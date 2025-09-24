@@ -1,0 +1,11 @@
+{
+    "name": "Inscription",
+    "alias": "inscription",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Inscription\\Providers\\InscriptionServiceProvider"
+    ],
+    "files": []
+}

@@ -1,0 +1,30 @@
+{
+    "name": "nwidart/inscription",
+    "description": "",
+    "authors": [
+        {
+            "name": "Nicolas Widart",
+            "email": "n.widart@gmail.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [],
+            "aliases": {
+
+            }
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Inscription\\": "app/",
+            "Modules\\Inscription\\Database\\Factories\\": "database/factories/",
+            "Modules\\Inscription\\Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Modules\\Inscription\\Tests\\": "tests/"
+        }
+    }
+}
