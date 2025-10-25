@@ -4,11 +4,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Modules\Inscription\Http\Controllers\PendingStudentController;
 use App\Modules\Inscription\Http\Controllers\SubmissionController;
+use App\Modules\Inscription\Http\Controllers\DossierSubmissionController;
+use App\Modules\Inscription\Http\Controllers\AcademicYearController;
 
 // Routes for Inscription module
 
 // Pending Students routes
-Route::prefix('pending-students')->group(function () {
+Route::prefix('api/pending-students')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/', [PendingStudentController::class, 'index']);
         Route::get('/{pendingStudent}', [PendingStudentController::class, 'show']);
@@ -23,15 +25,44 @@ Route::prefix('pending-students')->group(function () {
 });
 
 // Submission periods routes
-Route::prefix('submissions')->group(function () {
+Route::prefix('api/submissions')->group(function () {
     Route::get('/active-periods', [SubmissionController::class, 'getActiveSubmissionPeriods']);
     Route::get('/active-reclamation-periods', [SubmissionController::class, 'getActiveReclamationPeriods']);
     Route::post('/check-status', [SubmissionController::class, 'checkSubmissionStatus']);
     Route::post('/check-reclamation-status', [SubmissionController::class, 'checkReclamationStatus']);
+
+    // Admin-only CRUD for submission periods
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/', [SubmissionController::class, 'store']);
+        Route::put('/{submissionPeriod}', [SubmissionController::class, 'update']);
+        Route::delete('/{submissionPeriod}', [SubmissionController::class, 'destroy']);
+    });
 });
 
 // Academic years routes
-Route::prefix('academic-years')->group(function () {
+Route::prefix('api/academic-years')->group(function () {
     Route::get('/', [SubmissionController::class, 'getAcademicYears']);
     Route::get('/{academicYear}', [SubmissionController::class, 'getAcademicYear']);
+
+    // Admin endpoints (protected)
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/', [AcademicYearController::class, 'store']);
+        Route::put('/{academicYear}', [AcademicYearController::class, 'update']);
+        Route::delete('/{academicYear}', [AcademicYearController::class, 'destroy']);
+
+        Route::post('/{academicYear}/periods', [AcademicYearController::class, 'addPeriods']);
+        Route::put('/{academicYear}/periods', [AcademicYearController::class, 'extendPeriods']);
+        Route::delete('/{academicYear}/periods', [AcademicYearController::class, 'deletePeriods']);
+    });
+});
+
+// Dossier submission routes (public endpoints for external submissions)
+Route::prefix('api/dossiers')->group(function () {
+    Route::get('/periods', [DossierSubmissionController::class, 'getSubmissionPeriods']);
+    Route::post('/licence', [DossierSubmissionController::class, 'submitLicenceDossier']);
+    Route::post('/master', [DossierSubmissionController::class, 'submitMasterDossier']);
+    Route::post('/ingenieur/prepa', [DossierSubmissionController::class, 'submitIngenieurPrepaDossier']);
+    Route::post('/ingenieur/specialite', [DossierSubmissionController::class, 'submitIngenieurSpecialiteDossier']);
+    Route::post('/complement/{trackingCode}', [DossierSubmissionController::class, 'submitComplementDossier']);
+    Route::get('/{trackingCode}', [DossierSubmissionController::class, 'getDossier']);
 });

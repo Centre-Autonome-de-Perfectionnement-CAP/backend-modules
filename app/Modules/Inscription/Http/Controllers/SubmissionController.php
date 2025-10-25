@@ -11,6 +11,7 @@ use App\Modules\Inscription\Http\Resources\ReclamationPeriodResource;
 use App\Modules\Inscription\Http\Resources\AcademicYearResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 /**
  * @OA\Tag(
@@ -267,6 +268,161 @@ class SubmissionController extends Controller
         return response()->json([
             'success' => true,
             'data' => new AcademicYearResource($academicYear->load(['submissionPeriods', 'reclamationPeriods'])),
+        ]);
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/submissions",
+     *     summary="Créer une période de soumission",
+     *     description="Crée une nouvelle période de soumission pour une filière et une année académique",
+     *     operationId="createSubmissionPeriod",
+     *     tags={"Submission Management"},
+     *     security={{"sanctum": {}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"academic_year_id","department_id","start_date","end_date"},
+     *             @OA\Property(property="academic_year_id", type="integer", example=1),
+     *             @OA\Property(property="department_id", type="integer", example=2),
+     *             @OA\Property(property="start_date", type="string", format="date", example="2025-10-01"),
+     *             @OA\Property(property="end_date", type="string", format="date", example="2025-12-31")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="Période créée",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", ref="#/components/schemas/SubmissionPeriod")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Non authentifié"),
+     *     @OA\Response(response=422, description="Données invalides")
+     * )
+     * Create a new submission period
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'academic_year_id' => ['required','exists:academic_years,id'],
+            'department_id' => ['required','exists:departments,id'],
+            'start_date' => ['required','date'],
+            'end_date' => ['required','date','after_or_equal:start_date'],
+        ]);
+
+        $period = new SubmissionPeriod();
+        $period->uuid = (string) Str::uuid();
+        $period->academic_year_id = $validated['academic_year_id'];
+        $period->department_id = $validated['department_id'];
+        $period->start_date = $validated['start_date'];
+        $period->end_date = $validated['end_date'];
+        $period->save();
+
+        return response()->json([
+            'success' => true,
+            'data' => new SubmissionPeriodResource($period->fresh()),
+        ], 201);
+    }
+
+    /**
+     * @OA\Put(
+     *     path="/api/submissions/{submissionPeriod}",
+     *     summary="Mettre à jour une période de soumission",
+     *     description="Met à jour une période de soumission existante",
+     *     operationId="updateSubmissionPeriod",
+     *     tags={"Submission Management"},
+     *     security={{"sanctum": {}}},
+     *     @OA\Parameter(
+     *         name="submissionPeriod",
+     *         in="path",
+     *         required=true,
+     *         description="ID de la période de soumission",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=false,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="academic_year_id", type="integer"),
+     *             @OA\Property(property="department_id", type="integer"),
+     *             @OA\Property(property="start_date", type="string", format="date"),
+     *             @OA\Property(property="end_date", type="string", format="date")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Période mise à jour",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", ref="#/components/schemas/SubmissionPeriod")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Non authentifié"),
+     *     @OA\Response(response=404, description="Période non trouvée")
+     * )
+     * Update an existing submission period
+     */
+    public function update(Request $request, SubmissionPeriod $submissionPeriod): JsonResponse
+    {
+        $validated = $request->validate([
+            'academic_year_id' => ['sometimes','exists:academic_years,id'],
+            'department_id' => ['sometimes','exists:departments,id'],
+            'start_date' => ['sometimes','date'],
+            'end_date' => ['sometimes','date','after_or_equal:start_date'],
+        ]);
+
+        if (array_key_exists('academic_year_id', $validated)) {
+            $submissionPeriod->academic_year_id = $validated['academic_year_id'];
+        }
+        if (array_key_exists('department_id', $validated)) {
+            $submissionPeriod->department_id = $validated['department_id'];
+        }
+        if (array_key_exists('start_date', $validated)) {
+            $submissionPeriod->start_date = $validated['start_date'];
+        }
+        if (array_key_exists('end_date', $validated)) {
+            $submissionPeriod->end_date = $validated['end_date'];
+        }
+        $submissionPeriod->save();
+
+        return response()->json([
+            'success' => true,
+            'data' => new SubmissionPeriodResource($submissionPeriod->fresh()),
+        ]);
+    }
+
+    /**
+     * @OA\Delete(
+     *     path="/api/submissions/{submissionPeriod}",
+     *     summary="Supprimer une période de soumission",
+     *     description="Supprime une période de soumission",
+     *     operationId="deleteSubmissionPeriod",
+     *     tags={"Submission Management"},
+     *     security={{"sanctum": {}}},
+     *     @OA\Parameter(
+     *         name="submissionPeriod",
+     *         in="path",
+     *         required=true,
+     *         description="ID de la période de soumission",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Période supprimée",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true)
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Non authentifié"),
+     *     @OA\Response(response=404, description="Période non trouvée")
+     * )
+     * Delete a submission period
+     */
+    public function destroy(SubmissionPeriod $submissionPeriod): JsonResponse
+    {
+        $submissionPeriod->delete();
+        return response()->json([
+            'success' => true,
         ]);
     }
 }

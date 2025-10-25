@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\User;
 use App\Modules\Stockage\Models\Role;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class AdministrationSeeder extends Seeder
 {
@@ -26,7 +27,7 @@ class AdministrationSeeder extends Seeder
                 'first_name' => 'Max',
                 'email' => 'owomax@gmail.com',
                 'phone' => '61332652',
-                'password' => '$2y$12$QVGKdNVX7dA7QV07iaPcx.pylYW5wqS59KOHntf3ExJekgyEaLi3W',
+                'password' => Hash::make(env('ADMIN_DEFAULT_PASSWORD', 'ChangeMe123!')),
                 'rib_number' => '',
                 'rib' => '',
                 'photo' => NULL,
@@ -39,7 +40,7 @@ class AdministrationSeeder extends Seeder
                 'first_name' => 'Florence A.',
                 'email' => 'fldossou@gmail.com',
                 'phone' => '96855759',
-                'password' => '$2y$12$QVGKdNVX7dA7QV07iaPcx.pylYW5wqS59KOHntf3ExJekgyEaLi3W',
+                'password' => Hash::make(env('ADMIN_DEFAULT_PASSWORD', 'ChangeMe123!')),
                 'rib_number' => '',
                 'rib' => '',
                 'photo' => NULL,
@@ -52,7 +53,7 @@ class AdministrationSeeder extends Seeder
                 'first_name' => 'Fidèle Paul',
                 'email' => 'fideletchobo@gmail.com',
                 'phone' => '97686201',
-                'password' => '$2y$12$QVGKdNVX7dA7QV07iaPcx.pylYW5wqS59KOHntf3ExJekgyEaLi3W',
+                'password' => Hash::make(env('ADMIN_DEFAULT_PASSWORD', 'ChangeMe123!')),
                 'rib_number' => '',
                 'rib' => '',
                 'photo' => NULL,
@@ -65,7 +66,7 @@ class AdministrationSeeder extends Seeder
                 'first_name' => 'Serge',
                 'email' => 'ahounouserge@gmail.com',
                 'phone' => '97011862',
-                'password' => '$2y$12$QVGKdNVX7dA7QV07iaPcx.pylYW5wqS59KOHntf3ExJekgyEaLi3W',
+                'password' => Hash::make(env('ADMIN_DEFAULT_PASSWORD', 'ChangeMe123!')),
                 'rib_number' => '',
                 'rib' => '',
                 'photo' => NULL,
@@ -78,7 +79,7 @@ class AdministrationSeeder extends Seeder
                 'first_name' => 'Julienne',
                 'email' => 'zahoju22@gmail.com',
                 'phone' => '97589187',
-                'password' => '$2y$12$QVGKdNVX7dA7QV07iaPcx.pylYW5wqS59KOHntf3ExJekgyEaLi3W',
+                'password' => Hash::make(env('ADMIN_DEFAULT_PASSWORD', 'ChangeMe123!')),
                 'rib_number' => '',
                 'rib' => '',
                 'photo' => NULL,
