@@ -6,6 +6,7 @@ use App\Modules\Inscription\Http\Controllers\PendingStudentController;
 use App\Modules\Inscription\Http\Controllers\SubmissionController;
 use App\Modules\Inscription\Http\Controllers\DossierSubmissionController;
 use App\Modules\Inscription\Http\Controllers\AcademicYearController;
+use App\Modules\Inscription\Http\Controllers\StudentIdController;
 
 // Routes for Inscription module
 
@@ -64,5 +65,14 @@ Route::prefix('api/dossiers')->group(function () {
     Route::post('/ingenieur/prepa', [DossierSubmissionController::class, 'submitIngenieurPrepaDossier']);
     Route::post('/ingenieur/specialite', [DossierSubmissionController::class, 'submitIngenieurSpecialiteDossier']);
     Route::post('/complement/{trackingCode}', [DossierSubmissionController::class, 'submitComplementDossier']);
+});
+
+// Public student ID helper routes
+Route::prefix('api/students')->group(function () {
+    Route::post('/lookup-id', [StudentIdController::class, 'lookup']);
+    Route::post('/assign-id', [StudentIdController::class, 'assign']);
+});
+
+Route::prefix('api/dossiers')->group(function () {
     Route::get('/{trackingCode}', [DossierSubmissionController::class, 'getDossier']);
 });

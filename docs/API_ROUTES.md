@@ -92,6 +92,10 @@ Ce document liste les endpoints disponibles par module, avec l’authentificatio
 
 - GET `/api/academic-years`
   - Sortie 200: `{ success: true, data: AcademicYear[] }`
+  - Exemple:
+    ```json
+    {"success":true,"data":[{"id":1,"academic_year":"2025-2026","year_start":"2025-09-01","year_end":"2026-06-30"}]}
+    ```
 - GET `/api/academic-years/{academicYear}`
   - Sortie 200: `{ success: true, data: AcademicYear{ submissionPeriods[], reclamationPeriods[] } }`
 - POST `/api/academic-years` [auth]
@@ -124,6 +128,10 @@ Ce document liste les endpoints disponibles par module, avec l’authentificatio
 - GET `/api/dossiers/periods`
   - Query: `cycle?` enum `Licence|Master|Ingénieur`
   - Sortie 200: `{ data: [ { id, department, academic_year, start_date, end_date } ] }`
+  - Exemple:
+    ```json
+    {"data":[{"id":3,"department":"Génie Civil","academic_year":"2025-2026","start_date":"2025-10-01","end_date":"2026-01-15"}]}
+    ```
 - POST `/api/dossiers/licence` (multipart)
   - Entrée (multipart): champs perso + fichiers requis (voir OA). Ex:
     - `last_name`, `first_names`, `email`, `birth_date`, `gender`, `contacts[]`, `study_level`,
@@ -146,6 +154,36 @@ Ce document liste les endpoints disponibles par module, avec l’authentificatio
 - GET `/api/dossiers/{trackingCode}`
   - Sortie 200: `{ data: { personal_information, department, academic_year, documents[], status, message } }`
   - Erreurs: 404
+
+---
+
+### Students (public)
+
+- POST `/api/students/lookup-id`
+  - Entrée (JSON):
+    - `last_name` string
+    - `first_names` string
+    - `birth_date` date (YYYY-MM-DD)
+    - `birth_place` string
+  - Process: recherche dans `personal_information` par identité; lit le matricule si un `Student` existe avec `student_id_number == phone` (ou premier contact)
+  - Sorties:
+    - 200: `{ student_id_number: string }`
+      - Exemple: `{"student_id_number":"61234567"}`
+    - 404: `{ message: "Identité introuvable" | "Aucun numéro de téléphone associé à cette identité" | "Matricule non défini pour cette identité" }`
+
+- POST `/api/students/assign-id`
+  - Entrée (JSON):
+    - `last_name` string
+    - `first_names` string
+    - `birth_date` date (YYYY-MM-DD)
+    - `birth_place` string
+    - `phone` string
+  - Process: vérifie l’identité; crée un enregistrement `students` avec `student_id_number = phone` et `password = hash(phone)` si inexistant
+  - Sorties:
+    - 201: `{ student_id_number: string }`
+      - Exemple: `{"student_id_number":"61234567"}`
+    - 404: `{ message: "Identité introuvable" }`
+    - 409: `{ message: "Matricule déjà existant" }`
 
 ---
 

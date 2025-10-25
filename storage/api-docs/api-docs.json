@@ -1601,6 +1601,133 @@
                 }
             }
         },
+        "/api/students/lookup-id": {
+            "post": {
+                "tags": [
+                    "Students"
+                ],
+                "summary": "Récupérer le matricule par identité",
+                "operationId": "0be6ed00a6f68905ac969fef2e5023f5",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "last_name",
+                                    "first_names",
+                                    "birth_date",
+                                    "birth_place"
+                                ],
+                                "properties": {
+                                    "last_name": {
+                                        "type": "string"
+                                    },
+                                    "first_names": {
+                                        "type": "string"
+                                    },
+                                    "birth_date": {
+                                        "type": "string",
+                                        "format": "date"
+                                    },
+                                    "birth_place": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "student_id_number": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Introuvable"
+                    }
+                }
+            }
+        },
+        "/api/students/assign-id": {
+            "post": {
+                "tags": [
+                    "Students"
+                ],
+                "summary": "Assigner un matricule (numéro de téléphone)",
+                "operationId": "cf64222933a85e9028b51813978ed882",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "last_name",
+                                    "first_names",
+                                    "birth_date",
+                                    "birth_place",
+                                    "phone"
+                                ],
+                                "properties": {
+                                    "last_name": {
+                                        "type": "string"
+                                    },
+                                    "first_names": {
+                                        "type": "string"
+                                    },
+                                    "birth_date": {
+                                        "type": "string",
+                                        "format": "date"
+                                    },
+                                    "birth_place": {
+                                        "type": "string"
+                                    },
+                                    "phone": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Créé",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "student_id_number": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Identité introuvable"
+                    },
+                    "409": {
+                        "description": "Matricule déjà défini"
+                    }
+                }
+            }
+        },
         "/api/submissions/active-periods": {
             "get": {
                 "tags": [
@@ -4401,6 +4528,10 @@
         {
             "name": "Pending Students",
             "description": "Gestion des étudiants en attente d'inscription"
+        },
+        {
+            "name": "Students",
+            "description": "Recherche et assignation du matricule étudiant"
         },
         {
             "name": "Submission Management",

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inscription\Models;
 
+use App\Models\Student;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -26,6 +27,6 @@ class PersonalInformation extends Model
 
     public function student()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Student::class);
     }
 }
