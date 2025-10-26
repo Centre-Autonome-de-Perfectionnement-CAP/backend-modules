@@ -1,242 +1,297 @@
-# Progi CAP API – Routes par module
+# Progi CAP API – Documentation
 
-Ce document liste les endpoints disponibles par module, avec l’authentification requise et des exemples rapides.
-
-- Base URL (développement): `http://127.0.0.1:8000`
-- Authentification: Bearer token Sanctum
-  - Header: `Authorization: Bearer <token>`
+Base URL (développement): `http://127.0.0.1:8000`
 
 ---
 
-## Module Auth
+## API Next Deadline (Périodes d'inscription actives)
 
-- POST `/api/auth/login`
-  - Entrée (JSON):
-    - `email` string
-    - `password` string
-  - Sortie 200 (JSON):
-    ```json
-    {"access_token":"<string>","token_type":"Bearer","user":{}}
-    ```
-  - Erreurs: 422
-- POST `/api/auth/register`
-  - Entrée (JSON):
-    - `first_name` string (opt)
-    - `last_name` string (opt)
-    - `email` string (email)
-    - `password` string (>=8)
-    - `phone` string (opt)
-  - Sortie 201 (JSON): même structure que login
-  - Erreurs: 422
-- POST `/api/auth/logout` [auth]
-  - Entrée: header Authorization uniquement
-  - Sortie 200: `{ "message": "Logged out" }`
-  - Erreurs: 401
-- GET `/api/auth/me` [auth]
-  - Entrée: header Authorization
-  - Sortie 200: objet User
-  - Erreurs: 401
+### GET `/api/next-deadline`
 
----
+Retourne **toutes les périodes d'inscription actives groupées par date de fin**.
 
-## Module Inscription
+**Entrée**: aucune
 
-### Pending Students
-
-- POST `/api/pending-students`
-  - Entrée (JSON): données du dossier (selon modèle PendingStudent/PersonalInformation)
-  - Sortie 201: `{ success: true, data: {...} }`
-  - Erreurs: 422
-- POST `/api/pending-students/{pendingStudent}/documents`
-  - Entrée (multipart/form-data): fichiers
-  - Sortie 201: `{ success: true }`
-  - Erreurs: 404, 422
-- GET `/api/pending-students` [auth]
-  - Sortie 200: liste paginée/collection
-- GET `/api/pending-students/{pendingStudent}` [auth]
-  - Sortie 200: objet PendingStudent détaillé
-  - Erreurs: 404
-- PUT `/api/pending-students/{pendingStudent}` [auth]
-  - Entrée (JSON): champs à mettre à jour
-  - Sortie 200: `{ success: true, data: {...} }`
-  - Erreurs: 404, 422
-- DELETE `/api/pending-students/{pendingStudent}` [auth]
-  - Sortie 200: `{ success: true }`
-  - Erreurs: 404
-- GET `/api/pending-students/{pendingStudent}/documents` [auth]
-  - Sortie 200: `{ success: true, data: [ ... ] }`
-
-### Submissions (périodes globales)
-
-- GET `/api/submissions/active-periods`
-  - Sortie 200: `{ success: true, data: SubmissionPeriod[] }`
-- GET `/api/submissions/active-reclamation-periods`
-  - Sortie 200: `{ success: true, data: ReclamationPeriod[] }`
-- POST `/api/submissions/check-status`
-  - Entrée (JSON): `{ tracking_code: string }`
-  - Sortie 200: statut du dossier
-- POST `/api/submissions/check-reclamation-status`
-  - Entrée (JSON): `{ tracking_code: string }`
-  - Sortie 200: statut
-- POST `/api/submissions` [auth]
-  - Entrée (JSON): `{ academic_year_id: number, department_id: number, start_date: date, end_date: date }`
-  - Sortie 201: `{ success: true, data: SubmissionPeriod }`
-  - Erreurs: 401, 422
-- PUT `/api/submissions/{submissionPeriod}` [auth]
-  - Entrée (JSON): champs optionnels ci-dessus
-  - Sortie 200: `{ success: true, data: SubmissionPeriod }`
-- DELETE `/api/submissions/{submissionPeriod}` [auth]
-  - Sortie 200: `{ success: true }`
-
-### Academic Years
-
-- GET `/api/academic-years`
-  - Sortie 200: `{ success: true, data: AcademicYear[] }`
-  - Exemple:
-    ```json
-    {"success":true,"data":[{"id":1,"academic_year":"2025-2026","year_start":"2025-09-01","year_end":"2026-06-30"}]}
-    ```
-- GET `/api/academic-years/{academicYear}`
-  - Sortie 200: `{ success: true, data: AcademicYear{ submissionPeriods[], reclamationPeriods[] } }`
-- POST `/api/academic-years` [auth]
-  - Entrée (JSON):
-    - `year_start` date
-    - `year_end` date (> start)
-    - `submission_start` date (>= year_start)
-    - `submission_end` date (> submission_start, < year_end)
-    - `departments` number[] (opt)
-  - Sortie 201: `{ success: true, data: AcademicYear }`
-  - Erreurs: 401, 422
-- PUT `/api/academic-years/{academicYear}` [auth]
-  - Entrée (JSON, optionnel): `year_start?`, `year_end?`, `submission_start?`, `submission_end?`, `departments?` (ajoute périodes manquantes)
-  - Sortie 200: `{ success: true, data: AcademicYear }`
-- DELETE `/api/academic-years/{academicYear}` [auth]
-  - Sortie 200: `{ success: true }`
-- POST `/api/academic-years/{academicYear}/periods` [auth]
-  - Entrée (JSON): `{ start_date: date, end_date: date, departments: number[] }`
-  - Sortie 201: `{ success: true }`
-  - Erreurs: 401, 422 (chevauchement)
-- PUT `/api/academic-years/{academicYear}/periods` [auth]
-  - Entrée (JSON): `{ start_date, old_end_date, new_end_date, departments: number[] }`
-  - Sortie 200: `{ success: true }`
-- DELETE `/api/academic-years/{academicYear}/periods` [auth]
-  - Entrée (JSON): `{ start_date, end_date, departments: number[] }`
-  - Sortie 200: `{ success: true }`
-
-### Dossiers (soumission externe)
-
-- GET `/api/dossiers/periods`
-  - Query: `cycle?` enum `Licence|Master|Ingénieur`
-  - Sortie 200: `{ data: [ { id, department, academic_year, start_date, end_date } ] }`
-  - Exemple:
-    ```json
-    {"data":[{"id":3,"department":"Génie Civil","academic_year":"2025-2026","start_date":"2025-10-01","end_date":"2026-01-15"}]}
-    ```
-- POST `/api/dossiers/licence` (multipart)
-  - Entrée (multipart): champs perso + fichiers requis (voir OA). Ex:
-    - `last_name`, `first_names`, `email`, `birth_date`, `gender`, `contacts[]`, `study_level`,
-    - `academic_year_id`, `department_id`, `entry_diploma_id?`
-    - Fichiers: `demande_da`, `cv`, `acte_naissance`, `diplome_bac`, `attestation_travail`, `quittance_rectorat`, `quittance_cap`, `diplome_licence?`, `photo?`, `attestation_depot_dossier?`
-  - Sortie 201: `{ message, tracking_code }`
-  - Erreurs: 400, 422
-- POST `/api/dossiers/master` (multipart)
-  - Entrée: similaire à licence, avec `diplome_license` requis
-  - Sortie 201: `{ message, tracking_code }`
-- POST `/api/dossiers/ingenieur/prepa` (multipart)
-  - Entrée: similaire + `diplome_licence` requis
-  - Sortie 201: `{ message, tracking_code }`
-- POST `/api/dossiers/ingenieur/specialite` (multipart)
-  - Entrée: `student_id_number`, `department_id`, `academic_year_id`, `certificat_prepa` (file)
-  - Sortie 201: `{ message, tracking_code }`
-- POST `/api/dossiers/complement/{trackingCode}` (multipart)
-  - Entrée: `names[]` (noms de pièces), `files[]` (fichiers)
-  - Sortie 201: `{ message }`
-- GET `/api/dossiers/{trackingCode}`
-  - Sortie 200: `{ data: { personal_information, department, academic_year, documents[], status, message } }`
-  - Erreurs: 404
-
----
-
-### Students (public)
-
-- POST `/api/students/lookup-id`
-  - Entrée (JSON):
-    - `last_name` string
-    - `first_names` string
-    - `birth_date` date (YYYY-MM-DD)
-    - `birth_place` string
-  - Process: recherche dans `personal_information` par identité; lit le matricule si un `Student` existe avec `student_id_number == phone` (ou premier contact)
-  - Sorties:
-    - 200: `{ student_id_number: string }`
-      - Exemple: `{"student_id_number":"61234567"}`
-    - 404: `{ message: "Identité introuvable" | "Aucun numéro de téléphone associé à cette identité" | "Matricule non défini pour cette identité" }`
-
-- POST `/api/students/assign-id`
-  - Entrée (JSON):
-    - `last_name` string
-    - `first_names` string
-    - `birth_date` date (YYYY-MM-DD)
-    - `birth_place` string
-    - `phone` string
-  - Process: vérifie l’identité; crée un enregistrement `students` avec `student_id_number = phone` et `password = hash(phone)` si inexistant
-  - Sorties:
-    - 201: `{ student_id_number: string }`
-      - Exemple: `{"student_id_number":"61234567"}`
-    - 404: `{ message: "Identité introuvable" }`
-    - 409: `{ message: "Matricule déjà existant" }`
-
----
-
-## Module Stockage (fichiers)
-
-- GET `/files`
-  - Sortie 200: liste des fichiers
-- POST `/files`
-  - Entrée: multipart (`file`, metadata...)
-  - Sortie 201: fichier créé
-- GET `/files/public`
-- GET `/files/{file}`
-- PUT `/files/{file}`
-- DELETE `/files/{file}`
-- GET `/files/{file}/download`
-- GET `/files/{file}/activities`
-- POST `/files/{file}/lock` / `unlock`
-- Permissions & shares: voir routes, entrées JSON conformes aux contrôleurs (id/roles/users)
-
----
-
-## Exemples cURL
-
-- Auth – Login
-```bash
-curl -s -H "Content-Type: application/json" \
-  -X POST http://127.0.0.1:8000/api/auth/login \
-  -d '{"email":"admin@example.com","password":"secret"}'
+**Sortie 200 - Inscriptions ouvertes**:
+```json
+{
+  "success": true,
+  "data": {
+    "status": "open",
+    "periods": [
+      {
+        "deadline": "2025-11-25T23:59:59+00:00",
+        "filieres": [
+          {
+            "id": 28,
+            "name": "Génie Civil",
+            "abbreviation": "GC",
+            "cycle": "licence"
+          },
+          {
+            "id": 30,
+            "name": "Génie Électrique",
+            "abbreviation": "GE",
+            "cycle": "licence"
+          }
+        ]
+      },
+      {
+        "deadline": "2025-12-15T23:59:59+00:00",
+        "filieres": [
+          {
+            "id": 45,
+            "name": "Master Informatique",
+            "abbreviation": "MI",
+            "cycle": "master"
+          }
+        ]
+      }
+    ]
+  }
+}
 ```
 
-- Auth – Me
-```bash
-curl -s -H "Authorization: Bearer <token>" \
-  http://127.0.0.1:8000/api/auth/me
+**Sortie 200 - Aucune inscription active**:
+```json
+{
+  "success": true,
+  "data": {
+    "status": "closed",
+    "periods": []
+  }
+}
 ```
 
-- Academic Year – Create [auth]
+**Logique**:
+- Cherche toutes les périodes de soumission où `end_date >= aujourd'hui`
+- Groupe les filières par `end_date` identique
+- Trie par `end_date` croissant
+- Si aucune période active: `status: "closed"` + `periods: []`
+
+**Usage frontend**:
+- Afficher un countdown pour chaque période
+- Lister toutes les filières ayant la même deadline
+- Masquer le countdown si `status === "closed"`
+- La première période (`periods[0]`) est la plus proche
+
+**Exemple cURL**:
 ```bash
-curl -s -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
-  -X POST http://127.0.0.1:8000/api/academic-years \
-  -d '{
-    "year_start":"2025-09-01",
-    "year_end":"2026-06-30",
-    "submission_start":"2025-10-01",
-    "submission_end":"2026-01-15",
-    "departments":[1,2]
-  }'
+curl http://127.0.0.1:8000/api/next-deadline
 ```
+
+---
+
+## API Filières (Départements avec périodes)
+
+### GET `/api/filieres`
+
+Retourne **tous les départements de tous les cycles** avec leurs périodes de soumission.
+
+**Entrée**: aucune
+
+**Sortie 200**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "title": "Génie Civil",
+      "abbreviation": "GC",
+      "cycle": "licence",
+      "dateLimite": "2026-01-15",
+      "image": "",
+      "badge": "inscriptions-ouvertes"
+    }
+  ]
+}
+```
+
+**Format Filiere** (TypeScript):
+```typescript
+interface Filiere {
+  id: number;
+  title: string;
+  abbreviation: string;
+  cycle: 'licence' | 'master' | 'ingenierie';
+  dateLimite: string | null;
+  image: string;
+  badge: 'inscriptions-ouvertes' | 'inscriptions-fermees' | 'prochainement';
+}
+```
+
+**Badges**:
+- `inscriptions-ouvertes`: période en cours (aujourd'hui entre start_date et end_date)
+- `prochainement`: période future (start_date > aujourd'hui)
+- `inscriptions-fermees`: aucune période active ou future
+
+**Exemple cURL**:
+```bash
+curl http://127.0.0.1:8000/api/filieres
+```
+
+---
+
+## API Documents officiels
+
+Basée sur le modèle **File** avec `is_official_document = true`.
+
+### GET `/api/documents`
+
+Liste des documents officiels, avec filtre optionnel par catégorie.
+
+**Entrée**:
+- Query parameter: `categorie?` enum `administratif|pedagogique|legal|organisation`
+
+**Sortie 200**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "titre": "Règlement intérieur",
+      "description": "Document officiel du règlement intérieur de l'établissement",
+      "type": "pdf",
+      "taille": "2.5 MB",
+      "datePublication": "2025-10-01",
+      "lien": "https://example.com/storage/documents/reglement.pdf",
+      "categorie": "administratif"
+    }
+  ]
+}
+```
+
+**Format Document** (TypeScript):
+```typescript
+interface Document {
+  id: number;
+  titre: string;
+  description: string;
+  type: 'pdf' | 'doc' | 'xls' | 'ppt' | 'lien';
+  taille?: string;
+  datePublication: string;
+  lien: string;
+  categorie: 'administratif' | 'pedagogique' | 'legal' | 'organisation';
+}
+```
+
+**Exemples cURL**:
+```bash
+# Tous les documents
+curl http://127.0.0.1:8000/api/documents
+
+# Filtrer par catégorie
+curl "http://127.0.0.1:8000/api/documents?categorie=pedagogique"
+```
+
+---
+
+### GET `/api/documents/{file}`
+
+Détails d'un document spécifique.
+
+**Entrée**: ID du fichier dans l'URL
+
+**Sortie 200**: `{ success: true, data: Document }`
+
+**Erreurs**: 
+- 404: Fichier introuvable ou n'est pas un document officiel
+
+---
+
+### POST `/api/documents` [auth]
+
+Créer un document officiel (upload fichier OU lien externe).
+
+**Authentification**: Bearer token requis
+
+**Entrée (multipart/form-data)**:
+
+**Option 1 - Upload fichier**:
+- `titre` string (requis)
+- `description` string (requis)
+- `file` file max 10MB (requis si pas de lien)
+- `datePublication` date YYYY-MM-DD (requis)
+- `categorie` enum `administratif|pedagogique|legal|organisation` (requis)
+
+**Option 2 - Lien externe** (JSON):
+- `titre` string (requis)
+- `description` string (requis)
+- `lien` URL (requis si pas de file)
+- `datePublication` date (requis)
+- `categorie` enum (requis)
+
+**Sortie 201**: `{ success: true, data: Document }`
+
+**Erreurs**:
+- 401: Non authentifié
+- 422: Validation échouée
+
+**Exemples cURL**:
+```bash
+# Upload fichier
+curl -H "Authorization: Bearer <token>" \
+     -F "titre=Règlement intérieur 2025" \
+     -F "description=Document officiel" \
+     -F "file=@reglement.pdf" \
+     -F "datePublication=2025-10-26" \
+     -F "categorie=administratif" \
+     http://127.0.0.1:8000/api/documents
+
+# Lien externe
+curl -H "Authorization: Bearer <token>" \
+     -H "Content-Type: application/json" \
+     -X POST http://127.0.0.1:8000/api/documents \
+     -d '{
+       "titre": "Calendrier académique",
+       "description": "Calendrier officiel du ministère",
+       "lien": "https://memp.gouv.bj/calendrier-2025.pdf",
+       "datePublication": "2025-10-26",
+       "categorie": "pedagogique"
+     }'
+```
+
+---
+
+### PUT `/api/documents/{file}` [auth]
+
+Mettre à jour un document.
+
+**Authentification**: Bearer token requis
+
+**Entrée (JSON)**:
+- `titre?` string
+- `description?` string
+- `datePublication?` date
+- `categorie?` enum
+
+**Sortie 200**: `{ success: true, data: Document }`
+
+**Erreurs**:
+- 401: Non authentifié
+- 404: Document introuvable
+- 422: Validation échouée
+
+---
+
+### DELETE `/api/documents/{file}` [auth]
+
+Supprimer un document (fichier physique + enregistrement BDD).
+
+**Authentification**: Bearer token requis
+
+**Sortie 200**: `{ success: true }`
+
+**Erreurs**:
+- 401: Non authentifié
+- 404: Document introuvable
 
 ---
 
 ## Notes
 
-- Toutes les routes marquées [auth] nécessitent un `Authorization: Bearer <token>` valide.
-- Pour les uploads (multipart), utiliser `-F` avec `curl` et envoyer les fichiers en `form-data`.
-- La documentation interactive est disponible sur `/api/documentation` (Swagger UI).
+- Routes marquées [auth] nécessitent: `Authorization: Bearer <token>`
+- Documentation interactive: `/api/documentation` (Swagger UI)
+- Stockage documents: `public/documents/`

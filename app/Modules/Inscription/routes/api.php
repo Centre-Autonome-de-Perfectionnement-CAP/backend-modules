@@ -7,6 +7,7 @@ use App\Modules\Inscription\Http\Controllers\SubmissionController;
 use App\Modules\Inscription\Http\Controllers\DossierSubmissionController;
 use App\Modules\Inscription\Http\Controllers\AcademicYearController;
 use App\Modules\Inscription\Http\Controllers\StudentIdController;
+use App\Modules\Inscription\Http\Controllers\CycleController;
 
 // Routes for Inscription module
 
@@ -76,3 +77,8 @@ Route::prefix('api/students')->group(function () {
 Route::prefix('api/dossiers')->group(function () {
     Route::get('/{trackingCode}', [DossierSubmissionController::class, 'getDossier']);
 });
+
+// Cycles routes
+Route::get('/api/cycles', [CycleController::class, 'index']);
+Route::get('/api/filieres', [CycleController::class, 'allDepartmentsWithPeriods']);
+Route::get('/api/next-deadline', [CycleController::class, 'nextDeadline']);

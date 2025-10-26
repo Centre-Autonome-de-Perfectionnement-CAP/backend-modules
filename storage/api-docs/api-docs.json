@@ -7,7 +7,7 @@
     },
     "servers": [
         {
-            "url": "http://127.0.0.1:8000",
+            "url": "http://127.0.0.1:8001",
             "description": "API server"
         }
     ],
@@ -635,6 +635,108 @@
                         "sanctum": []
                     }
                 ]
+            }
+        },
+        "/api/cycles": {
+            "get": {
+                "tags": [
+                    "Cycles"
+                ],
+                "summary": "Liste des cycles avec leurs départements",
+                "description": "Récupère la liste de tous les cycles avec leurs départements associés",
+                "operationId": "getCyclesWithDepartments",
+                "responses": {
+                    "200": {
+                        "description": "Cycles récupérés avec succès",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/Cycle"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/filieres": {
+            "get": {
+                "tags": [
+                    "Cycles"
+                ],
+                "summary": "Tous les départements avec périodes de soumission (format Filiere)",
+                "description": "Retourne tous les départements de tous les cycles avec périodes au format front: id, title, cycle, dateLimite, image, badge",
+                "operationId": "getAllDepartmentsWithSubmissionPeriods",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "integer"
+                                                    },
+                                                    "title": {
+                                                        "type": "string"
+                                                    },
+                                                    "abbreviation": {
+                                                        "type": "string"
+                                                    },
+                                                    "cycle": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "licence",
+                                                            "master",
+                                                            "ingenierie"
+                                                        ]
+                                                    },
+                                                    "dateLimite": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "image": {
+                                                        "type": "string"
+                                                    },
+                                                    "badge": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "inscriptions-ouvertes",
+                                                            "inscriptions-fermees",
+                                                            "prochainement"
+                                                        ],
+                                                        "nullable": true
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         "/api/dossiers/periods": {
@@ -2162,6 +2264,295 @@
                     },
                     "404": {
                         "description": "Période non trouvée"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/documents": {
+            "get": {
+                "tags": [
+                    "Documents"
+                ],
+                "summary": "Liste des documents officiels",
+                "operationId": "72199913f6f620aab1ebcbd0ace646f5",
+                "parameters": [
+                    {
+                        "name": "categorie",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "administratif",
+                                "pedagogique",
+                                "legal",
+                                "organisation"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "integer"
+                                                    },
+                                                    "titre": {
+                                                        "type": "string"
+                                                    },
+                                                    "description": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "pdf",
+                                                            "doc",
+                                                            "xls",
+                                                            "ppt",
+                                                            "lien"
+                                                        ]
+                                                    },
+                                                    "taille": {
+                                                        "type": "string"
+                                                    },
+                                                    "datePublication": {
+                                                        "type": "string",
+                                                        "format": "date"
+                                                    },
+                                                    "lien": {
+                                                        "type": "string"
+                                                    },
+                                                    "categorie": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "administratif",
+                                                            "pedagogique",
+                                                            "legal",
+                                                            "organisation"
+                                                        ]
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Documents"
+                ],
+                "summary": "Créer un document officiel",
+                "description": "Upload fichier OU lien externe",
+                "operationId": "8ab230c5c7773cb66133d772ef0098cb",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "required": [
+                                    "titre",
+                                    "description",
+                                    "datePublication",
+                                    "categorie"
+                                ],
+                                "properties": {
+                                    "titre": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "file": {
+                                        "description": "Fichier (requis si pas de lien)",
+                                        "type": "string",
+                                        "format": "binary"
+                                    },
+                                    "lien": {
+                                        "description": "URL (requis si pas de fichier)",
+                                        "type": "string",
+                                        "format": "url"
+                                    },
+                                    "datePublication": {
+                                        "type": "string",
+                                        "format": "date"
+                                    },
+                                    "categorie": {
+                                        "type": "string",
+                                        "enum": [
+                                            "administratif",
+                                            "pedagogique",
+                                            "legal",
+                                            "organisation"
+                                        ]
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Créé",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer"
+                                                },
+                                                "titre": {
+                                                    "type": "string"
+                                                },
+                                                "description": {
+                                                    "type": "string"
+                                                },
+                                                "type": {
+                                                    "type": "string"
+                                                },
+                                                "taille": {
+                                                    "type": "string"
+                                                },
+                                                "datePublication": {
+                                                    "type": "string"
+                                                },
+                                                "lien": {
+                                                    "type": "string"
+                                                },
+                                                "categorie": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "422": {
+                        "description": "Validation échouée"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/documents/{document}": {
+            "get": {
+                "tags": [
+                    "Documents"
+                ],
+                "summary": "Détails d'un document",
+                "operationId": "11a6c0c6d947d984a28b551f4a89077e",
+                "parameters": [
+                    {
+                        "name": "document",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "404": {
+                        "description": "Document introuvable"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Documents"
+                ],
+                "summary": "Mettre à jour un document",
+                "operationId": "5522bfe9ead23443b0ea4e3d20bee98e",
+                "parameters": [
+                    {
+                        "name": "document",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {}
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Mis à jour"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Documents"
+                ],
+                "summary": "Supprimer un document",
+                "operationId": "0fbce488e082bb168fb37735c65c815e",
+                "parameters": [
+                    {
+                        "name": "document",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Supprimé"
                     }
                 },
                 "security": [
@@ -3880,6 +4271,97 @@
                 },
                 "type": "object"
             },
+            "Cycle": {
+                "title": "Cycle",
+                "description": "Représentation d'un cycle d'études",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "uuid": {
+                        "type": "string",
+                        "format": "uuid",
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Licence"
+                    },
+                    "abbreviation": {
+                        "type": "string",
+                        "example": "L"
+                    },
+                    "years_count": {
+                        "type": "integer",
+                        "example": 3
+                    },
+                    "is_lmd": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "type": {
+                        "type": "string",
+                        "example": "undergraduate"
+                    },
+                    "departments": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Department"
+                        }
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "type": "object"
+            },
+            "Department": {
+                "title": "Department",
+                "description": "Représentation d'un département",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "uuid": {
+                        "type": "string",
+                        "format": "uuid",
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Informatique"
+                    },
+                    "abbreviation": {
+                        "type": "string",
+                        "example": "INFO"
+                    },
+                    "cycle_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "next_level_id": {
+                        "type": "integer",
+                        "example": 2,
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "type": "object"
+            },
             "AcademicYear": {
                 "title": "Academic Year",
                 "description": "Modèle représentant une année académique",
@@ -4522,6 +5004,10 @@
             "description": "Gestion des années académiques et périodes"
         },
         {
+            "name": "Cycles",
+            "description": "Gestion des cycles d'études"
+        },
+        {
             "name": "Dossier Submission",
             "description": "Soumission des dossiers (Licence, Master, Ingénieur, Compléments)"
         },
@@ -4536,6 +5022,10 @@
         {
             "name": "Submission Management",
             "description": "Gestion des périodes de soumission et réclamation"
+        },
+        {
+            "name": "Documents",
+            "description": "Gestion des documents (administratif, pédagogique, légal, organisation)"
         },
         {
             "name": "File Management",

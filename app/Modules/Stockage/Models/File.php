@@ -49,6 +49,10 @@ class File extends Model
         'user_id',
         'name',
         'original_name',
+        'description',
+        'document_categorie',
+        'is_official_document',
+        'date_publication',
         'path',
         'disk',
         'visibility',
@@ -72,6 +76,8 @@ class File extends Model
         'metadata' => 'array',
         'size' => 'integer',
         'is_locked' => 'boolean',
+        'is_official_document' => 'boolean',
+        'date_publication' => 'date',
         'locked_at' => 'datetime',
         'last_accessed_at' => 'datetime',
         'download_count' => 'integer',
@@ -253,5 +259,21 @@ class File extends Model
             $q->where('original_name', 'like', "%{$search}%")
               ->orWhere('name', 'like', "%{$search}%");
         });
+    }
+
+    /**
+     * Scope pour les documents officiels.
+     */
+    public function scopeOfficialDocuments($query)
+    {
+        return $query->where('is_official_document', true);
+    }
+
+    /**
+     * Scope pour filtrer par catégorie de document.
+     */
+    public function scopeByCategorie($query, string $categorie)
+    {
+        return $query->where('document_categorie', $categorie);
     }
 }

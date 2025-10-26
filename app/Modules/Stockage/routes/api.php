@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Modules\Stockage\Http\Controllers\FileController;
 use App\Modules\Stockage\Http\Controllers\FilePermissionController;
 use App\Modules\Stockage\Http\Controllers\FileShareController;
+use App\Modules\Stockage\Http\Controllers\DocumentController;
 
 /*
 |--------------------------------------------------------------------------
@@ -58,5 +59,19 @@ Route::middleware('auth:sanctum')->prefix('files')->group(function () {
         Route::get('{share}', [FileShareController::class, 'show'])->name('api.files.shares.show');
         Route::post('{share}/deactivate', [FileShareController::class, 'deactivate'])->name('api.files.shares.deactivate');
         Route::delete('{share}', [FileShareController::class, 'destroy'])->name('api.files.shares.destroy');
+    });
+});
+
+// Routes Documents (public GET, protected CUD)
+Route::prefix('api/documents')->group(function () {
+    // Routes publiques
+    Route::get('/', [DocumentController::class, 'index'])->name('api.documents.index');
+    Route::get('{document}', [DocumentController::class, 'show'])->name('api.documents.show');
+    
+    // Routes protégées (authentification requise)
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/', [DocumentController::class, 'store'])->name('api.documents.store');
+        Route::put('{document}', [DocumentController::class, 'update'])->name('api.documents.update');
+        Route::delete('{document}', [DocumentController::class, 'destroy'])->name('api.documents.destroy');
     });
 });
