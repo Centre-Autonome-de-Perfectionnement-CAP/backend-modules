@@ -3,8 +3,10 @@
 namespace App\Modules\Auth\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
+use App\Modules\Auth\Services\AdministrationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Exception;
 
 /**
  * @OA\Tag(
@@ -14,6 +16,9 @@ use Illuminate\Http\Request;
  */
 class AdministrationController extends Controller
 {
+    public function __construct(
+        protected AdministrationService $administrationService
+    ) {}
     /**
      * @OA\Get(
      *     path="/api/auth/administration",
@@ -43,18 +48,8 @@ class AdministrationController extends Controller
     public function index(Request $request)
     {
         try {
-            // Récupérer les utilisateurs avec ces rôles
-            $adminRoles = ['chef_cap', 'chef_division', 'chef_division_continue', 'comptable', 'secretaire'];
-            
-            $users = User::whereHas('roles', function ($query) use ($adminRoles) {
-                $query->whereIn('name', $adminRoles);
-            })
-            ->with(['roles' => function ($query) {
-                $query->select('roles.id', 'roles.name', 'roles.display_name');
-            }])
-            ->select('id', 'first_name', 'last_name', 'email', 'phone', 'photo')
-            ->orderBy('last_name')
-            ->get();
+            $filters = $request->only(['role', 'search']);
+            $users = $this->administrationService->getAdminUsers($filters);
 
             return response()->json([
                 'success' => true,

@@ -4,12 +4,11 @@ namespace App\Modules\Inscription\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Inscription\Models\AcademicYear;
-use App\Modules\Inscription\Models\Department;
-use App\Modules\Inscription\Models\SubmissionPeriod;
+use App\Modules\Inscription\Services\AcademicYearService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
+use Exception;
 
 /**
  * @OA\Tag(
@@ -19,6 +18,9 @@ use Illuminate\Support\Str;
  */
 class AcademicYearController extends Controller
 {
+    public function __construct(
+        protected AcademicYearService $academicYearService
+    ) {}
     /**
      * @OA\Post(
      *     path="/api/academic-years",
@@ -42,46 +44,26 @@ class AcademicYearController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        $data = $request->validate([
-            'year_start' => ['required','date'],
-            'year_end' => ['required','date','after:year_start'],
-            'submission_start' => ['required','date','after_or_equal:year_start'],
-            'submission_end' => ['required','date','after:submission_start','before:year_end'],
-            'departments' => ['sometimes','array','min:1'],
-            'departments.*' => ['integer','exists:departments,id'],
-        ]);
+        try {
+            $data = $request->validate([
+                'year_start' => ['required','date'],
+                'year_end' => ['required','date','after:year_start'],
+                'submission_start' => ['required','date','after_or_equal:year_start'],
+                'submission_end' => ['required','date','after:submission_start','before:year_end'],
+                'departments' => ['sometimes','array','min:1'],
+                'departments.*' => ['integer','exists:departments,id'],
+            ]);
 
-        return DB::transaction(function () use ($data) {
-            $startYear = date('Y', strtotime($data['year_start']));
-            $endYear = date('Y', strtotime($data['year_end']));
+            $year = $this->academicYearService->create($data);
 
-            $exists = AcademicYear::where('academic_year', "$startYear-$endYear")->exists();
-            if ($exists) {
-                return response()->json(['message' => "L'année académique $startYear-$endYear existe déjà."], 422);
-            }
-
-            $year = new AcademicYear();
-            $year->uuid = (string) Str::uuid();
-            $year->academic_year = "$startYear-$endYear";
-            $year->year_start = $data['year_start'];
-            $year->year_end = $data['year_end'];
-            $year->submission_start = $data['submission_start'];
-            $year->submission_end = $data['submission_end'];
-            $year->save();
-
-            if (!empty($data['departments'])) {
-                foreach ($data['departments'] as $departmentId) {
-                    SubmissionPeriod::create([
-                        'academic_year_id' => $year->id,
-                        'department_id' => $departmentId,
-                        'start_date' => $data['submission_start'],
-                        'end_date' => $data['submission_end'],
-                    ]);
-                }
-            }
-
-            return response()->json(['success' => true, 'data' => $year->fresh()], 201);
-        });
+            return response()->json(['success' => true, 'data' => $year], 201);
+        } catch (Exception $e) {
+            Log::error('Erreur création année académique', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], $e->getMessage() === "L'année académique existe déjà." ? 422 : 500);
+        }
     }
 
     /**

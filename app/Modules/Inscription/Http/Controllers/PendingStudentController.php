@@ -4,15 +4,13 @@ namespace App\Modules\Inscription\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Inscription\Models\PendingStudent;
-use App\Modules\Inscription\Models\EntryLevel;
-use App\Modules\Inscription\Models\EntryDiploma;
-use App\Modules\Inscription\Models\SubmissionPeriod;
 use App\Modules\Inscription\Http\Requests\CreatePendingStudentRequest;
 use App\Modules\Inscription\Http\Resources\PendingStudentResource;
-use App\Modules\Stockage\Services\FileStorageService;
+use App\Modules\Inscription\Services\PendingStudentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Exception;
 
 /**
  * @OA\Tag(
@@ -24,7 +22,7 @@ use Illuminate\Support\Facades\DB;
 class PendingStudentController extends Controller
 {
     public function __construct(
-        protected FileStorageService $fileStorageService
+        protected PendingStudentService $pendingStudentService
     ) {
         $this->middleware('auth:sanctum');
     }
@@ -72,29 +70,26 @@ class PendingStudentController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = PendingStudent::with(['entryLevel', 'entryDiploma']);
+        try {
+            $filters = $request->only(['status', 'entry_level_id', 'search']);
+            $perPage = min(max((int) $request->input('per_page', 15), 1), 100);
+            
+            $pendingStudents = $this->pendingStudentService->getAll($filters, $perPage);
 
-        // Filtres
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
+            return response()->json([
+                'success' => true,
+                'data' => PendingStudentResource::collection($pendingStudents),
+                'meta' => [
+                    'total' => $pendingStudents->total(),
+                    'per_page' => $pendingStudents->perPage(),
+                    'current_page' => $pendingStudents->currentPage(),
+                    'last_page' => $pendingStudents->lastPage(),
+                ],
+            ]);
+        } catch (Exception $e) {
+            Log::error('Erreur récupération étudiants en attente', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Erreur serveur.'], 500);
         }
-
-        if ($request->has('entry_level_id')) {
-            $query->where('entry_level_id', $request->entry_level_id);
-        }
-
-        $pendingStudents = $query->orderBy('created_at', 'desc')->paginate(15);
-
-        return response()->json([
-            'success' => true,
-            'data' => PendingStudentResource::collection($pendingStudents),
-            'meta' => [
-                'total' => $pendingStudents->total(),
-                'per_page' => $pendingStudents->perPage(),
-                'current_page' => $pendingStudents->currentPage(),
-                'last_page' => $pendingStudents->lastPage(),
-            ],
-        ]);
     }
 
     /**
@@ -132,29 +127,19 @@ class PendingStudentController extends Controller
     public function store(CreatePendingStudentRequest $request): JsonResponse
     {
         try {
-            $pendingStudent = DB::transaction(function () use ($request) {
-                return PendingStudent::create([
-                    'email' => $request->validated()['email'],
-                    'first_name' => $request->validated()['first_name'],
-                    'last_name' => $request->validated()['last_name'],
-                    'phone' => $request->validated()['phone'],
-                    'entry_level_id' => $request->validated()['entry_level_id'],
-                    'entry_diploma_id' => $request->validated()['entry_diploma_id'],
-                    'status' => 'pending',
-                    'submitted_at' => now(),
-                ]);
-            });
+            $pendingStudent = $this->pendingStudentService->create($request->validated());
 
             return response()->json([
                 'success' => true,
                 'message' => 'Étudiant en attente créé avec succès.',
                 'data' => new PendingStudentResource($pendingStudent),
             ], 201);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
+            Log::error('Erreur création étudiant en attente', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de la création de l\'étudiant en attente.',
-                'error' => $e->getMessage(),
+                'message' => 'Erreur lors de la création.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }
     }
@@ -238,18 +223,19 @@ class PendingStudentController extends Controller
     public function update(CreatePendingStudentRequest $request, PendingStudent $pendingStudent): JsonResponse
     {
         try {
-            $pendingStudent->update($request->validated());
+            $pendingStudent = $this->pendingStudentService->update($pendingStudent, $request->validated());
 
             return response()->json([
                 'success' => true,
                 'message' => 'Étudiant en attente mis à jour avec succès.',
-                'data' => new PendingStudentResource($pendingStudent->fresh()),
+                'data' => new PendingStudentResource($pendingStudent),
             ]);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
+            Log::error('Erreur mise à jour étudiant', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de la mise à jour.',
-                'error' => $e->getMessage(),
+                'error' => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }
     }
@@ -285,17 +271,17 @@ class PendingStudentController extends Controller
     public function destroy(PendingStudent $pendingStudent): JsonResponse
     {
         try {
-            $pendingStudent->delete();
+            $this->pendingStudentService->delete($pendingStudent);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Étudiant en attente supprimé avec succès.',
             ]);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de la suppression.',
-                'error' => $e->getMessage(),
+                'error' => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }
     }
