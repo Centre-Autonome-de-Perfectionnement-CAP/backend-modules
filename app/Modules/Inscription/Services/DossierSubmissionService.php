@@ -46,16 +46,23 @@ class DossierSubmissionService
 
             $personalInformation = null;
             if ($isPersonalInfoRequired) {
+                // Log pour debug
+                Log::info('Creating PersonalInformation', [
+                    'birth_date' => $request->birth_date,
+                    'birth_place' => $request->birth_place,
+                    'birth_country' => $request->birth_country,
+                    'all_data' => $request->all()
+                ]);
+
                 $personalInformation = PersonalInformation::create([
                     'last_name' => $request->last_name,
                     'first_names' => $request->first_names,
                     'email' => $request->email,
-                    'birth_date' => $request->birth_date,
-                    'birth_place' => $request->birth_place,
-                    'birth_country' => $request->birth_country,
+                    'birth_date' => $request->birth_date ?? null,
+                    'birth_place' => $request->birth_place ?? null,
+                    'birth_country' => $request->birth_country ?? 'Bénin',
                     'gender' => $request->gender,
-                    'estimated_birth' => false,
-                    'contacts' => json_encode($request->contacts),
+                    'contacts' => $request->contacts, // Le cast 'array' dans le modèle gère la conversion JSON
                 ]);
             } else {
                 // Récupère les informations d'identité depuis une inscription antérieure (Prépa)
@@ -163,7 +170,9 @@ class DossierSubmissionService
             ]);
 
             return [
-                'message' => 'Dossier completed successfully.',
+                'message' => 'Complément de dossier soumis avec succès.',
+                'tracking_code' => $trackingCode,
+                'documents_added' => count($documents),
             ];
         });
     }

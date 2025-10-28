@@ -38,19 +38,59 @@ class PendingStudent extends Model
     use HasFactory;
 
     protected $fillable = [
+        'uuid',
+        'personal_information_id',
+        'tracking_code',
+        'entry_diploma_id',
+        'cuca_opinion',
+        'cuca_comment',
+        'department_id',
+        'academic_year_id',
+        'level',
+        'photo',
+        'documents',
         'email',
         'first_name',
         'last_name',
         'phone',
         'entry_level_id',
-        'entry_diploma_id',
         'status',
         'submitted_at',
     ];
 
     protected $casts = [
         'submitted_at' => 'datetime',
+        'documents' => 'array',
     ];
+
+    /**
+     * Boot method pour générer automatiquement l'UUID
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            if (empty($model->uuid)) {
+                $model->uuid = (string) \Illuminate\Support\Str::uuid();
+            }
+        });
+    }
+
+    public function personalInformation()
+    {
+        return $this->belongsTo(PersonalInformation::class);
+    }
+
+    public function department()
+    {
+        return $this->belongsTo(Department::class);
+    }
+
+    public function academicYear()
+    {
+        return $this->belongsTo(AcademicYear::class);
+    }
 
     public function entryLevel()
     {

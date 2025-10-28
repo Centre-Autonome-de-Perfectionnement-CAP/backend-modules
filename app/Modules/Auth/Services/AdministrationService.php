@@ -16,7 +16,7 @@ class AdministrationService
      */
     public function getAdminUsers(array $filters = []): \Illuminate\Support\Collection
     {
-        $adminRoles = ['chef_cap', 'chef_division', 'chef_division_continue', 'comptable', 'secretaire'];
+        $adminRoles = ['chef_cap', 'chef_division', 'chef_division_continue', 'chef_division_distance', 'comptable', 'secretaire'];
         
         $query = User::whereHas('roles', function ($q) use ($adminRoles) {
             $q->whereIn('name', $adminRoles);

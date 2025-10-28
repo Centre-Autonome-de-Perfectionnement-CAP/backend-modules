@@ -14,14 +14,14 @@ return new class extends Migration
         Schema::create('class_groups', function (Blueprint $table) {
             $table->id();
             $table->foreignId('academic_year_id')->constrained('academic_years')->onDelete('cascade');
-            $table->foreignId('program_id')->constrained('programs')->onDelete('cascade');
+            $table->foreignId('filiere_id')->constrained('filieres')->onDelete('cascade');
             $table->string('study_level')->comment('Niveau d\'étude: L1, L2, L3, M1, M2, etc.');
             $table->string('group_name');
             $table->timestamps();
 
             // Index
             $table->index('academic_year_id');
-            $table->index('program_id');
+            $table->index('filiere_id');
             $table->index('study_level');
         });
     }

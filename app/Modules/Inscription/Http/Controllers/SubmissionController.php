@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Inscription\Models\SubmissionPeriod;
 use App\Modules\Inscription\Models\ReclamationPeriod;
 use App\Modules\Inscription\Models\AcademicYear;
+use App\Modules\Inscription\Services\AcademicYearService;
 use App\Modules\Inscription\Http\Resources\SubmissionPeriodResource;
 use App\Modules\Inscription\Http\Resources\ReclamationPeriodResource;
 use App\Modules\Inscription\Http\Resources\AcademicYearResource;
@@ -22,9 +23,10 @@ use Illuminate\Support\Str;
 
 class SubmissionController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware('auth:sanctum');
+    public function __construct(
+        protected AcademicYearService $academicYearService
+    ) {
+        $this->middleware('auth:sanctum')->except(['getAcademicYears', 'getAcademicYear']);
     }
 
     /**
@@ -228,7 +230,7 @@ class SubmissionController extends Controller
      */
     public function getAcademicYears(): JsonResponse
     {
-        $academicYears = AcademicYear::orderBy('year_start', 'desc')->get();
+        $academicYears = $this->academicYearService->getAllYears();
 
         return response()->json([
             'success' => true,

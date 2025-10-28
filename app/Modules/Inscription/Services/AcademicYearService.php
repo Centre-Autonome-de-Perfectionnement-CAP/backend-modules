@@ -204,4 +204,12 @@ class AcademicYearService
         $now = now();
         return $now->between($current->submission_start, $current->submission_end);
     }
+
+    /**
+     * Récupérer toutes les années académiques (sans pagination)
+     */
+    public function getAllYears()
+    {
+        return AcademicYear::orderBy('year_start', 'desc')->get();
+    }
 }

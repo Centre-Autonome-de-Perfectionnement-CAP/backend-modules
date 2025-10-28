@@ -32,6 +32,12 @@ class RoleSeeder extends Seeder
                 'is_system' => true,
             ],
             [
+                'name' => 'chef_division_distance',
+                'display_name' => 'Chef Division Formation à Distance',
+                'description' => 'Chef de la division Formation à Distance (Licence)',
+                'is_system' => true,
+            ],
+            [
                 'name' => 'comptable',
                 'display_name' => 'Comptable',
                 'description' => 'Responsable de la comptabilité',

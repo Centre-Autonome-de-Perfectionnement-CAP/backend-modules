@@ -6,9 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Modules\Finance\Models\Paiement;
 use App\Modules\Finance\Http\Requests\CreatePaiementRequest;
 use App\Modules\Finance\Services\PaiementService;
+use App\Models\Student;
+use App\Modules\Inscription\Models\PersonalInformation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Exception;
 
 /**
@@ -467,6 +470,77 @@ class PaiementController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Une erreur est survenue lors de la consultation du paiement.',
+                'error' => config('app.debug') ? $e->getMessage() : 'Erreur interne du serveur.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Récupérer les informations d'un étudiant par matricule
+     */
+    public function getStudentInfo(string $matricule): JsonResponse
+    {
+        try {
+            $student = Student::where('student_id_number', $matricule)->first();
+
+            if (!$student) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Étudiant non trouvé avec ce matricule.',
+                ], 404);
+            }
+
+            // Chercher les informations personnelles via le matricule (téléphone)
+            $personalInfo = PersonalInformation::where(function($query) use ($matricule) {
+                $query->whereJsonContains('contacts', $matricule)
+                      ->orWhereJsonContains('contacts', [$matricule]);
+            })->first();
+
+            // Récupérer les filières/départements associés à l'étudiant
+            // Vous devrez adapter cette partie selon votre structure de base de données
+            $filieres = DB::table('student_department')
+                ->join('departments', 'student_department.department_id', '=', 'departments.id')
+                ->where('student_department.student_id', $student->id)
+                ->select('departments.id', 'departments.name as nom')
+                ->get()
+                ->toArray();
+
+            // Récupérer le diplôme (à adapter selon votre structure)
+            $diplome = null;
+            if ($personalInfo && isset($personalInfo->entry_diploma_id)) {
+                $diplome = DB::table('entry_diplomas')
+                    ->where('id', $personalInfo->entry_diploma_id)
+                    ->select('id', 'name as nom')
+                    ->first();
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id' => $student->id,
+                    'student_id_number' => $student->student_id_number,
+                    'nom' => $personalInfo->last_name ?? null,
+                    'prenoms' => $personalInfo->first_names ?? null,
+                    'email' => $personalInfo->email ?? null,
+                    'tel' => is_array($personalInfo->contacts ?? null) ? ($personalInfo->contacts[0] ?? null) : $matricule,
+                    'diplome' => $diplome ? [
+                        'id' => $diplome->id,
+                        'nom' => $diplome->nom
+                    ] : null,
+                    'filieres' => $filieres, // Liste des filières pour sélection
+                ],
+            ], 200);
+
+        } catch (Exception $e) {
+            Log::error('Erreur lors de la récupération des infos étudiant', [
+                'matricule' => $matricule,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Une erreur est survenue lors de la récupération des informations.',
                 'error' => config('app.debug') ? $e->getMessage() : 'Erreur interne du serveur.',
             ], 500);
         }

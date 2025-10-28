@@ -48,6 +48,11 @@ class AcademicYear extends Model
     {
         return $this->hasMany(SubmissionPeriod::class);
     }
+    
+    public function submissionPeriods()
+    {
+        return $this->hasMany(SubmissionPeriod::class);
+    }
 
     public function reclamationPeriod()
     {

@@ -8,6 +8,8 @@ use App\Modules\Inscription\Http\Controllers\DossierSubmissionController;
 use App\Modules\Inscription\Http\Controllers\AcademicYearController;
 use App\Modules\Inscription\Http\Controllers\StudentIdController;
 use App\Modules\Inscription\Http\Controllers\CycleController;
+use App\Modules\Inscription\Http\Controllers\EntryDiplomaController;
+use App\Modules\Inscription\Http\Controllers\PublicReferenceController;
 
 // Routes for Inscription module
 
@@ -43,6 +45,7 @@ Route::prefix('api/submissions')->group(function () {
 
 // Academic years routes
 Route::prefix('api/academic-years')->group(function () {
+    // Routes publiques pour les candidatures (gérées par le constructeur du controller)
     Route::get('/', [SubmissionController::class, 'getAcademicYears']);
     Route::get('/{academicYear}', [SubmissionController::class, 'getAcademicYear']);
 
@@ -82,3 +85,10 @@ Route::prefix('api/dossiers')->group(function () {
 Route::get('/api/cycles', [CycleController::class, 'index']);
 Route::get('/api/filieres', [CycleController::class, 'allDepartmentsWithPeriods']);
 Route::get('/api/next-deadline', [CycleController::class, 'nextDeadline']);
+
+// Routes publiques pour les candidatures (sans authentification)
+Route::prefix('api/public')->group(function () {
+    Route::get('/academic-years', [PublicReferenceController::class, 'academicYears']);
+    Route::get('/academic-years/department/{departmentId}', [PublicReferenceController::class, 'academicYearsForDepartment']);
+    Route::get('/entry-diplomas', [PublicReferenceController::class, 'entryDiplomas']);
+});

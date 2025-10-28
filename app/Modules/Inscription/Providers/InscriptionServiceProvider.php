@@ -3,6 +3,7 @@
 namespace App\Modules\Inscription\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Route;
 
 class InscriptionServiceProvider extends ServiceProvider
 {
@@ -19,7 +20,10 @@ class InscriptionServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
+        // Charger les routes avec le middleware API
+        Route::middleware('api')
+            ->group(__DIR__.'/../routes/api.php');
+            
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'inscription');
     }

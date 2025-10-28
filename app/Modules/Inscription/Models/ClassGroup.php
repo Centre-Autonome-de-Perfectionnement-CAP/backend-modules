@@ -11,7 +11,7 @@ class ClassGroup extends Model
 
     protected $fillable = [
         'academic_year_id',
-        'program_id',
+        'filiere_id',
         'study_level',
         'group_name',
     ];
@@ -25,11 +25,11 @@ class ClassGroup extends Model
     }
 
     /**
-     * Relation avec la filière (Program dans Inscription)
+     * Relation avec la filière (Department)
      */
-    public function program()
+    public function filiere()
     {
-        return $this->belongsTo(\App\Modules\Inscription\Models\Program::class);
+        return $this->belongsTo(\App\Models\Department::class, 'filiere_id');
     }
 
     /**

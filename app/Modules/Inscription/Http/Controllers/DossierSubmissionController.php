@@ -13,6 +13,7 @@ use App\Modules\Inscription\Models\SubmissionPeriod;
 use App\Modules\Inscription\Services\DossierSubmissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 /**
  * @OA\Tag(
@@ -133,6 +134,14 @@ class DossierSubmissionController extends Controller
      */
     public function submitLicenceDossier(SubmitLicenceDossierRequest $request): JsonResponse
     {
+        // Debug : log les données reçues
+        Log::info('Licence Dossier Submission - Data received', [
+            'birth_date' => $request->input('birth_date'),
+            'birth_place' => $request->input('birth_place'),
+            'birth_country' => $request->input('birth_country'),
+            'all_inputs' => $request->except(['photo', 'demande_da', 'cv', 'acte_naissance', 'diplome_bac', 'diplome_licence', 'attestation_travail', 'quittance_rectorat', 'quittance_cap', 'attestation_depot_dossier'])
+        ]);
+
         try {
             $fileFields = [
                 'demande_da' => 'Demande manuscrite adressée au D/EPAC',
@@ -148,7 +157,7 @@ class DossierSubmissionController extends Controller
 
             $result = $this->submissionService->submitDossier(
                 $request,
-                'Licence',
+                'Licence Professionnelle',
                 ['Baccalauréat Scientifique', 'BTS', 'DTI', 'DUT', 'DEAT'],
                 $fileFields
             );
@@ -194,7 +203,7 @@ class DossierSubmissionController extends Controller
 
             $result = $this->submissionService->submitDossier(
                 $request,
-                'Master',
+                'Master Professionnel',
                 ['Licence Professionnelle'],
                 $fileFields
             );
@@ -239,7 +248,7 @@ class DossierSubmissionController extends Controller
 
             $result = $this->submissionService->submitDossier(
                 $request,
-                'Ingénieur',
+                'Ingénierie',
                 ['Licence Professionnelle'],
                 $fileFields
             );
@@ -329,26 +338,40 @@ class DossierSubmissionController extends Controller
             }
         }
 
+        // Récupérer et décoder les documents manuellement
+        $documentsRaw = $pendingStudent->getAttributes()['documents'] ?? null;
+        $documents = null;
+        
+        if ($documentsRaw) {
+            // Si c'est déjà un array (grâce au cast), l'utiliser directement
+            if (is_array($documentsRaw)) {
+                $documents = $documentsRaw;
+            } else {
+                // Sinon, décoder le JSON
+                $documents = json_decode($documentsRaw, true);
+            }
+        }
+
         return response()->json([
             'data' => [
                 'tracking_code' => $pendingStudent->tracking_code,
-                'last_name' => $pendingStudent->personalInformation->last_name,
-                'first_names' => $pendingStudent->personalInformation->first_names,
-                'email' => $pendingStudent->personalInformation->email,
-                'birth_date' => $pendingStudent->personalInformation->birth_date,
-                'birth_place' => $pendingStudent->personalInformation->birth_place,
-                'birth_country' => $pendingStudent->personalInformation->birth_country,
-                'gender' => $pendingStudent->personalInformation->gender,
-                'contacts' => json_decode($pendingStudent->personalInformation->contacts, true),
+                'last_name' => $pendingStudent->personalInformation->last_name ?? '',
+                'first_names' => $pendingStudent->personalInformation->first_names ?? '',
+                'email' => $pendingStudent->personalInformation->email ?? '',
+                'birth_date' => $pendingStudent->personalInformation->birth_date ?? null,
+                'birth_place' => $pendingStudent->personalInformation->birth_place ?? '',
+                'birth_country' => $pendingStudent->personalInformation->birth_country ?? '',
+                'gender' => $pendingStudent->personalInformation->gender ?? '',
+                'contacts' => $pendingStudent->personalInformation->contacts ?? [], // Déjà en array grâce au cast
                 'study_level' => $pendingStudent->level,
                 'entry_diploma' => $pendingStudent->entryDiploma->name ?? null,
-                'department' => $pendingStudent->department->name,
-                'academic_year' => $pendingStudent->academicYear->academic_year,
-                'documents' => json_decode($pendingStudent->documents, true),
+                'department' => $pendingStudent->department->name ?? '',
+                'academic_year' => $pendingStudent->academicYear->academic_year ?? '',
+                'documents' => $documents,
                 'photo' => $pendingStudent->photo,
                 'status' => $status,
                 'message' => $message,
-                'source_deciion' => $sourceDecision
+                'source_decision' => $sourceDecision
             ],
         ], 200);
     }
