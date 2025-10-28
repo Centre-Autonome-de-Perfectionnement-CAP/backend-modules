@@ -10,7 +10,7 @@ class Program extends Model
 {
     use HasFactory, HasUuid;
 
-    protected $table = 'course_programs';
+    protected $table = 'programs';
 
     protected $fillable = [
         'class_group_id',

@@ -47,7 +47,7 @@ class AuthService
                 'email' => $user->email,
                 'phone' => $user->phone,
                 'role' => $user->roles->first()?->name ?? 'etudiant',
-                'role_display_name' => $user->roles->first()?->display_name ?? 'Étudiant',
+                'role_display_name' => $user->roles->first()?->name ?? 'Étudiant',
             ],
         ];
     }

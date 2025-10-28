@@ -61,14 +61,6 @@ class PaiementService
     }
 
     /**
-     * Récupérer un paiement par sa référence
-     */
-    public function getByReference(string $reference): ?Paiement
-    {
-        return Paiement::where('reference', $reference)->first();
-    }
-
-    /**
      * Récupérer les informations d'un étudiant par matricule
      */
     public function getStudentInfo(string $matricule): array

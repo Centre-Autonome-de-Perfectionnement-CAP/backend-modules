@@ -28,8 +28,7 @@ class Role extends Model
 
     protected $fillable = [
         'name',
-        'display_name',
-        'description',
+        'slug',
         'is_system',
     ];
 

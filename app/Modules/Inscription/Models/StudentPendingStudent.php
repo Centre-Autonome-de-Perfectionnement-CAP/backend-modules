@@ -4,10 +4,13 @@ namespace App\Modules\Inscription\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\HasUuid;
 
 class StudentPendingStudent extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
+
+    protected $table = 'student_pending_student';
 
     protected $fillable = [
         'student_id',
