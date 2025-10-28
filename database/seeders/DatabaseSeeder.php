@@ -28,6 +28,8 @@ class DatabaseSeeder extends Seeder
             // \App\Modules\Inscription\Database\Seeders\InscriptionDatabaseSeeder::class,
             CycleSeeder::class,
             DepartmentSeeder::class,
+            AcademicYearCompleteSeeder::class,  // Années académiques avec périodes complètes
+            // QuickAcademicYearSeeder::class,  // Alternative rapide pour développement
         ]);
     }
 }

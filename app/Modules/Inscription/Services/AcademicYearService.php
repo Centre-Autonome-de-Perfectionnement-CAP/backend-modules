@@ -16,7 +16,7 @@ class AcademicYearService
      */
     public function getAll(array $filters = [], int $perPage = 15)
     {
-        $query = AcademicYear::query()->with(['submissionPeriods.department']);
+        $query = AcademicYear::query();
 
         if (!empty($filters['search'])) {
             $query->where('academic_year', 'like', "%{$filters['search']}%");
@@ -72,7 +72,7 @@ class AcademicYearService
                 'label' => $academicYearLabel,
             ]);
 
-            return $year->fresh(['submissionPeriods.department']);
+            return $year->fresh();
         });
     }
 
@@ -81,7 +81,7 @@ class AcademicYearService
      */
     public function getById(int $id): ?AcademicYear
     {
-        return AcademicYear::with(['submissionPeriods.department'])->find($id);
+        return AcademicYear::find($id);
     }
 
     /**
@@ -116,7 +116,7 @@ class AcademicYearService
             // Mettre à jour les périodes de soumission si nécessaire
             if (isset($data['departments'])) {
                 // Supprimer les anciennes périodes
-                $academicYear->submissionPeriods()->delete();
+                $academicYear->submissionPeriod()->delete();
                 
                 // Créer les nouvelles
                 foreach ($data['departments'] as $departmentId) {
@@ -133,7 +133,7 @@ class AcademicYearService
                 'academic_year_id' => $academicYear->id,
             ]);
 
-            return $academicYear->fresh(['submissionPeriods.department']);
+            return $academicYear->fresh();
         });
     }
 
@@ -186,7 +186,6 @@ class AcademicYearService
     public function getCurrent(): ?AcademicYear
     {
         return AcademicYear::where('is_current', true)
-            ->with(['submissionPeriods.department'])
             ->first();
     }
 

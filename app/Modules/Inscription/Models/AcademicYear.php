@@ -27,7 +27,13 @@ class AcademicYear extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['submission_start', 'submission_end', 'academic_year', 'year_start', 'year_end'];
+    protected $fillable = ['submission_start', 'submission_end', 'academic_year', 'year_start', 'year_end', 'is_current'];
+
+    protected $casts = [
+        'submission_start' => 'date',
+        'submission_end' => 'date',
+        'is_current' => 'boolean',
+    ];
 
     protected static function boot()
     {

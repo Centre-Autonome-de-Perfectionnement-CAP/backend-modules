@@ -19,7 +19,7 @@ class AuthService
 
         if (!$user || !Hash::check($credentials['password'], $user->password)) {
             throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
+                'email' => ['Les identifiants fournis sont incorrects. '],
             ]);
         }
 
@@ -34,10 +34,21 @@ class AuthService
             'email' => $user->email,
         ]);
 
+        // Charger les rôles
+        $user->load('roles');
+        
         return [
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'user' => $user->load('roles'),
+            'user' => [
+                'id' => $user->id,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'role' => $user->roles->first()?->name ?? 'etudiant',
+                'role_display_name' => $user->roles->first()?->display_name ?? 'Étudiant',
+            ],
         ];
     }
 

@@ -63,7 +63,7 @@ Route::middleware('auth:sanctum')->prefix('files')->group(function () {
 });
 
 // Routes Documents (public GET, protected CUD)
-Route::prefix('api/documents')->group(function () {
+Route::prefix('documents')->group(function () {
     // Routes publiques
     Route::get('/', [DocumentController::class, 'index'])->name('api.documents.index');
     Route::get('{document}', [DocumentController::class, 'show'])->name('api.documents.show');

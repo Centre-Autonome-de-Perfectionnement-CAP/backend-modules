@@ -41,6 +41,17 @@ class ReclamationPeriod extends Model
         'is_active' => 'boolean',
     ];
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            if (empty($model->uuid)) {
+                $model->uuid = (string) \Illuminate\Support\Str::uuid();
+            }
+        });
+    }
+
     public function academicYear()
     {
         return $this->belongsTo(AcademicYear::class);

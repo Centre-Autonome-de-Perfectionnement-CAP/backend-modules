@@ -54,11 +54,15 @@ class PendingStudent extends Model
         'last_name',
         'phone',
         'entry_level_id',
+        'personal_information_id',
+        'entry_diploma_id',
+        'pieces',
         'status',
         'submitted_at',
     ];
 
     protected $casts = [
+        'pieces' => 'array',
         'submitted_at' => 'datetime',
         'documents' => 'array',
     ];
