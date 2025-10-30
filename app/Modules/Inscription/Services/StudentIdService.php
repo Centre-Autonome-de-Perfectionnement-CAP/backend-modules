@@ -2,9 +2,8 @@
 
 namespace App\Modules\Inscription\Services;
 
-use App\Models\Student;
+use App\Modules\Inscription\Models\Student;
 use App\Modules\Inscription\Models\PersonalInformation;
-use App\Exceptions\ResourceNotFoundException;
 use App\Exceptions\BusinessException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -25,16 +24,21 @@ class StudentIdService
             ->first();
 
         if (!$pi) {
-            throw new ResourceNotFoundException('Identité introuvable');
+            throw new BusinessException(
+                message: 'Aucune identité trouvée avec ces informations. Veuillez vérifier vos données (nom, prénoms, date et lieu de naissance).',
+                errorCode: 'IDENTITY_NOT_FOUND',
+                statusCode: 404
+            );
         }
 
-        // Le matricule est égal au numéro de téléphone enregistré
+        // Récupérer le matricule étudiant depuis la table students
+        // Le matricule peut être associé via le numéro de téléphone ou directement
         $phone = is_array($pi->contacts ?? null) ? ($pi->contacts[0] ?? null) : ($pi->phone ?? null);
         
         if (!$phone) {
             throw new BusinessException(
-                message: 'Aucun numéro de téléphone associé à cette identité',
-                errorCode: 'PHONE_NOT_FOUND'
+                message: 'Votre matricule n\'a pas encore été attribué. Veuillez d\'abord obtenir un matricule via l\'option "Obtenir un matricule".',
+                errorCode: 'STUDENT_ID_NOT_ASSIGNED'
             );
         }
 
@@ -42,7 +46,7 @@ class StudentIdService
         
         if (!$student) {
             throw new BusinessException(
-                message: 'Matricule non défini pour cette identité',
+                message: 'Votre matricule n\'a pas encore été attribué. Utilisez l\'onglet "Obtenir un matricule" pour en créer un.',
                 errorCode: 'STUDENT_ID_NOT_ASSIGNED'
             );
         }
@@ -70,18 +74,29 @@ class StudentIdService
                 ->first();
 
             if (!$pi) {
-                throw new ResourceNotFoundException('Identité introuvable');
+                throw new BusinessException(
+                    message: 'Aucune identité trouvée avec ces informations. Assurez-vous d\'avoir déjà soumis une candidature au CAP.',
+                    errorCode: 'IDENTITY_NOT_FOUND',
+                    statusCode: 404
+                );
             }
 
-            // Vérifier si un étudiant existe déjà avec ce numéro de téléphone
+            // Vérifier si un matricule existe déjà pour ce numéro de téléphone
             $existingStudent = Student::where('student_id_number', $data['phone'])->first();
             
             if ($existingStudent) {
                 throw new BusinessException(
-                    message: 'Un étudiant avec ce matricule existe déjà',
+                    message: 'Ce numéro de téléphone est déjà utilisé comme matricule. Utilisez l\'onglet "Consulter mon matricule" pour le retrouver.',
                     errorCode: 'STUDENT_ID_ALREADY_EXISTS',
                     statusCode: 409
                 );
+            }
+
+            // Mettre à jour le PersonalInformation avec le téléphone
+            $contacts = is_array($pi->contacts) ? $pi->contacts : [];
+            if (!in_array($data['phone'], $contacts)) {
+                $contacts[] = $data['phone'];
+                $pi->update(['contacts' => $contacts]);
             }
 
             // Créer l'étudiant

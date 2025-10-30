@@ -259,12 +259,14 @@ class DossierSubmissionController extends Controller
 
         $fileFields = [
             'certificat_prepa' => 'Certificat de Classes Préparatoires',
+            'quittance_rectorat' => 'Quittance Rectorat',
+            'quittance_cap' => 'Quittance CAP',
         ];
 
         $result = $this->submissionService->submitDossier(
             $request,
             'Ingénieur',
-            ['Certificat de Classes Préparatoires'],
+            ['Certificat de Classes Préparatoires', 'Quittance Rectorat', 'Quittance CAP'],
             $fileFields,
             false
         );

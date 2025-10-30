@@ -41,7 +41,7 @@ class CycleSeeder extends Seeder
                 'years_count' => 5,
                 'is_lmd' => false,
                 'type' => 'ingenieur',
-                'description' => 'Formation d\'Ingénieur (5 ans)',
+                'description' => 'Formation d\'Ingénieur (5 ans) - Inclut Prépa (2 ans) + Spécialité (3 ans)',
                 'is_active' => true,
             ],
         ];

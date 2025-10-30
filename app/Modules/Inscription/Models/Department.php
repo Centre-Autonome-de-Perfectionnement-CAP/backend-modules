@@ -24,6 +24,22 @@ class Department extends Model
     ];
 
     /**
+     * Relation avec le cycle
+     */
+    public function cycle()
+    {
+        return $this->belongsTo(Cycle::class, 'cycle_id');
+    }
+
+    /**
+     * Relation avec les périodes de soumission
+     */
+    public function submissionPeriod()
+    {
+        return $this->hasMany(\App\Modules\Inscription\Models\SubmissionPeriod::class, 'department_id');
+    }
+
+    /**
      * Relation avec les groupes de classe
      */
     public function classGroups()

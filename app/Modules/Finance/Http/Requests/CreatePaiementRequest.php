@@ -5,7 +5,7 @@ namespace App\Modules\Finance\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Contracts\Validation\Validator;
-use App\Models\Student;
+use App\Modules\Inscription\Models\Student;
 
 class CreatePaiementRequest extends FormRequest
 {

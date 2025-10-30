@@ -31,8 +31,9 @@ class SubmissionPeriodSeeder extends Seeder
         $reclamationCount = 0;
 
         // Créer des périodes de soumission pour chaque département
+        // PÉRIODES ACTIVES MAINTENANT pour les tests
         foreach ($departments as $dept) {
-            // Période de soumission
+            // Période de soumission (active maintenant pour 3 mois)
             SubmissionPeriod::updateOrCreate(
                 [
                     'academic_year_id' => $currentYear->id,
@@ -40,15 +41,15 @@ class SubmissionPeriodSeeder extends Seeder
                 ],
                 [
                     'uuid' => Str::uuid()->toString(),
-                    'start_date' => now()->addMonths(6)->startOfMonth(),
-                    'end_date' => now()->addMonths(8)->endOfMonth(),
+                    'start_date' => now()->subDays(7), // Commencé il y a 7 jours
+                    'end_date' => now()->addMonths(3), // Se termine dans 3 mois
                     'is_active' => true,
-                    'description' => "Période de soumission des candidatures pour {$dept->name}",
+                    'description' => "Période de soumission des candidatures pour {$dept->name} - ACTIVE",
                 ]
             );
             $submissionCount++;
 
-            // Période de réclamation
+            // Période de réclamation (sera active plus tard)
             ReclamationPeriod::updateOrCreate(
                 [
                     'academic_year_id' => $currentYear->id,
@@ -56,8 +57,8 @@ class SubmissionPeriodSeeder extends Seeder
                 ],
                 [
                     'uuid' => Str::uuid()->toString(),
-                    'start_date' => now()->addMonths(10)->startOfMonth(),
-                    'end_date' => now()->addMonths(10)->addDays(15),
+                    'start_date' => now()->addMonths(4)->startOfMonth(),
+                    'end_date' => now()->addMonths(4)->addDays(15),
                     'is_active' => true,
                     'description' => "Période de réclamation pour {$dept->name}",
                 ]
@@ -65,7 +66,7 @@ class SubmissionPeriodSeeder extends Seeder
             $reclamationCount++;
         }
 
-        // Période générale (sans département spécifique)
+        // Période générale (sans département spécifique) - ACTIVE MAINTENANT
         SubmissionPeriod::updateOrCreate(
             [
                 'academic_year_id' => $currentYear->id,
@@ -73,10 +74,10 @@ class SubmissionPeriodSeeder extends Seeder
             ],
             [
                 'uuid' => Str::uuid()->toString(),
-                'start_date' => now()->addMonths(6)->startOfMonth(),
-                'end_date' => now()->addMonths(8)->endOfMonth(),
+                'start_date' => now()->subDays(7), // Commencé il y a 7 jours
+                'end_date' => now()->addMonths(3), // Se termine dans 3 mois
                 'is_active' => true,
-                'description' => "Période générale de soumission des candidatures",
+                'description' => "Période générale de soumission des candidatures - ACTIVE",
             ]
         );
         $submissionCount++;
@@ -88,8 +89,8 @@ class SubmissionPeriodSeeder extends Seeder
             ],
             [
                 'uuid' => Str::uuid()->toString(),
-                'start_date' => now()->addMonths(10)->startOfMonth(),
-                'end_date' => now()->addMonths(10)->addDays(15),
+                'start_date' => now()->addMonths(4)->startOfMonth(),
+                'end_date' => now()->addMonths(4)->addDays(15),
                 'is_active' => true,
                 'description' => "Période générale de réclamation",
             ]

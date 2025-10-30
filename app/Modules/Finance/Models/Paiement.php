@@ -4,7 +4,7 @@ namespace App\Modules\Finance\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Student;
+use App\Modules\Inscription\Models\Student;
 use App\Modules\Stockage\Models\File;
 
 class Paiement extends Model

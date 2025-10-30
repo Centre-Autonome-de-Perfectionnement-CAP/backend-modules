@@ -43,7 +43,7 @@ class StudentIdController extends Controller
      */
     public function lookup(LookupStudentIdRequest $request): JsonResponse
     {
-        $studentIdNumber = $this->studentIdService->lookupStudentId($request->validated());
+        $studentIdNumber = $this->studentIdService->lookupByIdentity($request->validated());
         
         return $this->successResponse(
             ['student_id_number' => $studentIdNumber],
@@ -73,10 +73,10 @@ class StudentIdController extends Controller
      */
     public function assign(AssignStudentIdRequest $request): JsonResponse
     {
-        $studentIdNumber = $this->studentIdService->assignStudentId($request->validated());
+        $student = $this->studentIdService->assignStudentId($request->validated());
         
         return $this->createdResponse(
-            ['student_id_number' => $studentIdNumber],
+            ['student_id_number' => $student->student_id_number],
             'Matricule assigné avec succès'
         );
     }

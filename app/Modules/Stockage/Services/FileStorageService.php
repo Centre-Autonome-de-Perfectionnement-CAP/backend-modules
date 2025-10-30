@@ -61,12 +61,12 @@ class FileStorageService
             // Calculer le hash
             $fileHash = hash_file('sha256', $uploadedFile->getRealPath());
 
-            // Créer l'enregistrement
+            // Créer l'enregistrement (name et path sont des colonnes générées)
             $file = File::create([
                 'user_id' => $userId,
-                'name' => $filename,
                 'original_name' => $uploadedFile->getClientOriginalName(),
-                'path' => $path,
+                'stored_name' => $filename,
+                'file_path' => $path,
                 'disk' => $disk,
                 'visibility' => $visibility,
                 'module_name' => $moduleName,

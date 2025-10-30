@@ -17,7 +17,9 @@ class SubmitIngenieurSpecialiteDossierRequest extends FormRequest
             'student_id_number' => ['required','string','max:100'],
             'department_id' => ['required','integer','exists:departments,id'],
             'academic_year_id' => ['required','integer','exists:academic_years,id'],
-            'certificat_prepa' => ['required','file'],
+            'certificat_prepa' => ['required','file','mimes:pdf,jpg,jpeg,png','max:5120'],
+            'quittance_rectorat' => ['required','file','mimes:pdf,jpg,jpeg,png','max:5120'],
+            'quittance_cap' => ['required','file','mimes:pdf,jpg,jpeg,png','max:5120'],
         ];
     }
 }

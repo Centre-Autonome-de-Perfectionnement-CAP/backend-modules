@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
+use App\Traits\HasUuid;
 
 /**
  * @OA\Schema(
@@ -43,17 +44,19 @@ use Illuminate\Support\Facades\Storage;
  */
 class File extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, HasUuid;
 
     protected $fillable = [
         'user_id',
-        'name',
+        // 'name', // Colonne générée, ne pas inclure dans fillable
         'original_name',
+        'stored_name',
+        'file_path',
         'description',
         'document_categorie',
         'is_official_document',
         'date_publication',
-        'path',
+        // 'path', // Colonne générée, ne pas inclure dans fillable
         'disk',
         'visibility',
         'module_name',

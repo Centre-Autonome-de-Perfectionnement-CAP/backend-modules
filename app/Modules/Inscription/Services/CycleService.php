@@ -204,7 +204,9 @@ class CycleService
         $periods = $groupedByDeadline->map(function ($periodsGroup, $dateKey) {
             $deadline = \Illuminate\Support\Carbon::parse($dateKey)->endOfDay();
             
-            $filieres = $periodsGroup->map(function ($period) {
+            $filieres = $periodsGroup->filter(function ($period) {
+                return $period->department !== null;
+            })->map(function ($period) {
                 $cycleName = strtolower($period->department->cycle->name ?? '');
                 if ($cycleName === 'ingénieur') {
                     $cycleName = 'ingenierie';

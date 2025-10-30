@@ -4,7 +4,7 @@ namespace App\Modules\Finance\Services;
 
 use App\Modules\Finance\Models\Paiement;
 use App\Modules\Stockage\Services\FileStorageService;
-use App\Models\Student;
+use App\Modules\Inscription\Models\Student;
 use App\Modules\Inscription\Models\PersonalInformation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -77,35 +77,28 @@ class PaiementService
                   ->orWhereJsonContains('contacts', [$matricule]);
         })->first();
 
-        // Récupérer les filières/départements
-        $filieres = DB::table('student_department')
-            ->join('departments', 'student_department.department_id', '=', 'departments.id')
-            ->where('student_department.student_id', $student->id)
+        // Récupérer les filières/départements via student_pending_student
+        $filieres = DB::table('student_pending_student')
+            ->join('pending_students', 'student_pending_student.pending_student_id', '=', 'pending_students.id')
+            ->join('departments', 'pending_students.department_id', '=', 'departments.id')
+            ->where('student_pending_student.student_id', $student->id)
             ->select('departments.id', 'departments.name as nom')
+            ->distinct()
             ->get()
             ->toArray();
 
-        // Récupérer le diplôme
-        $diplome = null;
-        if ($personalInfo && isset($personalInfo->entry_diploma_id)) {
-            $diplome = DB::table('entry_diplomas')
-                ->where('id', $personalInfo->entry_diploma_id)
-                ->select('id', 'name as nom')
-                ->first();
-        }
+        $hasNoFilieres = empty($filieres);
 
         return [
             'id' => $student->id,
             'student_id_number' => $student->student_id_number,
-            'nom' => $personalInfo->last_name ?? null,
-            'prenoms' => $personalInfo->first_names ?? null,
-            'email' => $personalInfo->email ?? null,
-            'tel' => is_array($personalInfo->contacts ?? null) ? ($personalInfo->contacts[0] ?? null) : $matricule,
-            'diplome' => $diplome ? [
-                'id' => $diplome->id,
-                'nom' => $diplome->nom
-            ] : null,
+            'nom' => $personalInfo?->last_name ?? null,
+            'prenoms' => $personalInfo?->first_names ?? null,
+            'email' => $personalInfo?->email ?? $student->email ?? null,
+            'tel' => $personalInfo && is_array($personalInfo->contacts ?? null) ? ($personalInfo->contacts[0] ?? null) : $matricule,
             'filieres' => $filieres,
+            'has_no_filieres' => $hasNoFilieres,
+            'message' => $hasNoFilieres ? 'Aucune filière associée à ce matricule. Veuillez d\'abord soumettre une candidature.' : null,
         ];
     }
 
@@ -124,10 +117,10 @@ class PaiementService
                 throw new ResourceNotFoundException("Étudiant avec le matricule {$data['matricule']}");
             }
 
-            // Upload de la quittance
+            // Upload de la quittance (userId = null pour les soumissions publiques)
             $uploadedQuittance = $this->fileStorageService->uploadFile(
                 uploadedFile: $quittanceFile,
-                userId: $student->id,
+                userId: null, // Pas d'utilisateur authentifié pour les paiements publics
                 visibility: 'private',
                 collection: 'quittances',
                 moduleName: 'Finance',
@@ -135,6 +128,7 @@ class PaiementService
                 metadata: [
                     'matricule' => $data['matricule'],
                     'montant' => $data['montant'],
+                    'student_id' => $student->id, // ID de l'étudiant pour référence
                 ]
             );
 
