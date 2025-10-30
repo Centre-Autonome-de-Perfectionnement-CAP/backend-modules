@@ -17,7 +17,6 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  *     @OA\Property(property="name", type="string", description="Nom du rôle"),
  *     @OA\Property(property="display_name", type="string", description="Nom d'affichage"),
  *     @OA\Property(property="description", type="string", description="Description du rôle"),
- *     @OA\Property(property="is_system", type="boolean", description="Si c'est un rôle système"),
  *     @OA\Property(property="created_at", type="string", format="date-time", description="Date de création"),
  *     @OA\Property(property="updated_at", type="string", format="date-time", description="Date de mise à jour")
  * )
@@ -29,12 +28,9 @@ class Role extends Model
     protected $fillable = [
         'name',
         'slug',
-        'is_system',
     ];
 
-    protected $casts = [
-        'is_system' => 'boolean',
-    ];
+
 
     /**
      * Les permissions associées à ce rôle.
@@ -110,21 +106,5 @@ class Role extends Model
         $this->permissions()->detach($permissionIds);
 
         return $this;
-    }
-
-    /**
-     * Scope pour les rôles non-système (supprimables).
-     */
-    public function scopeNonSystem($query)
-    {
-        return $query->where('is_system', false);
-    }
-
-    /**
-     * Scope pour les rôles système.
-     */
-    public function scopeSystem($query)
-    {
-        return $query->where('is_system', true);
     }
 }

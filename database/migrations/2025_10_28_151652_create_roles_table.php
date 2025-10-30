@@ -16,7 +16,6 @@ return new class extends Migration
             $table->uuid('uuid')->unique();
             $table->string('name');
             $table->string('slug')->unique();
-            $table->text('description')->nullable();
             $table->timestamps();
             $table->softDeletes();
             

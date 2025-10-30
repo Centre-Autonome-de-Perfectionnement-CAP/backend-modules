@@ -20,8 +20,8 @@ class PendingStudent extends Model
         'level',
         'documents',
         'entry_diploma_id',
-        'status',
         'sponsorise',
+        'status',
     ];
 
     protected $casts = [
@@ -50,9 +50,9 @@ class PendingStudent extends Model
     }
 
     public function studentPendingStudents()
-    {
-        return $this->hasMany(StudentPendingStudent::class);
-    }
+{
+    return $this->hasMany(StudentPendingStudent::class, 'pending_student_id');
+}
 
     /**
      * Get the files associated with this pending student.

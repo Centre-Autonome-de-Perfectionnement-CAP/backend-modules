@@ -22,6 +22,7 @@ Route::prefix('api/inscription')->group(function () {
             Route::put('/{pendingStudent}', [PendingStudentController::class, 'update']);
             Route::delete('/{pendingStudent}', [PendingStudentController::class, 'destroy']);
             Route::get('/{pendingStudent}/documents', [PendingStudentController::class, 'getDocuments']);
+            Route::patch('/{pendingStudent}/financial-status', [PendingStudentController::class, 'updateStatus']);
         });
         Route::post('/', [PendingStudentController::class, 'store']);
         Route::post('/{pendingStudent}/documents', [PendingStudentController::class, 'submitDocuments']);

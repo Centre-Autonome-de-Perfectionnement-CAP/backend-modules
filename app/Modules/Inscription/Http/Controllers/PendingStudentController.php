@@ -240,6 +240,24 @@ class PendingStudentController extends Controller
     }
 
     /**
+ * Mettre à jour uniquement les statuts (exonéré, sponsorisé)
+ */
+public function updateStatus(Request $request, PendingStudent $pendingStudent): JsonResponse
+{
+    $validated = $request->validate([
+        'exonere' => 'sometimes|in:Oui,Non',
+        'sponsorise' => 'sometimes|in:Oui,Non',
+    ]);
+
+    $pendingStudent->update($validated);
+
+    return $this->successResponse(
+        new PendingStudentResource($pendingStudent),
+        'Statuts mis à jour avec succès'
+    );
+}
+
+    /**
      * @OA\Delete(
      *     path="/api/pending-students/{pendingStudent}",
      *     summary="Supprimer un étudiant en attente",

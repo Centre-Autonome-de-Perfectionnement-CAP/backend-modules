@@ -26,4 +26,9 @@ class StudentPendingStudent extends Model
     {
         return $this->belongsTo(PendingStudent::class);
     }
+
+    public function academicPaths()
+{
+    return $this->hasMany(AcademicPath::class, 'student_pending_student_id');
+}
 }
