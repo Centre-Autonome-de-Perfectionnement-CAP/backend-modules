@@ -115,4 +115,19 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Contact Form Email Recipients
+    |--------------------------------------------------------------------------
+    |
+    | Configure the email addresses that should receive notifications when
+    | a new contact message is submitted through the website contact form.
+    |
+    */
+
+    'contact' => [
+        'to' => env('MAIL_CONTACT_TO', 'contact@cap-epac.online'),
+        'cc' => env('MAIL_CONTACT_CC', 'owomax@gmail.com'),
+    ],
+
 ];

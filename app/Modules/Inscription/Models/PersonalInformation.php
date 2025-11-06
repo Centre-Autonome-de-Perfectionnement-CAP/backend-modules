@@ -20,7 +20,6 @@ class PersonalInformation extends Model
         'birth_country',
         'gender',
         'contacts',
-        'entry_diploma_id',
         'nationality',
         'photo',
     ];
@@ -33,5 +32,13 @@ class PersonalInformation extends Model
     public function student()
     {
         return $this->belongsTo(Student::class);
+    }
+
+    /**
+     * Relation vers les dossiers (pending_students)
+     */
+    public function pendingStudents()
+    {
+        return $this->hasMany(PendingStudent::class, 'personal_information_id');
     }
 }

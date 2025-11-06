@@ -13,7 +13,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
         then: function () {
             // Charger les routes API des modules
-            $modules = ['Auth', 'Stockage', 'Inscription', 'Finance', 'Cours', 'RH'];
+            $modules = ['Auth', 'Stockage', 'Inscription', 'Finance', 'Cours', 'RH', 'Contact'];
             foreach ($modules as $module) {
                 $routePath = base_path("app/Modules/{$module}/routes/api.php");
                 if (file_exists($routePath)) {

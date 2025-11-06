@@ -14,9 +14,9 @@ class DepartmentSeeder extends Seeder
      */
     public function run(): void
     {
-        $licenceCycle = Cycle::where('name', 'Licence')->first();
-        $masterCycle = Cycle::where('name', 'Master')->first();
-        $ingenieurCycle = Cycle::where('name', 'Ingénieur')->first();
+        $licenceCycle = Cycle::where('name', 'LIKE', '%Licence%')->first();
+        $masterCycle = Cycle::where('name', 'LIKE', '%Master%')->first();
+        $ingenieurCycle = Cycle::where('name', 'LIKE', '%Ing%')->first();
 
         $departments = [
             // ==================== Départements Licence (cycle_id = 1) ====================

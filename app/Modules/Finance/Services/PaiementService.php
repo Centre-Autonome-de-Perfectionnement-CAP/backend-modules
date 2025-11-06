@@ -3,46 +3,48 @@
 namespace App\Modules\Finance\Services;
 
 use App\Modules\Finance\Models\Paiement;
-use App\Modules\Stockage\Services\FileStorageService;
+use App\Modules\Finance\Mail\QuittanceConfirmation;
 use App\Modules\Inscription\Models\Student;
+use App\Modules\Inscription\Models\StudentPendingStudent;
 use App\Modules\Inscription\Models\PersonalInformation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use App\Exceptions\ResourceNotFoundException;
 
 class PaiementService
 {
-    public function __construct(
-        protected FileStorageService $fileStorageService
-    ) {}
+    // Plus besoin de FileStorageService
+    // Les fichiers seront stockés directement dans storage/app/private/paiements/{matricule}/
 
     /**
      * Récupérer tous les paiements avec filtres et pagination
      */
     public function getAll(array $filters, int $perPage = 15)
     {
-        $query = Paiement::query()->with(['student', 'quittanceFile']);
+        $query = Paiement::query()->with(['student']);
 
         // Recherche globale
         if (!empty($filters['search'])) {
             $search = $filters['search'];
             $query->where(function ($q) use ($search) {
-                $q->where('matricule', 'like', "%{$search}%")
+                $q->where('student_id_number', 'like', "%{$search}%")
                   ->orWhere('reference', 'like', "%{$search}%")
                   ->orWhere('email', 'like', "%{$search}%")
                   ->orWhere('contact', 'like', "%{$search}%")
-                  ->orWhere('numero_compte', 'like', "%{$search}%");
+                  ->orWhere('account_number', 'like', "%{$search}%");
             });
         }
 
         // Filtre par statut
-        if (!empty($filters['statut'])) {
-            $query->where('statut', $filters['statut']);
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
         }
 
         // Filtre par matricule
-        if (!empty($filters['matricule'])) {
-            $query->where('matricule', $filters['matricule']);
+        if (!empty($filters['student_id_number'])) {
+            $query->where('student_id_number', $filters['student_id_number']);
         }
 
         // Filtre par plage de dates
@@ -65,17 +67,14 @@ class PaiementService
      */
     public function getStudentInfo(string $matricule): array
     {
-        $student = Student::where('student_id_number', $matricule)->first();
+        $student = Student::with('pendingStudents.personalInformation')->where('student_id_number', $matricule)->first();
         
         if (!$student) {
             throw new ResourceNotFoundException('Étudiant');
         }
 
-        // Chercher les informations personnelles
-        $personalInfo = PersonalInformation::where(function($query) use ($matricule) {
-            $query->whereJsonContains('contacts', $matricule)
-                  ->orWhereJsonContains('contacts', [$matricule]);
-        })->first();
+        // Récupérer les informations personnelles via la relation
+        $personalInfo = $student->personalInformation;
 
         // Récupérer les filières/départements via student_pending_student
         $filieres = DB::table('student_pending_student')
@@ -94,8 +93,8 @@ class PaiementService
             'student_id_number' => $student->student_id_number,
             'nom' => $personalInfo?->last_name ?? null,
             'prenoms' => $personalInfo?->first_names ?? null,
-            'email' => $personalInfo?->email ?? $student->email ?? null,
-            'tel' => $personalInfo && is_array($personalInfo->contacts ?? null) ? ($personalInfo->contacts[0] ?? null) : $matricule,
+            'email' => $personalInfo?->email ?? null,
+            'tel' => $personalInfo && is_array($personalInfo->contacts ?? null) ? ($personalInfo->contacts[0] ?? null) : null,
             'filieres' => $filieres,
             'has_no_filieres' => $hasNoFilieres,
             'message' => $hasNoFilieres ? 'Aucune filière associée à ce matricule. Veuillez d\'abord soumettre une candidature.' : null,
@@ -108,8 +107,8 @@ class PaiementService
     public function create(array $data, $quittanceFile): Paiement
     {
         return DB::transaction(function () use ($data, $quittanceFile) {
-            // Générer une référence unique
-            $data['reference'] = $this->generateReference();
+            // La référence vient de la quittance (extraite par OCR)
+            // Elle est déjà validée comme unique dans CreatePaiementRequest
 
             // Vérifier que l'étudiant existe
             $student = Student::where('student_id_number', $data['matricule'])->first();
@@ -117,43 +116,97 @@ class PaiementService
                 throw new ResourceNotFoundException("Étudiant avec le matricule {$data['matricule']}");
             }
 
-            // Upload de la quittance (userId = null pour les soumissions publiques)
-            $uploadedQuittance = $this->fileStorageService->uploadFile(
-                uploadedFile: $quittanceFile,
-                userId: null, // Pas d'utilisateur authentifié pour les paiements publics
-                visibility: 'private',
-                collection: 'quittances',
-                moduleName: 'Finance',
-                moduleResourceType: 'Paiement',
-                metadata: [
-                    'matricule' => $data['matricule'],
-                    'montant' => $data['montant'],
-                    'student_id' => $student->id, // ID de l'étudiant pour référence
-                ]
-            );
+            // Récupérer le student_pending_student_id à partir du matricule et department_id
+            // Le department_id est requis pour identifier correctement l'inscription
+            if (empty($data['department_id'])) {
+                throw new \InvalidArgumentException('Le department_id est requis pour créer un paiement');
+            }
+            
+            $studentPendingStudent = StudentPendingStudent::query()
+                ->where('student_id', $student->id)
+                ->whereHas('pendingStudent', function ($q) use ($data) {
+                    $q->where('department_id', $data['department_id']);
+                })
+                ->latest('id') // Prendre le plus récent si plusieurs
+                ->first();
+            
+            if (!$studentPendingStudent) {
+                throw new ResourceNotFoundException(
+                    "Aucune inscription trouvée pour l'étudiant {$data['matricule']} dans le département {$data['department_id']}"
+                );
+            }
+            
+            $studentPendingStudentId = $studentPendingStudent->id;
+            
+            Log::info('Récupération student_pending_student_id', [
+                'student_id' => $student->id,
+                'department_id' => $data['department_id'],
+                'student_pending_student_id' => $studentPendingStudentId,
+                'pending_student_id' => $studentPendingStudent->pending_student_id,
+            ]);
+
+            // Stockage direct de la quittance
+            // Structure: storage/app/private/payments/{matricule}/{année}/{filename}
+            $year = date('Y');
+            $filename = uniqid('receipt_' . $data['matricule'] . '_') . '.' . $quittanceFile->getClientOriginalExtension();
+            $receiptPath = "payments/{$data['matricule']}/{$year}/{$filename}";
+            
+            // Stocker le fichier
+            Storage::disk('local')->put($receiptPath, file_get_contents($quittanceFile->getRealPath()));
 
             // Créer le paiement
             $paiement = Paiement::create([
-                'matricule' => $data['matricule'],
-                'montant' => $data['montant'],
+                'student_id_number' => $data['matricule'],
+                'student_pending_student_id' => $studentPendingStudentId,
+                'amount' => $data['montant'],
                 'reference' => $data['reference'],
-                'numero_compte' => $data['numero_compte'],
-                'date_versement' => $data['date_versement'],
-                'motif' => $data['motif'] ?? null,
+                'account_number' => $data['numero_compte'],
+                'payment_date' => $data['date_versement'],
+                'purpose' => $data['motif'] ?? null,
                 'email' => $data['email'] ?? null,
                 'contact' => $data['contact'] ?? null,
-                'statut' => 'attente',
-                'quittance_id' => $uploadedQuittance->id,
+                'status' => 'pending',
+                'receipt_path' => $receiptPath,
             ]);
-
-            // Mettre à jour la relation du fichier
-            $uploadedQuittance->update(['module_resource_id' => $paiement->id]);
 
             Log::info('Paiement créé avec succès', [
                 'paiement_id' => $paiement->id,
                 'reference' => $paiement->reference,
-                'matricule' => $paiement->matricule,
+                'student_id_number' => $paiement->student_id_number,
             ]);
+
+            // Envoyer un email de confirmation si un email est fourni
+            try {
+                if (!empty($paiement->email)) {
+                    // Charger les informations personnelles pour personnaliser le mail
+                    $student->load('pendingStudents.personalInformation');
+                    $personalInfo = $student->personalInformation;
+                    
+                    $mailData = [
+                        'reference' => $paiement->reference,
+                        'matricule' => $paiement->student_id_number,
+                        'montant' => $paiement->amount,
+                        'numero_compte' => $paiement->account_number,
+                        'date_versement' => $paiement->payment_date,
+                        'motif' => $paiement->purpose,
+                        'prenoms' => $personalInfo?->first_names ?? 'Étudiant(e)',
+                        'nom' => $personalInfo?->last_name ?? '',
+                    ];
+                    
+                    Mail::to($paiement->email)->send(new QuittanceConfirmation($mailData));
+                    
+                    Log::info('Email de confirmation de quittance envoyé', [
+                        'paiement_id' => $paiement->id,
+                        'email' => $paiement->email,
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::error('Échec lors de l\'envoi du mail de confirmation de quittance', [
+                    'paiement_id' => $paiement->id,
+                    'error' => $e->getMessage(),
+                ]);
+                // Ne pas bloquer la création du paiement si l'email échoue
+            }
 
             return $paiement;
         });
@@ -164,7 +217,7 @@ class PaiementService
      */
     public function getByReference(string $reference): ?Paiement
     {
-        return Paiement::with(['student', 'quittanceFile'])
+        return Paiement::with(['student'])
             ->where('reference', $reference)
             ->first();
     }
@@ -175,7 +228,7 @@ class PaiementService
     public function updateStatus(Paiement $paiement, string $status, ?string $observation = null): Paiement
     {
         $paiement->update([
-            'statut' => $status,
+            'status' => $status,
             'observation' => $observation,
         ]);
 
@@ -185,7 +238,7 @@ class PaiementService
             'new_status' => $status,
         ]);
 
-        return $paiement->fresh(['student', 'quittanceFile']);
+        return $paiement->fresh(['student']);
     }
 
     /**
@@ -208,8 +261,8 @@ class PaiementService
         return DB::transaction(function () use ($paiement) {
             try {
                 // Supprimer le fichier de quittance
-                if ($paiement->quittanceFile) {
-                    $this->fileStorageService->forceDeleteFile($paiement->quittanceFile, $paiement->student?->id ?? 1);
+                if ($paiement->receipt_path && Storage::disk('local')->exists($paiement->receipt_path)) {
+                    Storage::disk('local')->delete($paiement->receipt_path);
                 }
 
                 $paiement->delete();
@@ -220,7 +273,7 @@ class PaiementService
                 ]);
 
                 return true;
-            } catch (Exception $e) {
+            } catch (\Exception $e) {
                 Log::error('Erreur lors de la suppression du paiement', [
                     'paiement_id' => $paiement->id,
                     'error' => $e->getMessage(),
@@ -238,10 +291,10 @@ class PaiementService
     {
         return [
             'total' => Paiement::count(),
-            'attente' => Paiement::where('statut', 'attente')->count(),
-            'accepte' => Paiement::where('statut', 'accepte')->count(),
-            'rejete' => Paiement::where('statut', 'rejete')->count(),
-            'montant_total' => Paiement::where('statut', 'accepte')->sum('montant'),
+            'pending' => Paiement::where('status', 'pending')->count(),
+            'approved' => Paiement::where('status', 'approved')->count(),
+            'rejected' => Paiement::where('status', 'rejected')->count(),
+            'total_amount' => Paiement::where('status', 'approved')->sum('amount'),
         ];
     }
 }

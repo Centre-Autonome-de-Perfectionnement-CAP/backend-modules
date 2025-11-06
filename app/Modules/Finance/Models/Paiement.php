@@ -4,36 +4,41 @@ namespace App\Modules\Finance\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Modules\Inscription\Models\Student;
-use App\Modules\Stockage\Models\File;
+use App\Modules\Inscription\Models\StudentPendingStudent;
+use App\Traits\HasUuid;
 
 class Paiement extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes, HasUuid;
+
+    protected $table = 'payments';
 
     protected $fillable = [
-        'matricule',
-        'montant',
+        'student_id_number',
+        'student_pending_student_id',
+        'amount',
         'reference',
-        'numero_compte',
-        'date_versement',
-        'quittance',
-        'motif',
+        'account_number',
+        'payment_date',
+        'receipt_path',
+        'purpose',
         'observation',
         'email',
-        'statut',
+        'status',
         'contact',
     ];
 
     protected $casts = [
-        'montant' => 'float',
-        'date_versement' => 'date',
+        'amount' => 'float',
+        'payment_date' => 'date',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
 
     protected $attributes = [
-        'statut' => 'attente',
+        'status' => 'pending',
     ];
 
     /**
@@ -41,46 +46,57 @@ class Paiement extends Model
      */
     public function student()
     {
-        return $this->belongsTo(Student::class, 'matricule', 'student_id_number');
+        return $this->belongsTo(Student::class, 'student_id_number', 'student_id_number');
     }
 
     /**
-     * Relation avec le fichier de quittance
+     * Relation avec StudentPendingStudent
      */
-    public function quittanceFile()
+    public function studentPendingStudent()
     {
-        return $this->belongsTo(File::class, 'quittance', 'id');
+        return $this->belongsTo(StudentPendingStudent::class, 'student_pending_student_id');
+    }
+
+    /**
+     * Obtenir l'URL de téléchargement de la quittance
+     */
+    public function getReceiptUrlAttribute(): ?string
+    {
+        if ($this->receipt_path) {
+            return route('api.finance.paiements.download', ['reference' => $this->reference]);
+        }
+        return null;
     }
 
     /**
      * Scope pour filtrer par statut
      */
-    public function scopeByStatut($query, string $statut)
+    public function scopeByStatus($query, string $status)
     {
-        return $query->where('statut', $statut);
+        return $query->where('status', $status);
     }
 
     /**
      * Scope pour les paiements en attente
      */
-    public function scopeEnAttente($query)
+    public function scopePending($query)
     {
-        return $query->where('statut', 'attente');
+        return $query->where('status', 'pending');
     }
 
     /**
-     * Scope pour les paiements acceptés
+     * Scope pour les paiements approuvés
      */
-    public function scopeAccepte($query)
+    public function scopeApproved($query)
     {
-        return $query->where('statut', 'accepte');
+        return $query->where('status', 'approved');
     }
 
     /**
      * Scope pour les paiements rejetés
      */
-    public function scopeRejete($query)
+    public function scopeRejected($query)
     {
-        return $query->where('statut', 'rejete');
+        return $query->where('status', 'rejected');
     }
 }

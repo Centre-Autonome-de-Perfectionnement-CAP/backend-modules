@@ -38,8 +38,18 @@ class CreatePaiementRequest extends FormRequest
                 },
             ],
             'montant' => 'nullable|numeric|min:0',
-            'reference' => 'required|string|max:255|unique:paiements,reference',
-            'numero_compte' => 'required|string|max:255',
+            'reference' => 'required|string|max:255|unique:payments,reference',
+            'department_id' => 'required|integer|exists:departments,id',
+            'numero_compte' => [
+                'required',
+                'string',
+                'max:255',
+                function ($attribute, $value, $fail) {
+                    if ($value !== '01711043903') {
+                        $fail('Le numéro de compte fourni n\'est pas valide. Veuillez utiliser le compte officiel de l\'établissement.');
+                    }
+                },
+            ],
             'date_versement' => 'nullable|date|before_or_equal:today',
             'quittance' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120', // Max 5MB
             'motif' => 'required|string',
@@ -82,6 +92,10 @@ class CreatePaiementRequest extends FormRequest
             
             'motif.required' => 'Le motif est obligatoire.',
             'motif.string' => 'Le motif doit être une chaîne de caractères.',
+            
+            'department_id.required' => 'Le département est obligatoire.',
+            'department_id.integer' => 'Le département doit être un identifiant valide.',
+            'department_id.exists' => 'Le département sélectionné n\'existe pas.',
             
             'email.email' => 'L\'adresse email doit être valide.',
             'email.max' => 'L\'adresse email ne peut pas dépasser 255 caractères.',

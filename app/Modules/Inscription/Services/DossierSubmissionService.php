@@ -8,14 +8,18 @@ use App\Modules\Inscription\Models\Department;
 use App\Modules\Inscription\Models\EntryDiploma;
 use App\Modules\Inscription\Models\PendingStudent;
 use App\Modules\Inscription\Models\PersonalInformation;
+use App\Modules\Inscription\Models\Student;
 use App\Modules\Inscription\Models\StudentPendingStudent;
 use App\Modules\Inscription\Models\SubmissionPeriod;
 use App\Exceptions\BusinessException;
 use App\Exceptions\ResourceNotFoundException;
 use App\Exceptions\FileUploadException;
+use App\Modules\Inscription\Mail\DossierSubmissionConfirmation;
+use App\Modules\Inscription\Mail\DossierCompletedConfirmation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -77,14 +81,14 @@ class DossierSubmissionService
                     'contacts' => $request->contacts, // Le cast 'array' dans le modèle gère la conversion JSON
                 ]);
             } else {
-                // Récupère les informations d'identité depuis une inscription antérieure (Prépa)
-                $student = \App\Models\User::where('student_id_number', $request->student_id_number)->firstOrFail();
+                // Récupère les informations d'identité depuis une inscription antérieure
+                $student = Student::where('student_id_number', $request->student_id_number)->firstOrFail();
+                
+                // Récupérer le premier dossier (pending_student) de l'étudiant pour obtenir les infos personnelles
                 $studentPendingStudent = StudentPendingStudent::where('student_id', $student->id)
-                    ->whereHas('pendingStudent', function ($query) {
-                        $query->where('department_id', 1) // Prépa (supposition)
-                              ->where('level', '1');
-                    })
+                    ->with('pendingStudent.personalInformation')
                     ->firstOrFail();
+                    
                 $personalInformation = $studentPendingStudent->pendingStudent->personalInformation;
             }
 
@@ -117,7 +121,7 @@ class DossierSubmissionService
                 'cuo_opinion' => null,
                 'rejection_reason' => null,
                 'cuco_mail_sent' => false,
-                'documents' => json_encode($documents),
+                'documents' => $documents, // Le cast 'array' encode automatiquement en JSON
                 'level' => $request->study_level,
                 'entry_diploma_id' => $request->entry_diploma_id ?? null,
                 'photo' => $photoPath,
@@ -127,9 +131,19 @@ class DossierSubmissionService
 
             // Envoi d'email optionnel: non implémenté ici pour éviter les dépendances
             try {
-                Log::info('Dossier soumis: ' . $pendingStudent->tracking_code);
+                $mailData = [
+                    'department' => $department->name,
+                    'academic_year' => AcademicYear::findOrFail($request->academic_year_id)->academic_year,
+                    'tracking_code' => $pendingStudent->tracking_code,
+                    'study_level' => $request->study_level,
+                    'first_names' => $personalInformation->first_names,
+                    'email' => $personalInformation->email,
+                    'contacts' => $personalInformation->contacts, // Déjà un array grâce au cast
+                    'cycle_name' => $cycleName,
+                ];
+                Mail::to($personalInformation->email)->send(new DossierSubmissionConfirmation($mailData));
             } catch (\Exception $e) {
-                Log::error('Echec log envoi mail: ' . $e->getMessage());
+                Log::error('Echec lors de l\'envoi du mail de confirmation: ' . $e->getMessage());
             }
 
             return [
@@ -186,12 +200,30 @@ class DossierSubmissionService
                 }
             }
 
+            // Fusionner les anciens documents avec les nouveaux
+            $existingDocuments = $pendingStudent->documents ?? [];
+            $mergedDocuments = array_merge((array) $existingDocuments, $documents);
+            
             $pendingStudent->update([
-                'documents' => json_encode(array_merge(
-                    (array) json_decode($pendingStudent->documents, true),
-                    $documents
-                )),
+                'documents' => $mergedDocuments, // Le cast 'array' encode automatiquement
             ]);
+
+            // Récupérer les infos nécessaires pour l'email
+            $department = Department::findOrFail($pendingStudent->department_id);
+            $personalInformation = $pendingStudent->personalInformation;
+
+            try {
+                $mailData = [
+                    'department' => $department->name,
+                    'academic_year' => AcademicYear::findOrFail($pendingStudent->academic_year_id)->academic_year,
+                    'tracking_code' => $pendingStudent->tracking_code,
+                    'study_level' => $pendingStudent->study_level,
+                    'first_names' => $personalInformation->first_names,
+                ];
+                Mail::to($personalInformation->email)->send(new DossierCompletedConfirmation($mailData));
+            } catch (\Exception $e) {
+                Log::error('Failed to send confirmation email: ' . $e->getMessage());
+            }
 
             return [
                 'message' => 'Complément de dossier soumis avec succès.',
@@ -203,32 +235,60 @@ class DossierSubmissionService
 
     public function validateIngenieurSpecialiteEligibility(string $studentIdNumber, int $departmentId): void
     {
-        // Vérifications simplifiées pour compatibilité
-        $student = \App\Models\User::where('student_id_number', $studentIdNumber)->first();
+        // Rechercher l'étudiant par son matricule
+        $student = Student::where('student_id_number', $studentIdNumber)->first();
         if (!$student) {
-            throw new ResourceNotFoundException('Étudiant non retrouvé');
+            throw new ResourceNotFoundException('Étudiant non retrouvé avec ce matricule');
         }
 
+        // Vérifier que l'étudiant a un dossier Prépa validé
+        // Les départements Prépa commencent par "P-"
         $existsPrepa = StudentPendingStudent::where('student_id', $student->id)
             ->whereHas('pendingStudent', function ($query) {
-                $query->where('department_id', 1) // Prépa (supposition)
-                      ->where('level', '1');
+                $query->whereHas('department', function ($deptQuery) {
+                    $deptQuery->where('abbreviation', 'LIKE', 'P-%');
+                })
+                ->where('status', 'approved');
             })
             ->exists();
+            
         if (!$existsPrepa) {
             throw new BusinessException(
-                message: 'L\'\u00e9tudiant n\'a pas compl\u00e9t\u00e9 les Classes Pr\u00e9paratoires',
+                message: 'Vous devez avoir complété et validé les Classes Préparatoires pour vous inscrire en Spécialité',
                 errorCode: 'PREPARATORY_NOT_COMPLETED'
             );
         }
 
+        // Vérifier que le département choisi n'est pas une Prépa
         $department = Department::findOrFail($departmentId);
-        if ($department->name === 'Classes Préparatoires') {
+        if (str_starts_with($department->abbreviation ?? '', 'P-')) {
             throw new BusinessException(
-                message: 'La fili\u00e8re choisie n\'est pas valide',
+                message: 'Vous ne pouvez pas vous inscrire en Prépa pour la Spécialité. Choisissez un département de Spécialité (GC, GT, GE, GME).',
                 errorCode: 'INVALID_DEPARTMENT'
             );
         }
+    }
+
+    public function getDossierByTrackingCode(string $trackingCode): array
+    {
+        $pendingStudent = PendingStudent::with([
+            'personalInformation',
+            'department.cycle',
+            'academicYear',
+            'entryDiploma',
+            'studentPendingStudents.student.pendingStudents.personalInformation',
+            'studentPendingStudents.academicPaths'
+        ])
+        ->where('tracking_code', strtoupper($trackingCode))
+        ->first();
+
+        if (!$pendingStudent) {
+            throw new ResourceNotFoundException('Dossier non trouvé');
+        }
+
+        return [
+            'dossier' => $pendingStudent,
+        ];
     }
 
     private function deleteFiles(array $files): void

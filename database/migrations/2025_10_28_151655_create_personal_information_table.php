@@ -22,7 +22,6 @@ return new class extends Migration
             $table->string('birth_country')->nullable();
             $table->enum('gender', ['M', 'F'])->nullable();
             $table->json('contacts')->nullable();
-            $table->foreignId('entry_diploma_id')->nullable()->constrained('entry_diplomas')->onDelete('set null');
             $table->string('nationality')->nullable();
             $table->string('photo')->nullable();
             $table->timestamps();

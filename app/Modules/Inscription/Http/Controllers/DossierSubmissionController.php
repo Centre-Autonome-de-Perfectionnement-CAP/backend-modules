@@ -14,6 +14,7 @@ use App\Modules\Inscription\Services\DossierSubmissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Traits\ApiResponse;
+use Illuminate\Support\Facades\Log;
 
 /**
  * @OA\Tag(
@@ -265,7 +266,7 @@ class DossierSubmissionController extends Controller
 
         $result = $this->submissionService->submitDossier(
             $request,
-            'Ingénieur',
+            'Ingénierie',
             ['Certificat de Classes Préparatoires', 'Quittance Rectorat', 'Quittance CAP'],
             $fileFields,
             false

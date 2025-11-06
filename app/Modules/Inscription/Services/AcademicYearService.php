@@ -217,6 +217,21 @@ class AcademicYearService
     }
 
     /**
+     * Récupérer les années académiques pour un département spécifique
+     * Retourne uniquement les années ayant des périodes de soumission actives pour ce département
+     */
+    public function getYearsForDepartment(int $departmentId)
+    {
+        $now = now();
+        
+        return AcademicYear::whereHas('submissionPeriods', function ($query) use ($departmentId, $now) {
+            $query->where('department_id', $departmentId)
+                  ->where('start_date', '<=', $now)
+                  ->where('end_date', '>=', $now);
+        })->orderBy('year_start', 'desc')->get();
+    }
+
+    /**
      * Ajouter des périodes de soumission pour des départements
      */
     public function addPeriods(AcademicYear $academicYear, array $data): void

@@ -19,7 +19,7 @@ class StudentPendingStudent extends Model
 
     public function student()
     {
-        return $this->belongsTo(User::class, 'student_id');
+        return $this->belongsTo(Student::class, 'student_id');
     }
 
     public function pendingStudent()
@@ -27,8 +27,11 @@ class StudentPendingStudent extends Model
         return $this->belongsTo(PendingStudent::class);
     }
 
+    /**
+     * Parcours académiques liés à ce lien student-pending
+     */
     public function academicPaths()
-{
-    return $this->hasMany(AcademicPath::class, 'student_pending_student_id');
-}
+    {
+        return $this->hasMany(AcademicPath::class, 'student_pending_student_id');
+    }
 }

@@ -7,6 +7,7 @@ use App\Modules\Finance\Http\Requests\CreatePaiementRequest;
 use App\Modules\Finance\Services\PaiementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use App\Traits\ApiResponse;
 use App\Traits\HasPagination;
 
@@ -202,15 +203,15 @@ class PaiementController extends Controller
         return $this->createdResponse(
             [
                 'id' => $paiement->id,
-                'matricule' => $paiement->matricule,
-                'montant' => $paiement->montant,
+                'student_id_number' => $paiement->student_id_number,
+                'amount' => $paiement->amount,
                 'reference' => $paiement->reference,
-                'numero_compte' => $paiement->numero_compte,
-                'date_versement' => $paiement->date_versement,
-                'motif' => $paiement->motif,
+                'account_number' => $paiement->account_number,
+                'payment_date' => $paiement->payment_date,
+                'purpose' => $paiement->purpose,
                 'email' => $paiement->email,
                 'contact' => $paiement->contact,
-                'statut' => $paiement->statut,
+                'status' => $paiement->status,
                 'created_at' => $paiement->created_at->toISOString(),
             ],
             'Paiement soumis avec succès. Il sera traité dans les plus brefs délais.'
@@ -259,27 +260,84 @@ class PaiementController extends Controller
      */
     public function show(string $reference): JsonResponse
     {
+        try {
+            // Décoder la référence au cas où elle serait encodée
+            $reference = urldecode($reference);
+            $paiement = $this->paiementService->getByReference($reference);
+
+            if (!$paiement) {
+                return $this->errorResponse(
+                    'Aucune quittance trouvée avec cette référence. Vérifiez que la référence est correcte.',
+                    404,
+                    'PAIEMENT_NOT_FOUND'
+                );
+            }
+
+            return $this->successResponse(
+                [
+                    'reference' => $paiement->reference,
+                    'status' => $paiement->status,
+                    'student_id_number' => $paiement->student_id_number,
+                    'amount' => $paiement->amount,
+                    'payment_date' => $paiement->payment_date,
+                    'purpose' => $paiement->purpose,
+                    'receipt_path' => $paiement->receipt_path,
+                    'observation' => $paiement->observation,
+                    'created_at' => $paiement->created_at->toISOString(),
+                ],
+                'Paiement récupéré avec succès'
+            );
+        } catch (\Exception $e) {
+            Log::error('Erreur lors de la récupération du paiement', [
+                'reference' => $reference,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return $this->errorResponse(
+                'Erreur lors de la récupération du paiement: ' . $e->getMessage(),
+                500,
+                'INTERNAL_ERROR'
+            );
+        }
+    }
+
+    /**
+     * Télécharger la quittance d'un paiement
+     */
+    public function download(string $reference)
+    {
+        // Décoder la référence au cas où elle serait encodée
+        $reference = urldecode($reference);
         $paiement = $this->paiementService->getByReference($reference);
 
         if (!$paiement) {
             return $this->errorResponse(
                 'Aucun paiement trouvé avec cette référence',
-                'PAIEMENT_NOT_FOUND',
-                404
+                404,
+                'PAIEMENT_NOT_FOUND'
             );
         }
 
-        return $this->successResponse(
-            [
-                'reference' => $paiement->reference,
-                'statut' => $paiement->statut,
-                'montant' => $paiement->montant,
-                'date_versement' => $paiement->date_versement,
-                'motif' => $paiement->motif,
-                'created_at' => $paiement->created_at->toISOString(),
-            ],
-            'Paiement récupéré avec succès'
-        );
+        if (!$paiement->receipt_path) {
+            return $this->errorResponse(
+                'Aucune quittance disponible pour ce paiement',
+                404,
+                'RECEIPT_NOT_FOUND'
+            );
+        }
+
+        $filePath = storage_path('app/private/' . $paiement->receipt_path);
+
+        if (!file_exists($filePath)) {
+            return $this->errorResponse(
+                'Le fichier de quittance est introuvable',
+                404,
+                'FILE_NOT_FOUND'
+            );
+        }
+
+        return response()->download($filePath, basename($paiement->receipt_path));
     }
 
     /**

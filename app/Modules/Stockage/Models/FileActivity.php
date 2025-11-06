@@ -41,8 +41,8 @@ class FileActivity extends Model
     protected $fillable = [
         'file_id',
         'user_id',
-        'activity_type',
-        'description',
+        'action', // Nom correct de la colonne
+        // 'description', // Colonne non présente dans la table
         'metadata',
         'ip_address',
         'user_agent',
@@ -74,7 +74,7 @@ class FileActivity extends Model
      */
     public function scopeOfType($query, string $type)
     {
-        return $query->where('activity_type', $type);
+        return $query->where('action', $type);
     }
 
     /**
@@ -99,8 +99,7 @@ class FileActivity extends Model
     public static function log(
         int $fileId,
         ?int $userId,
-        string $activityType,
-        ?string $description = null,
+        string $action,
         ?array $metadata = null,
         ?string $ipAddress = null,
         ?string $userAgent = null
@@ -108,8 +107,7 @@ class FileActivity extends Model
         return static::create([
             'file_id' => $fileId,
             'user_id' => $userId,
-            'activity_type' => $activityType,
-            'description' => $description,
+            'action' => $action,
             'metadata' => $metadata,
             'ip_address' => $ipAddress ?? request()->ip(),
             'user_agent' => $userAgent ?? request()->userAgent(),

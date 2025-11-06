@@ -31,18 +31,28 @@ class StudentIdService
             );
         }
 
-        // Récupérer le matricule étudiant depuis la table students
-        // Le matricule peut être associé via le numéro de téléphone ou directement
-        $phone = is_array($pi->contacts ?? null) ? ($pi->contacts[0] ?? null) : ($pi->phone ?? null);
+        // Rechercher le Student via les PendingStudents liés à ce PersonalInformation
+        $pendingStudent = $pi->pendingStudents()->first();
         
-        if (!$phone) {
+        if (!$pendingStudent) {
             throw new BusinessException(
-                message: 'Votre matricule n\'a pas encore été attribué. Veuillez d\'abord obtenir un matricule via l\'option "Obtenir un matricule".',
+                message: 'Aucun dossier trouvé. Assurez-vous d\'avoir soumis au moins une candidature.',
+                errorCode: 'NO_PENDING_STUDENT',
+                statusCode: 404
+            );
+        }
+
+        // Récupérer le Student via la table pivot student_pending_student
+        $studentPendingStudent = $pendingStudent->studentPendingStudents()->first();
+        
+        if (!$studentPendingStudent) {
+            throw new BusinessException(
+                message: 'Votre matricule n\'a pas encore été attribué. Utilisez l\'onglet "Obtenir un matricule" pour en créer un.',
                 errorCode: 'STUDENT_ID_NOT_ASSIGNED'
             );
         }
 
-        $student = Student::where('student_id_number', $phone)->first();
+        $student = $studentPendingStudent->student;
         
         if (!$student) {
             throw new BusinessException(

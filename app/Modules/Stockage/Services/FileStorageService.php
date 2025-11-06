@@ -15,7 +15,7 @@ class FileStorageService
      * Upload un fichier et crée l'enregistrement.
      *
      * @param UploadedFile $uploadedFile Le fichier à uploader
-     * @param int $userId ID de l'utilisateur
+     * @param int|null $userId ID de l'utilisateur (null pour les uploads publics)
      * @param string $visibility Visibilité (public/private)
      * @param string $collection Collection/catégorie
      * @param string|null $moduleName Nom du module propriétaire
@@ -27,7 +27,7 @@ class FileStorageService
      */
     public function uploadFile(
         UploadedFile $uploadedFile,
-        int $userId,
+        ?int $userId = null,
         string $visibility = 'private',
         string $collection = 'default',
         ?string $moduleName = null,
@@ -58,9 +58,6 @@ class FileStorageService
             // Stocker le fichier
             $uploadedFile->storeAs(dirname($path), basename($path), $disk);
 
-            // Calculer le hash
-            $fileHash = hash_file('sha256', $uploadedFile->getRealPath());
-
             // Créer l'enregistrement (name et path sont des colonnes générées)
             $file = File::create([
                 'user_id' => $userId,
@@ -76,16 +73,16 @@ class FileStorageService
                 'size' => $uploadedFile->getSize(),
                 'mime_type' => $uploadedFile->getMimeType(),
                 'extension' => $extension,
-                'file_hash' => $fileHash,
+                // file_hash retiré car la colonne n'existe pas dans la table
                 'metadata' => $metadata,
             ]);
 
-            // Logger l'activité
+            // Logger l'activité (description retirée car colonne inexistante)
             FileActivity::log(
                 $file->id,
                 $userId,
                 'uploaded',
-                "Fichier '{$file->original_name}' uploadé"
+                ['original_name' => $file->original_name] // Metadata au lieu de description
             );
 
             return $file;
@@ -113,7 +110,7 @@ class FileStorageService
             $file->id,
             $userId,
             'downloaded',
-            "Fichier '{$file->original_name}' téléchargé"
+            ['original_name' => $file->original_name]
         );
 
         return [
@@ -139,7 +136,7 @@ class FileStorageService
                 $file->id,
                 $userId,
                 'deleted',
-                "Fichier '{$file->original_name}' supprimé"
+                ['original_name' => $file->original_name]
             );
 
             // Soft delete
@@ -167,7 +164,7 @@ class FileStorageService
                 $file->id,
                 $userId,
                 'deleted',
-                "Fichier '{$file->original_name}' supprimé définitivement"
+                ['original_name' => $file->original_name, 'force_delete' => true]
             );
 
             // Suppression définitive
@@ -205,7 +202,7 @@ class FileStorageService
                 $file->id,
                 $userId,
                 'moved',
-                "Fichier déplacé de '{$oldCollection}' vers '{$newCollection}'"
+                ['old_collection' => $oldCollection, 'new_collection' => $newCollection]
             );
 
             return $file->fresh();
@@ -247,7 +244,7 @@ class FileStorageService
                 $file->id,
                 $userId,
                 'updated',
-                "Visibilité changée de '{$oldVisibility}' à '{$visibility}'"
+                ['old_visibility' => $oldVisibility, 'new_visibility' => $visibility]
             );
 
             return $file->fresh();
@@ -272,8 +269,7 @@ class FileStorageService
         FileActivity::log(
             $file->id,
             $userId,
-            'locked',
-            "Fichier verrouillé"
+            'locked'
         );
 
         return $file->fresh();
@@ -297,8 +293,7 @@ class FileStorageService
         FileActivity::log(
             $file->id,
             $userId,
-            'unlocked',
-            "Fichier déverrouillé"
+            'unlocked'
         );
 
         return $file->fresh();

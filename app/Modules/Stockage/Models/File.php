@@ -66,7 +66,7 @@ class File extends Model
         'size',
         'mime_type',
         'extension',
-        'file_hash',
+        // 'file_hash', // Colonne non présente dans la table
         'metadata',
         'is_locked',
         'locked_at',
