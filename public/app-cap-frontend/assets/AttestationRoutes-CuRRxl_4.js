@@ -1,0 +1,1 @@
+import{j as e,r as a,l as r,m as t,N as s,n as o}from"./index-BcJ7u4Sc.js";const l=()=>e.jsx(a.Suspense,{fallback:e.jsx(o,{fullPage:!0,message:"Chargement du module Attestation..."}),children:e.jsxs(r,{children:[e.jsx(t,{path:"/",element:e.jsx(s,{to:"/attestations/dashboard",replace:!0})}),e.jsx(t,{path:"*",element:e.jsx(s,{to:"/404",replace:!0})})]})});export{l as default};

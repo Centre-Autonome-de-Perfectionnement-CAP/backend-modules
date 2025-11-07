@@ -1,0 +1,1 @@
+import{j as e,r as a,l as r,m as s,N as t,n as o}from"./index-BcJ7u4Sc.js";const l=()=>e.jsx(a.Suspense,{fallback:e.jsx(o,{fullPage:!0,message:"Chargement du module Notes..."}),children:e.jsxs(r,{children:[e.jsx(s,{path:"/",element:e.jsx(t,{to:"/notes/dashboard",replace:!0})}),e.jsx(s,{path:"*",element:e.jsx(t,{to:"/404",replace:!0})})]})});export{l as default};
