@@ -1,1 +1,0 @@
-import{j as e,r as t,l as n,m as a,N as s,n as r}from"./index-BcJ7u4Sc.js";const l=()=>e.jsx(t.Suspense,{fallback:e.jsx(r,{fullPage:!0,message:"Chargement du module Finance..."}),children:e.jsxs(n,{children:[e.jsx(a,{path:"/",element:e.jsx(s,{to:"/finance/dashboard",replace:!0})}),e.jsx(a,{path:"*",element:e.jsx(s,{to:"/404",replace:!0})})]})});export{l as default};

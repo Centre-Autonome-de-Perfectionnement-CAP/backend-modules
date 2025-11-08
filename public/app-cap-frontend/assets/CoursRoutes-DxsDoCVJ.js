@@ -1,1 +1,0 @@
-import{j as e,r as t,l as r,m as s,N as a,n as o}from"./index-BcJ7u4Sc.js";const l=()=>e.jsx(t.Suspense,{fallback:e.jsx(o,{fullPage:!0,message:"Chargement du module Cours..."}),children:e.jsxs(r,{children:[e.jsx(s,{path:"/",element:e.jsx(a,{to:"/cours/dashboard",replace:!0})}),e.jsx(s,{path:"*",element:e.jsx(a,{to:"/404",replace:!0})})]})});export{l as default};

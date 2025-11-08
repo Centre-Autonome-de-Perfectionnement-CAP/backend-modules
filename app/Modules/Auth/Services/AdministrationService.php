@@ -21,7 +21,7 @@ class AdministrationService
         $query = User::whereHas('roles', function ($q) use ($adminRoles) {
             $q->whereIn('name', $adminRoles);
         })->with(['roles' => function ($query) {
-            $query->select('roles.id', 'roles.name', 'roles.slug', 'roles.description');
+            $query->select('roles.id', 'roles.name', 'roles.slug');
         }]);
 
         if (!empty($filters['role'])) {
@@ -53,7 +53,7 @@ class AdministrationService
             $query->where('name', 'soutien_informatique');
         })
         ->with(['roles' => function ($query) {
-            $query->select('roles.id', 'roles.name', 'roles.slug', 'roles.description');
+            $query->select('roles.id', 'roles.name', 'roles.slug');
         }])
         ->select('id', 'first_name', 'last_name', 'email', 'phone', 'photo')
         ->orderBy('last_name')
