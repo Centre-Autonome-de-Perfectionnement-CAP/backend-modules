@@ -19,11 +19,16 @@ class CycleFactory extends Factory
      */
     public function definition(): array
     {
-        $name = fake()->randomElement(['Licence', 'Master', 'Ingénieur']);
+        static $counter = 0;
+        $counter++;
+        
+        $types = ['Licence', 'Master', 'Ingénieur', 'Doctorat', 'BTS', 'DUT'];
+        $baseName = fake()->randomElement($types);
+        $name = $baseName . ' ' . $counter . ' ' . fake()->word();
         
         return [
             'name' => $name,
-            'abbreviation' => strtoupper(substr($name, 0, 1)),
+            'abbreviation' => strtoupper(substr($baseName, 0, 1)),
             'years_count' => fake()->numberBetween(3, 5),
             'is_lmd' => true,
             'type' => fake()->randomElement(['licence', 'master', 'ingenierie']),

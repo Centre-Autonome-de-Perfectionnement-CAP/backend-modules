@@ -20,7 +20,7 @@ class DashboardService
             ? $currentAcademicYear->libelle 
             : date('Y') . '-' . (date('Y') + 1);
         
-        $dossiersAttente = PendingStudent::whereIn('status', ['pending', 'documents_submitted'])->count();
+        $dossiersAttente = PendingStudent::where('status', 'pending')->count();
         $inscritsCap = PendingStudent::where('status', 'approved')->count();
         $nombreFilieres = Department::count();
         $nombreCycles = Cycle::count();
@@ -128,9 +128,9 @@ class DashboardService
     {
         $translations = [
             'pending' => 'En attente',
-            'documents_submitted' => 'Documents soumis',
             'approved' => 'Approuvé',
             'rejected' => 'Rejeté',
+            'withdrawn' => 'Retiré',
         ];
 
         return $translations[$status] ?? $status;

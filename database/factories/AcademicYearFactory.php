@@ -19,10 +19,13 @@ class AcademicYearFactory extends Factory
      */
     public function definition(): array
     {
-        $year = fake()->unique()->numberBetween(2020, 2035);
+        static $counter = 2020;
+        $year = $counter++;
+        $yearLabel = $year . '-' . ($year + 1);
         
         return [
-            'academic_year' => $year . '-' . ($year + 1),
+            'academic_year' => $yearLabel,
+            'libelle' => $yearLabel,  // Ajout du champ libelle utilisé par le service
             'year_start' => $year . '-09-01',
             'year_end' => ($year + 1) . '-06-30',
             'submission_start' => $year . '-06-01',

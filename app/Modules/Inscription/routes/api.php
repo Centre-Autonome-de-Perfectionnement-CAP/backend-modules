@@ -102,9 +102,9 @@ Route::prefix('api/inscription')->group(function () {
         Route::get('entry-diplomas', [PublicReferenceController::class, 'entryDiplomas']);
     });
 
-        Route::middleware('auth:sanctum')->group(function () {
-            Route::get('stats', [DashboardController::class, 'stats']);
-            Route::get('graphes', [DashboardController::class, 'graphes']);
-        });
+    Route::prefix('dashboard')->middleware('auth:sanctum')->group(function () {
+        Route::get('stats', [DashboardController::class, 'stats']);
+        Route::get('graphes', [DashboardController::class, 'graphes']);
+    });
 
 }); // Fin du groupe api/inscription

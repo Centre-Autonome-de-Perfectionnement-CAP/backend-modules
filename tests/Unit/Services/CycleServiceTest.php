@@ -100,14 +100,6 @@ class CycleServiceTest extends TestCase
     }
 
     /** @test */
-    public function it_can_filter_cycles_by_active_status()
-    {
-        // Ce test nécessite le champ is_active dans la table cycles
-        // Si le champ n'existe pas, ce test devrait être supprimé ou adapté
-        $this->markTestSkipped('Le champ is_active n\'existe pas dans le modèle Cycle actuel');
-    }
-
-    /** @test */
     public function it_creates_cycle_within_transaction()
     {
         $data = [

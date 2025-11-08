@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->foreignId('student_pending_student_id')
-                ->constrained('student_pending_students')
+                ->constrained('student_pending_student')
                 ->onDelete('cascade');
             $table->foreignId('program_id')
                 ->constrained('programs')
@@ -42,7 +42,7 @@ return new class extends Migration
             $table->index('validated');
             
             // One student can have only one set of grades per program
-            $table->unique(['student_pending_student_id', 'program_id'], 'student_program_unique');
+            $table->unique(['student_pending_student_id', 'program_id'], 'lmd_system_student_program_unique');
         });
     }
 

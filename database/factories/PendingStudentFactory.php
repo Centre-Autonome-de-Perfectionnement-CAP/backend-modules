@@ -32,11 +32,11 @@ class PendingStudentFactory extends Factory
             'academic_year_id' => AcademicYear::factory(),
             'level' => fake()->randomElement(['L1', 'L2', 'L3', 'M1', 'M2']),
             'status' => $status,
-            // cuca_opinion doit être null pour pending, favorable/défavorable pour approved/rejected
-            'cuca_opinion' => $status === 'pending' ? null : fake()->randomElement(['favorable', 'défavorable']),
+            // cuca_opinion doit être null pour pending, favorable/defavorable pour approved/rejected
+            'cuca_opinion' => $status === 'pending' ? null : fake()->randomElement(['favorable', 'defavorable']),
             'cuca_comment' => fake()->optional()->sentence(),
-            // sponsorise doit être 0 ou 1, pas boolean
-            'sponsorise' => fake()->randomElement([0, 1]),
+            // sponsorise est un ENUM 'Oui' ou 'Non'
+            'sponsorise' => fake()->randomElement(['Oui', 'Non']),
             'documents' => [],
         ];
     }

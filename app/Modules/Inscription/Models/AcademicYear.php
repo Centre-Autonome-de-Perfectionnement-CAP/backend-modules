@@ -10,7 +10,17 @@ class AcademicYear extends Model
 {
     use HasFactory, HasUuid;
 
-    protected $fillable = ['year', 'start_date', 'end_date', 'is_active'];
+    protected $fillable = [
+        'academic_year',
+        'libelle',
+        'year_start',
+        'year_end',
+        'submission_start',
+        'submission_end',
+        'reclamation_start',
+        'reclamation_end',
+        'is_current',
+    ];
 
     /**
      * Create a new factory instance for the model.
@@ -21,8 +31,12 @@ class AcademicYear extends Model
     }
 
     protected $casts = [
+        'year_start' => 'date',
+        'year_end' => 'date',
         'submission_start' => 'date',
         'submission_end' => 'date',
+        'reclamation_start' => 'date',
+        'reclamation_end' => 'date',
         'is_current' => 'boolean',
     ];
 

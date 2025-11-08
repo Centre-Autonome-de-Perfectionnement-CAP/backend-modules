@@ -27,14 +27,31 @@ class DashboardTest extends TestCase
             'libelle' => '2024-2025'
         ]);
         
-        // Créer des filières et cycles
-        $filieres = Department::factory()->count(3)->create();
-        $cycles = Cycle::factory()->count(2)->create();
+        // Créer des cycles d'abord
+        $cycle1 = Cycle::factory()->create();
+        $cycle2 = Cycle::factory()->create();
         
-        // Créer des étudiants avec différents statuts
-        PendingStudent::factory()->count(5)->create(['status' => 'approved']);
-        PendingStudent::factory()->count(3)->create(['status' => 'pending']);
-        PendingStudent::factory()->count(2)->create(['status' => 'documents_submitted']);
+        // Créer des filières en utilisant les cycles existants
+        $dept1 = Department::factory()->create(['cycle_id' => $cycle1->id]);
+        $dept2 = Department::factory()->create(['cycle_id' => $cycle1->id]);
+        $dept3 = Department::factory()->create(['cycle_id' => $cycle2->id]);
+        
+        // Créer des étudiants avec différents statuts en utilisant les départements existants
+        PendingStudent::factory()->count(5)->create([
+            'status' => 'approved',
+            'department_id' => $dept1->id,
+            'academic_year_id' => $currentYear->id,
+        ]);
+        PendingStudent::factory()->count(3)->create([
+            'status' => 'pending',
+            'department_id' => $dept2->id,
+            'academic_year_id' => $currentYear->id,
+        ]);
+        PendingStudent::factory()->count(2)->create([
+            'status' => 'rejected',
+            'department_id' => $dept3->id,
+            'academic_year_id' => $currentYear->id,
+        ]);
 
         // Act
         $response = $this->getJson('/api/inscription/dashboard/stats');
@@ -57,7 +74,7 @@ class DashboardTest extends TestCase
                 'message' => 'Statistiques récupérées avec succès',
                 'data' => [
                     'inscritsCap' => 5,
-                    'dossiersAttente' => 5, // 3 pending + 2 documents_submitted
+                    'dossiersAttente' => 3, // 3 pending seulement
                     'anneeAcademique' => '2024-2025',
                     'nombreFilieres' => 3,
                     'nombreCycles' => 2,
