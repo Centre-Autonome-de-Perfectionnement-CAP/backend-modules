@@ -1,1 +1,0 @@
-import{j as e,r as t,m as r,n as s,N as a,o}from"./index-_ikhRPMo.js";const n=()=>e.jsx(t.Suspense,{fallback:e.jsx(o,{fullPage:!0,message:"Chargement du module Cours..."}),children:e.jsxs(r,{children:[e.jsx(s,{path:"/",element:e.jsx(a,{to:"/cours/dashboard",replace:!0})}),e.jsx(s,{path:"*",element:e.jsx(a,{to:"/404",replace:!0})})]})});export{n as default};

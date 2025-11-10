@@ -1,1 +1,0 @@
-import{j as e,r as a,m as r,n as s,N as t,o}from"./index-_ikhRPMo.js";const u=()=>e.jsx(a.Suspense,{fallback:e.jsx(o,{fullPage:!0,message:"Chargement du module Notes..."}),children:e.jsxs(r,{children:[e.jsx(s,{path:"/",element:e.jsx(t,{to:"/notes/dashboard",replace:!0})}),e.jsx(s,{path:"*",element:e.jsx(t,{to:"/404",replace:!0})})]})});export{u as default};
