@@ -202,7 +202,7 @@ class DossierSubmissionController extends Controller
      *     @OA\RequestBody(required=true,
      *         @OA\MediaType(mediaType="multipart/form-data",
      *             @OA\Schema(
-     *                 required={"last_name","first_names","email","birth_date","birth_place","birth_country","gender","contacts","study_level","academic_year_id","department_id","demande_da","cv","acte_naissance","diplome_bac","diplome_licence","attestation_travail","quittance_rectorat","quittance_cap"}
+     *                 required={"last_name","first_names","email","birth_date","birth_place","birth_country","gender","contacts","study_level","academic_year_id","department_id","demande_da","cv","acte_naissance","diplome_bac","diplome_licence","attestation_travail","quittance_cap"}
      *             )
      *         )
      *     ),
@@ -219,7 +219,6 @@ class DossierSubmissionController extends Controller
                 'diplome_bac' => 'Photocopie légalisée du diplôme BAC',
                 'diplome_licence' => 'Photocopie légalisée du diplôme de la licence',
                 'attestation_travail' => 'Attestation de travail',
-                'quittance_rectorat' => 'Quittance Rectorat de 2.000F',
                 'quittance_cap' => 'Quittance de 15.000F',
                 'attestation_depot_dossier' => 'Attestation de dépôt de dossier pour diplômes étrangers',
             ];
@@ -243,7 +242,7 @@ class DossierSubmissionController extends Controller
      *     @OA\RequestBody(required=true,
      *         @OA\MediaType(mediaType="multipart/form-data",
      *             @OA\Schema(
-     *                 required={"student_id_number","department_id","academic_year_id","certificat_prepa"}
+     *                 required={"student_id_number","department_id","academic_year_id","certificat_prepa","quittance_cap"}
      *             )
      *         )
      *     ),

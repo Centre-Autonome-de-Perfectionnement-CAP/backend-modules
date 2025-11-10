@@ -34,7 +34,6 @@ class SubmitIngenieurPrepaDossierRequest extends FormRequest
             'diplome_bac' => ['required','file'],
             'diplome_licence' => ['required','file'],
             'attestation_travail' => ['required','file'],
-            'quittance_rectorat' => ['required','file'],
             'quittance_cap' => ['required','file'],
             'attestation_depot_dossier' => ['nullable','file'],
             'photo' => ['nullable','file','image'],
