@@ -18,7 +18,17 @@ class PendingStudentResource extends JsonResource
             $contacts = is_array($this->personalInformation->contacts) 
                 ? $this->personalInformation->contacts 
                 : json_decode($this->personalInformation->contacts, true);
-            $phone = $contacts['phone'] ?? null;
+            // Contacts peut être un array de numéros ou un objet avec clé 'phone'
+            if (is_array($contacts)) {
+                $phone = $contacts['phone'] ?? $contacts[0] ?? null;
+            }
+        }
+
+        $documents = [];
+        if ($this->documents) {
+            foreach ($this->documents as $name => $value) {
+                $documents[$name] = url("/api/inscription/files/legacy?path=" . urlencode($value));
+            }
         }
 
         return [
@@ -28,9 +38,20 @@ class PendingStudentResource extends JsonResource
             'last_name' => $this->personalInformation?->last_name,
             'phone' => $phone,
             'gender' => $this->personalInformation?->gender,
-            'status' => $this->status,
+            'status' => $this->cuca_opinion ?? 'pending',
+            'documents' => $documents,
             'submitted_at' => $this->created_at?->toISOString(),
             'department' => $this->department?->name,
+            'exonere' => $this->exonere === 'Oui' ? 'Oui' : 'Non',
+            'sponsorise' => $this->sponsorise === 'Oui' ? 'Oui' : 'Non',
+            'opinionCuca' => $this->cuca_opinion,
+            'commentaireCuca' => $this->cuca_comment,
+            'opinionCuo' => $this->cuo_opinion,
+            'commentaireCuo' => null,
+            'mailCucaEnvoye' => 'Non',
+            'mailCucaCount' => 0,
+            'mailCuoEnvoye' => 'Non',
+            'mailCuoCount' => 0,
             'entry_diploma' => $this->whenLoaded('entryDiploma', function () {
                 return [
                     'id' => $this->entryDiploma->id,
@@ -52,18 +73,7 @@ class PendingStudentResource extends JsonResource
                     ];
                 });
             }),
-            'files' => $this->whenLoaded('files', function () {
-                return $this->files->map(function ($file) {
-                    return [
-                        'id' => $file->id,
-                        'name' => $file->name,
-                        'path' => $file->path,
-                        'mime_type' => $file->mime_type,
-                        'size' => $file->size,
-                        // Ajoutez d'autres champs si nécessaire
-                    ];
-                });
-            }),
+
         ];
     }
 }

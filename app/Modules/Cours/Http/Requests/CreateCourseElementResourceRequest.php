@@ -15,10 +15,10 @@ class CreateCourseElementResourceRequest extends FormRequest
     {
         return [
             'course_element_id' => 'required|exists:course_elements,id',
-            'file' => 'required|file|mimes:pdf,pptx,ppt,docx,doc,xlsx,xls,mp4,mp3|max:51200', // Max 50MB
+            'file' => 'required|file|mimes:pdf,pptx,ppt,docx,doc,xlsx,xls,mp4,mp3|max:51200',
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'resource_type' => 'required|in:pdf,pptx,docx,video,audio,other',
+            'pedagogical_type' => 'required|in:syllabus,cours,td,tp,examen', // nouveau
             'is_public' => 'nullable|boolean',
         ];
     }

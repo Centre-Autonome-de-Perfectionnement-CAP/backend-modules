@@ -32,8 +32,13 @@ class AdminUserController extends Controller
         $perPage = $this->getPerPage($request);
         
         $users = $this->adminUserService->getAll($filters, $perPage);
+        
+        $users->setCollection(
+            AdminUserResource::collection($users->getCollection())->collection
+        );
+
         return $this->successPaginatedResponse(
-            $users->setCollection(AdminUserResource::collection($users->items())),
+            $users,
             'Utilisateurs récupérés avec succès'
         );
     }
@@ -47,10 +52,10 @@ class AdminUserController extends Controller
         
         $user = $this->adminUserService->create(
             $data,
+            auth()->id(),
             $request->file('rib'),
             $request->file('ifu'),
-            $request->file('photo'),
-            auth()->id()
+            $request->file('photo')
         );
 
         return $this->createdResponse(
@@ -80,10 +85,10 @@ class AdminUserController extends Controller
         $user = $this->adminUserService->update(
             $adminUser,
             $data,
+            auth()->id(),
             $request->file('rib'),
             $request->file('ifu'),
-            $request->file('photo'),
-            auth()->id()
+            $request->file('photo')
         );
 
         return $this->updatedResponse(

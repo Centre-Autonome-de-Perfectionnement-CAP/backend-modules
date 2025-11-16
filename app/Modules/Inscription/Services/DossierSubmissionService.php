@@ -16,15 +16,18 @@ use App\Exceptions\ResourceNotFoundException;
 use App\Exceptions\FileUploadException;
 use App\Modules\Inscription\Mail\DossierSubmissionConfirmation;
 use App\Modules\Inscription\Mail\DossierCompletedConfirmation;
+use App\Modules\Stockage\Services\FileStorageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class DossierSubmissionService
 {
+    public function __construct(private FileStorageService $fileStorageService)
+    {
+    }
     public function submitDossier(Request $request, string $cycleName, array $validDiplomas, array $fileFields, bool $isPersonalInfoRequired = true): array
     {
         return DB::transaction(function () use ($request, $cycleName, $validDiplomas, $fileFields, $isPersonalInfoRequired) {
@@ -92,15 +95,16 @@ class DossierSubmissionService
                 $personalInformation = $studentPendingStudent->pendingStudent->personalInformation;
             }
 
-            $year = now()->year;
-            $cyclePath = strtolower($cycleName);
             $documents = [];
             foreach ($fileFields as $field => $documentName) {
                 if ($request->hasFile($field) && $request->file($field)->isValid()) {
-                    $path = $request->file($field)->store("dossiers/$year/$cyclePath/{$field}", 'public');
-                    $documents[$documentName] = $path;
+                    $file = $this->fileStorageService->uploadFile(
+                        $request->file($field),
+                        "dossiers/{$cycleName}",
+                        $documentName
+                    );
+                    $documents[$documentName] = $file->id;
                 } elseif (!in_array($field, ['attestation_depot_dossier', 'attestation_anglais', 'diplome_licence'])) {
-                    $this->deleteFiles($documents);
                     throw new FileUploadException(
                         fileName: $documentName,
                         reason: "Le fichier {$documentName} est invalide ou n'a pas pu être téléchargé"
@@ -108,9 +112,14 @@ class DossierSubmissionService
                 }
             }
 
-            $photoPath = "null";
+            $photoPath = null;
             if ($request->hasFile('photo') && $request->file('photo')->isValid()) {
-                $photoPath = $request->file('photo')->store("dossiers/$year/photos", 'public');
+                $photoFile = $this->fileStorageService->uploadFile(
+                    $request->file('photo'),
+                    "dossiers/photos",
+                    "Photo - {$personalInformation->first_names} {$personalInformation->last_name}"
+                );
+                $photoPath = $photoFile->id;
             }
 
             $pendingStudent = PendingStudent::create([
@@ -172,9 +181,6 @@ class DossierSubmissionService
                 );
             }
 
-            $year = now()->year;
-            $cyclePath = strtolower('Complement');
-
             $names = $validated['names'];
             $files = $validated['files'];
             if (!is_array($files)) { $files = [$files]; }
@@ -190,8 +196,12 @@ class DossierSubmissionService
             foreach ($files as $index => $file) {
                 $name = $names[$index];
                 if ($file->isValid()) {
-                    $path = $file->store("dossiers/$year/$cyclePath/{$name}", 'public');
-                    $documents[$name . "(Complément)"] = $path;
+                    $uploadedFile = $this->fileStorageService->uploadFile(
+                        $file,
+                        "dossiers/complements",
+                        $name . " (Complément)"
+                    );
+                    $documents[$name . "(Complément)"] = $uploadedFile->id;
                 } else {
                     throw new FileUploadException(
                         fileName: $file->getClientOriginalName(),
@@ -291,14 +301,5 @@ class DossierSubmissionService
         ];
     }
 
-    private function deleteFiles(array $files): void
-    {
-        foreach ($files as $path) {
-            try {
-                Storage::disk('public')->delete($path);
-            } catch (\Exception $e) {
-                Log::error('Echec lors de la suppression du fichier: ' . $path . ' - ' . $e->getMessage());
-            }
-        }
-    }
+
 }

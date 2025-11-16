@@ -21,10 +21,10 @@ return new class extends Migration
             $table->string('password');
             $table->string('phone')->nullable();
             $table->string('rib_number')->nullable();
-            $table->string('rib')->nullable();
-            $table->string('photo')->nullable();
+            $table->unsignedBigInteger('rib')->nullable();
+            $table->unsignedBigInteger('photo')->nullable();
             $table->string('ifu_number')->nullable();
-            $table->string('ifu')->nullable();
+            $table->unsignedBigInteger('ifu')->nullable();
             $table->string('bank')->nullable();
             $table->rememberToken();
             $table->timestamps();

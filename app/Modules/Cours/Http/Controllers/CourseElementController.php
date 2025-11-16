@@ -31,8 +31,12 @@ class CourseElementController extends Controller
         
         $courseElements = $this->courseElementService->getAll($filters, $perPage);
 
+        $courseElements->setCollection(
+            CourseElementResource::collection($courseElements->getCollection())->collection
+        );
+
         return $this->successPaginatedResponse(
-            $courseElements->setCollection(CourseElementResource::collection($courseElements->items())),
+            $courseElements,
             'Éléments de cours récupérés avec succès'
         );
     }

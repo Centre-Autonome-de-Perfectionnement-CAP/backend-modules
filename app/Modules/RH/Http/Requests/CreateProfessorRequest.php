@@ -18,7 +18,7 @@ class CreateProfessorRequest extends FormRequest
             'first_name' => 'required|string|max:255',
             'email' => 'required|email|unique:professors,email',
             'phone' => 'nullable|string|max:20',
-            'password' => 'required|string|min:8',
+            'password' => 'nullable|string|min:8',
             'role_id' => 'nullable|exists:roles,id',
             'rib_number' => 'nullable|string|max:255',
             'rib' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',

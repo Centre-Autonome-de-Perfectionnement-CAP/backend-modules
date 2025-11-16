@@ -16,9 +16,7 @@ class DashboardService
     public function getStats(): array
     {
         $currentAcademicYear = AcademicYear::where('is_current', true)->first();
-        $anneeAcademique = $currentAcademicYear 
-            ? $currentAcademicYear->libelle 
-            : date('Y') . '-' . (date('Y') + 1);
+        $anneeAcademique = $currentAcademicYear ? $currentAcademicYear->academic_year : null;
         
         $dossiersAttente = PendingStudent::where('status', 'pending')->count();
         $inscritsCap = PendingStudent::where('status', 'approved')->count();
@@ -37,31 +35,32 @@ class DashboardService
     /**
      * Get graphs data for a specific academic year
      */
-    public function getGraphData(?string $academicYear = null): array
+    public function getGraphData($academicYearId = null): array
     {
-        if (!$academicYear) {
+        $currentYear = null;
+        if (!$academicYearId) {
             $currentYear = AcademicYear::where('is_current', true)->first();
-            $academicYear = $currentYear 
-                ? $currentYear->libelle 
-                : date('Y') . '-' . (date('Y') + 1);
+            $academicYearId = $currentYear ? $currentYear->id : null;
+        } else {
+            $currentYear = AcademicYear::find($academicYearId);
         }
 
-        $inscritsParFiliere = $this->getStudentsByDepartment();
-        $inscritsParCycle = $this->getStudentsByCycle();
-        $dossiersParStatut = $this->getStudentsByStatus();
+        $inscritsParFiliere = $this->getStudentsByDepartment($academicYearId);
+        $inscritsParCycle = $this->getStudentsByCycle($academicYearId);
+        $dossiersParStatut = $this->getStudentsByStatus($academicYearId);
 
         return [
             'inscritsParFiliere' => $inscritsParFiliere,
             'inscritsParCycle' => $inscritsParCycle,
             'dossiersParStatut' => $dossiersParStatut,
-            'anneeAcademique' => $academicYear,
+            'anneeAcademique' => $currentYear ? $currentYear->academic_year : null,
         ];
     }
 
     /**
      * Get students grouped by department
      */
-    protected function getStudentsByDepartment(): array
+    protected function getStudentsByDepartment($academicYearId = null): array
     {
         $departments = Department::all();
         
@@ -69,12 +68,17 @@ class DashboardService
             return [['filiere' => 'Aucune filière', 'nombre' => 0]];
         }
 
-        $totalApproved = PendingStudent::where('status', 'approved')->count();
-        
-        return $departments->map(function ($department) use ($totalApproved, $departments) {
+        return $departments->map(function ($department) use ($academicYearId) {
+            $query = PendingStudent::where('department_id', $department->id)
+                ->where('status', 'pending');
+            
+            if ($academicYearId) {
+                $query->where('academic_year_id', $academicYearId);
+            }
+            
             return [
                 'filiere' => $department->name ?? $department->libelle ?? 'N/A',
-                'nombre' => $departments->count() > 0 ? (int)($totalApproved / $departments->count()) : 0,
+                'nombre' => $query->count(),
             ];
         })->values()->toArray();
     }
@@ -82,7 +86,7 @@ class DashboardService
     /**
      * Get students grouped by cycle
      */
-    protected function getStudentsByCycle(): array
+    protected function getStudentsByCycle($academicYearId = null): array
     {
         $cycles = Cycle::all();
         
@@ -90,12 +94,18 @@ class DashboardService
             return [['cycle' => 'Aucun cycle', 'nombre' => 0]];
         }
 
-        $totalApproved = PendingStudent::where('status', 'approved')->count();
-        
-        return $cycles->map(function ($cycle) use ($totalApproved, $cycles) {
+        return $cycles->map(function ($cycle) use ($academicYearId) {
+            $query = PendingStudent::whereHas('department', function($q) use ($cycle) {
+                $q->where('cycle_id', $cycle->id);
+            })->where('status', 'approved');
+            
+            if ($academicYearId) {
+                $query->where('academic_year_id', $academicYearId);
+            }
+            
             return [
                 'cycle' => $cycle->name ?? $cycle->libelle ?? 'N/A',
-                'nombre' => $cycles->count() > 0 ? (int)($totalApproved / $cycles->count()) : 0,
+                'nombre' => $query->count(),
             ];
         })->values()->toArray();
     }
@@ -103,11 +113,16 @@ class DashboardService
     /**
      * Get students grouped by status
      */
-    protected function getStudentsByStatus(): array
+    protected function getStudentsByStatus($academicYearId = null): array
     {
-        $statusData = PendingStudent::select('status', DB::raw('count(*) as nombre'))
-            ->groupBy('status')
-            ->get();
+        $query = PendingStudent::select('status', DB::raw('count(*) as nombre'))
+            ->groupBy('status');
+        
+        if ($academicYearId) {
+            $query->where('academic_year_id', $academicYearId);
+        }
+        
+        $statusData = $query->get();
         
         if ($statusData->isEmpty()) {
             return [['statut' => 'Aucun dossier', 'nombre' => 0]];

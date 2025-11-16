@@ -107,4 +107,7 @@ Route::prefix('api/inscription')->group(function () {
         Route::get('graphes', [DashboardController::class, 'graphes']);
     });
 
+    Route::middleware('auth:sanctum')->get('files/legacy', [\App\Modules\Inscription\Http\Controllers\FileController::class, 'viewLegacyFile']);
+    Route::middleware('auth:sanctum')->post('send-mail', [\App\Modules\Inscription\Http\Controllers\MailController::class, 'sendMail']);
+
 }); // Fin du groupe api/inscription

@@ -23,11 +23,7 @@ class ManagePeriodsRequest extends FormRequest
             'departments.*' => ['integer', 'exists:departments,id'],
         ];
 
-        // Pour la création de périodes, valider par rapport à l'année académique
-        if ($this->isMethod('post') && $academicYear) {
-            $rules['start_date'][] = 'after_or_equal:' . $academicYear->year_start;
-            $rules['end_date'][] = 'before_or_equal:' . $academicYear->year_end;
-        }
+
 
         return $rules;
     }
@@ -38,10 +34,8 @@ class ManagePeriodsRequest extends FormRequest
             'type.required' => 'Le type de période est requis',
             'type.in' => 'Le type de période doit être "depot" ou "reclamation"',
             'start_date.required' => 'La date de début est requise',
-            'start_date.after_or_equal' => 'La date de début doit être dans la période de l\'année académique',
             'end_date.required' => 'La date de fin est requise',
             'end_date.after' => 'La date de fin doit être après la date de début',
-            'end_date.before_or_equal' => 'La date de fin doit être dans la période de l\'année académique',
             'departments.required' => 'Au moins un département est requis',
             'departments.array' => 'Les départements doivent être un tableau',
             'departments.min' => 'Au moins un département est requis',

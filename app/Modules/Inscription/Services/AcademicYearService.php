@@ -50,20 +50,18 @@ class AcademicYearService
                 );
             }
 
-            AcademicYear::query()->update(['is_current' => false]);
-
             $year = AcademicYear::create([
                 'uuid' => (string) Str::uuid(),
                 'academic_year' => $academicYearLabel,
                 'year_start' => $data['year_start'],
                 'year_end' => $data['year_end'],
-                'submission_start' => $data['submission_start'],
-                'submission_end' => $data['submission_end'],
+                'submission_start' => $data['submission_start'] ?? null,
+                'submission_end' => $data['submission_end'] ?? null,
                 'is_current' => true,
             ]);
 
             // Créer les périodes de soumission pour les départements
-            if (!empty($data['departments'])) {
+            if (!empty($data['departments']) && !empty($data['submission_start']) && !empty($data['submission_end'])) {
                 foreach ($data['departments'] as $departmentId) {
                     SubmissionPeriod::create([
                         'academic_year_id' => $year->id,

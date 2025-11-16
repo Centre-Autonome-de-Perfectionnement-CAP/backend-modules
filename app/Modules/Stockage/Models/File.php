@@ -191,8 +191,7 @@ class File extends Model
      */
     public function incrementDownloadCount(): void
     {
-        $this->increment('download_count');
-        $this->update(['last_accessed_at' => now()]);
+        //$this->update(['last_accessed_at' => now()]);
     }
 
     /**

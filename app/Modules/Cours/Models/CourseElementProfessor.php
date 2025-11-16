@@ -16,6 +16,12 @@ class CourseElementProfessor extends Model
     protected $fillable = [
         'course_element_id',
         'professor_id',
+        'principal_professor_id',
+        'is_primary',
+    ];
+
+    protected $casts = [
+        'is_primary' => 'boolean',
     ];
 
     /**
@@ -35,10 +41,50 @@ class CourseElementProfessor extends Model
     }
 
     /**
+     * Relation avec le professeur principal
+     */
+    public function principalProfessor(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\RH\Models\Professor::class, 'principal_professor_id');
+    }
+
+    /**
+     * Relation avec l'année académique
+     */
+    public function academicYear(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Inscription\Models\AcademicYear::class);
+    }
+
+    /**
+     * Relation avec le groupe de classe
+     */
+    public function classGroup(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Inscription\Models\ClassGroup::class);
+    }
+
+    /**
      * Relation avec les programmes qui utilisent cette assignation
      */
     public function programs()
     {
         return $this->hasMany(Program::class, 'course_element_professor_id');
+    }
+
+    /**
+     * Scope pour les professeurs principaux
+     */
+    public function scopePrimary($query)
+    {
+        return $query->where('is_primary', true);
+    }
+
+    /**
+     * Scope pour les professeurs secondaires
+     */
+    public function scopeSecondary($query)
+    {
+        return $query->where('is_primary', false);
     }
 }

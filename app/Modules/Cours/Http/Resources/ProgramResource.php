@@ -14,7 +14,17 @@ class ProgramResource extends JsonResource
             'uuid' => $this->uuid,
             'class_group_id' => $this->class_group_id,
             'course_element_professor_id' => $this->course_element_professor_id,
+            'academic_year_id' => $this->academic_year_id,
             'weighting' => $this->weighting,
+            'retake_weighting' => $this->retake_weighting,
+            
+            // Année académique
+            'academic_year' => $this->whenLoaded('academicYear', function () {
+                return [
+                    'id' => $this->academicYear->id,
+                    'name' => $this->academicYear->name,
+                ];
+            }),
             
             // Classe/Groupe
             'class_group' => $this->whenLoaded('classGroup', function () {

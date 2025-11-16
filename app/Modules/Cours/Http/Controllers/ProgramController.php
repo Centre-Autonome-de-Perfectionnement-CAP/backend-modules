@@ -40,8 +40,12 @@ class ProgramController extends Controller
         
         $programs = $this->programService->getAll($filters, $perPage);
 
+        $programs->setCollection(
+            ProgramResource::collection($programs->getCollection())->collection
+        );
+
         return $this->successPaginatedResponse(
-            $programs->setCollection(ProgramResource::collection($programs->items())),
+            $programs,
             'Programmes récupérés avec succès'
         );
     }
@@ -107,8 +111,12 @@ class ProgramController extends Controller
         $perPage = $this->getPerPage($request, 50);
         $programs = $this->programService->getProgramsByClassGroup($classGroupId, $perPage);
 
+        $programs->setCollection(
+            ProgramResource::collection($programs->getCollection())->collection
+        );
+
         return $this->successPaginatedResponse(
-            $programs->setCollection(ProgramResource::collection($programs->items())),
+            $programs,
             'Emploi du temps récupéré avec succès'
         );
     }
@@ -121,8 +129,12 @@ class ProgramController extends Controller
         $perPage = $this->getPerPage($request, 50);
         $programs = $this->programService->getProgramsByProfessor($professorId, $perPage);
 
+        $programs->setCollection(
+            ProgramResource::collection($programs->getCollection())->collection
+        );
+
         return $this->successPaginatedResponse(
-            $programs->setCollection(ProgramResource::collection($programs->items())),
+            $programs,
             'Programmes du professeur récupérés avec succès'
         );
     }
@@ -135,8 +147,12 @@ class ProgramController extends Controller
         $perPage = $this->getPerPage($request, 50);
         $programs = $this->programService->getProgramsByCourseElement($courseElementId, $perPage);
 
+        $programs->setCollection(
+            ProgramResource::collection($programs->getCollection())->collection
+        );
+
         return $this->successPaginatedResponse(
-            $programs->setCollection(ProgramResource::collection($programs->items())),
+            $programs,
             'Programmes de l\'élément de cours récupérés avec succès'
         );
     }
@@ -207,5 +223,20 @@ class ProgramController extends Controller
                 ],
             ],
         ], 201);
+    }
+
+    public function renewForNextYear(Request $request): JsonResponse
+    {
+        $request->validate([
+            'current_academic_year_id' => 'required|exists:academic_years,id',
+            'next_academic_year_id' => 'required|exists:academic_years,id',
+        ]);
+
+        $result = $this->programService->renewForNextYear(
+            $request->current_academic_year_id,
+            $request->next_academic_year_id
+        );
+
+        return $this->successResponse($result, "{$result['created']} programme(s) reconduit(s)");
     }
 }

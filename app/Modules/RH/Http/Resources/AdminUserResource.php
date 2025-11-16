@@ -18,11 +18,13 @@ class AdminUserResource extends JsonResource
             'phone' => $this->phone,
             'rib_number' => $this->rib_number,
             'rib' => $this->rib,
+            'rib_url' => $this->rib ? url("/api/stockage/files/{$this->rib}/view") : null,
             'ifu_number' => $this->ifu_number,
             'ifu' => $this->ifu,
+            'ifu_url' => $this->ifu ? url("/api/stockage/files/{$this->ifu}/view") : null,
             'bank' => $this->bank,
             'photo' => $this->photo,
-            'uuid' => $this->uuid,
+            'photo_url' => $this->photo ? url("/api/stockage/files/{$this->photo}/view") : null,
             'email_verified_at' => $this->email_verified_at?->toISOString(),
             'roles' => $this->whenLoaded('roles', function () {
                 return $this->roles->map(function ($role) {

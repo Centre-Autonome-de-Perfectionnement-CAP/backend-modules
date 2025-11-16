@@ -10,6 +10,14 @@ class CourseElement extends Model
 {
     use HasFactory, HasUuid;
 
+    /**
+     * Create a new factory instance for the model.
+     */
+    protected static function newFactory()
+    {
+        return \Database\Factories\CourseElementFactory::new();
+    }
+
     protected $fillable = [
         'name',
         'code',

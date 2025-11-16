@@ -10,6 +10,14 @@ class TeachingUnit extends Model
 {
     use HasFactory, HasUuid;
 
+    /**
+     * Create a new factory instance for the model.
+     */
+    protected static function newFactory()
+    {
+        return \Database\Factories\TeachingUnitFactory::new();
+    }
+
     protected $fillable = [
         'name',
         'code',

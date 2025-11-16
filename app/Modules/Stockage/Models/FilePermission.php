@@ -5,6 +5,7 @@ namespace App\Modules\Stockage\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Traits\HasUuid;
 
 /**
  * @OA\Schema(
@@ -40,7 +41,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class FilePermission extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     protected $fillable = [
         'file_id',

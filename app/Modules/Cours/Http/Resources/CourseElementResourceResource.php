@@ -12,6 +12,13 @@ class CourseElementResourceResource extends JsonResource
         return [
             'id' => $this->id,
             'course_element_id' => $this->course_element_id,
+            'course_element' => $this->whenLoaded('courseElement', function () {
+                return [
+                    'id' => $this->courseElement->id,
+                    'name' => $this->courseElement->name,
+                    'code' => $this->courseElement->code,
+                ];
+            }),
             'file_id' => $this->file_id,
             'title' => $this->title,
             'description' => $this->description,
@@ -24,7 +31,8 @@ class CourseElementResourceResource extends JsonResource
                     'original_name' => $this->file->original_name,
                     'mime_type' => $this->file->mime_type,
                     'size' => $this->file->size,
-                    'url' => $this->file->url,
+                    'url' => url("/api/stockage/files/{$this->file->id}/view"),
+                    'download_url' => url("/api/stockage/files/{$this->file->id}/download"),
                 ];
             }),
             'created_at' => $this->created_at?->toISOString(),

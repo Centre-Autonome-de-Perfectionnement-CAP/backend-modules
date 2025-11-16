@@ -28,13 +28,17 @@ class ProfessorController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $filters = $request->only(['search', 'status', 'grade_id', 'sort_by', 'sort_order']);
+        $filters = $request->only(['search', 'status', 'grade_id', 'bank', 'sort_by', 'sort_order']);
         $perPage = $this->getPerPage($request);
         
         $professors = $this->professorService->getAll($filters, $perPage);
 
+        $professors->setCollection(
+            ProfessorResource::collection($professors->getCollection())->collection
+        );
+
         return $this->successPaginatedResponse(
-            $professors->setCollection(ProfessorResource::collection($professors->items())),
+            $professors,
             'Professeurs récupérés avec succès'
         );
     }
@@ -50,9 +54,9 @@ class ProfessorController extends Controller
 
         $professor = $this->professorService->create(
             $data,
+            auth()->id(),
             $ribFile,
-            $ifuFile,
-            auth()->id()
+            $ifuFile
         );
 
         return $this->createdResponse(
@@ -84,9 +88,9 @@ class ProfessorController extends Controller
         $professor = $this->professorService->update(
             $professor,
             $data,
+            auth()->id(),
             $ribFile,
-            $ifuFile,
-            auth()->id()
+            $ifuFile
         );
 
         return $this->updatedResponse(

@@ -4,15 +4,18 @@ namespace App\Modules\RH\Services;
 
 use App\Modules\RH\Models\Professor;
 use App\Modules\Stockage\Services\FileStorageService;
+use App\Services\PasswordGeneratorService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Exception;
 
 class ProfessorService
 {
     public function __construct(
-        protected FileStorageService $fileStorageService
+        protected FileStorageService $fileStorageService,
+        protected PasswordGeneratorService $passwordGenerator
     ) {}
 
     /**
@@ -43,6 +46,11 @@ class ProfessorService
             $query->where('grade_id', $filters['grade_id']);
         }
 
+        // Filtre par banque
+        if (!empty($filters['bank'])) {
+            $query->where('bank', $filters['bank']);
+        }
+
         // Tri
         $sortBy = $filters['sort_by'] ?? 'created_at';
         $sortOrder = $filters['sort_order'] ?? 'desc';
@@ -54,15 +62,12 @@ class ProfessorService
     /**
      * Créer un nouveau professeur
      */
-    public function create(array $data, $ribFile = null, $ifuFile = null, int $userId): Professor
+    public function create(array $data, int $userId, $ribFile = null, $ifuFile = null): Professor
     {
         return DB::transaction(function () use ($data, $ribFile, $ifuFile, $userId) {
-            // Hasher le mot de passe
-            if (isset($data['password'])) {
-                $data['password'] = Hash::make($data['password']);
-            }
-
-            // Upload RIB si fourni
+            // $data['password'] = Hash::make($this->passwordGenerator->generate());
+            $data['password'] = Hash::make('password');
+            $data['uuid'] = Str::uuid();
             if ($ribFile) {
                 $uploadedRib = $this->fileStorageService->uploadFile(
                     uploadedFile: $ribFile,
@@ -76,7 +81,6 @@ class ProfessorService
                 $data['rib'] = $uploadedRib->id;
             }
 
-            // Upload IFU si fourni
             if ($ifuFile) {
                 $uploadedIfu = $this->fileStorageService->uploadFile(
                     uploadedFile: $ifuFile,
@@ -90,10 +94,7 @@ class ProfessorService
                 $data['ifu'] = $uploadedIfu->id;
             }
 
-            // Créer le professeur
             $professor = Professor::create($data);
-
-            // Mettre à jour les relations des fichiers
             if (!empty($data['rib'])) {
                 $uploadedRib->update(['module_resource_id' => $professor->id]);
             }
@@ -122,7 +123,7 @@ class ProfessorService
     /**
      * Mettre à jour un professeur
      */
-    public function update(Professor $professor, array $data, $ribFile = null, $ifuFile = null, int $userId): Professor
+    public function update(Professor $professor, array $data, int $userId, $ribFile = null, $ifuFile = null): Professor
     {
         return DB::transaction(function () use ($professor, $data, $ribFile, $ifuFile, $userId) {
             // Hasher le mot de passe si fourni

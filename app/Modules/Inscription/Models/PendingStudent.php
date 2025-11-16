@@ -29,6 +29,7 @@ class PendingStudent extends Model
         'documents',
         'entry_diploma_id',
         'sponsorise',
+        'exonere',
         'status',
     ];
 

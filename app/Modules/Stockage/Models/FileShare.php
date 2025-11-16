@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
+use App\Traits\HasUuid;
 
 /**
  * @OA\Schema(
@@ -40,7 +41,7 @@ use Illuminate\Support\Str;
  */
 class FileShare extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     protected $fillable = [
         'file_id',

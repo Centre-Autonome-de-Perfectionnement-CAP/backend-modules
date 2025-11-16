@@ -15,6 +15,7 @@ class Program extends Model
     protected $fillable = [
         'class_group_id',
         'course_element_professor_id',
+        'academic_year_id',
         'weighting',
         'retake_weighting',
     ];
@@ -30,6 +31,14 @@ class Program extends Model
     public function classGroup()
     {
         return $this->belongsTo(\App\Modules\Inscription\Models\ClassGroup::class);
+    }
+
+    /**
+     * Relation avec l'année académique
+     */
+    public function academicYear()
+    {
+        return $this->belongsTo(\App\Modules\Inscription\Models\AcademicYear::class);
     }
 
     /**

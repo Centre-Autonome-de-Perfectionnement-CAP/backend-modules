@@ -25,6 +25,11 @@ class ProgramService
             $query->where('class_group_id', $filters['class_group_id']);
         }
 
+        // Filtre par année académique
+        if (!empty($filters['academic_year_id'])) {
+            $query->where('academic_year_id', $filters['academic_year_id']);
+        }
+
         // Filtre par élément de cours
         if (!empty($filters['course_element_id'])) {
             $query->whereHas('courseElementProfessor', function ($q) use ($filters) {
@@ -60,16 +65,27 @@ class ProgramService
      */
     public function create(array $data): Program
     {
+        $exists = Program::where('class_group_id', $data['class_group_id'])
+            ->where('course_element_professor_id', $data['course_element_professor_id'])
+            ->where('academic_year_id', $data['academic_year_id'])
+            ->exists();
+
+        if ($exists) {
+            throw new Exception('Ce programme existe déjà pour cette année académique');
+        }
+
         $program = Program::create($data);
 
         Log::info('Programme créé', [
             'program_id' => $program->id,
             'class_group_id' => $program->class_group_id,
             'course_element_professor_id' => $program->course_element_professor_id,
+            'academic_year_id' => $program->academic_year_id,
         ]);
 
         return $program->load([
             'classGroup',
+            'academicYear',
             'courseElementProfessor.courseElement.teachingUnit',
             'courseElementProfessor.professor'
         ]);
@@ -187,13 +203,14 @@ class ProgramService
                 // Vérifier si cette combinaison existe déjà
                 $exists = Program::where('class_group_id', $data['class_group_id'])
                     ->where('course_element_professor_id', $data['course_element_professor_id'])
+                    ->where('academic_year_id', $data['academic_year_id'])
                     ->exists();
 
                 if ($exists) {
                     $errors[] = [
                         'index' => $index,
                         'data' => $data,
-                        'error' => 'Ce cours est déjà assigné à ce groupe de classe.',
+                        'error' => 'Ce cours est déjà assigné à ce groupe de classe pour cette année.',
                     ];
                     continue;
                 }
@@ -253,6 +270,7 @@ class ProgramService
                 // Vérifier si cette assignation existe déjà pour la classe cible
                 $exists = Program::where('class_group_id', $targetClassGroupId)
                     ->where('course_element_professor_id', $sourceProgram->course_element_professor_id)
+                    ->where('academic_year_id', $sourceProgram->academic_year_id)
                     ->exists();
 
                 if ($exists) {
@@ -268,7 +286,9 @@ class ProgramService
                 $newProgram = Program::create([
                     'class_group_id' => $targetClassGroupId,
                     'course_element_professor_id' => $sourceProgram->course_element_professor_id,
+                    'academic_year_id' => $sourceProgram->academic_year_id,
                     'weighting' => $sourceProgram->weighting,
+                    'retake_weighting' => $sourceProgram->retake_weighting,
                 ]);
 
                 $createdPrograms[] = $newProgram->load([
@@ -300,5 +320,35 @@ class ProgramService
             'error_count' => count($errors),
             'total_source' => $sourcePrograms->count(),
         ];
+    }
+
+    public function renewForNextYear(int $currentAcademicYearId, int $nextAcademicYearId): array
+    {
+        $programs = Program::where('academic_year_id', $currentAcademicYearId)->get();
+        $created = [];
+        $errors = [];
+
+        foreach ($programs as $program) {
+            try {
+                $exists = Program::where('class_group_id', $program->class_group_id)
+                    ->where('course_element_professor_id', $program->course_element_professor_id)
+                    ->where('academic_year_id', $nextAcademicYearId)
+                    ->exists();
+
+                if (!$exists) {
+                    $created[] = Program::create([
+                        'class_group_id' => $program->class_group_id,
+                        'course_element_professor_id' => $program->course_element_professor_id,
+                        'academic_year_id' => $nextAcademicYearId,
+                        'weighting' => $program->weighting,
+                        'retake_weighting' => $program->retake_weighting,
+                    ]);
+                }
+            } catch (Exception $e) {
+                $errors[] = ['program_id' => $program->id, 'error' => $e->getMessage()];
+            }
+        }
+
+        return ['created' => count($created), 'errors' => $errors];
     }
 }

@@ -31,6 +31,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(remove: [
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
         ]);
+        
+        // Configure auth middleware to return JSON for API
+        $middleware->redirectGuestsTo(fn () => abort(401, 'Authentification requise'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (\App\Exceptions\BusinessException $e, $request) {

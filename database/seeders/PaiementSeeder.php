@@ -24,56 +24,56 @@ class PaiementSeeder extends Seeder
             // Frais d'inscription
             $paiements[] = [
                 'reference' => 'PAY-' . strtoupper(Str::random(8)),
-                'matricule' => $student->student_id_number,
-                'montant' => 50000,
-                'date_versement' => now()->subDays(90 + $index),
-                'motif' => 'Frais d\'inscription',
-                'statut' => 'en_attente',
+                'student_id_number' => $student->student_id_number,
+                'amount' => 50000,
+                'payment_date' => now()->subDays(90 + $index),
+                'purpose' => 'Frais d\'inscription',
+                'status' => 'pending',
                 'email' => $student->email,
                 'contact' => '+225 07 00 00 ' . sprintf('%02d', $index + 1),
-                'numero_compte' => 'CI01234567890' . sprintf('%03d', $index + 1),
+                'account_number' => 'CI01234567890' . sprintf('%03d', $index + 1),
             ];
 
             // Premier semestre
             $paiements[] = [
                 'reference' => 'PAY-' . strtoupper(Str::random(8)),
-                'matricule' => $student->student_id_number,
-                'montant' => 250000,
-                'date_versement' => now()->subDays(60 + $index),
-                'motif' => 'Frais de scolarité 1er semestre',
-                'statut' => 'en_attente',
+                'student_id_number' => $student->student_id_number,
+                'amount' => 250000,
+                'payment_date' => now()->subDays(60 + $index),
+                'purpose' => 'Frais de scolarité 1er semestre',
+                'status' => 'pending',
                 'email' => $student->email,
                 'contact' => '+225 07 00 00 ' . sprintf('%02d', $index + 1),
-                'numero_compte' => 'CI01234567890' . sprintf('%03d', $index + 1),
+                'account_number' => 'CI01234567890' . sprintf('%03d', $index + 1),
             ];
 
             // Deuxième semestre (en attente pour certains)
-            $statut = $index === 0 ? 'en_attente' : 'accepte';
+            $statut = $index === 0 ? 'pending' : 'approved';
             $paiements[] = [
                 'reference' => 'PAY-' . strtoupper(Str::random(8)),
-                'matricule' => $student->student_id_number,
-                'montant' => 250000,
-                'date_versement' => now()->subDays(30 + $index),
-                'motif' => 'Frais de scolarité 2ème semestre',
-                'statut' => $statut,
+                'student_id_number' => $student->student_id_number,
+                'amount' => 250000,
+                'payment_date' => now()->subDays(30 + $index),
+                'purpose' => 'Frais de scolarité 2ème semestre',
+                'status' => $statut,
                 'email' => $student->email,
                 'contact' => '+225 07 00 00 ' . sprintf('%02d', $index + 1),
-                'numero_compte' => 'CI01234567890' . sprintf('%03d', $index + 1),
-                'observation' => $statut === 'en_attente' ? 'En attente de validation' : null,
+                'account_number' => 'CI01234567890' . sprintf('%03d', $index + 1),
+                'observation' => $statut === 'pending' ? 'En attente de validation' : null,
             ];
 
             // Frais d'examen
             if ($index < 2) {
                 $paiements[] = [
                     'reference' => 'PAY-' . strtoupper(Str::random(8)),
-                    'matricule' => $student->student_id_number,
-                    'montant' => 25000,
-                    'date_versement' => now()->subDays(10 + $index),
-                    'motif' => 'Frais d\'examen',
-                    'statut' => 'en_attente',
+                    'student_id_number' => $student->student_id_number,
+                    'amount' => 25000,
+                    'payment_date' => now()->subDays(10 + $index),
+                    'purpose' => 'Frais d\'examen',
+                    'status' => 'pending',
                     'email' => $student->email,
                     'contact' => '+225 07 00 00 ' . sprintf('%02d', $index + 1),
-                    'numero_compte' => 'CI01234567890' . sprintf('%03d', $index + 1),
+                    'account_number' => 'CI01234567890' . sprintf('%03d', $index + 1),
                 ];
             }
         }

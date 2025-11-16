@@ -22,23 +22,18 @@ class PendingStudentService
             'academicYear'
         ]);
 
-        // Filtre par statut
-        if (!empty($filters['status'])) {
-            $query->where('status', $filters['status']);
-        }
-
         // Filtre par département
-        if (!empty($filters['department_id'])) {
+        if (!empty($filters['department_id']) && is_numeric($filters['department_id'])) {
             $query->where('department_id', $filters['department_id']);
         }
 
         // Filtre par année académique
-        if (!empty($filters['academic_year_id'])) {
+        if (!empty($filters['academic_year_id']) && is_numeric($filters['academic_year_id'])) {
             $query->where('academic_year_id', $filters['academic_year_id']);
         }
 
         // Filtre par diplôme d'entrée
-        if (!empty($filters['entry_diploma_id'])) {
+        if (!empty($filters['entry_diploma_id']) && is_numeric($filters['entry_diploma_id'])) {
             $query->where('entry_diploma_id', $filters['entry_diploma_id']);
         }
 

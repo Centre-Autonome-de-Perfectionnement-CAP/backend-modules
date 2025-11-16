@@ -47,6 +47,9 @@ class CourseElementResourceService
     {
         return DB::transaction(function () use ($data, $uploadedFile, $userId) {
             // Upload du fichier via le service de stockage
+            $mime = $uploadedFile->getClientOriginalExtension();
+            $resourceType = $this->getResourceTypeFromExtension($mime);
+
             $file = $this->fileStorageService->uploadFile(
                 uploadedFile: $uploadedFile,
                 userId: $userId,
@@ -56,7 +59,8 @@ class CourseElementResourceService
                 moduleResourceType: 'CourseElementResource',
                 metadata: [
                     'course_element_id' => $data['course_element_id'],
-                    'resource_type' => $data['resource_type'],
+                    'pedagogical_type' => $data['pedagogical_type'], // nouveau champ
+                    'resource_type' => $resourceType,
                 ]
             );
 
@@ -66,7 +70,7 @@ class CourseElementResourceService
                 'file_id' => $file->id,
                 'title' => $data['title'],
                 'description' => $data['description'] ?? null,
-                'resource_type' => $data['resource_type'],
+                'resource_type' => $data['pedagogical_type'],
                 'is_public' => $data['is_public'] ?? false,
             ]);
 
@@ -133,5 +137,17 @@ class CourseElementResourceService
                 throw $e;
             }
         });
+    }
+
+    protected function getResourceTypeFromExtension(string $extension): string
+    {
+        return match (strtolower($extension)) {
+            'pdf' => 'pdf',
+            'ppt', 'pptx' => 'pptx',
+            'doc', 'docx' => 'docx',
+            'mp4' => 'video',
+            'mp3' => 'audio',
+            default => 'other',
+        };
     }
 }

@@ -29,9 +29,12 @@ class TeachingUnitController extends Controller
         $perPage = $this->getPerPage($request);
         
         $teachingUnits = $this->teachingUnitService->getAll($filters, $perPage);
+        $teachingUnits->setCollection(
+            TeachingUnitResource::collection($teachingUnits->getCollection())->collection
+        );
 
         return $this->successPaginatedResponse(
-            $teachingUnits->setCollection(TeachingUnitResource::collection($teachingUnits->items())),
+            $teachingUnits,
             'Unités d\'enseignement récupérées avec succès'
         );
     }

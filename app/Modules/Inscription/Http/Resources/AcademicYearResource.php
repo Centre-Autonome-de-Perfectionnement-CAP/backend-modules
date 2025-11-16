@@ -12,11 +12,15 @@ class AcademicYearResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $now = now();
+        $isCurrent = $now->between($this->year_start, $this->year_end);
+        
         return [
             'id' => $this->id,
             'libelle' => $this->academic_year,
-            'date_debut' => $this->submission_start?->format('Y-m-d'),
-            'date_fin' => $this->submission_end?->format('Y-m-d'),
+            'date_debut' => $this->year_start,
+            'date_fin' => $this->year_end,
+            'is_current' => $isCurrent,
         ];
     }
 }

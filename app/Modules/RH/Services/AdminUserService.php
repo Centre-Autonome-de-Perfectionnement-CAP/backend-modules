@@ -4,6 +4,7 @@ namespace App\Modules\RH\Services;
 
 use App\Models\User;
 use App\Modules\Stockage\Services\FileStorageService;
+use App\Services\PasswordGeneratorService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -12,7 +13,8 @@ use Exception;
 class AdminUserService
 {
     public function __construct(
-        protected FileStorageService $fileStorageService
+        protected FileStorageService $fileStorageService,
+        protected PasswordGeneratorService $passwordGenerator
     ) {}
 
     /**
@@ -51,15 +53,11 @@ class AdminUserService
     /**
      * Créer un nouveau membre de l'administration
      */
-    public function create(array $data, $ribFile = null, $ifuFile = null, $photoFile = null, int $userId): User
+    public function create(array $data, int $userId, $ribFile = null, $ifuFile = null, $photoFile = null): User
     {
         return DB::transaction(function () use ($data, $ribFile, $ifuFile, $photoFile, $userId) {
-            // Hasher le mot de passe
-            if (isset($data['password'])) {
-                $data['password'] = Hash::make($data['password']);
-            }
+            $data['password'] = Hash::make($this->passwordGenerator->generate());
 
-            // Upload RIB si fourni
             if ($ribFile) {
                 $uploadedRib = $this->fileStorageService->uploadFile(
                     uploadedFile: $ribFile,
@@ -73,7 +71,6 @@ class AdminUserService
                 $data['rib'] = $uploadedRib->id;
             }
 
-            // Upload IFU si fourni
             if ($ifuFile) {
                 $uploadedIfu = $this->fileStorageService->uploadFile(
                     uploadedFile: $ifuFile,
@@ -86,8 +83,6 @@ class AdminUserService
                 );
                 $data['ifu'] = $uploadedIfu->id;
             }
-
-            // Upload photo si fournie
             if ($photoFile) {
                 $uploadedPhoto = $this->fileStorageService->uploadFile(
                     uploadedFile: $photoFile,
@@ -101,15 +96,13 @@ class AdminUserService
                 $data['photo'] = $uploadedPhoto->id;
             }
 
-            // Créer l'utilisateur
             $user = User::create($data);
-
-            // Attacher les rôles si fournis
-            if (!empty($data['role_ids']) && is_array($data['role_ids'])) {
+            if (!empty($data['role_id'])) {
+                $user->roles()->sync([$data['role_id']]);
+            } elseif (!empty($data['role_ids']) && is_array($data['role_ids'])) {
                 $user->roles()->sync($data['role_ids']);
             }
 
-            // Mettre à jour les relations des fichiers
             if (!empty($data['rib'])) {
                 $uploadedRib->update(['module_resource_id' => $user->id]);
             }
@@ -142,7 +135,7 @@ class AdminUserService
     /**
      * Mettre à jour un utilisateur
      */
-    public function update(User $user, array $data, $ribFile = null, $ifuFile = null, $photoFile = null, int $userId): User
+    public function update(User $user, array $data, int $userId, $ribFile = null, $ifuFile = null, $photoFile = null): User
     {
         return DB::transaction(function () use ($user, $data, $ribFile, $ifuFile, $photoFile, $userId) {
             // Hasher le mot de passe si fourni
@@ -201,7 +194,9 @@ class AdminUserService
             $user->update($data);
 
             // Synchroniser les rôles si fournis
-            if (isset($data['role_ids']) && is_array($data['role_ids'])) {
+            if (!empty($data['role_id'])) {
+                $user->roles()->sync([$data['role_id']]);
+            } elseif (isset($data['role_ids']) && is_array($data['role_ids'])) {
                 $user->roles()->sync($data['role_ids']);
             }
 
@@ -268,9 +263,9 @@ class AdminUserService
     public function getStatistics(): array
     {
         return [
-            'total' => User::count(),
-            'with_email_verified' => User::whereNotNull('email_verified_at')->count(),
-            'without_email_verified' => User::whereNull('email_verified_at')->count(),
+            'total_admin_users' => User::count(),
+            'total_professors' => \App\Modules\RH\Models\Professor::count(),
+            'active_professors' => \App\Modules\RH\Models\Professor::where('status', 'active')->count(),
         ];
     }
 }

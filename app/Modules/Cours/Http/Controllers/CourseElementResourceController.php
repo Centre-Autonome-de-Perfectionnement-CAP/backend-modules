@@ -33,8 +33,13 @@ class CourseElementResourceController extends Controller
         
         $resources = $this->resourceService->getAll($filters, $perPage);
 
+        $resources->getCollection()->load(['courseElement', 'file']);
+        $resources->setCollection(
+            CourseElementResourceResource::collection($resources->getCollection())->collection
+        );
+
         return $this->successPaginatedResponse(
-            $resources->setCollection(CourseElementResourceResource::collection($resources->items())),
+            $resources,
             'Ressources récupérées avec succès'
         );
     }

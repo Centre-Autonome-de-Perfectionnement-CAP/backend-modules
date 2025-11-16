@@ -332,16 +332,34 @@ class FileController extends Controller
 
         $download = $this->storageService->downloadFile($file, Auth::id());
 
-            return response()->stream(
-                function () use ($download) {
-                    echo $download['stream'];
-                },
-                200,
-                [
-                    'Content-Type' => $download['mimeType'],
-                    'Content-Disposition' => 'attachment; filename="' . $download['filename'] . '"',
-                ]
-            );
+        return response()->stream(
+            function () use ($download) {
+                echo $download['stream'];
+            },
+            200,
+            [
+                'Content-Type' => $download['mimeType'],
+                'Content-Disposition' => 'attachment; filename="' . $download['filename'] . '"',
+            ]
+        );
+    }
+
+    public function view(File $file)
+    {
+        $this->authorize('view', $file);
+
+        $download = $this->storageService->downloadFile($file, Auth::id());
+
+        return response()->stream(
+            function () use ($download) {
+                echo $download['stream'];
+            },
+            200,
+            [
+                'Content-Type' => $download['mimeType'],
+                'Content-Disposition' => 'inline; filename="' . $download['filename'] . '"',
+            ]
+        );
     }
 
     /**

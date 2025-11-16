@@ -20,9 +20,9 @@ return new class extends Migration
             $table->string('phone')->nullable();
             $table->string('password')->nullable();
             $table->string('rib_number')->nullable();
-            $table->string('rib')->nullable();
+            $table->unsignedBigInteger('rib')->nullable();
             $table->string('ifu_number')->nullable();
-            $table->string('ifu')->nullable();
+            $table->unsignedBigInteger('ifu')->nullable();
             $table->string('bank')->nullable();
             $table->string('specialty')->nullable();
             $table->enum('status', ['active', 'inactive', 'on_leave'])->default('active');

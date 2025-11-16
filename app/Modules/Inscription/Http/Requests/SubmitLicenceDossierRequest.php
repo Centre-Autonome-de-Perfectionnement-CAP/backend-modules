@@ -16,7 +16,7 @@ class SubmitLicenceDossierRequest extends FormRequest
         return [
             'last_name' => ['required','string','max:255'],
             'first_names' => ['required','string','max:255'],
-            'email' => ['required','email'],
+            'email' => ['required','email','unique:personal_information,email'],
             'birth_date' => ['required','date'],
             'birth_place' => ['required','string','max:255'],
             'birth_country' => ['required','string','max:255'],

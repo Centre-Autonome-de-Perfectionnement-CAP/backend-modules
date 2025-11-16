@@ -5,6 +5,8 @@ namespace App\Modules\Stockage\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Traits\HasUuid;
+use Illuminate\Support\Str;
 
 /**
  * @OA\Schema(
@@ -34,7 +36,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class FileActivity extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     const UPDATED_AT = null; // Pas de colonne updated_at
 
@@ -105,6 +107,7 @@ class FileActivity extends Model
         ?string $userAgent = null
     ): self {
         return static::create([
+            'uuid' => Str::uuid(),
             'file_id' => $fileId,
             'user_id' => $userId,
             'action' => $action,

@@ -41,6 +41,7 @@ Route::middleware('auth:sanctum')->prefix('files')->group(function () {
     
     // Actions sur les fichiers
     Route::get('{file}/download', [FileController::class, 'download'])->name('api.files.download');
+    Route::get('{file}/view', [FileController::class, 'view'])->name('api.files.view');
     Route::post('{file}/visibility', [FileController::class, 'changeVisibility'])->name('api.files.visibility');
     Route::post('{file}/lock', [FileController::class, 'lock'])->name('api.files.lock');
     Route::post('{file}/unlock', [FileController::class, 'unlock'])->name('api.files.unlock');

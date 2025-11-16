@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Modules\Cours\Http\Controllers\TeachingUnitController;
 use App\Modules\Cours\Http\Controllers\CourseElementController;
 use App\Modules\Cours\Http\Controllers\CourseElementResourceController;
+use App\Modules\Cours\Http\Controllers\CourseElementProfessorController;
 use App\Modules\Cours\Http\Controllers\ProgramController;
 
 Route::prefix('api/cours')->group(function () {
@@ -22,10 +23,16 @@ Route::prefix('api/cours')->group(function () {
         // Course Resources (Ressources Pédagogiques)
         Route::apiResource('course-resources', CourseElementResourceController::class);
         
+        // Course Element Professor Assignments (Associations Matière-Professeur)
+        Route::apiResource('course-element-professors', CourseElementProfessorController::class);
+        Route::get('course-elements/{courseElement}/assignments', [CourseElementProfessorController::class, 'getByCourseElement']);
+        Route::post('course-element-professors/renew', [CourseElementProfessorController::class, 'renewForNextYear']);
+        
         // Programs (Emploi du temps / Assignations)
         Route::apiResource('programs', ProgramController::class);
         Route::post('programs/bulk', [ProgramController::class, 'bulkStore']);
         Route::post('programs/copy', [ProgramController::class, 'copyPrograms']);
+        Route::post('programs/renew', [ProgramController::class, 'renewForNextYear']);
         
         // Routes utilitaires pour les programmes
         Route::get('class-groups/{classGroupId}/programs', [ProgramController::class, 'getByClassGroup']);
