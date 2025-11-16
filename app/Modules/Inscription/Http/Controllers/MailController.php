@@ -3,7 +3,10 @@
 namespace App\Modules\Inscription\Http\Controllers;
 
 use App\Modules\Inscription\Jobs\SendPendingStudentMailJob;
+<<<<<<< HEAD
 use App\Modules\Inscription\Models\PendingStudent;
+=======
+>>>>>>> f355611 (draft)
 use Illuminate\Http\Request;
 
 class MailController
@@ -11,6 +14,7 @@ class MailController
     public function sendMail(Request $request)
     {
         $students = $request->input('students', []);
+<<<<<<< HEAD
         $errors = [];
         $success = [];
         
@@ -58,12 +62,21 @@ class MailController
                 'errors' => $errors,
                 'success' => $success
             ], 422);
+=======
+        
+        foreach ($students as $studentData) {
+            SendPendingStudentMailJob::dispatch($studentData);
+>>>>>>> f355611 (draft)
         }
         
         return response()->json([
             'success' => true,
+<<<<<<< HEAD
             'message' => 'Mails en cours d\'envoi',
             'success' => $success
+=======
+            'message' => 'Mails en cours d\'envoi'
+>>>>>>> f355611 (draft)
         ]);
     }
 }

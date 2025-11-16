@@ -16,3 +16,12 @@ Route::get('/services/{any?}', function () {
 Route::get('/{any}', function () {
     return file_get_contents(public_path('app-cap/index.html'));
 })->where('any', '^(?!api/)(?!services/)(?!.*\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot|map)).*');
+// Route pour l'API Laravel (si vous en avez)
+// Route::get('/api/endpoint', [Controller::class, 'method']);
+
+// Route catch-all pour app-cap (doit être en dernier) - exclure les fichiers statiques et les routes API
+Route::get('/{any}', function () {
+    return file_get_contents(public_path('app-cap/index.html'));
+})->where('any', '^(?!api/)(?!.*\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot|map)).*$');
+
+
