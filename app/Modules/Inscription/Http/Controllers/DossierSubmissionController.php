@@ -219,7 +219,7 @@ class DossierSubmissionController extends Controller
                 'diplome_bac' => 'Photocopie légalisée du diplôme BAC',
                 'diplome_licence' => 'Photocopie légalisée du diplôme de la licence',
                 'attestation_travail' => 'Attestation de travail',
-                'quittance_rectorat' => 'Quittance Rectorat de 2.000F',
+                // 'quittance_rectorat' => 'Quittance Rectorat de 2.000F',
                 'quittance_cap' => 'Quittance de 15.000F',
                 'attestation_depot_dossier' => 'Attestation de dépôt de dossier pour diplômes étrangers',
             ];
