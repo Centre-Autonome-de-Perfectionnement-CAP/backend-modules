@@ -1,1 +1,0 @@
-import{j as e,r as t,n,o as a,N as s,p as r}from"./index-khCzjUTv.js";const u=()=>e.jsx(t.Suspense,{fallback:e.jsx(r,{fullPage:!0,message:"Chargement du module Finance..."}),children:e.jsxs(n,{children:[e.jsx(a,{path:"/",element:e.jsx(s,{to:"/finance/dashboard",replace:!0})}),e.jsx(a,{path:"*",element:e.jsx(s,{to:"/404",replace:!0})})]})});export{u as default};
