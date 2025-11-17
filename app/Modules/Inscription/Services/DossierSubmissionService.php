@@ -100,8 +100,9 @@ class DossierSubmissionService
                 if ($request->hasFile($field) && $request->file($field)->isValid()) {
                     $file = $this->fileStorageService->uploadFile(
                         $request->file($field),
-                        "dossiers/{$cycleName}",
-                        $documentName
+                        null,
+                        'public',
+                        "dossiers/{$cycleName}"
                     );
                     $documents[$documentName] = $file->id;
                 } elseif (!in_array($field, ['attestation_depot_dossier', 'attestation_anglais', 'diplome_licence'])) {
@@ -116,8 +117,9 @@ class DossierSubmissionService
             if ($request->hasFile('photo') && $request->file('photo')->isValid()) {
                 $photoFile = $this->fileStorageService->uploadFile(
                     $request->file('photo'),
-                    "dossiers/photos",
-                    "Photo - {$personalInformation->first_names} {$personalInformation->last_name}"
+                    null,
+                    'public',
+                    "dossiers/photos"
                 );
                 $photoPath = $photoFile->id;
             }
@@ -198,8 +200,9 @@ class DossierSubmissionService
                 if ($file->isValid()) {
                     $uploadedFile = $this->fileStorageService->uploadFile(
                         $file,
-                        "dossiers/complements",
-                        $name . " (Complément)"
+                        null,
+                        'public',
+                        "dossiers/complements"
                     );
                     $documents[$name . "(Complément)"] = $uploadedFile->id;
                 } else {
