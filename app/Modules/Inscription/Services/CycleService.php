@@ -260,7 +260,12 @@ class CycleService
                         'L3' => 'Licence 3',
                         'M1' => 'Master 1',
                         'M2' => 'Master 2',
-                        default => $level,
+                        '1' => 'Niveau 1',
+                        '2' => 'Niveau 2',
+                        '3' => 'Niveau 3',
+                        '4' => 'Niveau 4',
+                        '5' => 'Niveau 5',
+                        default => "Niveau {$level}",
                     };
                     return [
                         'value' => $level,
@@ -273,5 +278,40 @@ class CycleService
         }
 
         return $levels;
+    }
+
+    /**
+     * Récupère tous les niveaux d'études disponibles (format plat pour les selects)
+     */
+    public function getAllStudyLevels(): array
+    {
+        // Récupérer tous les niveaux uniques depuis pending_students
+        $allLevels = \Illuminate\Support\Facades\DB::table('pending_students')
+            ->distinct()
+            ->pluck('level')
+            ->filter()
+            ->sort()
+            ->values();
+
+        // Formater les niveaux avec label
+        return $allLevels->map(function ($level) {
+            $label = match($level) {
+                'L1' => 'Licence 1',
+                'L2' => 'Licence 2', 
+                'L3' => 'Licence 3',
+                'M1' => 'Master 1',
+                'M2' => 'Master 2',
+                '1' => 'Niveau 1',
+                '2' => 'Niveau 2',
+                '3' => 'Niveau 3',
+                '4' => 'Niveau 4',
+                '5' => 'Niveau 5',
+                default => "Niveau {$level}",
+            };
+            return [
+                'value' => $level,
+                'label' => $label,
+            ];
+        })->toArray();
     }
 }

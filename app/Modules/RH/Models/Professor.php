@@ -43,6 +43,8 @@ class Professor extends Authenticatable
         'password' => 'hashed',
     ];
 
+    protected $appends = ['full_name'];
+
     /**
      * Relation avec le grade
      */

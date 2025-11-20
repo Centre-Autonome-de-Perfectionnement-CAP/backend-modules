@@ -77,11 +77,8 @@ class PendingStudentController extends Controller
     $perPage = $this->getPerPage($request);
     
     $pendingStudents = $this->pendingStudentService->getAll($filters, $perPage);
-
-    // Transformez d'abord les données avec la Resource, puis passez-les au paginator
     $transformedData = PendingStudentResource::collection($pendingStudents->items());
     
-    // Créez un nouveau paginator avec les données transformées
     $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
         $transformedData,
         $pendingStudents->total(),
@@ -221,14 +218,11 @@ class PendingStudentController extends Controller
     public function update(CreatePendingStudentRequest $request, PendingStudent $pendingStudent): JsonResponse
     {
         $data = $request->validated();
-
-        // Si le statut est changé, utiliser la méthode changeStatus
         if (isset($data['status']) && $data['status'] !== $pendingStudent->status) {
             $pendingStudent = $this->pendingStudentService->changeStatus($pendingStudent, $data['status']);
-            unset($data['status']); // Retirer le statut des données de mise à jour normale
+            unset($data['status']); 
         }
 
-        // Mettre à jour les autres champs si nécessaire
         if (!empty($data)) {
             $pendingStudent = $this->pendingStudentService->update($pendingStudent, $data);
         }

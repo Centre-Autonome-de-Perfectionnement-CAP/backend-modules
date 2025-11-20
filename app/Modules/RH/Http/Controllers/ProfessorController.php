@@ -107,4 +107,22 @@ class ProfessorController extends Controller
         $this->professorService->delete($professor);
         return $this->deletedResponse('Professeur supprimé avec succès');
     }
+
+    /**
+     * Récupérer la liste des banques utilisées
+     */
+    public function getBanks(): JsonResponse
+    {
+        $banks = Professor::whereNotNull('bank')
+            ->where('bank', '!=', '')
+            ->distinct()
+            ->pluck('bank')
+            ->sort()
+            ->values();
+
+        return $this->successResponse(
+            $banks,
+            'Banques récupérées avec succès'
+        );
+    }
 }
