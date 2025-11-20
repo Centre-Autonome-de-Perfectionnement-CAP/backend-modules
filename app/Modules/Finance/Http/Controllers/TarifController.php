@@ -39,6 +39,7 @@ class TarifController extends Controller
     }
 
     /**
+<<<<<<< HEAD
      * Liste toutes les classes disponibles
      */
     public function getAvailableClasses(Request $request)
@@ -117,6 +118,8 @@ class TarifController extends Controller
     }
 
     /**
+=======
+>>>>>>> eea2b06 (draft)
      * Crée un nouveau tarif
      */
     public function store(CreateTarifRequest $request)

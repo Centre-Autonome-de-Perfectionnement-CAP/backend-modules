@@ -3,9 +3,17 @@
 namespace App\Modules\Inscription\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+<<<<<<< HEAD
 use App\Modules\Inscription\Services\PendingStudentExportService;
 use App\Modules\Inscription\Http\Requests\ExportPendingStudentsRequest;
 use App\Traits\ApiResponse;
+=======
+use App\Modules\Inscription\Models\PendingStudent;
+use App\Modules\Inscription\Models\AcademicYear;
+use App\Traits\ApiResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+>>>>>>> eea2b06 (draft)
 use Barryvdh\DomPDF\Facade\Pdf;
 use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\IOFactory;
@@ -16,6 +24,7 @@ class PendingStudentExportController extends Controller
 {
     use ApiResponse;
 
+<<<<<<< HEAD
     public function __construct(
         protected PendingStudentExportService $exportService
     ) {
@@ -36,10 +45,23 @@ class PendingStudentExportController extends Controller
         $filename = $this->exportService->generateFilename('pdf', $data);
         
         \Log::info('Export PDF filename:', ['filename' => $filename, 'data' => $data]);
+=======
+    public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+    }
+
+    public function exportPdf(Request $request)
+    {
+        $data = $this->prepareData($request);
+        $template = $this->getTemplate($data['isPrepa']);
+        $filename = $this->generateFilename('pdf', $data);
+>>>>>>> eea2b06 (draft)
         
         $pdf = Pdf::loadView("core::pdfs.{$template}", $data)
             ->setPaper('a4', 'landscape');
         
+<<<<<<< HEAD
         $output = $pdf->output();
         
         return response()->make($output, 200)
@@ -59,6 +81,16 @@ class PendingStudentExportController extends Controller
         $data = $this->exportService->prepareExportData($filters);
         $template = $this->exportService->getTemplate($data['isPrepa']);
         $filename = $this->exportService->generateFilename('xlsx', $data);
+=======
+        return $pdf->stream($filename);
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $data = $this->prepareData($request);
+        $template = $this->getTemplate($data['isPrepa']);
+        $filename = $this->generateFilename('xlsx', $data);
+>>>>>>> eea2b06 (draft)
         
         $spreadsheet = new Spreadsheet();
         $worksheet = $spreadsheet->getActiveSheet();
@@ -101,6 +133,7 @@ class PendingStudentExportController extends Controller
         $temp_file = tempnam(sys_get_temp_dir(), $filename);
         $writer->save($temp_file);
         
+<<<<<<< HEAD
         return response()->download($temp_file, $filename, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"'
@@ -121,6 +154,16 @@ class PendingStudentExportController extends Controller
         $filename = $this->exportService->generateFilename('docx', $data);
         
         \Log::info('Export Word filename:', ['filename' => $filename]);
+=======
+        return response()->download($temp_file, $filename)->deleteFileAfterSend();
+    }
+
+    public function exportWord(Request $request)
+    {
+        $data = $this->prepareData($request);
+        $template = $this->getTemplate($data['isPrepa']);
+        $filename = $this->generateFilename('docx', $data);
+>>>>>>> eea2b06 (draft)
         
         $phpWord = new PhpWord();
         $section = $phpWord->addSection(['orientation' => 'landscape']);
@@ -177,6 +220,7 @@ class PendingStudentExportController extends Controller
         $writer = IOFactory::createWriter($phpWord, 'Word2007');
         $writer->save($temp_file);
         
+<<<<<<< HEAD
         return response()->download($temp_file, $filename, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"'
@@ -291,3 +335,71 @@ class PendingStudentExportController extends Controller
             ->header('Content-Type', 'application/pdf')
             ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
     }}
+=======
+        return response()->download($temp_file, $filename)->deleteFileAfterSend();
+    }
+
+    private function prepareData(Request $request): array
+    {
+        $year = $request->get('year');
+        $filiere = $request->get('filiere');
+        
+        $query = PendingStudent::with(['personalInformation', 'department', 'academicYear']);
+        
+        if ($year && $year !== 'all') {
+            if (is_numeric($year)) {
+                $query->where('academic_year_id', $year);
+            } else {
+                $query->whereHas('academicYear', function($q) use ($year) {
+                    $q->where('academic_year', $year);
+                });
+            }
+        }
+        
+        if ($filiere && $filiere !== 'all') {
+            if (is_numeric($filiere)) {
+                $query->where('department_id', $filiere);
+            } else {
+                $query->whereHas('department', function($q) use ($filiere) {
+                    $q->where('name', $filiere);
+                });
+            }
+        }
+        
+        $pendingStudents = $query->get();
+        
+        $academicYear = null;
+        if ($year && is_numeric($year)) {
+            $academicYear = AcademicYear::find($year);
+        } else {
+            $academicYear = AcademicYear::where('is_current', true)->first();
+        }
+        
+        $department = $pendingStudents->first()?->department;
+        $isPrepa = $department && strpos(strtolower($department->name), 'prepa') !== false;
+        
+        return [
+            'pendingStudents' => $pendingStudents,
+            'academicYear' => $academicYear?->academic_year ?? 'N/A',
+            'department' => $department?->name ?? 'Toutes filières',
+            'formation' => $department?->name ?? 'Formation générale',
+            'isPrepa' => $isPrepa,
+            'includeContact' => false
+        ];
+    }
+
+    private function getTemplate(bool $isPrepa): string
+    {
+        return $isPrepa ? 'liste-cuca-cuo-prepa' : 'liste-cuca-cuo';
+    }
+
+    private function generateFilename(string $extension, array $data): string
+    {
+        $department = str_replace(' ', '_', $data['department']);
+        $academicYear = str_replace(['/', '-'], '_', $data['academicYear']);
+        $dateTime = now()->format('Y_m_d_H_i');
+        
+        return "Liste_cuca_cuo_{$academicYear}_{$department}_{$dateTime}.{$extension}";
+    }
+}
+>>>>>>> eea2b06 (draft)

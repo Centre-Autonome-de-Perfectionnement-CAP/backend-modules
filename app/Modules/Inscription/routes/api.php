@@ -14,9 +14,12 @@ use App\Modules\Inscription\Http\Controllers\DashboardController;
 use App\Modules\Inscription\Http\Controllers\ClassGroupController;
 use App\Modules\Inscription\Http\Controllers\StudentController;
 use App\Modules\Inscription\Http\Controllers\PendingStudentExportController;
+<<<<<<< HEAD
 
 
 use App\Modules\Inscription\Http\Controllers\StudentBroadcastController;
+=======
+>>>>>>> eea2b06 (draft)
 
 
 Route::prefix('api/inscription')->group(function () {
@@ -151,5 +154,11 @@ Route::prefix('api/inscription')->group(function () {
     });
 =======
 >>>>>>> f355611 (draft)
+
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('export/pdf', [PendingStudentExportController::class, 'exportPdf']);
+        Route::get('export/excel', [PendingStudentExportController::class, 'exportExcel']);
+        Route::get('export/word', [PendingStudentExportController::class, 'exportWord']);
+    });
 
 }); // Fin du groupe api/inscription

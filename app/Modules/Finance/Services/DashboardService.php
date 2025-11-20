@@ -6,7 +6,10 @@ use App\Modules\Finance\Models\Paiement;
 use App\Modules\Finance\Models\Amount;
 use App\Modules\Inscription\Models\Student;
 use App\Modules\Inscription\Models\AcademicYear;
+<<<<<<< HEAD
 use App\Services\DatabaseAdapter;
+=======
+>>>>>>> eea2b06 (draft)
 use Illuminate\Support\Facades\DB;
 
 class DashboardService
@@ -21,7 +24,11 @@ class DashboardService
             $academicYear = AcademicYear::where('is_current', true)->first();
             if (!$academicYear) {
                 // Fallback: prendre la dernière année académique
+<<<<<<< HEAD
                 $academicYear = AcademicYear::orderBy('year_start', 'desc')->first();
+=======
+                $academicYear = AcademicYear::orderBy('date_debut', 'desc')->first();
+>>>>>>> eea2b06 (draft)
             }
         }
         
@@ -103,7 +110,11 @@ class DashboardService
                 $academicYear->year_end
             ])
             ->select(
+<<<<<<< HEAD
                 DB::raw(DatabaseAdapter::month('payment_date') . ' as month'),
+=======
+                DB::raw('MONTH(payment_date) as month'),
+>>>>>>> eea2b06 (draft)
                 DB::raw('SUM(amount) as total')
             )
             ->groupBy('month')

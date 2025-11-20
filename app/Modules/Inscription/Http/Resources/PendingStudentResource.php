@@ -34,6 +34,7 @@ class PendingStudentResource extends JsonResource
         $documents = [];
         if ($this->documents) {
             foreach ($this->documents as $name => $value) {
+<<<<<<< HEAD
                 // Gérer le format objet {url, custom_name} ou string
                 $url = is_array($value) ? ($value['url'] ?? '') : $value;
                 $customName = is_array($value) ? ($value['custom_name'] ?? null) : null;
@@ -43,6 +44,11 @@ class PendingStudentResource extends JsonResource
                     'url' => url("/api/inscription/files/legacy?path=" . urlencode($path)),
                     'custom_name' => $customName
                 ];
+=======
+                // Ajouter 'public/' au chemin si nécessaire
+                $path = str_starts_with($value, 'public/') ? $value : 'public/' . $value;
+                $documents[$name] = url("/api/inscription/files/legacy?path=" . urlencode($path));
+>>>>>>> eea2b06 (draft)
             }
         }
 
@@ -70,7 +76,10 @@ class PendingStudentResource extends JsonResource
             'mailCucaCount' => $this->mail_cuca_count ?? 0,
             'mailCuoEnvoye' => $this->mail_cuo_sent ? 'Oui' : 'Non',
             'mailCuoCount' => $this->mail_cuo_count ?? 0,
+<<<<<<< HEAD
             'level' => $this->level,
+=======
+>>>>>>> eea2b06 (draft)
             'entry_diploma' => $this->whenLoaded('entryDiploma', function () {
                 return [
                     'id' => $this->entryDiploma->id,

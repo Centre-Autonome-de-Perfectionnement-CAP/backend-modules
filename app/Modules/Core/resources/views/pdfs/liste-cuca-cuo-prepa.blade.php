@@ -71,10 +71,13 @@
             page-break-inside: avoid;
             page-break-after: auto;
         }
+<<<<<<< HEAD
         
         .liste thead {
             display: table-row-group;
         }
+=======
+>>>>>>> eea2b06 (draft)
 
         .name {
             padding: 5px;
@@ -97,6 +100,15 @@
 <body>
     <main>
         <table class="entete">
+<<<<<<< HEAD
+=======
+            <thead>
+                <tr>
+                    <th scope="row" rowspan="2"></th>
+                </tr>
+            </thead>
+            <br />
+>>>>>>> eea2b06 (draft)
             <tbody>
                 <tr>
                     <th scope="row" class="title">ETABLISSEMENT :</th>

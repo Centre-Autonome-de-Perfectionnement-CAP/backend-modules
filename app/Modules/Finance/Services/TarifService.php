@@ -13,6 +13,7 @@ class TarifService
      */
     public function getAllTarifs()
     {
+<<<<<<< HEAD
         return Amount::with(['academicYear'])
             ->get()
             ->map(function($amount) {
@@ -30,6 +31,12 @@ class TarifService
                 $amount->class_groups_count = count($classesList);
                 return $amount;
             });
+=======
+        return [
+            'amounts' => Amount::with(['academicYear', 'cycle', 'department'])->get(),
+            'exonerations' => Exoneration::with(['academicYear'])->get()
+        ];
+>>>>>>> eea2b06 (draft)
     }
 
     /**
@@ -40,6 +47,7 @@ class TarifService
         DB::beginTransaction();
         
         try {
+<<<<<<< HEAD
             $classGroups = $data['class_groups'];
             unset($data['class_groups']);
             
@@ -58,6 +66,16 @@ class TarifService
             
             DB::commit();
             return $tarif->load('classGroups');
+=======
+            if ($data['type'] === 'exoneration') {
+                $tarif = Exoneration::create($data);
+            } else {
+                $tarif = Amount::create($data);
+            }
+            
+            DB::commit();
+            return $tarif;
+>>>>>>> eea2b06 (draft)
         } catch (\Exception $e) {
             DB::rollback();
             throw $e;

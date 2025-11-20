@@ -17,9 +17,12 @@ class CourseElementProfessor extends Model
         'course_element_id',
         'professor_id',
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
         'principal_professor_id',
 >>>>>>> f355611 (draft)
+=======
+>>>>>>> eea2b06 (draft)
         'is_primary',
     ];
 
@@ -45,6 +48,7 @@ class CourseElementProfessor extends Model
 
     /**
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
      * Relation avec le professeur principal
      */
@@ -55,6 +59,8 @@ class CourseElementProfessor extends Model
 
     /**
 >>>>>>> f355611 (draft)
+=======
+>>>>>>> eea2b06 (draft)
      * Relation avec l'année académique
      */
     public function academicYear(): BelongsTo
