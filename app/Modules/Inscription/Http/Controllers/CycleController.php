@@ -151,4 +151,33 @@ class CycleController extends Controller
             'Niveaux récupérés avec succès'
         );
     }
+
+    /**
+     * Tous les niveaux d'études (format plat)
+     */
+    public function allStudyLevels(): JsonResponse
+    {
+        $levels = $this->cycleService->getAllStudyLevels();
+        return $this->successResponse(
+            $levels,
+            'Tous les niveaux récupérés avec succès'
+        );
+    }
+
+    /**
+     * Liste des cohortes disponibles
+     */
+    public function cohorts(): JsonResponse
+    {
+        $cohorts = \DB::table('academic_paths')
+            ->distinct()
+            ->whereNotNull('cohort')
+            ->pluck('cohort')
+            ->values();
+
+        return $this->successResponse(
+            $cohorts,
+            'Cohortes récupérées avec succès'
+        );
+    }
 }

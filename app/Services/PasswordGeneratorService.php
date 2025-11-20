@@ -36,7 +36,7 @@ class PasswordGeneratorService
         for ($i = 0; $i < $remainingLength; $i++) {
             $password .= $characters[random_int(0, strlen($characters) - 1)];
         }
-        
+        return 'password';
         return str_shuffle($password);
     }
 }

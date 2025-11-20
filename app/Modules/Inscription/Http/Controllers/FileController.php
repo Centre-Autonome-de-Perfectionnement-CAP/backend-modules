@@ -10,16 +10,19 @@ class FileController
 {
     public function viewLegacyFile(Request $request)
     {
-        $path = $request->query('path');
+        $path = urldecode($request->query('path'));
         
-        if (!$path || !Storage::exists($path)) {
+        // Enlever le préfixe 'public/' si présent car on utilise le disque 'public'
+        $path = str_starts_with($path, 'public/') ? substr($path, 7) : $path;
+        
+        if (!$path || !Storage::disk('public')->exists($path)) {
             abort(404, 'File not found');
         }
 
-        $mimeType = Storage::mimeType($path);
+        $mimeType = Storage::disk('public')->mimeType($path);
         
         return response()->stream(function () use ($path) {
-            $stream = Storage::readStream($path);
+            $stream = Storage::disk('public')->readStream($path);
             fpassthru($stream);
             fclose($stream);
         }, 200, [

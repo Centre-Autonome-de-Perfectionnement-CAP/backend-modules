@@ -5,6 +5,7 @@ namespace App\Modules\RH\Services;
 use App\Models\User;
 use App\Modules\Stockage\Services\FileStorageService;
 use App\Services\PasswordGeneratorService;
+use App\Services\StringUtilityService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -23,8 +24,6 @@ class AdminUserService
     public function getAll(array $filters = [], int $perPage = 15)
     {
         $query = User::query()->with(['roles']);
-
-        // Recherche
         if (!empty($filters['search'])) {
             $search = $filters['search'];
             $query->where(function ($q) use ($search) {
@@ -34,15 +33,11 @@ class AdminUserService
                   ->orWhere('phone', 'like', "%{$search}%");
             });
         }
-
-        // Filtre par rôle
         if (!empty($filters['role_id'])) {
             $query->whereHas('roles', function ($q) use ($filters) {
                 $q->where('roles.id', $filters['role_id']);
             });
         }
-
-        // Tri
         $sortBy = $filters['sort_by'] ?? 'created_at';
         $sortOrder = $filters['sort_order'] ?? 'desc';
         $query->orderBy($sortBy, $sortOrder);
@@ -57,6 +52,10 @@ class AdminUserService
     {
         return DB::transaction(function () use ($data, $ribFile, $ifuFile, $photoFile, $userId) {
             $data['password'] = Hash::make($this->passwordGenerator->generate());
+            
+            if (!empty($data['bank'])) {
+                $data['bank'] = StringUtilityService::capitalize($data['bank']);
+            }
 
             if ($ribFile) {
                 $uploadedRib = $this->fileStorageService->uploadFile(
@@ -97,10 +96,11 @@ class AdminUserService
             }
 
             $user = User::create($data);
+            
             if (!empty($data['role_id'])) {
-                $user->roles()->sync([$data['role_id']]);
+                $user->roles()->attach($data['role_id']);
             } elseif (!empty($data['role_ids']) && is_array($data['role_ids'])) {
-                $user->roles()->sync($data['role_ids']);
+                $user->roles()->attach($data['role_ids']);
             }
 
             if (!empty($data['rib'])) {
@@ -138,14 +138,14 @@ class AdminUserService
     public function update(User $user, array $data, int $userId, $ribFile = null, $ifuFile = null, $photoFile = null): User
     {
         return DB::transaction(function () use ($user, $data, $ribFile, $ifuFile, $photoFile, $userId) {
-            // Hasher le mot de passe si fourni
             if (!empty($data['password'])) {
                 $data['password'] = Hash::make($data['password']);
             } else {
                 unset($data['password']);
             }
-
-            // Upload RIB si fourni
+            if (!empty($data['bank'])) {
+                $data['bank'] = StringUtilityService::capitalize($data['bank']);
+            }
             if ($ribFile) {
                 $uploadedRib = $this->fileStorageService->uploadFile(
                     uploadedFile: $ribFile,
@@ -159,8 +159,6 @@ class AdminUserService
                 );
                 $data['rib'] = $uploadedRib->id;
             }
-
-            // Upload IFU si fourni
             if ($ifuFile) {
                 $uploadedIfu = $this->fileStorageService->uploadFile(
                     uploadedFile: $ifuFile,
@@ -174,8 +172,6 @@ class AdminUserService
                 );
                 $data['ifu'] = $uploadedIfu->id;
             }
-
-            // Upload photo si fournie
             if ($photoFile) {
                 $uploadedPhoto = $this->fileStorageService->uploadFile(
                     uploadedFile: $photoFile,
@@ -189,11 +185,7 @@ class AdminUserService
                 );
                 $data['photo'] = $uploadedPhoto->id;
             }
-
-            // Mettre à jour l'utilisateur
             $user->update($data);
-
-            // Synchroniser les rôles si fournis
             if (!empty($data['role_id'])) {
                 $user->roles()->sync([$data['role_id']]);
             } elseif (isset($data['role_ids']) && is_array($data['role_ids'])) {

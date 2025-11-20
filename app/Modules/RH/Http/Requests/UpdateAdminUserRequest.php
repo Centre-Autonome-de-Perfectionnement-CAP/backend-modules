@@ -2,6 +2,7 @@
 
 namespace App\Modules\RH\Http\Requests;
 
+use App\Services\ValidationService;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateAdminUserRequest extends FormRequest
@@ -21,10 +22,18 @@ class UpdateAdminUserRequest extends FormRequest
             'email' => 'sometimes|email|unique:users,email,' . $userId,
             'password' => 'sometimes|string|min:8',
             'phone' => 'nullable|string|max:20',
-            'rib_number' => 'nullable|string|max:255',
+            'rib_number' => ['nullable', 'string', function ($attribute, $value, $fail) {
+                if ($value && !ValidationService::validateRIB($value)) {
+                    $fail(ValidationService::getRIBErrorMessage());
+                }
+            }],
             'rib' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
             'photo' => 'nullable|file|mimes:jpg,jpeg,png|max:2048',
-            'ifu_number' => 'nullable|string|max:255',
+            'ifu_number' => ['nullable', 'string', function ($attribute, $value, $fail) {
+                if ($value && !ValidationService::validateIFU($value)) {
+                    $fail(ValidationService::getIFUErrorMessage());
+                }
+            }],
             'ifu' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
             'bank' => 'nullable|string|max:255',
         ];

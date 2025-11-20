@@ -13,6 +13,7 @@ use App\Modules\Inscription\Http\Controllers\PublicReferenceController;
 use App\Modules\Inscription\Http\Controllers\DashboardController;
 use App\Modules\Inscription\Http\Controllers\ClassGroupController;
 use App\Modules\Inscription\Http\Controllers\StudentController;
+use App\Modules\Inscription\Http\Controllers\PendingStudentExportController;
 
 
 Route::prefix('api/inscription')->group(function () {
@@ -94,6 +95,8 @@ Route::prefix('api/inscription')->group(function () {
     Route::get('cycles', [CycleController::class, 'index']);
     Route::get('filieres', [CycleController::class, 'allDepartmentsWithPeriods']);
     Route::get('niveaux', [CycleController::class, 'studyLevels']);
+    Route::get('niveaux/all', [CycleController::class, 'allStudyLevels']);
+    Route::get('cohortes', [CycleController::class, 'cohorts']);
     Route::get('next-deadline', [CycleController::class, 'nextDeadline']);
 
     Route::prefix('public')->group(function () {
@@ -109,5 +112,11 @@ Route::prefix('api/inscription')->group(function () {
 
     Route::middleware('auth:sanctum')->get('files/legacy', [\App\Modules\Inscription\Http\Controllers\FileController::class, 'viewLegacyFile']);
     Route::middleware('auth:sanctum')->post('send-mail', [\App\Modules\Inscription\Http\Controllers\MailController::class, 'sendMail']);
+
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('export/pdf', [PendingStudentExportController::class, 'exportPdf']);
+        Route::get('export/excel', [PendingStudentExportController::class, 'exportExcel']);
+        Route::get('export/word', [PendingStudentExportController::class, 'exportWord']);
+    });
 
 }); // Fin du groupe api/inscription

@@ -16,7 +16,6 @@ class CourseElementProfessor extends Model
     protected $fillable = [
         'course_element_id',
         'professor_id',
-        'principal_professor_id',
         'is_primary',
     ];
 
@@ -38,14 +37,6 @@ class CourseElementProfessor extends Model
     public function professor(): BelongsTo
     {
         return $this->belongsTo(\App\Modules\RH\Models\Professor::class);
-    }
-
-    /**
-     * Relation avec le professeur principal
-     */
-    public function principalProfessor(): BelongsTo
-    {
-        return $this->belongsTo(\App\Modules\RH\Models\Professor::class, 'principal_professor_id');
     }
 
     /**

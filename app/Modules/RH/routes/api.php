@@ -25,6 +25,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Liste des grades
     Route::get('grades', [GradeController::class, 'index']);
     
+    // Liste des banques
+    Route::get('banks', [ProfessorController::class, 'getBanks']);
+    
     // Liste des rôles
     Route::get('roles', function () {
         return response()->json([

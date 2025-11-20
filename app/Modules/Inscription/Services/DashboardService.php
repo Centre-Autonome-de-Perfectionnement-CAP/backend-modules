@@ -69,8 +69,7 @@ class DashboardService
         }
 
         return $departments->map(function ($department) use ($academicYearId) {
-            $query = PendingStudent::where('department_id', $department->id)
-                ->where('status', 'pending');
+            $query = PendingStudent::where('department_id', $department->id);
             
             if ($academicYearId) {
                 $query->where('academic_year_id', $academicYearId);
@@ -97,7 +96,7 @@ class DashboardService
         return $cycles->map(function ($cycle) use ($academicYearId) {
             $query = PendingStudent::whereHas('department', function($q) use ($cycle) {
                 $q->where('cycle_id', $cycle->id);
-            })->where('status', 'approved');
+            });
             
             if ($academicYearId) {
                 $query->where('academic_year_id', $academicYearId);

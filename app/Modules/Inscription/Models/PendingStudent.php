@@ -23,6 +23,8 @@ class PendingStudent extends Model
         'tracking_code',
         'cuca_opinion',
         'cuca_comment',
+        'cuo_opinion',
+        'cuo_comment',
         'department_id',
         'academic_year_id',
         'level',
@@ -31,10 +33,18 @@ class PendingStudent extends Model
         'sponsorise',
         'exonere',
         'status',
+        'mail_cuca_sent',
+        'mail_cuca_count',
+        'mail_cuo_sent',
+        'mail_cuo_count',
     ];
 
     protected $casts = [
         'documents' => 'array',
+        'mail_cuca_sent' => 'boolean',
+        'mail_cuo_sent' => 'boolean',
+        'mail_cuca_count' => 'integer',
+        'mail_cuo_count' => 'integer',
     ];
 
 
