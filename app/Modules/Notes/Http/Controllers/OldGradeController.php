@@ -27,12 +27,14 @@ class OldGradeController extends Controller
     {
         $request->validate([
             'program_id' => 'required|exists:programs,id',
+            'cohort' => 'nullable|string',
         ]);
 
         $program = Program::with(['classGroup', 'courseElementProfessor.courseElement', 'courseElementProfessor.professor'])
             ->findOrFail($request->program_id);
         
-        $students = $this->gradeService->getStudentsByProgram($program);
+        $cohort = $request->input('cohort');
+        $students = $this->gradeService->getStudentsByProgram($program, $cohort);
 
         return $this->successResponse([
             'program' => [

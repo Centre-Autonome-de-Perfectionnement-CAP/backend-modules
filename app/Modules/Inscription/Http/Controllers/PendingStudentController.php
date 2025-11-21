@@ -73,7 +73,7 @@ class PendingStudentController extends Controller
      */
     public function index(Request $request): JsonResponse
 {
-    $filters = $request->only(['status', 'department_id', 'academic_year_id', 'entry_diploma_id', 'level', 'search']);
+    $filters = $request->only(['status', 'department_id', 'academic_year_id', 'entry_diploma_id', 'level', 'cohort', 'search']);
     $perPage = $this->getPerPage($request);
     
     $pendingStudents = $this->pendingStudentService->getAll($filters, $perPage);

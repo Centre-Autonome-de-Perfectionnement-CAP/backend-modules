@@ -77,6 +77,16 @@ class StudentService
         if (!empty($filters['niveau']) && $filters['niveau'] !== 'all') {
             $query->where('pending_students.level', $filters['niveau']);
         }
+        
+        if (!empty($filters['cohort']) && $filters['cohort'] !== 'all') {
+            $query->whereNotNull('student_pending_student.id')
+                  ->whereExists(function ($subQuery) use ($filters) {
+                      $subQuery->select(DB::raw(1))
+                          ->from('academic_paths')
+                          ->whereColumn('academic_paths.student_pending_student_id', 'student_pending_student.id')
+                          ->where('academic_paths.cohort', $filters['cohort']);
+                  });
+        }
 
         if (!empty($filters['search'])) {
             $search = $filters['search'];
@@ -238,11 +248,13 @@ class StudentService
             'etudiantsEnAttente' => $etudiantsEnAttente,
         ];
 
-        $filename = 'fiche-presence-' . ($filters['filiere'] ?? 'classe') . '-' . ($filters['niveau'] ?? '');
+        $cohort = $filters['cohort'] ?? 'all';
+        $dateTime = now()->format('Ymd_His');
+        $filename = 'FICHE_PRESENCE_' . ($academicYear ? str_replace(['/', '-'], '_', $academicYear->academic_year) : 'N_A') . '_COHORTE_' . $cohort . '_' . ($department && $department->abbreviation ? $department->abbreviation : 'N_A') . '_' . ($filters['niveau'] ?? 'N_A');
         if (!empty($filters['groupe'])) {
-            $filename .= '-' . $filters['groupe'];
+            $filename .= '_GROUPE_' . $filters['groupe'];
         }
-        $filename .= '.pdf';
+        $filename .= '_' . $dateTime . '.pdf';
 
         return $pdfService->downloadWithTemplate(
             'liste-presence',
@@ -295,11 +307,13 @@ class StudentService
             'etudiants' => $etudiants,
         ];
 
-        $filename = 'fiche-emargement-' . ($filters['filiere'] ?? 'classe') . '-' . ($filters['niveau'] ?? '');
+        $cohort = $filters['cohort'] ?? 'all';
+        $dateTime = now()->format('Ymd_His');
+        $filename = 'FICHE_EMARGEMENT_' . ($academicYear ? str_replace(['/', '-'], '_', $academicYear->academic_year) : 'N_A') . '_COHORTE_' . $cohort . '_' . ($department && $department->abbreviation ? $department->abbreviation : 'N_A') . '_' . ($filters['niveau'] ?? 'N_A');
         if (!empty($filters['groupe'])) {
-            $filename .= '-' . $filters['groupe'];
+            $filename .= '_GROUPE_' . $filters['groupe'];
         }
-        $filename .= '.pdf';
+        $filename .= '_' . $dateTime . '.pdf';
 
         return $pdfService->downloadWithTemplate(
             'liste-emargement',
@@ -355,6 +369,16 @@ class StudentService
 
         if (!empty($filters['niveau']) && $filters['niveau'] !== 'all') {
             $query->where('pending_students.level', $filters['niveau']);
+        }
+        
+        if (!empty($filters['cohort']) && $filters['cohort'] !== 'all') {
+            $query->whereNotNull('student_pending_student.id')
+                  ->whereExists(function ($subQuery) use ($filters) {
+                      $subQuery->select(DB::raw(1))
+                          ->from('academic_paths')
+                          ->whereColumn('academic_paths.student_pending_student_id', 'student_pending_student.id')
+                          ->where('academic_paths.cohort', $filters['cohort']);
+                  });
         }
 
         if (!empty($filters['groupe']) && $filters['groupe'] !== 'all') {

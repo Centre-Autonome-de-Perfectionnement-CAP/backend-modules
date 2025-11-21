@@ -7,6 +7,7 @@ use App\Modules\Inscription\Services\CycleService;
 use App\Modules\Inscription\Http\Resources\CycleResource;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * @OA\Tag(
@@ -165,16 +166,34 @@ class CycleController extends Controller
     }
 
     /**
-     * Liste des cohortes disponibles
+     * Liste des cohortes disponibles pour une année académique
      */
-    public function cohorts(): JsonResponse
+    public function cohorts(Request $request): JsonResponse
     {
-        $cohorts = \DB::table('academic_paths')
-            ->distinct()
-            ->whereNotNull('cohort')
-            ->pluck('cohort')
-            ->values();
-
+        $academicYearId = $request->get('academic_year_id');
+        
+        if (!$academicYearId) {
+            return $this->successResponse([], 'Aucune année académique spécifiée');
+        }
+        
+        // Récupérer les périodes distinctes et compter
+        $periods = \DB::table('submission_periods')
+            ->where('academic_year_id', $academicYearId)
+            ->select('start_date', 'end_date')
+            ->groupBy('start_date', 'end_date')
+            ->get();
+        
+        $periodsCount = $periods->count();
+        
+        // Générer les cohortes basées sur le nombre de périodes
+        $cohorts = [];
+        for ($i = 1; $i <= $periodsCount; $i++) {
+            $cohorts[] = [
+                'value' => (string)$i,
+                'label' => "Cohorte {$i}"
+            ];
+        }
+        
         return $this->successResponse(
             $cohorts,
             'Cohortes récupérées avec succès'

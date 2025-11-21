@@ -42,6 +42,25 @@ class PendingStudentService
             $query->where('level', $filters['level']);
         }
 
+        // Filtre par cohorte
+        if (!empty($filters['cohort']) && !empty($filters['academic_year_id'])) {
+            // Récupérer les périodes de soumission pour cette année académique
+            $periods = \DB::table('submission_periods')
+                ->where('academic_year_id', $filters['academic_year_id'])
+                ->select('start_date', 'end_date')
+                ->groupBy('start_date', 'end_date')
+                ->orderBy('start_date')
+                ->get();
+            
+            // Trouver la période correspondant à la cohorte demandée
+            $cohortIndex = (int)$filters['cohort'] - 1;
+            if (isset($periods[$cohortIndex])) {
+                $period = $periods[$cohortIndex];
+                $query->whereDate('pending_students.created_at', '>=', $period->start_date)
+                      ->whereDate('pending_students.created_at', '<=', $period->end_date);
+            }
+        }
+
         // Recherche
         if (!empty($filters['search'])) {
             $search = $filters['search'];
@@ -292,11 +311,15 @@ class PendingStudentService
             'pending_student_id' => $pendingStudent->id,
         ]);
 
+        // Déterminer la cohorte basée sur la période de dépôt
+        $cohort = $this->determineCohort($pendingStudent);
+        
         // Créer l'entrée dans academic_paths pour l'année académique actuelle
         \App\Modules\Inscription\Models\AcademicPath::create([
             'student_pending_student_id' => $student->studentPendingStudents()->first()->id,
             'academic_year_id' => $pendingStudent->academic_year_id,
             'study_level' => $pendingStudent->level,
+            'cohort' => $cohort,
             'financial_status' => 'Non exonéré', // Par défaut non exonéré
         ]);
 
@@ -308,6 +331,40 @@ class PendingStudentService
         ]);
     }
 
+    /**
+     * Déterminer la cohorte basée sur la période de dépôt
+     */
+    private function determineCohort(PendingStudent $pendingStudent): ?string
+    {
+        // Récupérer les périodes distinctes pour cette année académique
+        $periods = DB::table('submission_periods')
+            ->where('academic_year_id', $pendingStudent->academic_year_id)
+            ->select('start_date', 'end_date')
+            ->groupBy('start_date', 'end_date')
+            ->orderBy('start_date', 'asc')
+            ->get();
+        
+        if ($periods->isEmpty()) {
+            return '1'; // Par défaut cohorte 1
+        }
+        
+        // Trouver dans quelle période le pending_student a été créé
+        $createdAt = $pendingStudent->created_at;
+        $cohortNumber = 1;
+        
+        foreach ($periods as $index => $period) {
+            $startDate = \Carbon\Carbon::parse($period->start_date);
+            $endDate = \Carbon\Carbon::parse($period->end_date);
+            
+            if ($createdAt->between($startDate, $endDate)) {
+                $cohortNumber = $index + 1;
+                break;
+            }
+        }
+        
+        return (string)$cohortNumber;
+    }
+    
     /**
      * Générer un numéro d'étudiant unique
      */

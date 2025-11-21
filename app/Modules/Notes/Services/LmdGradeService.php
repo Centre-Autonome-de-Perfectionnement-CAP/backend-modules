@@ -365,14 +365,6 @@ class LmdGradeService
             $query->where('department_id', $departmentId);
         }
 
-        if ($cohort) {
-            $query->whereHas('programs', function ($q) use ($cohort) {
-                $q->whereHas('studentPendingStudents.academicPaths', function ($subQ) use ($cohort) {
-                    $subQ->where('cohort', $cohort);
-                });
-            });
-        }
-
         $classes = $query->get();
 
         return $classes->groupBy('cycle.name')->map(function ($cycleClasses, $cycleName) {
@@ -590,18 +582,73 @@ class LmdGradeService
         return []; // À implémenter
     }
 
-    public function getGradesByFilters(?int $academicYearId, ?int $departmentId, ?string $level, ?int $programId): array
+    public function getGradesByFilters(?int $academicYearId, ?int $departmentId, ?string $level, ?int $programId, ?string $cohort = null): array
     {
-        return []; // À implémenter
+        $query = \App\Modules\Cours\Models\Program::query()
+            ->with(['classGroup.department', 'classGroup.cycle', 'courseElementProfessor.courseElement', 'courseElementProfessor.professor']);
+
+        if ($academicYearId) {
+            $query->whereHas('classGroup', function ($q) use ($academicYearId) {
+                $q->where('academic_year_id', $academicYearId);
+            });
+        }
+
+        if ($departmentId) {
+            $query->whereHas('classGroup', function ($q) use ($departmentId) {
+                $q->where('department_id', $departmentId);
+            });
+        }
+
+        if ($level) {
+            $query->whereHas('classGroup', function ($q) use ($level) {
+                $q->where('level', $level);
+            });
+        }
+
+        if ($programId) {
+            $query->where('id', $programId);
+        }
+
+        $programs = $query->get();
+
+        return $programs->map(function ($program) use ($cohort) {
+            $students = $this->getStudentsByProgram($program, $cohort);
+            
+            return [
+                'program_id' => $program->id,
+                'program_name' => $program->courseElementProfessor->courseElement->name ?? 'N/A',
+                'class_name' => $program->classGroup->name ?? 'N/A',
+                'department' => $program->classGroup->department->name ?? 'N/A',
+                'level' => $program->classGroup->level ?? 'N/A',
+                'professor' => $program->courseElementProfessor->professor->name ?? 'N/A',
+                'total_students' => $students->count(),
+                'students_with_grades' => $students->filter(fn($s) => !empty($s['grades']))->count(),
+                'average_class' => $students->avg('average'),
+            ];
+        })->toArray();
     }
 
-    public function getProgramDetailsForAdmin(int $programId): array
+    public function getProgramDetailsForAdmin(int $programId, ?string $cohort = null): array
     {
-        return []; // À implémenter
+        $program = Program::with(['classGroup.department', 'classGroup.cycle', 'courseElementProfessor.courseElement', 'courseElementProfessor.professor'])
+            ->findOrFail($programId);
+        
+        return $this->getGradeSheet($program, $cohort);
     }
 
-    public function exportGradesByDepartment(int $academicYearId, int $departmentId, ?string $level, string $format): array
+    public function exportGradesByDepartment(int $academicYearId, int $departmentId, ?string $level, string $format, ?string $cohort = null): array
     {
-        return []; // À implémenter
+        $programs = $this->getGradesByFilters($academicYearId, $departmentId, $level, null, $cohort);
+        
+        return [
+            'format' => $format,
+            'data' => $programs,
+            'filters' => [
+                'academic_year_id' => $academicYearId,
+                'department_id' => $departmentId,
+                'level' => $level,
+                'cohort' => $cohort,
+            ]
+        ];
     }
 }

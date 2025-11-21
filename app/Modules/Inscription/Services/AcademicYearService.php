@@ -344,7 +344,9 @@ class AcademicYearService
             ->with('department')
             ->get()
             ->groupBy(function ($period) {
-                return $period->start_date->format('Y-m-d H:i:s') . '_' . $period->end_date->format('Y-m-d H:i:s');
+                $startDate = $period->start_date ? $period->start_date->format('Y-m-d') : 'null';
+                $endDate = $period->end_date ? $period->end_date->format('Y-m-d') : 'null';
+                return $startDate . '_' . $endDate;
             });
 
         foreach ($submissionPeriods as $key => $groupedPeriods) {
@@ -355,8 +357,8 @@ class AcademicYearService
 
             $periods[] = [
                 'type' => 'depot',
-                'start' => $firstPeriod->start_date->format('d/m/Y H:i'),
-                'end' => $firstPeriod->end_date->format('d/m/Y H:i'),
+                'start' => $firstPeriod->start_date ? $firstPeriod->start_date->format('d/m/Y') : '',
+                'end' => $firstPeriod->end_date ? $firstPeriod->end_date->format('d/m/Y') : '',
                 'filieres' => $departments,
             ];
         }
@@ -367,8 +369,8 @@ class AcademicYearService
         foreach ($reclamationPeriods as $period) {
             $periods[] = [
                 'type' => 'reclamation',
-                'start' => $period->start_date->format('d/m/Y H:i'),
-                'end' => $period->end_date->format('d/m/Y H:i'),
+                'start' => $period->start_date ? $period->start_date->format('d/m/Y') : '',
+                'end' => $period->end_date ? $period->end_date->format('d/m/Y') : '',
                 'filieres' => [], // Les réclamations n'ont pas de départements spécifiques
             ];
         }

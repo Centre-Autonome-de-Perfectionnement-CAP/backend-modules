@@ -93,12 +93,6 @@
 <body>
     <main>
         <table class="entete">
-            <thead>
-                <tr>
-                    <th scope="row" rowspan="2"></th>
-                </tr>
-            </thead>
-            <br />
             <tbody>
                 <tr>
                     <th scope="row" class="title">ETABLISSEMENT :</th>

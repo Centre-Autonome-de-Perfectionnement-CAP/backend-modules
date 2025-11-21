@@ -55,11 +55,13 @@ class AdminGradeController extends Controller
             'cohort' => 'nullable|string'
         ]);
 
-        // Retourner des données vides pour l'instant
-        $result = [
-            'students' => [],
-            'programs' => []
-        ];
+        $result = $this->lmdGradeService->getGradesByFilters(
+            $request->input('academic_year_id'),
+            $request->input('department_id'),
+            $request->input('level'),
+            $request->input('program_id'),
+            $request->input('cohort')
+        );
 
         return $this->successResponse($result, 'Notes récupérées avec succès');
     }
@@ -69,7 +71,14 @@ class AdminGradeController extends Controller
      */
     public function getProgramDetails(Request $request, int $programId): JsonResponse
     {
-        $result = $this->lmdGradeService->getProgramDetailsForAdmin($programId);
+        $request->validate([
+            'cohort' => 'nullable|string'
+        ]);
+
+        $result = $this->lmdGradeService->getProgramDetailsForAdmin(
+            $programId,
+            $request->input('cohort')
+        );
 
         return $this->successResponse($result, 'Détails du programme récupérés avec succès');
     }
@@ -83,14 +92,16 @@ class AdminGradeController extends Controller
             'academic_year_id' => 'required|exists:academic_years,id',
             'department_id' => 'required|exists:departments,id',
             'level' => 'nullable|string',
-            'format' => 'in:pdf,excel'
+            'format' => 'in:pdf,excel',
+            'cohort' => 'nullable|string'
         ]);
 
         $result = $this->lmdGradeService->exportGradesByDepartment(
             $request->input('academic_year_id'),
             $request->input('department_id'),
             $request->input('level'),
-            $request->input('format', 'pdf')
+            $request->input('format', 'pdf'),
+            $request->input('cohort')
         );
 
         return $this->successResponse($result, 'Export généré avec succès');

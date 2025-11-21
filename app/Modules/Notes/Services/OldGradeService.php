@@ -19,17 +19,24 @@ class OldGradeService
      * Récupère les étudiants d'un programme avec leurs notes
      * 
      * @param Program $program
+     * @param string|null $cohort
      * @return \Illuminate\Support\Collection
      */
-    public function getStudentsByProgram(Program $program)
+    public function getStudentsByProgram(Program $program, ?string $cohort = null)
     {
         $classGroup = $program->classGroup;
 
-        $academicPaths = \App\Modules\Inscription\Models\AcademicPath::whereHas('studentPendingStudent', function ($q) use ($classGroup) {
+        $query = \App\Modules\Inscription\Models\AcademicPath::whereHas('studentPendingStudent', function ($q) use ($classGroup) {
             $q->where('academic_year_id', $classGroup->academic_year_id)
                 ->where('study_level', $classGroup->level)
                 ->where('year_decision', '!=', 'failed');
-        })->get();
+        });
+
+        if ($cohort) {
+            $query->where('cohort', $cohort);
+        }
+
+        $academicPaths = $query->get();
 
         return $academicPaths->map(function ($academicPath) use ($program) {
             $studentPending = $academicPath->studentPendingStudent;

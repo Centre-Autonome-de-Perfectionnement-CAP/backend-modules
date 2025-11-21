@@ -25,6 +25,13 @@ class PendingStudentExportController extends Controller
 
     public function exportPdf(Request $request)
     {
+        $request->validate([
+            'cohort' => 'required|not_in:all',
+        ], [
+            'cohort.required' => 'La sélection de la cohorte est obligatoire',
+            'cohort.not_in' => 'Veuillez sélectionner une cohorte spécifique',
+        ]);
+        
         $data = $this->prepareData($request);
         $template = $this->getTemplate($data['isPrepa']);
         $filename = $this->generateFilename('pdf', $data);
@@ -32,11 +39,18 @@ class PendingStudentExportController extends Controller
         $pdf = Pdf::loadView("core::pdfs.{$template}", $data)
             ->setPaper('a4', 'landscape');
         
-        return $pdf->stream($filename);
+        return $pdf->download($filename);
     }
 
     public function exportExcel(Request $request)
     {
+        $request->validate([
+            'cohort' => 'required|not_in:all',
+        ], [
+            'cohort.required' => 'La sélection de la cohorte est obligatoire',
+            'cohort.not_in' => 'Veuillez sélectionner une cohorte spécifique',
+        ]);
+        
         $data = $this->prepareData($request);
         $template = $this->getTemplate($data['isPrepa']);
         $filename = $this->generateFilename('xlsx', $data);
@@ -87,6 +101,13 @@ class PendingStudentExportController extends Controller
 
     public function exportWord(Request $request)
     {
+        $request->validate([
+            'cohort' => 'required|not_in:all',
+        ], [
+            'cohort.required' => 'La sélection de la cohorte est obligatoire',
+            'cohort.not_in' => 'Veuillez sélectionner une cohorte spécifique',
+        ]);
+        
         $data = $this->prepareData($request);
         $template = $this->getTemplate($data['isPrepa']);
         $filename = $this->generateFilename('docx', $data);
@@ -153,6 +174,7 @@ class PendingStudentExportController extends Controller
     {
         $year = $request->get('year');
         $filiere = $request->get('filiere');
+        $cohort = $request->get('cohort');
         
         $query = PendingStudent::with(['personalInformation', 'department', 'academicYear']);
         
@@ -176,6 +198,22 @@ class PendingStudentExportController extends Controller
             }
         }
         
+        if ($cohort && $cohort !== 'all' && $year && is_numeric($year)) {
+            $periods = \DB::table('submission_periods')
+                ->where('academic_year_id', $year)
+                ->select('start_date', 'end_date')
+                ->groupBy('start_date', 'end_date')
+                ->orderBy('start_date')
+                ->get();
+            
+            $cohortIndex = (int)$cohort - 1;
+            if (isset($periods[$cohortIndex])) {
+                $period = $periods[$cohortIndex];
+                $query->whereDate('created_at', '>=', $period->start_date)
+                      ->whereDate('created_at', '<=', $period->end_date);
+            }
+        }
+        
         $pendingStudents = $query->get();
         
         $academicYear = null;
@@ -194,7 +232,8 @@ class PendingStudentExportController extends Controller
             'department' => $department?->name ?? 'Toutes filières',
             'formation' => $department?->name ?? 'Formation générale',
             'isPrepa' => $isPrepa,
-            'includeContact' => false
+            'includeContact' => false,
+            'cohort' => $cohort ?? 'all'
         ];
     }
 
@@ -207,8 +246,9 @@ class PendingStudentExportController extends Controller
     {
         $department = str_replace(' ', '_', $data['department']);
         $academicYear = str_replace(['/', '-'], '_', $data['academicYear']);
-        $dateTime = now()->format('Y_m_d_H_i');
+        $cohort = $data['cohort'] ?? 'all';
+        $dateTime = now()->format('Ymd_His');
         
-        return "Liste_cuca_cuo_{$academicYear}_{$department}_{$dateTime}.{$extension}";
+        return "LISTE_CUCA_CUO_{$academicYear}_COHORTE_{$cohort}_{$department}_{$dateTime}.{$extension}";
     }
 }
