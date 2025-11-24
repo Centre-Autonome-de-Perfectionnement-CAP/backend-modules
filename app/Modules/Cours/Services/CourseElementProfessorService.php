@@ -29,6 +29,10 @@ class CourseElementProfessorService
             $query->where('class_group_id', $filters['class_group_id']);
         }
 
+        if (isset($filters['is_primary'])) {
+            $query->where('is_primary', (bool)$filters['is_primary']);
+        }
+
         if (!empty($filters['search'])) {
             $search = $filters['search'];
             $query->whereHas('courseElement', function ($q) use ($search) {

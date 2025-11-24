@@ -67,16 +67,24 @@
             border-collapse: collapse;
             margin: 10px 0 0 0;
             text-align: center;
-            page-break-inside: avoid;
           }
           .liste th, td {
               border: 0.5px solid black;
               padding: 5px;
           }
-          .liste tr {
-              page-break-inside: avoid;
-              page-break-after: auto;
-          }
+     
+ 
+thead {
+    display: table-row-group !important; /* Empêche la répétition */
+}
+
+.liste tr, .liste td, .liste th {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+}
+.liste tr {
+    page-break-inside: auto !important;
+}
 
           .name{
             padding: 5px;

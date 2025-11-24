@@ -15,7 +15,7 @@ class CycleSeeder extends Seeder
     {
         $cycles = [
             [
-                'name' => 'Licence',
+                'name' => 'Licence Professionnelle',
                 'libelle' => 'Licence Professionnelle',
                 'abbreviation' => 'L',
                 'years_count' => 3,
@@ -35,7 +35,7 @@ class CycleSeeder extends Seeder
                 'is_active' => true,
             ],
             [
-                'name' => 'Ingénieur',
+                'name' => 'Ingénierie',
                 'libelle' => 'Cycle d\'Ingénieur',
                 'abbreviation' => 'I',
                 'years_count' => 4,

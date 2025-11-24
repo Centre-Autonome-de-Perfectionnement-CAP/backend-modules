@@ -21,13 +21,10 @@ class PendingStudentService
             'department',
             'academicYear'
         ]);
-
-        // Filtre par département
         if (!empty($filters['department_id']) && is_numeric($filters['department_id'])) {
             $query->where('department_id', $filters['department_id']);
         }
 
-        // Filtre par année académique
         if (!empty($filters['academic_year_id']) && is_numeric($filters['academic_year_id'])) {
             $query->where('academic_year_id', $filters['academic_year_id']);
         }
@@ -44,11 +41,11 @@ class PendingStudentService
 
         // Filtre par cohorte
         if (!empty($filters['cohort']) && !empty($filters['academic_year_id'])) {
-            // Récupérer les périodes de soumission pour cette année académique
+            // Récupérer les périodes de soumission distinctes pour cette année académique
             $periods = \DB::table('submission_periods')
                 ->where('academic_year_id', $filters['academic_year_id'])
                 ->select('start_date', 'end_date')
-                ->groupBy('start_date', 'end_date')
+                ->distinct()
                 ->orderBy('start_date')
                 ->get();
             
@@ -225,19 +222,60 @@ class PendingStudentService
         return DB::transaction(function () use ($pendingStudent, $status) {
             $oldStatus = $pendingStudent->status;
 
+            Log::info('=== CHANGE STATUS START ===', [
+                'pending_student_id' => $pendingStudent->id,
+                'old_status' => $oldStatus,
+                'new_status' => $status,
+            ]);
+
             $pendingStudent->update(['status' => $status]);
 
             // Si le statut passe à "approved", créer l'étudiant officiel
             if ($status === 'approved' && $oldStatus !== 'approved') {
-                $this->createOfficialStudent($pendingStudent);
+                Log::info('Status changed to approved, checking if student should be created');
+                
+                // Vérifier le cycle et le nom du département
+                $department = $pendingStudent->department;
+                $cycle = $department ? strtolower($department->cycle->name ?? '') : '';
+                $departmentName = $department ? strtolower($department->name ?? '') : '';
+                
+                // Prépa = cycle Ingénierie ET nom contient "prepa"
+                $isPrepa = (str_contains($cycle, 'ingénierie') || str_contains($cycle, 'ingenierie')) && 
+                           (str_contains($departmentName, 'prépa') || str_contains($departmentName, 'prepa'));
+                
+                Log::info('Department and cycle info', [
+                    'department_id' => $department?->id,
+                    'department_name' => $department?->name,
+                    'cycle' => $cycle,
+                    'isPrepa' => $isPrepa,
+                    'cuca_opinion' => $pendingStudent->cuca_opinion,
+                    'cuo_opinion' => $pendingStudent->cuo_opinion,
+                ]);
+                
+                $canCreateStudent = false;
+                
+                if ($isPrepa) {
+                    // Prépa: seule CUCA décide
+                    $canCreateStudent = true;
+                    Log::info('Prépa detected, can create student');
+                } else {
+                    // Licence/Master et autres Ingénierie: seule CUO décide
+                    $canCreateStudent = ($pendingStudent->cuo_opinion === 'favorable');
+                    Log::info('Licence/Master/Autre Ingénierie detected', [
+                        'cuo_opinion' => $pendingStudent->cuo_opinion,
+                        'canCreateStudent' => $canCreateStudent,
+                    ]);
+                }
+                
+                if ($canCreateStudent) {
+                    Log::info('Creating official student');
+                    $this->createOfficialStudent($pendingStudent);
+                } else {
+                    Log::info('NOT creating student - conditions not met');
+                }
             }
 
-            Log::info('Statut de l\'étudiant en attente changé', [
-                'pending_student_id' => $pendingStudent->id,
-                'tracking_code' => $pendingStudent->tracking_code,
-                'old_status' => $oldStatus,
-                'new_status' => $status,
-            ]);
+            Log::info('=== CHANGE STATUS END ===');
 
             return $pendingStudent->fresh();
         });
@@ -314,12 +352,16 @@ class PendingStudentService
         // Déterminer la cohorte basée sur la période de dépôt
         $cohort = $this->determineCohort($pendingStudent);
         
+        // Récupérer le role_id étudiant
+        $studentRoleId = DB::table('roles')->where('name', 'etudiant')->value('id');
+        
         // Créer l'entrée dans academic_paths pour l'année académique actuelle
         \App\Modules\Inscription\Models\AcademicPath::create([
             'student_pending_student_id' => $student->studentPendingStudents()->first()->id,
             'academic_year_id' => $pendingStudent->academic_year_id,
             'study_level' => $pendingStudent->level,
             'cohort' => $cohort,
+            'role_id' => $studentRoleId,
             'financial_status' => 'Non exonéré', // Par défaut non exonéré
         ]);
 

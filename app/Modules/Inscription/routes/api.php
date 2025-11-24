@@ -26,6 +26,7 @@ Route::prefix('api/inscription')->group(function () {
             Route::delete('/{pendingStudent}', [PendingStudentController::class, 'destroy']);
             Route::get('/{pendingStudent}/documents', [PendingStudentController::class, 'getDocuments']);
             Route::patch('/{pendingStudent}/financial-status', [PendingStudentController::class, 'updateStatus']);
+            Route::patch('/{pendingStudent}/level', [PendingStudentController::class, 'updateLevel']);
         });
         Route::post('/', [PendingStudentController::class, 'store']);
         Route::post('/{pendingStudent}/documents', [PendingStudentController::class, 'submitDocuments']);
@@ -86,7 +87,9 @@ Route::prefix('api/inscription')->group(function () {
 
     Route::prefix('class-groups')->middleware('auth:sanctum')->group(function () {
         Route::get('/', [ClassGroupController::class, 'index']);
+        Route::get('/by-class/{classGroupId}', [ClassGroupController::class, 'getGroupsByClass']);
         Route::post('/', [ClassGroupController::class, 'store']);
+        Route::post('/create-default', [ClassGroupController::class, 'createDefault']);
         Route::get('/{classGroup}', [ClassGroupController::class, 'show']);
         Route::delete('/{classGroup}', [ClassGroupController::class, 'destroy']);
         Route::post('/delete-all', [ClassGroupController::class, 'destroyAll']);

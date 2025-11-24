@@ -11,12 +11,14 @@ Route::prefix('api/notes')->group(function () {
         Route::prefix('professor')->group(function () {
             Route::get('my-classes', [ProfessorGradeController::class, 'getMyClasses']);
             Route::get('programs-by-class/{class_group_id}', [ProfessorGradeController::class, 'getProgramsByClass']);
-            Route::post('grade-sheet', [ProfessorGradeController::class, 'getGradeSheet']);
+            Route::get('grade-sheet/{program}', [ProfessorGradeController::class, 'getGradeSheet']);
+            Route::get('students-for-evaluation/{program}', [ProfessorGradeController::class, 'getStudentsForEvaluation']);
             Route::post('create-evaluation', [ProfessorGradeController::class, 'createEvaluation']);
             Route::put('update-grade', [ProfessorGradeController::class, 'updateGrade']);
             Route::put('set-weighting', [ProfessorGradeController::class, 'setWeighting']);
             Route::put('duplicate-grade', [ProfessorGradeController::class, 'duplicateGrade']);
-            Route::post('export-grade-sheet', [ProfessorGradeController::class, 'exportGradeSheet']);
+            Route::post('delete-evaluation', [ProfessorGradeController::class, 'deleteEvaluation']);
+            Route::get('export-grade-sheet/{program}', [ProfessorGradeController::class, 'exportGradeSheet']);
         });
         
         // Routes pour l'administration
@@ -29,9 +31,11 @@ Route::prefix('api/notes')->group(function () {
         
         // Routes pour les décisions et PV
         Route::prefix('decisions')->group(function () {
-            Route::post('export-pv-fin-annee', [\App\Modules\Notes\Http\Controllers\DecisionController::class, 'exportPVFinAnnee']);
-            Route::post('export-pv-deliberation', [\App\Modules\Notes\Http\Controllers\DecisionController::class, 'exportPVDeliberation']);
-            Route::post('export-recap-notes', [\App\Modules\Notes\Http\Controllers\DecisionController::class, 'exportRecapNotes']);
+            Route::get('students-by-semester', [\App\Modules\Notes\Http\Controllers\DecisionController::class, 'getStudentsBySemester']);
+            Route::get('students-by-year', [\App\Modules\Notes\Http\Controllers\DecisionController::class, 'getStudentsByYear']);
+            Route::get('export-pv-fin-annee', [\App\Modules\Notes\Http\Controllers\DecisionController::class, 'exportPVFinAnnee']);
+            Route::get('export-pv-deliberation', [\App\Modules\Notes\Http\Controllers\DecisionController::class, 'exportPVDeliberation']);
+            Route::get('export-recap-notes', [\App\Modules\Notes\Http\Controllers\DecisionController::class, 'exportRecapNotes']);
             Route::post('save-semester-decisions', [\App\Modules\Notes\Http\Controllers\DecisionController::class, 'saveSemesterDecisions']);
             Route::post('save-year-decisions', [\App\Modules\Notes\Http\Controllers\DecisionController::class, 'saveYearDecisions']);
         });

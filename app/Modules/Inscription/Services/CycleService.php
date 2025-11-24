@@ -165,7 +165,7 @@ class CycleService
 
             return [
                 'id' => $dept->id,
-                'title' => $dept->name,
+                'title' => $dept->name . ' (' . ($dept->cycle->name ?? '') . ')',
                 'abbreviation' => $dept->abbreviation ?? '',
                 'cycle' => $cycleName,
                 'dateLimite' => $dateLimite,

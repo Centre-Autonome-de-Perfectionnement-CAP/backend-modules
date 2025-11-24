@@ -14,7 +14,7 @@ class SetWeightingRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'program_id' => 'required|exists:programs,id',
+            'program_id' => 'required',
             'weighting' => 'required|array',
             'weighting.*' => 'required|integer|min:0|max:100',
         ];

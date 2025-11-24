@@ -57,6 +57,7 @@ class PendingStudentResource extends JsonResource
             'mailCucaCount' => $this->mail_cuca_count ?? 0,
             'mailCuoEnvoye' => $this->mail_cuo_sent ? 'Oui' : 'Non',
             'mailCuoCount' => $this->mail_cuo_count ?? 0,
+            'level' => $this->level,
             'entry_diploma' => $this->whenLoaded('entryDiploma', function () {
                 return [
                     'id' => $this->entryDiploma->id,

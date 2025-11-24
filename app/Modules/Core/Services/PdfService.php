@@ -19,18 +19,31 @@ class PdfService
      */
     public function generatePdf(string $view, array $data = [], array $options = [])
     {
-        $pdf = Pdf::loadView($view, $data);
+        \Log::info('PdfService: Début génération PDF', ['view' => $view, 'data_keys' => array_keys($data)]);
+        
+        try {
+            $pdf = Pdf::loadView($view, $data);
 
-        // Appliquer les options
-        if (isset($options['orientation'])) {
-            $pdf->setPaper('A4', $options['orientation']);
+            // Appliquer les options
+            if (isset($options['orientation'])) {
+                $pdf->setPaper('A4', $options['orientation']);
+            }
+
+            if (isset($options['paper_size'])) {
+                $pdf->setPaper($options['paper_size'], $options['orientation'] ?? 'portrait');
+            }
+
+            \Log::info('PdfService: PDF généré avec succès', ['view' => $view]);
+
+            return $pdf;
+        } catch (\Exception $e) {
+            \Log::error('PdfService: Erreur génération PDF', [
+                'view' => $view,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
         }
-
-        if (isset($options['paper_size'])) {
-            $pdf->setPaper($options['paper_size'], $options['orientation'] ?? 'portrait');
-        }
-
-        return $pdf;
     }
 
     /**
@@ -58,8 +71,19 @@ class PdfService
      */
     public function downloadPdf(string $view, array $data = [], string $filename = 'document.pdf', array $options = [])
     {
-        $pdf = $this->generatePdf($view, $data, $options);
-        return $pdf->download($filename);
+        \Log::info('PdfService: Début téléchargement PDF', ['filename' => $filename]);
+        
+        try {
+            $pdf = $this->generatePdf($view, $data, $options);
+            \Log::info('PdfService: Téléchargement PDF prêt', ['filename' => $filename]);
+            return $pdf->download($filename);
+        } catch (\Exception $e) {
+            \Log::error('PdfService: Erreur téléchargement PDF', [
+                'filename' => $filename,
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
     }
 
     /**

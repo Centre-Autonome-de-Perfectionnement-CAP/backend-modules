@@ -239,4 +239,116 @@ class ProgramController extends Controller
 
         return $this->successResponse($result, "{$result['created']} programme(s) reconduit(s)");
     }
+
+    /**
+     * Récupérer toutes les classes (class_groups)
+     */
+    /**
+     * Reconduire un programme pour la prochaine année académique
+     * 
+     * TODO: Implémenter la logique de reconduction
+     * 
+     * Cette méthode permet de dupliquer un programme existant pour l'année académique suivante.
+     * 
+     * Logique à implémenter:
+     * 1. Vérifier que le programme existe et appartient à l'année académique courante
+     * 2. Récupérer l'année académique suivante (current_year + 1)
+     * 3. Vérifier qu'un programme similaire n'existe pas déjà pour l'année suivante
+     * 4. Créer une copie du programme avec:
+     *    - Le même class_group_id (ou trouver l'équivalent pour l'année suivante)
+     *    - Le même course_element_professor_id (ou vérifier s'il existe pour l'année suivante)
+     *    - La nouvelle academic_year_id
+     *    - Les mêmes pondérations (weighting et retake_weighting)
+     * 5. Retourner le nouveau programme créé
+     * 
+     * @param Program $program Le programme à reconduire
+     * @return JsonResponse
+     */
+    public function renewProgram(Program $program): JsonResponse
+    {
+        // TODO: Implémenter la logique de reconduction
+        // Exemple de structure:
+        // 
+        // 1. Charger le programme avec ses relations
+        // $program->load(['classGroup', 'courseElementProfessor', 'academicYear']);
+        // 
+        // 2. Trouver l'année académique suivante
+        // $nextAcademicYear = AcademicYear::where('id', '>', $program->academic_year_id)
+        //     ->orderBy('id', 'asc')
+        //     ->first();
+        // 
+        // if (!$nextAcademicYear) {
+        //     return $this->errorResponse('Aucune année académique suivante trouvée', 404);
+        // }
+        // 
+        // 3. Vérifier si le programme existe déjà pour l'année suivante
+        // $exists = Program::where('class_group_id', $program->class_group_id)
+        //     ->where('course_element_professor_id', $program->course_element_professor_id)
+        //     ->where('academic_year_id', $nextAcademicYear->id)
+        //     ->exists();
+        // 
+        // if ($exists) {
+        //     return $this->errorResponse('Ce programme existe déjà pour l\'année suivante', 409);
+        // }
+        // 
+        // 4. Créer le nouveau programme
+        // $newProgram = $this->programService->create([
+        //     'class_group_id' => $program->class_group_id,
+        //     'course_element_professor_id' => $program->course_element_professor_id,
+        //     'academic_year_id' => $nextAcademicYear->id,
+        //     'weighting' => $program->weighting,
+        //     'retake_weighting' => $program->retake_weighting,
+        // ]);
+        // 
+        // return $this->createdResponse(
+        //     new ProgramResource($newProgram),
+        //     'Programme reconduit avec succès pour l\'année académique ' . $nextAcademicYear->academic_year
+        // );
+
+        return $this->errorResponse('Fonctionnalité en cours de développement', 501);
+    }
+
+    public function getClassGroups(): JsonResponse
+    {
+        $currentYear = \App\Modules\Inscription\Models\AcademicYear::where('is_current', true)->first();
+        
+        $classGroups = \App\Modules\Inscription\Models\ClassGroup::with(['academicYear', 'department', 'studentGroups.student.studentPendingStudents.academicPaths'])
+            ->where('academic_year_id', $currentYear->id)
+            ->orderBy('department_id')
+            ->orderBy('study_level')
+            ->get()
+            ->map(function ($group) {
+                $cohorts = $group->studentGroups
+                    ->pluck('student.studentPendingStudents')
+                    ->flatten()
+                    ->pluck('academicPaths')
+                    ->flatten()
+                    ->where('academic_year_id', $group->academic_year_id)
+                    ->pluck('cohort')
+                    ->unique()
+                    ->sort()
+                    ->values()
+                    ->all();
+                
+                $cohortLabel = !empty($cohorts) ? ' [Cohorte ' . implode(', ', $cohorts) . ']' : '';
+                $name = $group->department->name . ' - ' . $group->study_level;
+                if ($group->group_name) {
+                    $name .= ' (' . $group->group_name . ')';
+                }
+                $name .= $cohortLabel;
+                
+                return [
+                    'id' => $group->id,
+                    'name' => $name,
+                    'academic_year' => $group->academicYear->academic_year,
+                    'academic_year_id' => $group->academic_year_id,
+                    'department_id' => $group->department_id,
+                    'study_level' => $group->study_level,
+                    'group_name' => $group->group_name,
+                    'cohorts' => $cohorts,
+                ];
+            });
+
+        return $this->successResponse($classGroups, 'Classes récupérées avec succès');
+    }
 }

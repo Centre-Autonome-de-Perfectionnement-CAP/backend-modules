@@ -1,0 +1,111 @@
+INSERT INTO grades (uuid, name, code, level, description, created_at, updated_at)
+VALUES
+  (
+    UUID(),
+    'Professeur Titulaire',
+    'Pr',
+    5,
+    'Professeur Titulaire des Universités du CAMES',
+    NOW(),
+    NOW()
+  ),
+  (
+    UUID(),
+    'Maitre de Conférences',
+    'Dr(MC)',
+    4,
+    'Maitre de Conférences des Universités du CAMES',
+    NOW(),
+    NOW()
+  ),
+  (
+    UUID(),
+    'Maitre-Assistant',
+    'Dr(MA)',
+    3,
+    'Maitre-Assistant des Universités du CAMES',
+    NOW(),
+    NOW()
+  ),
+  (
+    UUID(),
+    'Docteur',
+    'Dr',
+    2,
+    'Docteur',
+    NOW(),
+    NOW()
+  ),
+  (
+    UUID(),
+    'Monsieur',
+    'Mr',
+    1,
+    'Enseignant sans grade académique spécifique (Monsieur)',
+    NOW(),
+    NOW()
+  );
+
+
+
+
+
+
+  INSERT INTO roles (uuid, name, slug, created_at, updated_at)
+VALUES
+  (
+    UUID(),
+    'Chef CAP',
+    'chef-cap',
+    NOW(),
+    NOW()
+  ),
+  (
+    UUID(),
+    'Chef de division',
+    'chef-division',
+    NOW(),
+    NOW()
+  ),
+  (
+    UUID(),
+    'Secrétaire',
+    'secretaire',
+    NOW(),
+    NOW()
+  ),
+  (
+    UUID(),
+    'Comptable',
+    'comptable',
+    NOW(),
+    NOW()
+  ),
+  (
+    UUID(),
+    'Soutien informatique',
+    'soutien-informatique',
+    NOW(),
+    NOW()
+  ),
+  (
+    UUID(),
+    'Professeur',
+    'professeur',
+    NOW(),
+    NOW()
+  ),
+  (
+    UUID(),
+    'Étudiant',
+    'etudiant',
+    NOW(),
+    NOW()
+  ),
+  (
+    UUID(),
+    'Responsable',
+    'responsable',
+    NOW(),
+    NOW()
+  );

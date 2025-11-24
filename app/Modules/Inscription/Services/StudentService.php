@@ -5,6 +5,7 @@ namespace App\Modules\Inscription\Services;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Modules\Core\Services\PdfService;
+use App\Modules\Core\Services\NationalityService;
 
 /**
  * Service de gestion des étudiants
@@ -235,7 +236,7 @@ class StudentService
                 'nom' => explode(' ', $student->nomPrenoms)[0] ?? '',
                 'prenoms' => implode(' ', array_slice(explode(' ', $student->nomPrenoms), 1)) ?: '',
                 'red' => $student->redoublant === 'Oui',
-                'nationalite' => 'CI',
+                'nationalite' => NationalityService::getNationality($student->nationality ?? ''),
             ];
         });
 
@@ -347,7 +348,8 @@ class StudentService
                 'students.student_id_number as matricule',
                 DB::raw("CONCAT(personal_information.last_name, ' ', personal_information.first_names) as nomPrenoms"),
                 'pending_students.level as niveau',
-                'class_groups.group_name as groupe'
+                'class_groups.group_name as groupe',
+                'personal_information.nationality'
             );
 
         // Filtres

@@ -17,16 +17,7 @@
         <td>Période :  ....................</td>
     </tr>
     <tr>
-        <td>
-            Classe : 
-            @if($classe == 'DIC-GE')
-                <strong>GE-1</strong>
-            @elseif($classe == 'DIC-GC')
-                <strong>GC-1</strong>
-            @elseif($classe == 'DIC-GT')
-                <strong>GT-1</strong>
-            @endif
-        </td>
+        <td><strong>Classe :</strong> {{ $classe  }}</td>
         <td></td>
     </tr>
     <tr>

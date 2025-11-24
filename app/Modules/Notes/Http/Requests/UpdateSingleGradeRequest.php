@@ -14,8 +14,8 @@ class UpdateSingleGradeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'student_pending_student_id' => 'required|exists:student_pending_students,id',
-            'program_id' => 'required|exists:programs,id',
+            'student_pending_student_id' => 'required|integer',
+            'program_id' => 'required',
             'position' => 'required|integer|min:0',
             'value' => 'required|numeric|min:-1|max:20',
         ];

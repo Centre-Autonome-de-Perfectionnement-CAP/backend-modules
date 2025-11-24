@@ -25,7 +25,7 @@ class CourseElementProfessorController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $filters = $request->only(['course_element_id', 'professor_id', 'search']);
+        $filters = $request->only(['course_element_id', 'professor_id', 'search', 'is_primary']);
         $perPage = $this->getPerPage($request);
         
         $assignments = $this->service->getAll($filters, $perPage);

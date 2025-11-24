@@ -23,8 +23,11 @@ class ProgramResource extends JsonResource
                 return [
                     'id' => $this->academicYear->id,
                     'name' => $this->academicYear->name,
+                    'is_current' => $this->academicYear->is_current,
                 ];
             }),
+            
+            'semester' => $this->semester,
             
             // Classe/Groupe
             'class_group' => $this->whenLoaded('classGroup', function () {

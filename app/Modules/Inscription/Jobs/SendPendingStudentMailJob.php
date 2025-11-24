@@ -50,18 +50,23 @@ class SendPendingStudentMailJob
         }
         
         // Déterminer le nouveau statut selon les règles
-        $filiere = strtolower($student->department->name ?? '');
+        $cycle = strtolower($student->department->cycle->name ?? '');
+        $departmentName = strtolower($student->department->name ?? '');
         $newStatus = null;
         
-        if (strpos($filiere, 'prepa') !== false) {
-            // Pour les filières contenant "prepa", seul CUCA compte
+        // Prépa = cycle Ingénierie ET nom contient "prepa"
+        $isPrepa = (str_contains($cycle, 'ingénierie') || str_contains($cycle, 'ingenierie')) && 
+                   (str_contains($departmentName, 'prépa') || str_contains($departmentName, 'prepa'));
+        
+        if ($isPrepa) {
+            // Pour Prépa, seul CUCA décide
             if ($opinionCuca && strtolower($opinionCuca) === 'favorable') {
                 $newStatus = 'approved';
             } elseif ($opinionCuca && strtolower($opinionCuca) !== 'favorable') {
                 $newStatus = 'rejected';
             }
         } else {
-            // Pour les autres filières, CUO compte
+            // Pour Licence/Master et autres Ingénierie, seul CUO décide
             if ($opinionCuo && strtolower($opinionCuo) === 'favorable') {
                 $newStatus = 'approved';
             } elseif ($opinionCuo && strtolower($opinionCuo) !== 'favorable') {
@@ -78,7 +83,7 @@ class SendPendingStudentMailJob
             Log::info('Statut mis à jour', [
                 'student_id' => $student->id,
                 'nouveau_statut' => $newStatus,
-                'filiere' => $filiere,
+                'cycle' => $cycle,
                 'opinion_cuca' => $opinionCuca,
                 'opinion_cuo' => $opinionCuo
             ]);
@@ -122,10 +127,24 @@ class SendPendingStudentMailJob
         }
         
         // Créer Student, StudentPendingStudent et AcademicPath si favorable
-        $isFavorable = ($opinionCuca && strtolower($opinionCuca) === 'favorable') || 
-                       ($opinionCuo && strtolower($opinionCuo) === 'favorable');
+        $cycle = strtolower($student->department->cycle->name ?? '');
+        $departmentName = strtolower($student->department->name ?? '');
+        $isFavorable = false;
+        
+        // Prépa = cycle Ingénierie ET nom contient "prepa"
+        $isPrepa = (str_contains($cycle, 'ingénierie') || str_contains($cycle, 'ingenierie')) && 
+                   (str_contains($departmentName, 'prépa') || str_contains($departmentName, 'prepa'));
+        
+        if ($isPrepa) {
+            // Pour Prépa, seule CUCA décide
+            $isFavorable = ($opinionCuca && strtolower($opinionCuca) === 'favorable');
+        } else {
+            // Pour Licence/Master et autres Ingénierie, seule CUO décide
+            $isFavorable = ($opinionCuo && strtolower($opinionCuo) === 'favorable');
+        }
         
         Log::info('Vérification favorable', [
+            'cycle' => $cycle,
             'isFavorable' => $isFavorable,
             'opinionCuca' => $opinionCuca,
             'opinionCuo' => $opinionCuo,
@@ -147,7 +166,13 @@ class SendPendingStudentMailJob
                         }
                         $phoneNumber = is_array($contacts) ? ($contacts['phone'] ?? $contacts[0] ?? null) : null;
                         
-                        Log::info('Création Student', ['phone' => $phoneNumber]);
+                        // Déterminer la cohorte
+                        $cohort = $this->determineCohort($student);
+                        
+                        // Récupérer le role_id étudiant
+                        $studentRoleId = DB::table('roles')->where('name', 'etudiant')->value('id');
+                        
+                        Log::info('Création Student', ['phone' => $phoneNumber, 'cohort' => $cohort, 'role_id' => $studentRoleId]);
                         
                         // Créer le Student
                         $newStudent = Student::create([
@@ -170,6 +195,8 @@ class SendPendingStudentMailJob
                             'student_pending_student_id' => $studentPendingStudent->id,
                             'academic_year_id' => $student->academic_year_id,
                             'study_level' => $student->level,
+                            'cohort' => $cohort,
+                            'role_id' => $studentRoleId,
                             'year_decision' => null,
                             'financial_status' => $student->exonere === 'Oui' ? 'Exonéré' : 'Non exonéré',
                         ]);
@@ -181,5 +208,34 @@ class SendPendingStudentMailJob
                 Log::error('Erreur création Student', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             }
         }
+    }
+    
+    private function determineCohort($pendingStudent): ?string
+    {
+        $periods = DB::table('submission_periods')
+            ->where('academic_year_id', $pendingStudent->academic_year_id)
+            ->select('start_date', 'end_date')
+            ->distinct()
+            ->orderBy('start_date')
+            ->get();
+        
+        if ($periods->isEmpty()) {
+            return '1';
+        }
+        
+        $createdAt = \Carbon\Carbon::parse($pendingStudent->created_at);
+        $cohortNumber = 1;
+        
+        foreach ($periods as $index => $period) {
+            $startDate = \Carbon\Carbon::parse($period->start_date);
+            $endDate = \Carbon\Carbon::parse($period->end_date);
+            
+            if ($createdAt->between($startDate, $endDate)) {
+                $cohortNumber = $index + 1;
+                break;
+            }
+        }
+        
+        return (string)$cohortNumber;
     }
 }

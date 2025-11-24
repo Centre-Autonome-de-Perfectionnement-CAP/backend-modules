@@ -26,12 +26,37 @@ class LmdGradeService
     {
         $classGroup = $program->classGroup;
 
-        // Récupère les academic paths liés à cette classe
-        $query = \App\Modules\Inscription\Models\AcademicPath::whereHas('studentPendingStudent', function ($q) use ($classGroup) {
-            $q->where('academic_year_id', $classGroup->academic_year_id)
-                ->where('study_level', $classGroup->level)
-                ->where('year_decision', '!=', 'failed');
-        });
+        // Récupère les student_ids assignés à ce class_group
+        $studentIds = \App\Modules\Inscription\Models\StudentGroup::where('class_group_id', $classGroup->id)
+            ->pluck('student_id')
+            ->toArray();
+
+        if (empty($studentIds)) {
+            return collect([]);
+        }
+
+        // Récupère les student_pending_student_ids pour ces students
+        $studentPendingStudentIds = \App\Modules\Inscription\Models\StudentPendingStudent::whereIn('student_id', $studentIds)
+            ->pluck('id')
+            ->toArray();
+
+
+
+        if (empty($studentPendingStudentIds)) {
+            return collect([]);
+        }
+
+        // Récupère les academic paths
+        $query = \App\Modules\Inscription\Models\AcademicPath::with([
+                'studentPendingStudent.pendingStudent.personalInformation',
+                'studentPendingStudent.student'
+            ])
+            ->whereIn('student_pending_student_id', $studentPendingStudentIds)
+            ->where('academic_year_id', $classGroup->academic_year_id)
+            ->where(function ($q) {
+                $q->where('year_decision', '!=', 'failed')
+                  ->orWhereNull('year_decision');
+            });
 
         if ($cohort) {
             $query->where('cohort', $cohort);
@@ -43,6 +68,7 @@ class LmdGradeService
             $studentPending = $academicPath->studentPendingStudent;
             $pendingStudent = $studentPending?->pendingStudent;
             $personalInfo = $pendingStudent?->personalInformation;
+            $student = $studentPending?->student;
 
             // Récupérer la note
             $grade = LmdSystemGrade::where('student_pending_student_id', $academicPath->student_pending_student_id)
@@ -51,6 +77,7 @@ class LmdGradeService
 
             return [
                 'student_pending_student_id' => $academicPath->student_pending_student_id,
+                'student_id' => $student?->student_id_number ?? 'N/A',
                 'last_name' => $personalInfo?->last_name,
                 'first_names' => $personalInfo?->first_names,
                 'grades' => $grade?->grades ?? [],
@@ -126,10 +153,10 @@ class LmdGradeService
                         $grade->validated = $this->calculationService->isValidated($moyenne, $grade->retake_average);
                         $grade->must_retake = $this->calculationService->mustRetake($moyenne);
                     } else {
-                        $grade->retake_average = $moyenne;
+                        $grade->retake_average = $moyenne >= 12 ? 12 : $moyenne;
                         $grade->retaken = true;
-                        $grade->validated = $this->calculationService->isValidated($grade->average, $moyenne);
-                        $grade->must_retake = $this->calculationService->mustRetake($moyenne);
+                        $grade->validated = $this->calculationService->isValidated($grade->average, $grade->retake_average);
+                        $grade->must_retake = $this->calculationService->mustRetake($grade->retake_average);
                     }
                 }
 
@@ -212,9 +239,9 @@ class LmdGradeService
                 $grade->validated = $this->calculationService->isValidated($moyenne, $grade->retake_average);
                 $grade->must_retake = $this->calculationService->mustRetake($moyenne);
             } else {
-                $grade->retake_average = $moyenne;
-                $grade->validated = $this->calculationService->isValidated($grade->average, $moyenne);
-                $grade->must_retake = $this->calculationService->mustRetake($moyenne);
+                $grade->retake_average = $moyenne >= 12 ? 12 : $moyenne;
+                $grade->validated = $this->calculationService->isValidated($grade->average, $grade->retake_average);
+                $grade->must_retake = $this->calculationService->mustRetake($grade->retake_average);
             }
         }
 
@@ -258,9 +285,9 @@ class LmdGradeService
                 $grade->validated = $this->calculationService->isValidated($moyenne, $grade->retake_average);
                 $grade->must_retake = $this->calculationService->mustRetake($moyenne);
             } else {
-                $grade->retake_average = $moyenne;
-                $grade->validated = $this->calculationService->isValidated($grade->average, $moyenne);
-                $grade->must_retake = $this->calculationService->mustRetake($moyenne);
+                $grade->retake_average = $moyenne >= 12 ? 12 : $moyenne;
+                $grade->validated = $this->calculationService->isValidated($grade->average, $grade->retake_average);
+                $grade->must_retake = $this->calculationService->mustRetake($grade->retake_average);
             }
 
             $grade->save();
@@ -334,9 +361,9 @@ class LmdGradeService
                     $grade->validated = $this->calculationService->isValidated($moyenne, $grade->retake_average);
                     $grade->must_retake = $this->calculationService->mustRetake($moyenne);
                 } else {
-                    $grade->retake_average = $moyenne;
-                    $grade->validated = $this->calculationService->isValidated($grade->average, $moyenne);
-                    $grade->must_retake = $this->calculationService->mustRetake($moyenne);
+                    $grade->retake_average = $moyenne >= 12 ? 12 : $moyenne;
+                    $grade->validated = $this->calculationService->isValidated($grade->average, $grade->retake_average);
+                    $grade->must_retake = $this->calculationService->mustRetake($grade->retake_average);
                 }
                 
                 $grade->save();
@@ -365,26 +392,93 @@ class LmdGradeService
             $query->where('department_id', $departmentId);
         }
 
+        // Filtrer par cohorte - ne retourner que les classes ayant des étudiants dans cette cohorte
+        if ($cohort) {
+            $query->whereHas('studentGroups', function ($q) use ($cohort, $academicYearId) {
+                $q->whereHas('student.studentPendingStudents.academicPaths', function ($subQ) use ($cohort, $academicYearId) {
+                    $subQ->where('cohort', $cohort)
+                         ->where('academic_year_id', $academicYearId)
+                         ->where(function ($q2) {
+                             $q2->where('year_decision', '!=', 'failed')
+                                ->orWhereNull('year_decision');
+                         });
+                });
+            });
+        }
+
         $classes = $query->get();
 
-        return $classes->groupBy('cycle.name')->map(function ($cycleClasses, $cycleName) {
+        return $classes->groupBy('cycle.name')->map(function ($cycleClasses, $cycleName) use ($professorId, $cohort, $academicYearId) {
             return [
                 'cycle_name' => $cycleName,
-                'departments' => $cycleClasses->groupBy('department.name')->map(function ($deptClasses, $deptName) {
+                'departments' => $cycleClasses->groupBy('department.name')->map(function ($deptClasses, $deptName) use ($professorId, $cohort, $academicYearId) {
                     return [
                         'department_name' => $deptName,
-                        'classes' => $deptClasses->map(function ($class) {
+                        'classes' => $deptClasses->map(function ($class) use ($professorId, $cohort, $academicYearId) {
+                            $name = $class->department->name . ' - Niveau ' . $class->study_level;
+                            if ($class->group_name) {
+                                $name .= ' (' . $class->group_name . ')';
+                            }
+                            
+                            // Compter uniquement les programmes du professeur
+                            $professorProgramsCount = $class->programs->filter(function ($program) use ($professorId) {
+                                return $program->courseElementProfessor && $program->courseElementProfessor->professor_id === $professorId;
+                            })->count();
+                            
+                            // Compter les étudiants dans le class_group spécifique
+                            $studentsCount = \App\Modules\Inscription\Models\StudentGroup::where('class_group_id', $class->id)
+                                ->whereHas('student.studentPendingStudents.academicPaths', function ($q) use ($class, $cohort) {
+                                    $q->where('academic_year_id', $class->academic_year_id)
+                                      ->where(function ($q2) {
+                                          $q2->where('year_decision', '!=', 'failed')
+                                             ->orWhereNull('year_decision');
+                                      });
+                                    if ($cohort) {
+                                        $q->where('cohort', $cohort);
+                                    }
+                                })
+                                ->count();
+                            
                             return [
                                 'id' => $class->id,
-                                'name' => $class->name,
-                                'level' => $class->level,
-                                'programs_count' => $class->programs->count()
+                                'name' => $name,
+                                'level' => $class->study_level,
+                                'programs_count' => $professorProgramsCount,
+                                'students_count' => $studentsCount
                             ];
                         })
                     ];
                 })->values()
             ];
         })->values()->toArray();
+    }
+
+    /**
+     * Obtient la liste des étudiants d'un programme (sans notes)
+     */
+    public function getStudentsForEvaluation(Program $program, ?string $cohort = null): array
+    {
+        $students = $this->getStudentsByProgram($program, $cohort);
+        
+        return [
+            'program' => [
+                'id' => $program->id,
+                'uuid' => $program->uuid,
+                'name' => $program->courseElementProfessor->courseElement->name ?? 'N/A',
+                'class_group' => [
+                    'id' => $program->classGroup->id,
+                    'name' => $program->classGroup->department->name . ' - Niveau ' . $program->classGroup->study_level . ($program->classGroup->group_name ? ' (' . $program->classGroup->group_name . ')' : ''),
+                    'level' => $program->classGroup->study_level,
+                ],
+            ],
+            'students' => $students->map(function ($student) {
+                return [
+                    'student_pending_student_id' => $student['student_pending_student_id'],
+                    'last_name' => $student['last_name'],
+                    'first_names' => $student['first_names'],
+                ];
+            })->values(),
+        ];
     }
 
     /**
@@ -402,22 +496,30 @@ class LmdGradeService
             ->with(['courseElementProfessor.courseElement', 'courseElementProfessor.professor'])
             ->get();
 
+        $className = $classGroup->department->name . ' - Niveau ' . $classGroup->study_level;
+        if ($classGroup->group_name) {
+            $className .= ' (' . $classGroup->group_name . ')';
+        }
+
         return [
             'class_group' => [
                 'id' => $classGroup->id,
-                'name' => $classGroup->name,
-                'level' => $classGroup->level,
+                'name' => $className,
+                'level' => $classGroup->study_level,
                 'department' => $classGroup->department->name ?? 'N/A',
                 'cycle' => $classGroup->cycle->name ?? 'N/A'
             ],
             'programs' => $programs->map(function ($program) {
+                $weighting = $program->weighting ?? [];
+                $columnCount = is_array($weighting) ? count($weighting) : 0;
+                
                 return [
                     'id' => $program->id,
                     'uuid' => $program->uuid,
                     'course_name' => $program->courseElementProfessor->courseElement->name ?? 'N/A',
-                    'professor_name' => $program->courseElementProfessor->professor->name ?? 'N/A',
-                    'weighting' => $program->weighting ?? [],
-                    'column_count' => count($program->weighting ?? []),
+                    'professor_name' => $program->courseElementProfessor->professor->full_name ?? 'N/A',
+                    'weighting' => $weighting,
+                    'column_count' => $columnCount,
                     'has_retake' => !empty($program->retake_weighting)
                 ];
             })
@@ -431,6 +533,13 @@ class LmdGradeService
     {
         $students = $this->getStudentsByProgram($program, $cohort);
         
+        // Convertir weighting en tableau de valeurs si c'est un objet
+        $weighting = $program->weighting ?? [];
+        $weightingArray = is_array($weighting) ? array_values($weighting) : [];
+        
+        $retakeWeighting = $program->retake_weighting ?? [];
+        $retakeWeightingArray = is_array($retakeWeighting) ? array_values($retakeWeighting) : [];
+        
         return [
             'program' => [
                 'id' => $program->id,
@@ -438,13 +547,13 @@ class LmdGradeService
                 'name' => $program->courseElementProfessor->courseElement->name ?? 'N/A',
                 'class_group' => [
                     'id' => $program->classGroup->id,
-                    'name' => $program->classGroup->name ?? 'N/A',
-                    'level' => $program->classGroup->level ?? 'N/A',
+                    'name' => $program->classGroup->department->name . ' - Niveau ' . $program->classGroup->study_level . ($program->classGroup->group_name ? ' (' . $program->classGroup->group_name . ')' : ''),
+                    'level' => $program->classGroup->study_level,
                 ],
-                'weighting' => $program->weighting ?? [],
-                'retake_weighting' => $program->retake_weighting ?? [],
-                'column_count' => count($program->weighting ?? []),
-                'retake_column_count' => count($program->retake_weighting ?? [])
+                'weighting' => $weightingArray,
+                'retake_weighting' => $retakeWeightingArray,
+                'column_count' => count($weightingArray),
+                'retake_column_count' => count($retakeWeightingArray)
             ],
             'students' => $students,
             'total_students' => $students->count(),
@@ -479,28 +588,35 @@ class LmdGradeService
     }
 
     /**
-     * Duplique une note pour tous les étudiants
+     * Duplique une colonne de notes complète
      */
-    public function duplicateGrade(int $programId, int $position, float $value): array
+    public function duplicateColumn(int $programId, int $columnIndex, bool $sessionNormale = true): array
     {
         $program = Program::findOrFail($programId);
-        $students = $this->getStudentsByProgram($program);
-        $results = [];
+        $grades = LmdSystemGrade::where('program_id', $programId)->get();
         
-        foreach ($students as $student) {
-            $success = $this->updateNoteAtPosition(
-                $student['student_pending_student_id'],
-                $programId,
-                $position,
-                $value
-            );
+        DB::beginTransaction();
+        try {
+            $notesToAdd = [];
             
-            if ($success) {
-                $results[] = $student['student_pending_student_id'];
+            foreach ($grades as $grade) {
+                $gradesArray = $sessionNormale ? ($grade->grades ?? []) : ($grade->retake_grades ?? []);
+                
+                if (isset($gradesArray[$columnIndex])) {
+                    $notesToAdd[$grade->student_pending_student_id] = $gradesArray[$columnIndex];
+                } else {
+                    $notesToAdd[$grade->student_pending_student_id] = -1;
+                }
             }
+            
+            $result = $this->addNoteColumn($programId, $notesToAdd, $sessionNormale);
+            
+            DB::commit();
+            return $result;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
         }
-        
-        return ['updated_students' => count($results)];
     }
 
     /**
@@ -515,9 +631,9 @@ class LmdGradeService
         $exportData = [
             'program_info' => [
                 'name' => $program->courseElementProfessor->courseElement->name ?? 'N/A',
-                'class' => $program->classGroup->name ?? 'N/A',
-                'professor' => $program->courseElementProfessor->professor->name ?? 'N/A',
-                'level' => $program->classGroup->level ?? 'N/A'
+                'class' => $program->classGroup->department->name . ' - Niveau ' . $program->classGroup->study_level . ($program->classGroup->group_name ? ' (' . $program->classGroup->group_name . ')' : ''),
+                'professor' => $program->courseElementProfessor->professor->full_name ?? 'N/A',
+                'level' => $program->classGroup->study_level
             ],
             'weighting' => $program->weighting ?? [],
             'retake_weighting' => $includeRetake ? ($program->retake_weighting ?? []) : [],
@@ -601,12 +717,29 @@ class LmdGradeService
 
         if ($level) {
             $query->whereHas('classGroup', function ($q) use ($level) {
-                $q->where('level', $level);
+                $q->where('study_level', $level);
             });
         }
 
         if ($programId) {
             $query->where('id', $programId);
+        }
+
+        // Filtrer par cohorte si spécifiée
+        if ($cohort) {
+            $query->whereHas('classGroup', function ($q) use ($cohort) {
+                $q->whereExists(function ($subQuery) use ($cohort) {
+                    $subQuery->select(DB::raw(1))
+                        ->from('academic_paths')
+                        ->whereColumn('academic_paths.academic_year_id', 'class_groups.academic_year_id')
+                        ->whereColumn('academic_paths.study_level', 'class_groups.study_level')
+                        ->where('academic_paths.cohort', $cohort)
+                        ->where(function ($q2) {
+                            $q2->where('academic_paths.year_decision', '!=', 'failed')
+                               ->orWhereNull('academic_paths.year_decision');
+                        });
+                });
+            });
         }
 
         $programs = $query->get();
@@ -617,10 +750,10 @@ class LmdGradeService
             return [
                 'program_id' => $program->id,
                 'program_name' => $program->courseElementProfessor->courseElement->name ?? 'N/A',
-                'class_name' => $program->classGroup->name ?? 'N/A',
+                'class_name' => $program->classGroup->department->name . ' - Niveau ' . $program->classGroup->study_level . ($program->classGroup->group_name ? ' (' . $program->classGroup->group_name . ')' : ''),
                 'department' => $program->classGroup->department->name ?? 'N/A',
-                'level' => $program->classGroup->level ?? 'N/A',
-                'professor' => $program->courseElementProfessor->professor->name ?? 'N/A',
+                'level' => $program->classGroup->study_level,
+                'professor' => $program->courseElementProfessor->professor->full_name ?? 'N/A',
                 'total_students' => $students->count(),
                 'students_with_grades' => $students->filter(fn($s) => !empty($s['grades']))->count(),
                 'average_class' => $students->avg('average'),

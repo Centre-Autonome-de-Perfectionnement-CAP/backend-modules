@@ -14,7 +14,7 @@ class AddColumnRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'program_id' => 'required|exists:programs,id',
+            'program_id' => 'required',
             'notes' => 'required|array',
             'notes.*' => 'required|numeric|min:-1|max:20',
             'is_retake' => 'boolean',

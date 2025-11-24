@@ -16,6 +16,7 @@ class Program extends Model
         'class_group_id',
         'course_element_professor_id',
         'academic_year_id',
+        'semester',
         'weighting',
         'retake_weighting',
     ];

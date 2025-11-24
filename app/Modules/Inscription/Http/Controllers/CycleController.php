@@ -180,7 +180,8 @@ class CycleController extends Controller
         $periods = \DB::table('submission_periods')
             ->where('academic_year_id', $academicYearId)
             ->select('start_date', 'end_date')
-            ->groupBy('start_date', 'end_date')
+            ->distinct()
+            ->orderBy('start_date')
             ->get();
         
         $periodsCount = $periods->count();

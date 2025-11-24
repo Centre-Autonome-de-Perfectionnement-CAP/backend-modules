@@ -71,6 +71,10 @@
             page-break-inside: avoid;
             page-break-after: auto;
         }
+        
+        .liste thead {
+            display: table-row-group;
+        }
 
         .name {
             padding: 5px;

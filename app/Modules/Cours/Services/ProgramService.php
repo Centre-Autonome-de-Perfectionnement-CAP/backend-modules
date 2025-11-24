@@ -16,40 +16,48 @@ class ProgramService
         $query = Program::query()
             ->with([
                 'classGroup',
+                'academicYear',
                 'courseElementProfessor.courseElement.teachingUnit',
                 'courseElementProfessor.professor'
             ]);
 
-        // Filtre par groupe de classe
         if (!empty($filters['class_group_id'])) {
             $query->where('class_group_id', $filters['class_group_id']);
         }
-
-        // Filtre par année académique
         if (!empty($filters['academic_year_id'])) {
             $query->where('academic_year_id', $filters['academic_year_id']);
         }
 
-        // Filtre par élément de cours
         if (!empty($filters['course_element_id'])) {
             $query->whereHas('courseElementProfessor', function ($q) use ($filters) {
                 $q->where('course_element_id', $filters['course_element_id']);
             });
         }
 
-        // Filtre par professeur
         if (!empty($filters['professor_id'])) {
             $query->whereHas('courseElementProfessor', function ($q) use ($filters) {
                 $q->where('professor_id', $filters['professor_id']);
             });
         }
 
-        // Recherche globale
         if (!empty($filters['search'])) {
             $search = $filters['search'];
-            $query->whereHas('courseElementProfessor.courseElement', function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('code', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('courseElementProfessor.courseElement', function ($subQ) use ($search) {
+                    $subQ->where('name', 'like', "%{$search}%")
+                         ->orWhere('code', 'like', "%{$search}%");
+                })
+                ->orWhereHas('courseElementProfessor.professor', function ($subQ) use ($search) {
+                    $subQ->where('first_name', 'like', "%{$search}%")
+                         ->orWhere('last_name', 'like', "%{$search}%");
+                })
+                ->orWhereHas('classGroup', function ($subQ) use ($search) {
+                    $subQ->where('study_level', 'like', "%{$search}%")
+                         ->orWhere('group_name', 'like', "%{$search}%")
+                         ->orWhereHas('department', function ($deptQ) use ($search) {
+                             $deptQ->where('name', 'like', "%{$search}%");
+                         });
+                });
             });
         }
 
@@ -150,6 +158,7 @@ class ProgramService
     public function getProgramsByClassGroup(int $classGroupId, int $perPage = 50)
     {
         return Program::with([
+            'academicYear',
             'courseElementProfessor.courseElement.teachingUnit',
             'courseElementProfessor.professor'
         ])
@@ -165,6 +174,7 @@ class ProgramService
     {
         return Program::with([
             'classGroup',
+            'academicYear',
             'courseElementProfessor.courseElement.teachingUnit'
         ])
             ->whereHas('courseElementProfessor', function ($q) use ($professorId) {
@@ -181,6 +191,7 @@ class ProgramService
     {
         return Program::with([
             'classGroup',
+            'academicYear',
             'courseElementProfessor.professor'
         ])
             ->whereHas('courseElementProfessor', function ($q) use ($courseElementId) {
@@ -218,6 +229,7 @@ class ProgramService
                 $program = Program::create($data);
                 $createdPrograms[] = $program->load([
                     'classGroup',
+                    'academicYear',
                     'courseElementProfessor.courseElement.teachingUnit',
                     'courseElementProfessor.professor'
                 ]);
@@ -293,6 +305,7 @@ class ProgramService
 
                 $createdPrograms[] = $newProgram->load([
                     'classGroup',
+                    'academicYear',
                     'courseElementProfessor.courseElement.teachingUnit',
                     'courseElementProfessor.professor'
                 ]);
