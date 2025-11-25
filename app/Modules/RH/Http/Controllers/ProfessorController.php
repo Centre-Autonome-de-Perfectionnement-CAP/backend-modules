@@ -20,7 +20,7 @@ class ProfessorController extends Controller
     public function __construct(
         protected ProfessorService $professorService
     ) {
-        $this->middleware('auth:sanctum');
+        $this->middleware('auth:sanctum')->except(['index']);
     }
 
     /**

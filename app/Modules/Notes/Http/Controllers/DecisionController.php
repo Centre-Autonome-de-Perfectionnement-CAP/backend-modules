@@ -4,22 +4,26 @@ namespace App\Modules\Notes\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Notes\Services\DecisionService;
+use App\Modules\Notes\Services\CourseRetakeService;
 use App\Modules\Notes\Http\Requests\ExportPVRequest;
 use App\Modules\Notes\Http\Requests\ExportPVDeliberationRequest;
 use App\Modules\Notes\Http\Requests\GetStudentsBySemesterRequest;
 use App\Modules\Notes\Http\Requests\GetStudentsByYearRequest;
 use App\Traits\ApiResponse;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request;
 
 class DecisionController extends Controller
 {
     use ApiResponse;
 
     private DecisionService $decisionService;
+    private CourseRetakeService $retakeService;
 
-    public function __construct(DecisionService $decisionService)
+    public function __construct(DecisionService $decisionService, CourseRetakeService $retakeService)
     {
         $this->decisionService = $decisionService;
+        $this->retakeService = $retakeService;
     }
 
     public function exportPVFinAnnee(ExportPVRequest $request)
@@ -108,5 +112,40 @@ class DecisionController extends Controller
         );
 
         return $this->successResponse($students, 'Étudiants récupérés avec succès');
+    }
+
+    public function saveSemesterDecisions(Request $request)
+    {
+        $request->validate([
+            'decisions' => 'required|array',
+            'decisions.*.student_pending_student_id' => 'required|integer',
+            'decisions.*.semester_decision' => 'required|string'
+        ]);
+
+        $result = $this->decisionService->saveSemesterDecisions($request->decisions);
+        return $this->successResponse($result, 'Décisions semestrielles enregistrées');
+    }
+
+    public function saveYearDecisions(Request $request)
+    {
+        $request->validate([
+            'academic_year_id' => 'required|integer',
+            'class_group_id' => 'required|integer',
+            'decisions' => 'required|array',
+            'decisions.*.student_pending_student_id' => 'required|integer',
+            'decisions.*.year_decision' => 'required|string'
+        ]);
+
+        $result = $this->decisionService->saveYearDecisions($request->decisions);
+        
+        $retakes = $this->retakeService->processYearEndRetakes(
+            $request->academic_year_id,
+            $request->class_group_id
+        );
+
+        return $this->successResponse([
+            'decisions' => $result,
+            'retakes_created' => count($retakes)
+        ], 'Décisions annuelles enregistrées et reprises créées');
     }
 }

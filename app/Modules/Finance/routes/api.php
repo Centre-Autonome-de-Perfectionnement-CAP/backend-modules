@@ -7,6 +7,10 @@ use App\Modules\Finance\Http\Controllers\DashboardController;
 use App\Modules\Finance\Http\Controllers\TarifController;
 use App\Modules\Finance\Http\Controllers\HistoriqueController;
 use App\Modules\Finance\Http\Controllers\ValidationController;
+use App\Modules\Finance\Http\Controllers\TransactionController;
+use App\Modules\Finance\Http\Controllers\ExonerationController;
+use App\Modules\Finance\Http\Controllers\StudentFinanceController;
+use App\Modules\Finance\Http\Controllers\ReportController;
 
 // Routes for Finance module
 
@@ -38,4 +42,23 @@ Route::prefix('api/finance')->group(function () {
     Route::post('/validation/{paymentId}/validate', [ValidationController::class, 'validatePayment']);
     Route::post('/validation/{paymentId}/reject', [ValidationController::class, 'rejectPayment']);
     Route::get('/validation/{paymentId}/receipt', [ValidationController::class, 'downloadReceipt']);
+    
+    // Transactions
+    Route::get('/transactions/student/{studentPendingStudentId}', [TransactionController::class, 'getStudentTransactions']);
+    Route::get('/transactions/student/{studentPendingStudentId}/balance', [TransactionController::class, 'getStudentBalance']);
+    
+    // Exonérations
+    Route::get('/exonerations', [ExonerationController::class, 'index']);
+    Route::post('/exonerations', [ExonerationController::class, 'store']);
+    Route::put('/exonerations/{id}', [ExonerationController::class, 'update']);
+    Route::delete('/exonerations/{id}', [ExonerationController::class, 'destroy']);
+    
+    // État financier étudiant
+    Route::get('/student/{studentPendingStudentId}/financial-state', [StudentFinanceController::class, 'getFinancialState']);
+    Route::post('/student/submit-payment', [StudentFinanceController::class, 'submitPayment']);
+    
+    // Rapports et exports
+    Route::get('/reports/export-payments', [ReportController::class, 'exportPayments']);
+    Route::get('/reports/stats-by-department', [ReportController::class, 'getFinancialStatsByDepartment']);
+    Route::get('/reports/revenue-by-period', [ReportController::class, 'getRevenueByPeriod']);
 });

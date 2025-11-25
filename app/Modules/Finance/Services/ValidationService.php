@@ -3,6 +3,7 @@
 namespace App\Modules\Finance\Services;
 
 use App\Modules\Finance\Models\Paiement;
+use App\Modules\Finance\Services\TransactionService;
 use App\Modules\Core\Services\MailService;
 use App\Modules\Finance\Jobs\SendPaymentNotificationJob;
 use Illuminate\Support\Facades\DB;

@@ -752,4 +752,36 @@ class DecisionService
             return $item->nom !== 'N/A' && $item->prenoms !== 'N/A';
         })->sortBy('nom')->values()->toArray();
     }
+
+    public function saveSemesterDecisions(array $decisions): int
+    {
+        $count = 0;
+        foreach ($decisions as $decision) {
+            $academicPath = AcademicPath::where('student_pending_student_id', $decision['student_pending_student_id'])
+                ->first();
+            
+            if ($academicPath) {
+                $academicPath->semester_decision = $decision['semester_decision'];
+                $academicPath->save();
+                $count++;
+            }
+        }
+        return $count;
+    }
+
+    public function saveYearDecisions(array $decisions): int
+    {
+        $count = 0;
+        foreach ($decisions as $decision) {
+            $academicPath = AcademicPath::where('student_pending_student_id', $decision['student_pending_student_id'])
+                ->first();
+            
+            if ($academicPath) {
+                $academicPath->year_decision = $decision['year_decision'];
+                $academicPath->save();
+                $count++;
+            }
+        }
+        return $count;
+    }
 }

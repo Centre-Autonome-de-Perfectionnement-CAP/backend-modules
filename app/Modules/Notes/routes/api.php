@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Modules\Notes\Http\Controllers\ProfessorGradeController;
 use App\Modules\Notes\Http\Controllers\AdminGradeController;
+use App\Modules\Notes\Http\Controllers\CourseRetakeController;
 
 Route::prefix('api/notes')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
@@ -27,6 +28,12 @@ Route::prefix('api/notes')->group(function () {
             Route::get('grades-by-department-level', [AdminGradeController::class, 'getGradesByDepartmentLevel']);
             Route::get('program-details/{program_id}', [AdminGradeController::class, 'getProgramDetails']);
             Route::post('export-grades-by-department', [AdminGradeController::class, 'exportGradesByDepartment']);
+        });
+        
+        // Routes pour les reprises
+        Route::prefix('retakes')->group(function () {
+            Route::get('my-retakes', [CourseRetakeController::class, 'getStudentRetakes']);
+            Route::put('{retake_id}/status', [CourseRetakeController::class, 'updateRetakeStatus']);
         });
         
         // Routes pour les décisions et PV

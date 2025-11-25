@@ -26,32 +26,34 @@ class LmdGradeService
     {
         $classGroup = $program->classGroup;
 
-        // Récupère les student_ids assignés à ce class_group
         $studentIds = \App\Modules\Inscription\Models\StudentGroup::where('class_group_id', $classGroup->id)
             ->pluck('student_id')
             ->toArray();
 
-        if (empty($studentIds)) {
-            return collect([]);
+        $studentPendingStudentIds = [];
+        if (!empty($studentIds)) {
+            $studentPendingStudentIds = \App\Modules\Inscription\Models\StudentPendingStudent::whereIn('student_id', $studentIds)
+                ->pluck('id')
+                ->toArray();
         }
 
-        // Récupère les student_pending_student_ids pour ces students
-        $studentPendingStudentIds = \App\Modules\Inscription\Models\StudentPendingStudent::whereIn('student_id', $studentIds)
-            ->pluck('id')
+        $retakeStudentIds = \App\Modules\Notes\Models\StudentCourseRetake::where('program_id', $program->id)
+            ->where('retake_academic_year_id', $classGroup->academic_year_id)
+            ->whereIn('status', ['pending', 'in_progress'])
+            ->pluck('student_pending_student_id')
             ->toArray();
 
+        $allStudentPendingStudentIds = array_unique(array_merge($studentPendingStudentIds, $retakeStudentIds));
 
-
-        if (empty($studentPendingStudentIds)) {
+        if (empty($allStudentPendingStudentIds)) {
             return collect([]);
         }
 
-        // Récupère les academic paths
         $query = \App\Modules\Inscription\Models\AcademicPath::with([
                 'studentPendingStudent.pendingStudent.personalInformation',
                 'studentPendingStudent.student'
             ])
-            ->whereIn('student_pending_student_id', $studentPendingStudentIds)
+            ->whereIn('student_pending_student_id', $allStudentPendingStudentIds)
             ->where('academic_year_id', $classGroup->academic_year_id)
             ->where(function ($q) {
                 $q->where('year_decision', '!=', 'failed')
@@ -64,13 +66,17 @@ class LmdGradeService
 
         $academicPaths = $query->get();
 
-        return $academicPaths->map(function ($academicPath) use ($program) {
+        return $academicPaths->map(function ($academicPath) use ($program, $classGroup) {
             $studentPending = $academicPath->studentPendingStudent;
             $pendingStudent = $studentPending?->pendingStudent;
             $personalInfo = $pendingStudent?->personalInformation;
             $student = $studentPending?->student;
 
-            // Récupérer la note
+            $retake = \App\Modules\Notes\Models\StudentCourseRetake::where('student_pending_student_id', $academicPath->student_pending_student_id)
+                ->where('program_id', $program->id)
+                ->where('retake_academic_year_id', $classGroup->academic_year_id)
+                ->first();
+
             $grade = LmdSystemGrade::where('student_pending_student_id', $academicPath->student_pending_student_id)
                 ->where('program_id', $program->id)
                 ->first();
@@ -85,6 +91,12 @@ class LmdGradeService
                 'retake_grades' => $grade?->retake_grades ?? [],
                 'retake_average' => $grade?->retake_average,
                 'validated' => $grade?->validated ?? false,
+                'is_retake' => $retake !== null,
+                'retake_info' => $retake ? [
+                    'original_level' => $retake->original_study_level,
+                    'current_level' => $retake->current_study_level,
+                    'status' => $retake->status
+                ] : null
             ];
         })->filter(function ($item) {
             return $item['last_name'] && $item['first_names'];
