@@ -132,7 +132,7 @@ class DefenseSubmissionController extends Controller
             $contacts = is_array($decoded) ? $decoded : [];
         }
 
-        return response()->json([
+        return $this->successResponse([
             'student_id_number' => $submission->student_id_number ?: 'Non Fourni',
             'last_name' => $submission->last_name ?? '',
             'first_names' => $submission->first_names ?? '',
@@ -145,7 +145,7 @@ class DefenseSubmissionController extends Controller
             'defense_type' => $submission->defense_type ?? '',
             'status' => $submission->status ?? '',
             'documents' => $documents,
-        ]);
+        ], 'Détails du dossier récupérés avec succès');
     }
 
     public function store(CreateDefenseSubmissionRequest $request): JsonResponse

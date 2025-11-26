@@ -10,6 +10,7 @@ use App\Modules\Soutenance\Services\DefenseSubmissionService;
 use App\Modules\Soutenance\Models\DefenseJuryMember;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class DefenseJuryController extends Controller
 {
@@ -98,7 +99,7 @@ class DefenseJuryController extends Controller
             return $this->errorResponse('Soumission non trouvée', 404);
         }
 
-        return response()->json([
+        return $this->successResponse([
             'room' => $submission->room,
             'defense_date' => $submission->defense_date ? $submission->defense_date->format('Y-m-d\TH:i') : null,
             'members' => $submission->juryMembers->map(function ($member) {
@@ -107,7 +108,7 @@ class DefenseJuryController extends Controller
                     'role' => $member->role
                 ];
             })
-        ]);
+        ], 'Jury récupéré avec succès');
     }
 
     public function getSuggestions(Request $request)
@@ -118,7 +119,7 @@ class DefenseJuryController extends Controller
         }
 
         $suggestions = $this->defenseJuryService->getScheduleSuggestions($submission);
-        return response()->json($suggestions);
+        return $this->successResponse($suggestions, 'Suggestions récupérées avec succès');
     }
 
     public function checkStatus(Request $request)
@@ -143,11 +144,11 @@ class DefenseJuryController extends Controller
 
         $total = $submissions->count();
 
-        return response()->json([
+        return $this->successResponse([
             'all_complete' => $total > 0 && $complete === $total,
             'complete_count' => $complete,
             'total_count' => $total
-        ]);
+        ], 'Statut des jurys récupéré avec succès');
     }
 
     public function store(Request $request, int $submissionId): JsonResponse
@@ -167,7 +168,7 @@ class DefenseJuryController extends Controller
         foreach ($request->jury_members as $i => $member) {
             if (($member['professor_id'] ?? null) === 'external') {
                 if (empty($member['external_name'])) {
-                    return response()->json(['message' => "Le nom de l'intervenant externe est requis."], 422);
+                    return $this->validationErrorResponse("Le nom de l'intervenant externe est requis.");
                 }
             } else {
                 $request->validate([
@@ -179,10 +180,10 @@ class DefenseJuryController extends Controller
 
         $roles = collect($request->jury_members)->pluck('role');
         if (!$roles->contains('president')) {
-            return response()->json(['message' => 'Un président du jury est requis'], 422);
+            return $this->validationErrorResponse('Un président du jury est requis');
         }
         if (!$roles->contains('directeur')) {
-            return response()->json(['message' => 'Un directeur de mémoire est requis'], 422);
+            return $this->validationErrorResponse('Un directeur de mémoire est requis');
         }
 
         $submission->update([
@@ -192,7 +193,7 @@ class DefenseJuryController extends Controller
 
         $this->defenseJuryService->syncJuryMembers($submission, $request->jury_members);
 
-        return response()->json(['message' => 'Jury enregistré avec succès']);
+        return $this->successResponse(null, 'Jury enregistré avec succès');
     }
 
     public function update(UpdateJuryMemberRequest $request, int $submissionId, int $juryMemberId): JsonResponse

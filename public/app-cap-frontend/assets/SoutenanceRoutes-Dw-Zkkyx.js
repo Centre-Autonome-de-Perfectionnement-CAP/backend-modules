@@ -1,1 +1,0 @@
-import{j as e,r as t,n,o as s,N as a,p as r}from"./index-BJnCw79b.js";const u=()=>e.jsx(t.Suspense,{fallback:e.jsx(r,{fullPage:!0,message:"Chargement du module Soutenance..."}),children:e.jsxs(n,{children:[e.jsx(s,{path:"/",element:e.jsx(a,{to:"/soutenances/dashboard",replace:!0})}),e.jsx(s,{path:"*",element:e.jsx(a,{to:"/404",replace:!0})})]})});export{u as default};
