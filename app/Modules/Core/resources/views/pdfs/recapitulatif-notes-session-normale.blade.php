@@ -3,6 +3,9 @@
 @section('title', 'RECAPITULATIF DES NOTES SESSION NORMALE')
 
 @section('content')
+    <style>
+        thead { page-break-inside: avoid; page-break-after: avoid; }
+    </style>
     <div class="pg">
         @include('core::pdfs.partials.header')
         <div class="main">
