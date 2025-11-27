@@ -43,7 +43,7 @@
                     {{ $classe->filiere->diplome->sigle }}
                 @endunless
             
-                {{ $classe->filiere->nom }}
+                {{ $classe->filiere->nom }} - (2e Cohorte) 
             
                 @unless($isPrepa)
                     -

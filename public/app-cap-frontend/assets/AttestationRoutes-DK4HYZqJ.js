@@ -1,0 +1,1 @@
+import{j as e,r as a,n as r,o as t,N as s,p as o}from"./index-COOINa8v.js";const u=()=>e.jsx(a.Suspense,{fallback:e.jsx(o,{fullPage:!0,message:"Chargement du module Attestation..."}),children:e.jsxs(r,{children:[e.jsx(t,{path:"/",element:e.jsx(s,{to:"/attestations/dashboard",replace:!0})}),e.jsx(t,{path:"*",element:e.jsx(s,{to:"/404",replace:!0})})]})});export{u as default};
