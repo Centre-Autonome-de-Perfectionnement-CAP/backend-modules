@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Modules\RH\Http\Controllers\ProfessorController;
 use App\Modules\RH\Http\Controllers\AdminUserController;
 use App\Modules\RH\Http\Controllers\GradeController;
+use App\Modules\RH\Http\Controllers\SignataireController;
 
 Route::prefix('api/rh')->group(function () {
     Route::get('professors', [ProfessorController::class, 'index']);
@@ -13,6 +14,7 @@ Route::prefix('api/rh')->group(function () {
         Route::apiResource('professors', ProfessorController::class)->only(['store', 'show', 'update', 'destroy']);
         
         Route::apiResource('admin-users', AdminUserController::class);
+        Route::apiResource('signataires', SignataireController::class);
 
         Route::post('admin-users/{adminUser}/roles/attach', [AdminUserController::class, 'attachRole']);
         Route::post('admin-users/{adminUser}/roles/detach', [AdminUserController::class, 'detachRole']);

@@ -49,41 +49,11 @@ class SendPendingStudentMailJob
             $updateData['cuo_comment'] = $this->studentData['commentaireCuo'] ?? null;
         }
         
-        // Déterminer le nouveau statut selon les règles
-        $cycle = strtolower($student->department->cycle->name ?? '');
-        $departmentName = strtolower($student->department->name ?? '');
-        $newStatus = null;
-        
-        // Prépa = cycle Ingénierie ET nom contient "prepa"
-        $isPrepa = (str_contains($cycle, 'ingénierie') || str_contains($cycle, 'ingenierie')) && 
-                   (str_contains($departmentName, 'prépa') || str_contains($departmentName, 'prepa'));
-        
-        if ($isPrepa) {
-            // Pour Prépa, seul CUCA décide
-            if ($opinionCuca && strtolower($opinionCuca) === 'favorable') {
-                $newStatus = 'approved';
-            } elseif ($opinionCuca && strtolower($opinionCuca) !== 'favorable') {
-                $newStatus = 'rejected';
-            }
-        } else {
-            // Pour Licence/Master et autres Ingénierie, seul CUO décide
-            if ($opinionCuo && strtolower($opinionCuo) === 'favorable') {
-                $newStatus = 'approved';
-            } elseif ($opinionCuo && strtolower($opinionCuo) !== 'favorable') {
-                $newStatus = 'rejected';
-            }
-        }
-        
-        if ($newStatus) {
-            $updateData['status'] = $newStatus;
-        }
-        
+        // Mettre à jour uniquement les opinions (pas le statut)
         if (!empty($updateData)) {
             $student->update($updateData);
-            Log::info('Statut mis à jour', [
+            Log::info('Opinions mises à jour', [
                 'student_id' => $student->id,
-                'nouveau_statut' => $newStatus,
-                'cycle' => $cycle,
                 'opinion_cuca' => $opinionCuca,
                 'opinion_cuo' => $opinionCuo
             ]);
@@ -152,90 +122,22 @@ class SendPendingStudentMailJob
         
         if ($isFavorable) {
             try {
-                DB::transaction(function () use ($student) {
-                    // Vérifier si le student existe déjà
-                    $existingLink = StudentPendingStudent::where('pending_student_id', $student->id)->first();
-                    
-                    Log::info('Vérification existingLink', ['exists' => !is_null($existingLink)]);
-                    
-                    if (!$existingLink) {
-                        // Extraire le premier contact
-                        $contacts = $student->personalInformation->contacts;
-                        if (is_string($contacts)) {
-                            $contacts = json_decode($contacts, true);
-                        }
-                        $phoneNumber = is_array($contacts) ? ($contacts['phone'] ?? $contacts[0] ?? null) : null;
-                        
-                        // Déterminer la cohorte
-                        $cohort = $this->determineCohort($student);
-                        
-                        // Récupérer le role_id étudiant
-                        $studentRoleId = DB::table('roles')->where('name', 'etudiant')->value('id');
-                        
-                        Log::info('Création Student', ['phone' => $phoneNumber, 'cohort' => $cohort, 'role_id' => $studentRoleId]);
-                        
-                        // Créer le Student
-                        $newStudent = Student::create([
-                            'student_id_number' => $phoneNumber ?? 'TEMP-' . $student->id,
-                            'password' => bcrypt('password123'),
-                        ]);
-                        
-                        Log::info('Student créé', ['student_id' => $newStudent->id]);
-                        
-                        // Créer StudentPendingStudent
-                        $studentPendingStudent = StudentPendingStudent::create([
-                            'student_id' => $newStudent->id,
-                            'pending_student_id' => $student->id,
-                        ]);
-                        
-                        Log::info('StudentPendingStudent créé', ['id' => $studentPendingStudent->id]);
-                        
-                        // Créer AcademicPath
-                        AcademicPath::create([
-                            'student_pending_student_id' => $studentPendingStudent->id,
-                            'academic_year_id' => $student->academic_year_id,
-                            'study_level' => $student->level,
-                            'cohort' => $cohort,
-                            'role_id' => $studentRoleId,
-                            'year_decision' => null,
-                            'financial_status' => $student->exonere === 'Oui' ? 'Exonéré' : 'Non exonéré',
-                        ]);
-                        
-                        Log::info('AcademicPath créé');
-                    }
-                });
+                // Vérifier si le student existe déjà
+                $existingLink = StudentPendingStudent::where('pending_student_id', $student->id)->first();
+                
+                Log::info('Vérification existingLink', ['exists' => !is_null($existingLink)]);
+                
+                if (!$existingLink) {
+                    // Utiliser le PendingStudentService pour créer l'étudiant officiel
+                    Log::info('Appel de PendingStudentService::createOfficialStudent');
+                    $pendingStudentService = app(\App\Modules\Inscription\Services\PendingStudentService::class);
+                    $pendingStudentService->changeStatus($student, 'approved');
+                }
             } catch (\Exception $e) {
                 Log::error('Erreur création Student', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             }
         }
     }
     
-    private function determineCohort($pendingStudent): ?string
-    {
-        $periods = DB::table('submission_periods')
-            ->where('academic_year_id', $pendingStudent->academic_year_id)
-            ->select('start_date', 'end_date')
-            ->distinct()
-            ->orderBy('start_date')
-            ->get();
-        
-        if ($periods->isEmpty()) {
-            return '1';
-        }
-        
-        $createdAt = \Carbon\Carbon::parse($pendingStudent->created_at);
-        $cohortNumber = 1;
-        
-        foreach ($periods as $index => $period) {
-            $startDate = \Carbon\Carbon::parse($period->start_date);
-            $endDate = \Carbon\Carbon::parse($period->end_date);
-            
-            if ($createdAt->between($startDate, $endDate)) {
-                $cohortNumber = $index + 1;
-                break;
-            }
-        }
-        
-        return (string)$cohortNumber;
-    }
+
 }

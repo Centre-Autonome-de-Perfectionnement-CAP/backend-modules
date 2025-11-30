@@ -12,4 +12,5 @@ return [
     App\Modules\Cours\Providers\CoursServiceProvider::class,
     App\Modules\Notes\Providers\NotesServiceProvider::class,
     App\Modules\Soutenance\Providers\SoutenanceServiceProvider::class,
+    App\Modules\Attestation\Providers\AttestationServiceProvider::class,
 ];

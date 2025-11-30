@@ -6,12 +6,16 @@ use App\Modules\Inscription\Models\AcademicYear;
 use App\Modules\Inscription\Models\SubmissionPeriod;
 use App\Modules\Inscription\Models\ReclamationPeriod;
 use App\Exceptions\BusinessException;
+use App\Modules\Notes\Services\AcademicPathProgressionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class AcademicYearService
 {
+    public function __construct(
+        protected AcademicPathProgressionService $progressionService
+    ) {}
     /**
      * Récupérer toutes les années académiques
      */
@@ -84,7 +88,26 @@ class AcademicYearService
                 'label' => $academicYearLabel,
             ]);
 
-            return $year->fresh();
+            // Progression automatique des étudiants
+            Log::info('Début de la progression automatique des étudiants', [
+                'academic_year_id' => $year->id,
+            ]);
+            
+            $this->progressionService->progressStudents($year);
+            
+            Log::info('Fin de la progression automatique des étudiants', [
+                'academic_year_id' => $year->id,
+            ]);
+
+            $freshYear = $year->fresh();
+            
+            Log::info('Année académique créée avec succès - Résumé final', [
+                'academic_year_id' => $freshYear->id,
+                'label' => $academicYearLabel,
+                'is_current' => $freshYear->is_current,
+            ]);
+            
+            return $freshYear;
         });
     }
 

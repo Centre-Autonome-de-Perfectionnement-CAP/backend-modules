@@ -18,6 +18,7 @@
         "league/flysystem-aws-s3-v3": "^3.29",
         "maatwebsite/excel": "*",
         "phpoffice/phpword": "*",
+        "simplesoftwareio/simple-qrcode": "^4.2",
         "socialiteproviders/keycloak": "^5.3"
     },
     "require-dev": {
@@ -36,7 +37,10 @@
             "Database\\Seeders\\": "database/seeders/",
             "App\\Modules\\Inscription\\Database\\Seeders\\": "app/Modules/Inscription/database/seeders/",
             "App\\Modules\\Stockage\\Database\\Seeders\\": "app/Modules/Stockage/database/seeders/"
-        }
+        },
+        "files": [
+            "app/Helpers/helpers.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {

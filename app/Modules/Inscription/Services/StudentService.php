@@ -26,8 +26,8 @@ class StudentService
             ->join('personal_information', 'pending_students.personal_information_id', '=', 'personal_information.id')
             ->join('departments', 'pending_students.department_id', '=', 'departments.id')
             ->join('academic_years', 'pending_students.academic_year_id', '=', 'academic_years.id')
+            ->join('student_pending_student', 'pending_students.id', '=', 'student_pending_student.pending_student_id')
             ->leftJoin('entry_diplomas', 'pending_students.entry_diploma_id', '=', 'entry_diplomas.id')
-            ->leftJoin('student_pending_student', 'pending_students.id', '=', 'student_pending_student.pending_student_id')
             ->leftJoin('student_groups', 'student_pending_student.student_id', '=', 'student_groups.student_id')
             ->leftJoin('class_groups', function ($join) {
                 $join->on('student_groups.class_group_id', '=', 'class_groups.id')
@@ -104,7 +104,7 @@ class StudentService
 
         // Ajouter le statut redoublant pour chaque étudiant
         $results->getCollection()->transform(function ($student) {
-            $student->redoublant = $this->isRepeatingStudent($student->student_pending_student_id, $student->niveau) ? 'Oui' : 'Non';
+            $student->redoublant = ($student->niveau && $this->isRepeatingStudent($student->student_pending_student_id, $student->niveau)) ? 'Oui' : 'Non';
             return $student;
         });
 
@@ -120,8 +120,8 @@ class StudentService
             ->join('personal_information', 'pending_students.personal_information_id', '=', 'personal_information.id')
             ->join('departments', 'pending_students.department_id', '=', 'departments.id')
             ->join('academic_years', 'pending_students.academic_year_id', '=', 'academic_years.id')
+            ->join('student_pending_student', 'pending_students.id', '=', 'student_pending_student.pending_student_id')
             ->leftJoin('entry_diplomas', 'pending_students.entry_diploma_id', '=', 'entry_diplomas.id')
-            ->leftJoin('student_pending_student', 'pending_students.id', '=', 'student_pending_student.pending_student_id')
             ->leftJoin('student_groups', 'student_pending_student.student_id', '=', 'student_groups.student_id')
             ->leftJoin('class_groups', function ($join) {
                 $join->on('student_groups.class_group_id', '=', 'class_groups.id')
@@ -150,7 +150,7 @@ class StudentService
             ->first();
 
         if ($student) {
-            $student->redoublant = $this->isRepeatingStudent($student->student_pending_student_id, $student->niveau) ? 'Oui' : 'Non';
+            $student->redoublant = ($student->niveau && $this->isRepeatingStudent($student->student_pending_student_id, $student->niveau)) ? 'Oui' : 'Non';
         }
 
         return $student;
@@ -394,7 +394,7 @@ class StudentService
 
         // Ajouter le statut redoublant pour chaque étudiant
         $results->transform(function ($student) {
-            $student->redoublant = $this->isRepeatingStudent($student->student_pending_student_id, $student->niveau) ? 'Oui' : 'Non';
+            $student->redoublant = ($student->niveau && $this->isRepeatingStudent($student->student_pending_student_id, $student->niveau)) ? 'Oui' : 'Non';
             return $student;
         });
 

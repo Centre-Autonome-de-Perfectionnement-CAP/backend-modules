@@ -116,17 +116,26 @@ class DecisionService
 
     private function getStudentsForYear($academicYearId, $departmentId, $level, $cohort, $programsSem1, $programsSem2, $hasSem1, $hasSem2, $validationAverage)
     {
-        $classGroupIds = collect();
-        if ($hasSem1) {
-            $classGroupIds = $classGroupIds->merge(Program::whereIn('id', $programsSem1->pluck('id'))->pluck('class_group_id'));
+        $academicPathQuery = AcademicPath::where('academic_year_id', $academicYearId)
+            ->where('study_level', $level);
+        
+        if ($cohort) {
+            $academicPathQuery->where('cohort', $cohort);
         }
-        if ($hasSem2) {
-            $classGroupIds = $classGroupIds->merge(Program::whereIn('id', $programsSem2->pluck('id'))->pluck('class_group_id'));
-        }
-        $classGroupIds = $classGroupIds->unique()->toArray();
-
-        $studentIds = \App\Modules\Inscription\Models\StudentGroup::whereIn('class_group_id', $classGroupIds)
-            ->pluck('student_id')->unique()->toArray();
+        
+        $studentPendingStudentIds = $academicPathQuery->pluck('student_pending_student_id')->toArray();
+        
+        $studentIds = \App\Modules\Inscription\Models\StudentPendingStudent::whereIn('id', $studentPendingStudentIds)
+            ->pluck('student_id')->toArray();
+        
+        $classGroupIds = \App\Modules\Inscription\Models\StudentGroup::whereIn('student_id', $studentIds)
+            ->pluck('class_group_id')->unique()->toArray();
+        
+        $classGroupIds = \App\Modules\Inscription\Models\ClassGroup::whereIn('id', $classGroupIds)
+            ->where('academic_year_id', $academicYearId)
+            ->where('department_id', $departmentId)
+            ->where('study_level', $level)
+            ->pluck('id')->toArray();
 
         $query = AcademicPath::with([
             'studentPendingStudent.pendingStudent.personalInformation',
@@ -769,19 +778,126 @@ class DecisionService
         return $count;
     }
 
-    public function saveYearDecisions(array $decisions): int
+    public function saveYearDecisions(array $decisions, ?string $deliberationDate = null): int
     {
         $count = 0;
+        $dateToUse = $deliberationDate ? \Carbon\Carbon::parse($deliberationDate) : now();
+        
         foreach ($decisions as $decision) {
             $academicPath = AcademicPath::where('student_pending_student_id', $decision['student_pending_student_id'])
                 ->first();
             
             if ($academicPath) {
                 $academicPath->year_decision = $decision['year_decision'];
+                $academicPath->deliberation_date = $dateToUse;
                 $academicPath->save();
                 $count++;
             }
         }
         return $count;
+    }
+
+    public function processYearDeliberationAndProgression(int $academicYearId, int $departmentId, ?string $level, ?string $cohort, float $validationAverage = 12, ?string $deliberationDate = null, array $studentData = []): array
+    {
+        \Log::info('=== DEBUT processYearDeliberationAndProgression ===', compact('academicYearId', 'departmentId', 'level', 'cohort', 'validationAverage'));
+        
+        $dateToUse = $deliberationDate ? \Carbon\Carbon::parse($deliberationDate) : now();
+        \Log::info('Date de délibération', ['date' => $dateToUse->format('Y-m-d')]);
+
+        // Mettre à jour la moyenne minimale dans les ClassGroups concernés
+        \App\Modules\Inscription\Models\ClassGroup::where('academic_year_id', $academicYearId)
+            ->where('department_id', $departmentId)
+            ->where('study_level', $level)
+            ->update(['validation_average' => $validationAverage]);
+
+        $department = Department::find($departmentId);
+        $isPrepa = $department && stripos($department->name, 'prepa') !== false;
+        \Log::info('Type de filière', ['department_name' => $department?->name, 'is_prepa' => $isPrepa]);
+
+        // Rechercher l'année académique suivante
+        $nextYear = \App\Modules\Inscription\Models\AcademicYear::where('year_start', '>', 
+            \App\Modules\Inscription\Models\AcademicYear::find($academicYearId)->year_start)
+            ->orderBy('year_start', 'asc')
+            ->first();
+        \Log::info('Année académique suivante', ['next_year_id' => $nextYear?->id, 'next_year_label' => $nextYear?->academic_year]);
+
+        $academicPathQuery = AcademicPath::with(['studentPendingStudent.pendingStudent.department', 'studentPendingStudent.student'])
+            ->where('academic_year_id', $academicYearId)
+            ->where('study_level', $level);
+        
+        if ($cohort) {
+            $academicPathQuery->where('cohort', $cohort);
+        }
+
+        $academicPaths = $academicPathQuery->get();
+        \Log::info('Nombre de parcours académiques trouvés', ['count' => $academicPaths->count()]);
+        \Log::info('Données étudiants reçues', ['count' => count($studentData)]);
+        
+        $updated = 0;
+        $progressed = 0;
+
+        foreach ($academicPaths as $index => $academicPath) {
+            $studentId = $academicPath->studentPendingStudent?->student?->id;
+            \Log::info("Traitement étudiant $index", ['student_id' => $studentId, 'academic_path_id' => $academicPath->id]);
+            
+            $studentInfo = collect($studentData)->firstWhere('id', $studentId);
+            
+            if (!$studentInfo) {
+                \Log::warning('Étudiant non trouvé dans les données', ['student_id' => $studentId]);
+                continue;
+            }
+
+            $moyenne = $studentInfo->moyenneAnnuelle ?? 0;
+            $hasZero = $studentInfo->hasZero ?? false;
+            \Log::info('Moyenne et zéro', ['moyenne' => $moyenne, 'hasZero' => $hasZero, 'validationAverage' => $validationAverage]);
+
+            if ($hasZero || $moyenne < $validationAverage) {
+                $decision = $moyenne < $validationAverage ? 'fail' : 'repeat';
+            } else {
+                $decision = 'pass';
+            }
+            \Log::info('Décision calculée', ['decision' => $decision]);
+
+            $academicPath->year_decision = $decision;
+            $academicPath->deliberation_date = $dateToUse;
+            $academicPath->save();
+            $updated++;
+            \Log::info('AcademicPath mis à jour', ['id' => $academicPath->id, 'decision' => $decision]);
+
+            // Progression automatique pour les filières non-prépa
+            if (!$isPrepa && $decision === 'pass' && $nextYear) {
+                $newStudyLevel = $academicPath->study_level + 1;
+                $newCohort = ($academicPath->cohort && $academicPath->cohort != 1) ? 1 : $academicPath->cohort;
+                
+                $newPath = AcademicPath::create([
+                    'student_pending_student_id' => $academicPath->student_pending_student_id,
+                    'academic_year_id' => $nextYear->id,
+                    'study_level' => $newStudyLevel,
+                    'role_id' => $academicPath->role_id,
+                    'financial_status' => $academicPath->financial_status,
+                    'cohort' => $newCohort,
+                    'year_decision' => null,
+                    'deliberation_date' => null,
+                ]);
+                
+                $progressed++;
+                \Log::info('Progression automatique créée', [
+                    'new_path_id' => $newPath->id,
+                    'old_level' => $academicPath->study_level,
+                    'new_level' => $newStudyLevel,
+                    'old_cohort' => $academicPath->cohort,
+                    'new_cohort' => $newCohort,
+                    'next_year_id' => $nextYear->id
+                ]);
+            }
+        }
+
+        \Log::info('=== FIN processYearDeliberationAndProgression ===', ['updated' => $updated, 'progressed' => $progressed]);
+        
+        return [
+            'updated' => $updated,
+            'progressed' => $progressed,
+            'message' => "$updated décisions mises à jour, $progressed étudiants progressés"
+        ];
     }
 }

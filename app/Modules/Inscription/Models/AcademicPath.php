@@ -10,7 +10,11 @@ class AcademicPath extends Model
 {
     use HasFactory, HasUuid;
 
-    protected $fillable = ['student_pending_student_id', 'academic_year_id', 'study_level', 'year_decision', 'role_id', 'financial_status', 'cohort'];
+    protected $fillable = ['student_pending_student_id', 'academic_year_id', 'study_level', 'year_decision', 'deliberation_date', 'role_id', 'financial_status', 'cohort'];
+
+    protected $casts = [
+        'deliberation_date' => 'date',
+    ];
 
     public function studentPendingStudent()
     {

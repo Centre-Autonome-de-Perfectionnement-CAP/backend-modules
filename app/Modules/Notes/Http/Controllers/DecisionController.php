@@ -36,6 +36,18 @@ class DecisionController extends Controller
             $request->validation_average ?? 12
         );
 
+        $result = $this->decisionService->processYearDeliberationAndProgression(
+            $request->academic_year_id,
+            $request->department_id,
+            $request->level,
+            $request->cohort,
+            $request->validation_average ?? 12,
+            $request->deliberation_date,
+            $data['etudiants']->toArray()
+        );
+        
+        \Log::info('Résultat processYearDeliberationAndProgression', $result);
+
         $cleanAnnee = str_replace(['/', '-', ' ', '(', ')'], '_', $data['annee']);
         $filename = "PV_Fin_Annee_{$cleanAnnee}.pdf";
 

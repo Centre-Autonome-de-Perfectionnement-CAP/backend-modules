@@ -22,7 +22,7 @@ class ClassGroup extends Model
         'academic_year_id',
         'department_id',
         'study_level',
-        'semester1_credits', 'semester2_credits',
+        'validation_average',
         'group_name',
     ];
 

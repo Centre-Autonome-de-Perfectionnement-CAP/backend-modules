@@ -334,42 +334,101 @@ class PendingStudentService
      */
     private function createOfficialStudent(PendingStudent $pendingStudent): void
     {
-        // Générer un numéro d'étudiant unique
-        $studentIdNumber = $this->generateStudentIdNumber();
-
-        // Créer l'étudiant dans la table students
-        $student = \App\Modules\Inscription\Models\Student::create([
-            'student_id_number' => $studentIdNumber,
-            'password' => bcrypt($studentIdNumber), // Mot de passe par défaut = numéro étudiant
+        Log::info('=== DÉBUT createOfficialStudent ===', [
+            'pending_student_id' => $pendingStudent->id,
+            'tracking_code' => $pendingStudent->tracking_code,
+            'personal_information_id' => $pendingStudent->personal_information_id,
+            'department_id' => $pendingStudent->department_id,
+            'level' => $pendingStudent->level,
         ]);
 
+        // Chercher si un Student existe déjà pour cette personne
+        Log::info('Recherche d\'un Student existant via personal_information_id', [
+            'personal_information_id' => $pendingStudent->personal_information_id,
+        ]);
+        
+        $existingStudentPendingStudent = \App\Modules\Inscription\Models\StudentPendingStudent::whereHas('pendingStudent', function($q) use ($pendingStudent) {
+            $q->where('personal_information_id', $pendingStudent->personal_information_id);
+        })->with('student')->first();
+
+        if ($existingStudentPendingStudent && $existingStudentPendingStudent->student) {
+            // Réutiliser le Student existant
+            $student = $existingStudentPendingStudent->student;
+            Log::info('✅ Student existant TROUVÉ et RÉUTILISÉ', [
+                'student_id' => $student->id,
+                'student_id_number' => $student->student_id_number,
+                'personal_information_id' => $pendingStudent->personal_information_id,
+                'existing_student_pending_student_id' => $existingStudentPendingStudent->id,
+            ]);
+        } else {
+            // Créer un nouveau Student
+            Log::info('Aucun Student existant trouvé, création d\'un nouveau Student');
+            $studentIdNumber = $this->generateStudentIdNumber();
+            $student = \App\Modules\Inscription\Models\Student::create([
+                'student_id_number' => $studentIdNumber,
+                'password' => bcrypt($studentIdNumber),
+            ]);
+            Log::info('✅ Nouveau Student CRÉÉ', [
+                'student_id' => $student->id,
+                'student_id_number' => $studentIdNumber,
+            ]);
+        }
+
         // Créer la liaison dans student_pending_student
-        \App\Modules\Inscription\Models\StudentPendingStudent::create([
+        Log::info('Création de StudentPendingStudent (liaison)', [
             'student_id' => $student->id,
             'pending_student_id' => $pendingStudent->id,
+        ]);
+        
+        $studentPendingStudent = \App\Modules\Inscription\Models\StudentPendingStudent::create([
+            'student_id' => $student->id,
+            'pending_student_id' => $pendingStudent->id,
+        ]);
+        
+        Log::info('✅ StudentPendingStudent créé', [
+            'student_pending_student_id' => $studentPendingStudent->id,
         ]);
 
         // Déterminer la cohorte basée sur la période de dépôt
         $cohort = $this->determineCohort($pendingStudent);
+        Log::info('Cohorte déterminée', ['cohort' => $cohort]);
         
         // Récupérer le role_id étudiant
         $studentRoleId = DB::table('roles')->where('name', 'etudiant')->value('id');
+        Log::info('Role étudiant récupéré', ['role_id' => $studentRoleId]);
         
         // Créer l'entrée dans academic_paths pour l'année académique actuelle
-        \App\Modules\Inscription\Models\AcademicPath::create([
-            'student_pending_student_id' => $student->studentPendingStudents()->first()->id,
+        $financialStatus = $pendingStudent->exonere ? 'Exonéré' : 'Non exonéré';
+        Log::info('Création de AcademicPath', [
+            'student_pending_student_id' => $studentPendingStudent->id,
             'academic_year_id' => $pendingStudent->academic_year_id,
             'study_level' => $pendingStudent->level,
             'cohort' => $cohort,
             'role_id' => $studentRoleId,
-            'financial_status' => 'Non exonéré', // Par défaut non exonéré
+            'financial_status' => $financialStatus,
+        ]);
+        
+        $academicPath = \App\Modules\Inscription\Models\AcademicPath::create([
+            'student_pending_student_id' => $studentPendingStudent->id,
+            'academic_year_id' => $pendingStudent->academic_year_id,
+            'study_level' => $pendingStudent->level,
+            'cohort' => $cohort,
+            'role_id' => $studentRoleId,
+            'financial_status' => $financialStatus,
+        ]);
+        
+        Log::info('✅ AcademicPath créé', [
+            'academic_path_id' => $academicPath->id,
         ]);
 
-        Log::info('Étudiant officiel créé', [
+        Log::info('=== FIN createOfficialStudent - SUCCÈS ===', [
             'student_id' => $student->id,
-            'student_id_number' => $studentIdNumber,
+            'student_id_number' => $student->student_id_number,
             'pending_student_id' => $pendingStudent->id,
             'tracking_code' => $pendingStudent->tracking_code,
+            'student_pending_student_id' => $studentPendingStudent->id,
+            'academic_path_id' => $academicPath->id,
+            'student_reused' => isset($existingStudentPendingStudent),
         ]);
     }
 
