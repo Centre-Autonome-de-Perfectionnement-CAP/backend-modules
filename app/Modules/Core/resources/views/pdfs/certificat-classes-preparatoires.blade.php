@@ -209,7 +209,7 @@
             </p>
         </div>
         
-        <div style="position: fixed; bottom: 60px; text-align: center;">
+        <div style="position: fixed; bottom: 40px; text-align: center;">
             <hr style="border: 1px solid black;">
             <p style="font-size: 9pt; font-weight: bold;">
                 Ce certificat est le résultat de la mise à niveau de l'étudiant et n'est valable que pour une inscription aux études ingénieurs du CAP
