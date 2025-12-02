@@ -182,7 +182,7 @@
                     N° <span style="margin-left: 60px;">/EPAC/ CAP/ UAC<span>
                 </td>
                 <td style="width: 50%; text-align: left;  margin: 5px 0; ">
-                    <span>Abomey-Calavi, le                    </span>
+                    <span>Abomey-Calavi, le            </span>
                 </td> 
             </tr>
         </table>
@@ -235,7 +235,7 @@
         
         <div style="position: fixed; bottom: 40px; left: -2cm; text-align: center; width: 90%; left: 0; padding: 0 2cm;">
             <hr style="border: 1px solid black; width: 100%; position: relative; left: -1cm; right: 1cm;">
-            <p style="text-align: center; font-size: 11pt; font-family: 'Economica';">
+            <p style="position: relative; left: -1cm; font-size: 11pt; font-family: 'Economica';">
                 Ce certificat est le résultat de la mise à niveau de l'étudiant et n'est valable que pour une inscription aux études ingénieurs du CAP.
             </p>
         </div>
