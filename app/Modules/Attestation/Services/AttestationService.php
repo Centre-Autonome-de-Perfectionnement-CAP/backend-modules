@@ -292,6 +292,208 @@ class AttestationService
     }
 
     /**
+     * Génère plusieurs bulletins dans un seul PDF
+     */
+    public function generateMultipleBulletins(array $requests)
+    {
+        $bulletins = [];
+        $monthsFr = [
+            1 => 'Janvier', 2 => 'Février', 3 => 'Mars', 4 => 'Avril',
+            5 => 'Mai', 6 => 'Juin', 7 => 'Juillet', 8 => 'Août',
+            9 => 'Septembre', 10 => 'Octobre', 11 => 'Novembre', 12 => 'Décembre'
+        ];
+        
+        foreach ($requests as $request) {
+            $studentPendingStudentId = $request['student_pending_student_id'];
+            $academicYearId = $request['academic_year_id'];
+            
+            $academicPath = AcademicPath::with([
+                'studentPendingStudent.pendingStudent.personalInformation',
+                'studentPendingStudent.pendingStudent.department',
+                'studentPendingStudent.student',
+                'academicYear'
+            ])
+            ->where('student_pending_student_id', $studentPendingStudentId)
+            ->where('academic_year_id', $academicYearId)
+            ->first();
+            
+            if (!$academicPath) continue;
+            
+            $personalInfo = $academicPath->studentPendingStudent?->pendingStudent?->personalInformation;
+            $department = $academicPath->studentPendingStudent?->pendingStudent?->department;
+            $student = $academicPath->studentPendingStudent?->student;
+            
+            // Récupérer le class_group_id de l'étudiant
+            $classGroupId = DB::table('student_groups')
+                ->where('student_id', $student->id)
+                ->value('class_group_id');
+            
+            // Récupérer la moyenne minimale de validation de la classe
+            $classGroup = DB::table('class_groups')
+                ->where('id', $classGroupId)
+                ->where('academic_year_id', $academicYearId)
+                ->first();
+            
+            $validationAverage = $classGroup->validation_average ?? 10;
+            
+            // Récupérer les programmes de la classe pour l'année académique
+            $programs = DB::table('programs')
+                ->join('course_element_professor', 'programs.course_element_professor_id', '=', 'course_element_professor.id')
+                ->join('course_elements', 'course_element_professor.course_element_id', '=', 'course_elements.id')
+                ->where('programs.class_group_id', $classGroupId)
+                ->select('programs.id as program_id', 'course_elements.code', 'course_elements.name', 'course_elements.credits', 'programs.semester')
+                ->get();
+            
+            // Récupérer les notes de l'étudiant
+            $grades = [];
+            foreach ($programs as $program) {
+                $gradeRecord = DB::table('old_system_grades')
+                    ->where('student_pending_student_id', $studentPendingStudentId)
+                    ->where('program_id', $program->program_id)
+                    ->first();
+                
+                if ($gradeRecord) {
+                    $grades[] = (object) [
+                        'code' => $program->code,
+                        'name' => $program->name,
+                        'credits' => $program->credits,
+                        'average' => $gradeRecord->average ?? 0,
+                        'semester' => $program->semester,
+                        'has_retake' => false
+                    ];
+                }
+            }
+            
+            $grades = collect($grades);
+            
+            // Préparer les données du bulletin
+            $bulletinData = [];
+            $totalCredits = 0;
+            $obtainedCredits = 0;
+            $totalAverage = 0;
+            $validatedUE = 0;
+            $totalUE = $grades->count();
+            
+            foreach ($grades as $grade) {
+                $isValidated = $grade->average >= $validationAverage;
+                $bulletinData[] = [
+                    'code' => $grade->code,
+                    'nom' => $grade->name,
+                    'credit' => $grade->credits,
+                    'moyenne' => $grade->average,
+                    'frequence' => $grade->has_retake ? 2 : 1,
+                    'etat' => $isValidated ? 'Validé' : 'Non validé'
+                ];
+                $totalCredits += $grade->credits;
+                if ($isValidated) {
+                    $obtainedCredits += $grade->credits;
+                    $validatedUE++;
+                }
+                $totalAverage += $grade->average;
+            }
+            
+            $moyenne = $totalUE > 0 ? round(($totalAverage / $totalUE) * 5, 2) : 0;
+            $grade = $moyenne >= 90 ? 'A' : ($moyenne >= 80 ? 'B' : ($moyenne >= 70 ? 'C' : ($moyenne >= 60 ? 'D' : 'F')));
+            
+            $dateNaissance = $personalInfo?->birth_date ? 
+                $personalInfo->birth_date->format('d') . ' ' . 
+                $monthsFr[(int)$personalInfo->birth_date->format('n')] . ' ' . 
+                $personalInfo->birth_date->format('Y') : '';
+            
+            $filiereNom = str_replace(['PREPA ', 'Prepa ', 'Prépa ', 'prépa ', 'PREPA', 'Prepa', 'Prépa', 'prépa'], '', $department?->name ?? '');
+            $cycle = $department?->cycle;
+            
+            $etudiant = (object) [
+                'matricule' => $student?->student_id_number ?? '',
+                'genre' => $personalInfo?->gender === 'F' ? 'féminin' : 'masculin',
+                'nom' => $personalInfo?->last_name ?? '',
+                'prenoms' => $personalInfo?->first_names ?? '',
+                'date_naissance' => $dateNaissance,
+                'lieu_de_naissance' => $personalInfo?->birth_place ?? '',
+                'filiere' => (object) [
+                    'nom' => $filiereNom,
+                    'diplome' => (object) ['nom' => $cycle?->name ?? 'LMD']
+                ]
+            ];
+            
+            $signataireBd = Signataire::getByRole('Chef CAP') ?? Signataire::getByRole('Directeur');
+            $signataire = (object) [
+                'nomination' => $signataireBd?->nom ?? 'Prof. HOUNKONNOU Mahouton Norbert'
+            ];
+            
+            // Générer le QR code
+            $qrData = "Nom: {$etudiant->nom}\nPrénoms: {$etudiant->prenoms}\nMatricule: {$etudiant->matricule}\nFilière: {$filiereNom}\nDate d'impression: " . now()->format('d/m/Y');
+            
+            $renderer = new \BaconQrCode\Renderer\ImageRenderer(
+                new \BaconQrCode\Renderer\RendererStyle\RendererStyle(200),
+                new \BaconQrCode\Renderer\Image\SvgImageBackEnd()
+            );
+            $writer = new \BaconQrCode\Writer($renderer);
+            $qrCodeSvg = $writer->writeString($qrData);
+            $qrCodeBase64 = base64_encode($qrCodeSvg);
+            
+            $bulletins[] = [
+                'annee' => $academicPath->academicYear?->academic_year ?? '',
+                'qrcode' => $qrCodeBase64,
+                'etudiant' => $etudiant,
+                'signataire' => $signataire,
+                'bulletin_data' => [[
+                    ...$bulletinData,
+                    'nombre_ue' => $totalUE,
+                    'nombre_ue_valide' => $validatedUE,
+                    'nombre_credit_total' => $totalCredits > 0 ? $totalCredits : 1,
+                    'nombre_credit_obtenu' => $obtainedCredits,
+                    'moyenne' => $moyenne,
+                    'grade' => $grade,
+                    'decision' => $academicPath->year_decision === 'pass' ? 'Admis' : ($academicPath->year_decision === 'repeat' ? 'Redouble' : 'Exclu')
+                ]]
+            ];
+        }
+        
+        if (empty($bulletins)) {
+            throw new \Exception('Aucun bulletin éligible trouvé');
+        }
+        
+        return $this->pdfService->downloadPdf('core::pdfs.bulletins-multiple', [
+            'bulletins' => $bulletins
+        ], 'bulletins.pdf');
+    }
+
+    /**
+     * Génère plusieurs attestations de licence dans un seul PDF
+     */
+    public function generateMultipleAttestationsLicence(array $studentPendingStudentIds)
+    {
+        $attestations = [];
+        
+        foreach ($studentPendingStudentIds as $studentPendingStudentId) {
+            $academicPath = AcademicPath::with([
+                'studentPendingStudent.pendingStudent.personalInformation',
+                'studentPendingStudent.pendingStudent.department',
+                'studentPendingStudent.student',
+                'academicYear'
+            ])->whereHas('studentPendingStudent', function ($q) use ($studentPendingStudentId) {
+                $q->where('id', $studentPendingStudentId);
+            })->where('study_level', 'L3')
+            ->first();
+            
+            if (!$academicPath) continue;
+            
+            $attestations[] = [
+                'student' => $academicPath
+            ];
+        }
+        
+        if (empty($attestations)) {
+            throw new \Exception('Aucune attestation éligible trouvée');
+        }
+        
+        return $this->pdfService->downloadPdf('core::pdfs.attestations-licence-multiple', [
+            'attestations' => $attestations
+        ], 'attestations-licence.pdf');
+    }
+
+    /**
      * Génère un bulletin (année complète)
      */
     public function generateBulletin(int $studentPendingStudentId, int $academicYearId)

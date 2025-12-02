@@ -8,15 +8,13 @@ Route::prefix('api/attestations')->group(function () {
         
         Route::get('eligible/success', [AttestationController::class, 'getEligibleForSuccess']);
         Route::get('eligible/preparatory', [AttestationController::class, 'getEligibleForPreparatory']);
-        
-        // Génération des attestations
         Route::post('generate/success', [AttestationController::class, 'generateSuccess']);
         Route::post('generate/preparatory', [AttestationController::class, 'generatePreparatory']);
         Route::post('generate/preparatory/multiple', [AttestationController::class, 'generateMultiplePreparatory']);
         Route::post('generate/bulletin', [AttestationController::class, 'generateBulletin']);
+        Route::post('generate/bulletin/multiple', [AttestationController::class, 'generateMultipleBulletins']);
         Route::post('generate/licence', [AttestationController::class, 'generateLicence']);
-        
-        // Mise à jour des noms et récupération de l'acte de naissance
+        Route::post('generate/licence/multiple', [AttestationController::class, 'generateMultipleLicence']);
         Route::put('students/{studentPendingStudentId}/names', [AttestationController::class, 'updateStudentNames']);
         Route::get('students/{studentPendingStudentId}/birth-certificate', [AttestationController::class, 'getBirthCertificate']);
     });

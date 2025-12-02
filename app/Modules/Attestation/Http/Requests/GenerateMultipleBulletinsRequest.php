@@ -14,22 +14,23 @@ class GenerateMultipleBulletinsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'student_pending_student_ids' => 'required|array',
-            'student_pending_student_ids.*' => 'required|integer|exists:student_pending_student,id',
-            'academic_year_id' => 'required|exists:academic_years,id',
+            'bulletins' => 'required|array',
+            'bulletins.*.student_pending_student_id' => 'required|integer|exists:student_pending_student,id',
+            'bulletins.*.academic_year_id' => 'required|integer|exists:academic_years,id',
         ];
     }
 
     public function messages(): array
     {
         return [
-            'student_pending_student_ids.required' => 'La liste des étudiants est requise',
-            'student_pending_student_ids.array' => 'La liste des étudiants doit être un tableau',
-            'student_pending_student_ids.*.required' => 'L\'identifiant de l\'étudiant est requis',
-            'student_pending_student_ids.*.integer' => 'L\'identifiant de l\'étudiant doit être un nombre',
-            'student_pending_student_ids.*.exists' => 'L\'étudiant n\'existe pas',
-            'academic_year_id.required' => 'L\'année académique est requise',
-            'academic_year_id.exists' => 'L\'année académique n\'existe pas',
+            'bulletins.required' => 'La liste des bulletins est requise',
+            'bulletins.array' => 'La liste des bulletins doit être un tableau',
+            'bulletins.*.student_pending_student_id.required' => 'L\'identifiant de l\'étudiant est requis',
+            'bulletins.*.student_pending_student_id.integer' => 'L\'identifiant de l\'étudiant doit être un nombre',
+            'bulletins.*.student_pending_student_id.exists' => 'L\'étudiant n\'existe pas',
+            'bulletins.*.academic_year_id.required' => 'L\'année académique est requise',
+            'bulletins.*.academic_year_id.integer' => 'L\'année académique doit être un nombre',
+            'bulletins.*.academic_year_id.exists' => 'L\'année académique n\'existe pas',
         ];
     }
 }
