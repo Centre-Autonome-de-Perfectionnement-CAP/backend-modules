@@ -11,7 +11,8 @@ use App\Modules\Attestation\Http\Requests\{
     GetEligiblePreparatoryRequest,
     GenerateBulletinRequest,
     GenerateMultiplePreparatoryRequest,
-    GenerateMultipleBulletinsRequest
+    GenerateMultipleBulletinsRequest,
+    GenerateMultipleLicenceRequest
 };
 use App\Modules\Inscription\Models\{PersonalInformation, StudentPendingStudent};
 use App\Traits\ApiResponse;
@@ -125,6 +126,20 @@ class AttestationController extends Controller
     }
 
     /**
+     * Génère plusieurs bulletins dans un seul PDF
+     */
+    public function generateMultipleBulletins(GenerateMultipleBulletinsRequest $request)
+    {
+        try {
+            return $this->attestationService->generateMultipleBulletins(
+                $request->bulletins
+            );
+        } catch (\Exception $e) {
+            return $this->errorResponse($e->getMessage(), 500);
+        }
+    }
+
+    /**
      * Génère une attestation de licence
      */
     public function generateLicence(GenerateAttestationRequest $request)
@@ -135,6 +150,20 @@ class AttestationController extends Controller
             );
 
             return $pdf->stream('attestation-licence.pdf');
+        } catch (\Exception $e) {
+            return $this->errorResponse($e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Génère plusieurs attestations de licence dans un seul PDF
+     */
+    public function generateMultipleLicence(GenerateMultipleLicenceRequest $request)
+    {
+        try {
+            return $this->attestationService->generateMultipleAttestationsLicence(
+                $request->student_pending_student_ids
+            );
         } catch (\Exception $e) {
             return $this->errorResponse($e->getMessage(), 500);
         }
@@ -166,21 +195,6 @@ class AttestationController extends Controller
                     'first_names' => $personalInfo->first_names,
                 ],
                 'Noms mis à jour avec succès'
-            );
-        } catch (\Exception $e) {
-            return $this->errorResponse($e->getMessage(), 500);
-        }
-    }
-
-    /**
-     * Génère plusieurs bulletins dans un seul PDF
-     */
-    public function generateMultipleBulletins(GenerateMultipleBulletinsRequest $request)
-    {
-        try {
-            return $this->attestationService->generateMultipleBulletins(
-                $request->student_pending_student_ids,
-                $request->academic_year_id
             );
         } catch (\Exception $e) {
             return $this->errorResponse($e->getMessage(), 500);

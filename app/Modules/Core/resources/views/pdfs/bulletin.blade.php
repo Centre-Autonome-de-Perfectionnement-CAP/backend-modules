@@ -143,7 +143,7 @@
 
 @section('footer-text')
     <div style="text-align: center;">
-        <span><i>*Nombre de composition dans l'UE</i></span><br>
-        <span style="font-weight: bold;">NB: </span> Ce relevé ne peut en aucun cas tenir lieu d'attestation de diplôme et n'est délivré qu'une seule fois
+        <span style="margin-left: 170px;"><i>*Nombre de composition dans l'UE</i></span><br>
+        <span style="font-weight: bold; margin-left: 100px;">NB: </span> Ce relevé ne peut en aucun cas tenir lieu d'attestation de diplôme et n'est délivré qu'une seule fois
     </div>
 @endsection
