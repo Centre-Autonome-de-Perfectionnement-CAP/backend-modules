@@ -213,7 +213,8 @@
             <p style="margin-bottom: 5px; font-size: ">
                 Né<span>{{ $etudiant->genre == 'M' ? '' : 'e' }}</span>
                 {{ $etudiant->ne_vers == 0 ? 'le ' : '' }}<span class="date">{{ $etudiant->date_naissance }}</span> à
-                <span class="lieu" style="text-transform:capitalize;">{{ $etudiant->lieu_naissance }} <span style="text-transform: capitalize;">(REP. DU {{ $etudiant->pays_naissance }})</span></span>................
+                <!-- <span class="lieu" style="text-transform:capitalize;">{{ $etudiant->lieu_naissance }} <span style="text-transform: capitalize;">(REP. DU {{ $etudiant->pays_naissance }})</span></span>................ -->
+                 <span class="lieu" style="text-transform:capitalize;">{{ $etudiant->lieu_naissance }} <span style="text-transform: capitalize;">(REP. DU BENIN)</span></span>................
             </p>
             <p>
                 a obtenu le Certificat Préparatoire aux Etudes d'Ingénieur conformément à la délibération du {{ $etudiant->date_soutenance }}
