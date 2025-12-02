@@ -182,7 +182,7 @@
                     N° <span style="margin-left: 60px;">/EPAC/ CAP/ UAC<span>
                 </td>
                 <td style="width: 50%; text-align: left;  margin: 5px 0; ">
-                    <span>Abomey-Calavi, le<span style="margin-left: 30px;">      /</span><span style="margin-left: 30px;">      /</span> 20    </span>
+                    <span>Abomey-Calavi, le<span style="margin-left: 50px;">      /</span><span style="margin-left: 50px;">      /</span> 20    </span>
                 </td> 
             </tr>
         </table>
@@ -221,7 +221,7 @@
         </div>
         <div class="filiere">FILIERE : {{ trim($etudiant->filiere->libelle) }}</div>
 
-        <div class="paragraph-pristina-bold" style="margin-top: 15px;">
+        <div class="paragraph-pristina-bold" style="margin-top: 15px; font-weight: 800;">
             <span class="retrait">Le</span> présent certificat, revêtu du sceau de l'EPAC, est délivrée pour servir et valoir ce que de droit.
         </div>
         <br/><br/>
