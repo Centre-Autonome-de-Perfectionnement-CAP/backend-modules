@@ -216,13 +216,13 @@
             </p>
         </div>
         
-        <div style="position: fixed; bottom: 40px; left: -2cm; text-align: center; width: 100%; left: 0; padding: 0 2cm;">
+        <div style="position: fixed; bottom: 40px; left: -2cm; text-align: center; width: 90%; left: 0; padding: 0 2cm;">
             <hr style="border: 1px solid black; width: 100%; position: relative; left: -1cm; right: 1cm;">
             <p style="text-align: center; font-size: 11pt; font-family: 'Economica';">
                 Ce certificat est le résultat de la mise à niveau de l'étudiant et n'est valable que pour une inscription aux études ingénieurs du CAP.
             </p>
         </div>
-        <div style="text-align: center; position: fixed; left: -2cm;  bottom: 7px; text-align: center; width: 100%; left: 0; padding: 0 2cm;">
+        <div style="text-align: center; position: fixed; left: -2cm;  bottom: 7px; text-align: center; width: 90%; left: 0; padding: 0 2cm;">
             <hr style="border: 0.7px solid black; width: 100%; position: relative; left: -1cm; right: 1cm;">
             <p style="font-size: 9pt; ">
                 01 B.P.2009 COTONOU - TELEPHONE: 21 36 09 93 - FAX: 21 36 01 99 E-mail : epac.uac@epac.uac.bj - epacuac@bj.refer.org
