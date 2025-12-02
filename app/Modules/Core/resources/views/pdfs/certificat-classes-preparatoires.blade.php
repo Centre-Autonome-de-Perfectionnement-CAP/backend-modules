@@ -106,7 +106,8 @@
         }
         
         .paragraph-pristina {
-            font-size: 14pt;
+            font-size: 15pt;
+            font-weight: bold;
             font-family: 'Pristina';
             letter-spacing: 1.3px;
         }
@@ -116,10 +117,10 @@
     @php
         $epacLogo = public_path('assets/epac.png');
         $uacLogo  = public_path('assets/uac.jpeg');
+        $banner   = public_path('assets/banner-1.png');
     @endphp
 
     <div class="header">
-        {{-- Entête --}}
         <table style="width: 100%;" >
             <tr>
                 <td style="width: 20%; text-align: left;">
@@ -151,15 +152,15 @@
             </tr>
         </table>
 
-        <hr style="border: 1px solid #000; margin: 5px 0 8px;">
+        <hr style="border: 1px solid #000; margin: 5px 0 8px; width: 100%;">
 
-        <table style="width: 100%; font-size: 9pt;">
+        <table style="width: 100%; font-size: 11pt;">
             <tr>
-                <td style="width: 50%; text-align: left;  margin: 5px 0">
-                    N° ....................................... /EPAC/ CAP/ UAC
+                <td style="width: 50%; text-align: left;  margin-top: 5px; margin-bottom: 5px; margin-right: 50px;">
+                    N° <span style="margin-left: 30px;">/EPAC/ CAP/ UAC<span>
                 </td>
                 <td style="width: 50%; text-align: right;  margin: 5px 0">
-                    Abomey-Calavi, le .....................................
+                    Abomey-Calavi, le 
                 </td> 
             </tr>
         </table>
@@ -170,6 +171,9 @@
         <p class="attestation">
             CERTIFICAT PREPARATOIRE<br>AUX ETUDES D'INGENIEUR
         </p>
+            @if(file_exists($banner))
+                <img src="{{ $banner }}" alt="banner">
+            @endif
     </div>
 
     <div class="content">
@@ -182,14 +186,14 @@
         <br/>
         <div class="info">
             <p style="margin-bottom: 5px;">
-                <span style="{{ $etudiant->genre == 'M' ? '' : 'text-decoration: line-through;' }}">Mr</span> / <span style="{{ $etudiant->genre == 'F' ? '' : 'text-decoration: line-through;' }}">Mlle</span>
+                <span style="{{ $etudiant->genre == 'F' ? '' : 'text-decoration: line-through;' }}">Mlle</span> / <span style="{{ $etudiant->genre == 'M' ? '' : 'text-decoration: line-through;' }}">Mr</span>
                 <span style="text-transform: uppercase;">{{ $etudiant->nom }}</span>
                 <span style="text-transform: capitalize;"> {{ $etudiant->prenoms }} </span> .........................
             </p> 
-            <p style="margin-bottom: 5px;">
+            <p style="margin-bottom: 5px; font-size: ">
                 Né<span>{{ $etudiant->genre == 'M' ? '' : 'e' }}</span>
                 {{ $etudiant->ne_vers == 0 ? 'le ' : '' }}<span class="date">{{ $etudiant->date_naissance }}</span> à
-                <span class="lieu" style="text-transform:capitalize;">{{ $etudiant->lieu_naissance }} (Rep. {{ $etudiant->pays_naissance }})</span>................
+                <span class="lieu" style="text-transform:capitalize;">{{ $etudiant->lieu_naissance }} <span style="text-transform: capitalize;">(REP. DU {{ $etudiant->pays_naissance }})</span></span>................
             </p>
             <p>
                 a obtenu le Certificat Préparatoire aux Etudes d'Ingénieur conformément à la délibération du {{ $etudiant->date_soutenance }}:
@@ -209,14 +213,14 @@
             </p>
         </div>
         
-        <div style="position: fixed; bottom: 40px; text-align: center;">
-            <hr style="border: 1px solid black;">
+        <div style="position: fixed; bottom: 40px; text-align: center; width: 100%; left: 0; padding: 0 2cm;">
+            <hr style="border: 1px solid black; width: 100%;">
             <p style="font-size: 9pt; font-weight: bold;">
                 Ce certificat est le résultat de la mise à niveau de l'étudiant et n'est valable que pour une inscription aux études ingénieurs du CAP
             </p>
         </div>
-        <div style="position: fixed; bottom: 7px; text-align: center;">
-            <hr style="border: 0.7px solid black;">
+        <div style="position: fixed; bottom: 7px; text-align: center; width: 100%; left: 0; padding: 0 2cm;">
+            <hr style="border: 0.7px solid black; width: 100%;">
             <p style="font-size: 9pt; ">
                 01 B.P.2009 COTONOU - TELEPHONE: 21 36 09 93 - FAX: 21 36 01 99 E-mail : epac.uac@epac.uac.bj - epacuac@bj.refer.org
             </p>
