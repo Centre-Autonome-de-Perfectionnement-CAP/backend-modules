@@ -182,7 +182,7 @@
                     N° <span style="margin-left: 60px;">/EPAC/ CAP/ UAC<span>
                 </td>
                 <td style="width: 50%; text-align: left;  margin: 5px 0; ">
-                    <span>     Abomey-Calavi, le       </span>
+                    <span>       </span>
                 </td> 
             </tr>
         </table>
