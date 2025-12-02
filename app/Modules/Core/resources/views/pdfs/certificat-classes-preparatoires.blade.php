@@ -221,7 +221,7 @@
         </div>
         <div class="filiere">FILIERE : {{ trim($etudiant->filiere->libelle) }}</div>
 
-        <div class="paragraph-pristina-bold" style="margin-top: 15px; font-weight: 800;">
+        <div class="paragraph-pristina-bold" style="margin-top: 15px; font-weight: 700;">
             <span class="retrait">Le</span> présent certificat, revêtu du sceau de l'EPAC, est délivrée pour servir et valoir ce que de droit.
         </div>
         <br/><br/>
