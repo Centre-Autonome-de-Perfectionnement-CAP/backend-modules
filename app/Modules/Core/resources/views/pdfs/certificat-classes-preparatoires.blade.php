@@ -176,13 +176,13 @@
 
         <hr style="border: 1px solid #000; margin: 5px 0 8px; width: 100%;">
 
-        <table style="width: 100%; font-size: 15pt;">
+        <table style="width: 100%; font-size: 14pt;">
             <tr>
                 <td style="width: 50%; text-align: left;  margin-top: 5px; margin-bottom: 5px; margin-right: 50px;">
                     N° <span style="margin-left: 60px;">/EPAC/ CAP/ UAC<span>
                 </td>
                 <td style="width: 50%; text-align: left;  margin: 5px 0; ">
-                    <span>       </span>
+                    <span>Abomey-Calavi, le      /      / 20    </span>
                 </td> 
             </tr>
         </table>
