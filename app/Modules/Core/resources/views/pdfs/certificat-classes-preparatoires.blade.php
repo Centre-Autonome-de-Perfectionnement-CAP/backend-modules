@@ -215,6 +215,12 @@
                 Ce certificat est le résultat de la mise à niveau de l'étudiant et n'est valable que pour une inscription aux études ingénieurs du CAP
             </p>
         </div>
+        <div style="position: fixed; bottom: 15px; text-align: center;">
+            <hr style="border: 0.7px solid black;">
+            <p style="font-size: 11pt; ">
+                01 B.P.2009 COTONOU - TELEPHONE: 21 36 09 93 - FAX: 21 36 01 99 E-mail : epac.uac@epac.uac.bj - epacuac@bj.refer.org
+            </p>
+        </div>
     </div>
 </body>
 </html>
