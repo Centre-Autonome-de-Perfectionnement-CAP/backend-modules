@@ -112,7 +112,7 @@
         }
         
         .paragraph-pristina {
-            font-size: 16pt;
+            font-size: 17pt;
             font-family: 'Pristina';
             letter-spacing: 1.3px;
         }
@@ -159,12 +159,12 @@
 
         <hr style="border: 1px solid #000; margin: 5px 0 8px; width: 100%;">
 
-        <table style="width: 100%; font-size: 11pt;">
+        <table style="width: 100%; font-size: 15pt;">
             <tr>
                 <td style="width: 50%; text-align: left;  margin-top: 5px; margin-bottom: 5px; margin-right: 50px;">
                     N° <span style="margin-left: 60px;">/EPAC/ CAP/ UAC<span>
                 </td>
-                <td style="width: 50%; text-align: left;  margin: 5px 0">
+                <td style="width: 50%; text-align: left;  margin: 5px 0; ">
                     <span>Abomey-Calavi, le                        </span>
                 </td> 
             </tr>
@@ -217,13 +217,13 @@
         </div>
         
         <div style="position: fixed; bottom: 40px; left: -2cm; text-align: center; width: 100%; left: 0; padding: 0 2cm;">
-            <hr style="border: 1px solid black; width: 100%;">
-            <p style="font-size: 9pt; font-family: 'Economica';">
-                Ce certificat est le résultat de la mise à niveau de l'étudiant et n'est valable que pour une inscription aux études ingénieurs du CAP
+            <hr style="border: 1px solid black; width: 100%; position: relative; left: -10px;">
+            <p style="font-size: 12pt; font-family: 'Economica';">
+                Ce certificat est le résultat de la mise à niveau de l'étudiant et n'est valable que pour une inscription aux études ingénieurs du CAP.
             </p>
         </div>
         <div style="position: fixed; left: -2cm;  bottom: 7px; text-align: center; width: 100%; left: 0; padding: 0 2cm;">
-            <hr style="border: 0.7px solid black; width: 100%;">
+            <hr style="border: 0.7px solid black; width: 100%; position: relative; left: -10px;">
             <p style="font-size: 9pt; ">
                 01 B.P.2009 COTONOU - TELEPHONE: 21 36 09 93 - FAX: 21 36 01 99 E-mail : epac.uac@epac.uac.bj - epacuac@bj.refer.org
             </p>
