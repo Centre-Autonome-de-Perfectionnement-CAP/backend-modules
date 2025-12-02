@@ -25,8 +25,16 @@
             font-family: 'Pristina';
             src: url({{ storage_path('fonts/PRISTINA.ttf') }}) format('truetype');
             font-style: normal;
-        font-weight: bold;
+            font-weight: 400; /* normal */
         }
+
+        @font-face {
+            font-family: 'Pristina';
+            src: url({{ storage_path('fonts/PRISTINA.ttf') }}) format('truetype');
+            font-style: normal;
+            font-weight: 700; /* bold */
+        }
+
         @font-face {
             font-family: "Berlin Sans FB";
             src: url({{ storage_path('fonts/Berlin Sans FB Regular.ttf') }});
@@ -112,10 +120,19 @@
         }
         
         .paragraph-pristina {
-            font-size: 17pt;
-            font-family: 'Pristina';
-            letter-spacing: 1.3px;
-        }
+                font-size: 15pt;
+                font-family: 'Pristina';
+                letter-spacing: 1.3px;
+                font-weight: 400;
+            }
+
+            .paragraph-pristina-bold {
+                font-size: 15pt;
+                font-family: 'Pristina';
+                letter-spacing: 1.3px;
+                font-weight: 700;
+            }
+
     </style>
 </head>
 <body>
@@ -182,7 +199,7 @@
     <div class="content">
         {{-- Contenu --}}
     <div class="main">
-        <p class="paragraph-pristina">
+        <p class="paragraph-pristina-bold">
             <span class="retrait">Le</span> Directeur de l'Ecole Polytechnique d'Abomey-Calavi
             (EPAC), ex-Collège Polytechnique Universitaire (CPU), soussigné, atteste que:
         </p>
@@ -204,7 +221,7 @@
         </div>
         <div class="filiere">FILIERE : {{ trim($etudiant->filiere->libelle) }}</div>
 
-        <div class="paragraph-pristina" style="margin-top: 15px;">
+        <div class="paragraph-pristina-bold" style="margin-top: 15px;">
             <span class="retrait">Le</span> présent certificat, revêtu du sceau de l'EPAC, est délivrée pour servir et valoir ce que de droit.
         </div>
         <br/><br/>
@@ -224,7 +241,7 @@
         </div>
         <div style="text-align: center; position: fixed; left: -2cm;  bottom: 7px; text-align: center; width: 90%; left: 0; padding: 0 2cm;">
             <hr style="border: 0.7px solid black; width: 100%; position: relative; left: -1cm; right: 1cm;">
-            <p style="font-size: 9pt; ">
+            <p style="font-size: 9pt; position: relative; left: -1cm; ">
                 01 B.P.2009 COTONOU - TELEPHONE: 21 36 09 93 - FAX: 21 36 01 99 E-mail : epac.uac@epac.uac.bj - epacuac@bj.refer.org
             </p>
         </div>
