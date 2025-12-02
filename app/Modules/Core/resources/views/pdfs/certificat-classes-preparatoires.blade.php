@@ -58,6 +58,7 @@
         .attestation {
             font-size: 28pt;
             font-family: 'ALGERIA';
+            font-style: italic;
             text-transform: uppercase;
             margin: 22px 0 0;
         }
@@ -107,7 +108,6 @@
         
         .paragraph-pristina {
             font-size: 15pt;
-            font-weight: bold;
             font-family: 'Pristina';
             letter-spacing: 1.3px;
         }
@@ -157,15 +157,13 @@
         <table style="width: 100%; font-size: 11pt;">
             <tr>
                 <td style="width: 50%; text-align: left;  margin-top: 5px; margin-bottom: 5px; margin-right: 50px;">
-                    N° <span style="margin-left: 30px;">/EPAC/ CAP/ UAC<span>
+                    N° <span style="margin-left: 60px;">/EPAC/ CAP/ UAC<span>
                 </td>
-                <td style="width: 50%; text-align: right;  margin: 5px 0">
-                    Abomey-Calavi, le 
+                <td style="width: 50%; text-align: left;  margin: 5px 0">
+                    <span>Abomey-Calavi, le                                   </span>
                 </td> 
             </tr>
         </table>
-
-        {{-- Titre --}}
         <br/>
         <br/><br/>
         <p class="attestation">
@@ -213,13 +211,13 @@
             </p>
         </div>
         
-        <div style="position: fixed; bottom: 40px; text-align: center; width: 100%; left: 0; padding: 0 2cm;">
+        <div style="position: fixed; bottom: 40px; left: -2cm; text-align: center; width: 100%; left: 0; padding: 0 2cm;">
             <hr style="border: 1px solid black; width: 100%;">
             <p style="font-size: 9pt; font-weight: bold;">
                 Ce certificat est le résultat de la mise à niveau de l'étudiant et n'est valable que pour une inscription aux études ingénieurs du CAP
             </p>
         </div>
-        <div style="position: fixed; bottom: 7px; text-align: center; width: 100%; left: 0; padding: 0 2cm;">
+        <div style="position: fixed; left: -2cm;  bottom: 7px; text-align: center; width: 100%; left: 0; padding: 0 2cm;">
             <hr style="border: 0.7px solid black; width: 100%;">
             <p style="font-size: 9pt; ">
                 01 B.P.2009 COTONOU - TELEPHONE: 21 36 09 93 - FAX: 21 36 01 99 E-mail : epac.uac@epac.uac.bj - epacuac@bj.refer.org
