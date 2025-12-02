@@ -10,6 +10,10 @@
             src: url({{ storage_path('fonts/ALGERIA.ttf') }});
         }
         @font-face {
+            font-family: "Economica";
+            src: url({{ storage_path('fonts/Economica-Bold-OTF.otf') }});
+        }
+        @font-face {
             font-family: "Arial";
             src: url({{ storage_path('fonts/arial.ttf') }});
         }
@@ -20,6 +24,8 @@
         @font-face {
             font-family: 'Pristina';
             src: url({{ storage_path('fonts/PRISTINA.ttf') }}) format('truetype');
+            font-style: normal;
+        font-weight: bold;
         }
         @font-face {
             font-family: "Berlin Sans FB";
@@ -58,7 +64,6 @@
         .attestation {
             font-size: 28pt;
             font-family: 'ALGERIA';
-            font-style: italic;
             text-transform: uppercase;
             margin: 22px 0 0;
         }
@@ -107,7 +112,7 @@
         }
         
         .paragraph-pristina {
-            font-size: 15pt;
+            font-size: 16pt;
             font-family: 'Pristina';
             letter-spacing: 1.3px;
         }
@@ -160,7 +165,7 @@
                     N° <span style="margin-left: 60px;">/EPAC/ CAP/ UAC<span>
                 </td>
                 <td style="width: 50%; text-align: left;  margin: 5px 0">
-                    <span>Abomey-Calavi, le                                   </span>
+                    <span>Abomey-Calavi, le                        </span>
                 </td> 
             </tr>
         </table>
@@ -200,7 +205,7 @@
         <div class="filiere">FILIERE : {{ trim($etudiant->filiere->libelle) }}</div>
 
         <div class="paragraph-pristina" style="margin-top: 15px;">
-            <span class="retrait">Le</span> présent certificat, revêtu du sceau de l'EPAC, est délivrée pour servir et valor ce que de droit.
+            <span class="retrait">Le</span> présent certificat, revêtu du sceau de l'EPAC, est délivrée pour servir et valoir ce que de droit.
         </div>
         <br/><br/>
         <div class="directeur">
@@ -213,7 +218,7 @@
         
         <div style="position: fixed; bottom: 40px; left: -2cm; text-align: center; width: 100%; left: 0; padding: 0 2cm;">
             <hr style="border: 1px solid black; width: 100%;">
-            <p style="font-size: 9pt; font-weight: bold;">
+            <p style="font-size: 9pt; font-family: 'Economica';">
                 Ce certificat est le résultat de la mise à niveau de l'étudiant et n'est valable que pour une inscription aux études ingénieurs du CAP
             </p>
         </div>

@@ -94,6 +94,25 @@ class AttestationController extends Controller
     }
 
     /**
+     * Génère plusieurs certificats de classes préparatoires dans un seul PDF
+     */
+    public function generateMultiplePreparatory(Request $request)
+    {
+        try {
+            $request->validate([
+                'student_pending_student_ids' => 'required|array',
+                'student_pending_student_ids.*' => 'required|integer|exists:student_pending_students,id'
+            ]);
+
+            return $this->attestationService->generateMultipleCertificatsPreparatoires(
+                $request->student_pending_student_ids
+            );
+        } catch (\Exception $e) {
+            return $this->errorResponse($e->getMessage(), 500);
+        }
+    }
+
+    /**
      * Génère un bulletin
      */
     public function generateBulletin(GenerateBulletinRequest $request)

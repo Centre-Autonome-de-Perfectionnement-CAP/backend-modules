@@ -220,6 +220,78 @@ class AttestationService
     }
 
     /**
+     * Génère plusieurs certificats de classes préparatoires dans un seul PDF
+     */
+    public function generateMultipleCertificatsPreparatoires(array $studentPendingStudentIds)
+    {
+        $etudiants = [];
+        $monthsFr = [
+            1 => 'Janvier', 2 => 'Février', 3 => 'Mars', 4 => 'Avril',
+            5 => 'Mai', 6 => 'Juin', 7 => 'Juillet', 8 => 'Août',
+            9 => 'Septembre', 10 => 'Octobre', 11 => 'Novembre', 12 => 'Décembre'
+        ];
+
+        foreach ($studentPendingStudentIds as $studentPendingStudentId) {
+            $academicPath = AcademicPath::with([
+                'studentPendingStudent.pendingStudent.personalInformation',
+                'studentPendingStudent.pendingStudent.department',
+                'studentPendingStudent.student',
+                'academicYear'
+            ])
+            ->where('student_pending_student_id', $studentPendingStudentId)
+            ->where('study_level', 1)
+            ->where('year_decision', 'pass')
+            ->whereHas('studentPendingStudent.pendingStudent.department', function ($q) {
+                $q->where('name', 'like', '%prepa%')
+                  ->orWhere('name', 'like', '%prépa%');
+            })
+            ->first();
+
+            if (!$academicPath) {
+                continue;
+            }
+
+            $personalInfo = $academicPath->studentPendingStudent?->pendingStudent?->personalInformation;
+            $department = $academicPath->studentPendingStudent?->pendingStudent?->department;
+            $deliberationDate = $academicPath->deliberation_date ?? now();
+            
+            $etudiants[] = (object) [
+                'genre' => $personalInfo?->gender ?? 'M',
+                'nom' => $personalInfo?->last_name ?? '',
+                'prenoms' => $personalInfo?->first_names ?? '',
+                'ne_vers' => 0,
+                'date_naissance' => $personalInfo?->birth_date ? $personalInfo->birth_date->format('d') . ' ' . $monthsFr[(int)$personalInfo->birth_date->format('n')] . ' ' . $personalInfo->birth_date->format('Y') : '',
+                'lieu_naissance' => $personalInfo?->birth_place ?? '',
+                'pays_naissance' => $personalInfo?->birth_country ?? '',
+                'matricule' => $academicPath->studentPendingStudent?->student?->student_id_number ?? '',
+                'date_soutenance' => $deliberationDate->format('d') . ' ' . $monthsFr[(int)$deliberationDate->format('n')] . ' ' . $deliberationDate->format('Y'),
+                'filiere' => (object) [
+                    'libelle' => str_replace(['PREPA', 'Prepa', 'prépa', 'Prépa'], '', $department?->name ?? ''),
+                    'diplome' => (object) [
+                        'libelle' => 'Conseil de Perfectionnement'
+                    ]
+                ]
+            ];
+        }
+
+        if (empty($etudiants)) {
+            throw new \Exception('Aucun étudiant éligible trouvé');
+        }
+
+        $signataireBd = Signataire::getByRole('Directeur');
+        $poste = $signataireBd?->role?->name === 'Directeur' ? 'Le Directeur' : 'Le Chef CAP';
+        $signataire = (object) [
+            'poste' => $poste,
+            'nomination' => $signataireBd?->nom ?? 'Prof. HOUNKONNOU Mahouton Norbert'
+        ];
+
+        return $this->pdfService->downloadPdf('core::pdfs.certificats-classes-preparatoires-multiple', [
+            'etudiants' => $etudiants,
+            'signataire' => $signataire
+        ], 'certificats-preparatoires.pdf');
+    }
+
+    /**
      * Génère un bulletin (année complète)
      */
     public function generateBulletin(int $studentPendingStudentId, int $academicYearId)

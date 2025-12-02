@@ -12,6 +12,7 @@ Route::prefix('api/attestations')->group(function () {
         // Génération des attestations
         Route::post('generate/success', [AttestationController::class, 'generateSuccess']);
         Route::post('generate/preparatory', [AttestationController::class, 'generatePreparatory']);
+        Route::post('generate/preparatory/multiple', [AttestationController::class, 'generateMultiplePreparatory']);
         Route::post('generate/bulletin', [AttestationController::class, 'generateBulletin']);
         Route::post('generate/licence', [AttestationController::class, 'generateLicence']);
         
