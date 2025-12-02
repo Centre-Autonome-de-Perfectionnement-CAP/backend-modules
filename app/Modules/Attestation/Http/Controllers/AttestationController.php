@@ -9,7 +9,9 @@ use App\Modules\Attestation\Http\Requests\{
     UpdateStudentNamesRequest,
     GetEligibleStudentsRequest,
     GetEligiblePreparatoryRequest,
-    GenerateBulletinRequest
+    GenerateBulletinRequest,
+    GenerateMultiplePreparatoryRequest,
+    GenerateMultipleBulletinsRequest
 };
 use App\Modules\Inscription\Models\{PersonalInformation, StudentPendingStudent};
 use App\Traits\ApiResponse;
@@ -96,14 +98,9 @@ class AttestationController extends Controller
     /**
      * Génère plusieurs certificats de classes préparatoires dans un seul PDF
      */
-    public function generateMultiplePreparatory(Request $request)
+    public function generateMultiplePreparatory(GenerateMultiplePreparatoryRequest $request)
     {
         try {
-            $request->validate([
-                'student_pending_student_ids' => 'required|array',
-                'student_pending_student_ids.*' => 'required|integer|exists:student_pending_students,id'
-            ]);
-
             return $this->attestationService->generateMultipleCertificatsPreparatoires(
                 $request->student_pending_student_ids
             );
@@ -169,6 +166,21 @@ class AttestationController extends Controller
                     'first_names' => $personalInfo->first_names,
                 ],
                 'Noms mis à jour avec succès'
+            );
+        } catch (\Exception $e) {
+            return $this->errorResponse($e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Génère plusieurs bulletins dans un seul PDF
+     */
+    public function generateMultipleBulletins(GenerateMultipleBulletinsRequest $request)
+    {
+        try {
+            return $this->attestationService->generateMultipleBulletins(
+                $request->student_pending_student_ids,
+                $request->academic_year_id
             );
         } catch (\Exception $e) {
             return $this->errorResponse($e->getMessage(), 500);
