@@ -199,13 +199,13 @@
                 <p style="margin-bottom: 5px;">
                     <span style="{{ $etudiant->genre == 'F' ? '' : 'text-decoration: line-through;' }}">Mlle</span> / <span style="{{ $etudiant->genre == 'M' ? '' : 'text-decoration: line-through;' }}">Mr</span>
                     <span style="text-transform: uppercase;">{{ $etudiant->nom }}</span>
-                    <span style="text-transform: capitalize;"> {{ $etudiant->prenoms }} </span> .........................
+                    <span style="text-transform: capitalize;"> {{ $etudiant->prenoms }} </span> 
                 </p> 
                 <p style="margin-bottom: 5px; font-size: ">
                     Né<span>{{ $etudiant->genre == 'M' ? '' : 'e' }}</span>
                     {{ $etudiant->ne_vers == 0 ? 'le ' : '' }}<span class="date">{{ $etudiant->date_naissance }}</span> à
                     <!-- <span class="lieu" style="text-transform:capitalize;">{{ $etudiant->lieu_naissance }} <span style="text-transform: capitalize;">(REP. DU {{ $etudiant->pays_naissance }})</span></span>................ -->
-                    <span class="lieu" style="text-transform:capitalize;">{{ $etudiant->lieu_naissance }} <span style="text-transform: capitalize;">(REP. DU BENIN)</span></span>................
+                    <span class="lieu" style="text-transform:capitalize;">{{ $etudiant->lieu_naissance }} <span style="text-transform: capitalize;">(REP. DU BENIN)</span></span>
                 </p>
                 <p>
                     a obtenu le Certificat Préparatoire aux Etudes d'Ingénieur conformément à la délibération du {{ $etudiant->date_soutenance }}
@@ -225,8 +225,8 @@
                 </p>
             </div>
             
-            <div style="position: fixed; bottom: 40px; left: -2cm; text-align: center; width: 90%; left: 0; padding: 0 2cm;">
-                <hr style="border: 1px solid black; width: 100%; position: relative; left: -1cm; right: 1cm;">
+            <div style="position: fixed; bottom: 30px; left: -2cm; text-align: center; width: 90%; left: 0; padding: 0 2cm;">
+                <!-- <hr style="border: 1px solid black; width: 100%; position: relative; left: -1cm; right: 1cm;"> -->
                 <p style="position: relative; left: -1cm; font-size: 11pt; font-family: 'Economica';">
                     Ce certificat est le résultat de la mise à niveau de l'étudiant et n'est valable que pour une inscription aux études ingénieurs du CAP.
                 </p>
