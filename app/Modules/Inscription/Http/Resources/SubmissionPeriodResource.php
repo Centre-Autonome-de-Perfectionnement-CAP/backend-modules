@@ -15,8 +15,8 @@ class SubmissionPeriodResource extends JsonResource
         return [
             'id' => $this->id,
             'academic_year_id' => $this->academic_year_id,
-            'start_date' => $this->start_date?->toISOString(),
-            'end_date' => $this->end_date?->toISOString(),
+            'start_date' => $this->start_date?->format('Y-m-d'),
+            'end_date' => $this->end_date?->format('Y-m-d'),
             'is_active' => $this->is_active,
             'academic_year' => $this->whenLoaded('academicYear', function () {
                 return [

@@ -4,8 +4,7 @@ namespace App\Modules\Finance\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Str;
+use App\Traits\HasUuid;
 
 /**
  * Amount Model - Fee Structure
@@ -15,27 +14,29 @@ use Illuminate\Support\Str;
  */
 class Amount extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, HasUuid;
 
     protected $fillable = [
         'uuid',
-        'academic_year_id',
-        'department_id',
+        'type',
+        'libelle',
+        'program_id',
         'level',
-        'registration_fee',
-        'national_training_fee',
-        'international_training_fee',
-        'exempted_training_fee',
-        'sponsored_training_fee',
+        'academic_year_id',
+        'amount',
+        'sponsored_amount',
+        'is_active',
+        'penalty_amount',
+        'penalty_type',
+        'penalty_active',
     ];
 
     protected $casts = [
-        'level' => 'integer',
-        'registration_fee' => 'decimal:2',
-        'national_training_fee' => 'decimal:2',
-        'international_training_fee' => 'decimal:2',
-        'exempted_training_fee' => 'decimal:2',
-        'sponsored_training_fee' => 'decimal:2',
+        'amount' => 'decimal:2',
+        'sponsored_amount' => 'decimal:2',
+        'penalty_amount' => 'decimal:2',
+        'is_active' => 'boolean',
+        'penalty_active' => 'boolean',
     ];
 
     protected static function boot()

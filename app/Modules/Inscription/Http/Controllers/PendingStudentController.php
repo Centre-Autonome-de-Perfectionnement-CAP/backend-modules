@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Inscription\Models\PendingStudent;
 use App\Modules\Inscription\Http\Requests\CreatePendingStudentRequest;
 use App\Modules\Inscription\Http\Requests\SubmitDocumentsRequest;
+use App\Modules\Inscription\Http\Requests\UpdatePendingStudentLevelRequest;
 use App\Modules\Inscription\Http\Resources\PendingStudentResource;
 use App\Modules\Inscription\Services\PendingStudentService;
 use Illuminate\Http\JsonResponse;
@@ -73,15 +74,12 @@ class PendingStudentController extends Controller
      */
     public function index(Request $request): JsonResponse
 {
-    $filters = $request->only(['status', 'department_id', 'academic_year_id', 'entry_diploma_id', 'level', 'search']);
+    $filters = $request->only(['status', 'department_id', 'academic_year_id', 'entry_diploma_id', 'level', 'cohort', 'search']);
     $perPage = $this->getPerPage($request);
     
     $pendingStudents = $this->pendingStudentService->getAll($filters, $perPage);
-
-    // Transformez d'abord les données avec la Resource, puis passez-les au paginator
     $transformedData = PendingStudentResource::collection($pendingStudents->items());
     
-    // Créez un nouveau paginator avec les données transformées
     $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
         $transformedData,
         $pendingStudents->total(),
@@ -221,17 +219,40 @@ class PendingStudentController extends Controller
     public function update(CreatePendingStudentRequest $request, PendingStudent $pendingStudent): JsonResponse
     {
         $data = $request->validated();
-
-        // Si le statut est changé, utiliser la méthode changeStatus
-        if (isset($data['status']) && $data['status'] !== $pendingStudent->status) {
+        
+        \Log::info('=== UPDATE PENDING STUDENT START ===', [
+            'pending_student_id' => $pendingStudent->id,
+            'data_received' => $data,
+            'current_status' => $pendingStudent->status,
+            'current_cuca_opinion' => $pendingStudent->cuca_opinion,
+            'current_cuo_opinion' => $pendingStudent->cuo_opinion,
+        ]);
+        
+        // Si on met à jour les opinions CUCA ou CUO, ne pas changer le status automatiquement
+        $isOpinionUpdate = isset($data['cuca_opinion']) || isset($data['cuo_opinion']);
+        
+        \Log::info('Opinion update check', [
+            'isOpinionUpdate' => $isOpinionUpdate,
+            'has_cuca_opinion' => isset($data['cuca_opinion']),
+            'has_cuo_opinion' => isset($data['cuo_opinion']),
+            'has_status' => isset($data['status']),
+        ]);
+        
+        if (isset($data['status']) && $data['status'] !== $pendingStudent->status && !$isOpinionUpdate) {
+            \Log::info('Calling changeStatus', [
+                'old_status' => $pendingStudent->status,
+                'new_status' => $data['status'],
+            ]);
             $pendingStudent = $this->pendingStudentService->changeStatus($pendingStudent, $data['status']);
-            unset($data['status']); // Retirer le statut des données de mise à jour normale
+            unset($data['status']); 
         }
 
-        // Mettre à jour les autres champs si nécessaire
         if (!empty($data)) {
+            \Log::info('Calling update service', ['data' => $data]);
             $pendingStudent = $this->pendingStudentService->update($pendingStudent, $data);
         }
+        
+        \Log::info('=== UPDATE PENDING STUDENT END ===');
 
         return $this->updatedResponse(
             new PendingStudentResource($pendingStudent),
@@ -256,6 +277,19 @@ public function updateStatus(Request $request, PendingStudent $pendingStudent): 
         'Statuts mis à jour avec succès'
     );
 }
+
+    /**
+     * Mettre à jour le niveau d'études
+     */
+    public function updateLevel(UpdatePendingStudentLevelRequest $request, PendingStudent $pendingStudent): JsonResponse
+    {
+        $pendingStudent->update($request->validated());
+
+        return $this->successResponse(
+            new PendingStudentResource($pendingStudent),
+            'Niveau d\'études mis à jour avec succès'
+        );
+    }
 
     /**
      * @OA\Delete(

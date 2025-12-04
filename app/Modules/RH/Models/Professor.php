@@ -6,10 +6,11 @@ use App\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class Professor extends Authenticatable
 {
-    use HasFactory, Notifiable, HasUuid;
+    use HasFactory, Notifiable, HasUuid, HasApiTokens;
 
     /**
      * Create a new factory instance for the model.
@@ -42,6 +43,8 @@ class Professor extends Authenticatable
     protected $casts = [
         'password' => 'hashed',
     ];
+
+    protected $appends = ['full_name'];
 
     /**
      * Relation avec le grade

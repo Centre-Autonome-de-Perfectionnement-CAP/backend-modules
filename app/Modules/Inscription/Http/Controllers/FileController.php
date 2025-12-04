@@ -2,28 +2,32 @@
 
 namespace App\Modules\Inscription\Http\Controllers;
 
+use App\Http\Controllers\Controller;
+use App\Modules\Inscription\Services\FileService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
-class FileController
+class FileController extends Controller
 {
+    public function __construct(
+        protected FileService $fileService
+    ) {}
+
     public function viewLegacyFile(Request $request)
     {
-        $path = $request->query('path');
+        $path = urldecode($request->query('path'));
+        $file = $this->fileService->getLegacyFile($path);
         
-        if (!$path || !Storage::exists($path)) {
+        if (!$file) {
             abort(404, 'File not found');
         }
-
-        $mimeType = Storage::mimeType($path);
         
-        return response()->stream(function () use ($path) {
-            $stream = Storage::readStream($path);
+        return response()->stream(function () use ($file) {
+            $stream = Storage::disk('public')->readStream($file['path']);
             fpassthru($stream);
             fclose($stream);
         }, 200, [
-            'Content-Type' => $mimeType,
+            'Content-Type' => $file['mimeType'],
             'Content-Disposition' => 'inline',
         ]);
     }

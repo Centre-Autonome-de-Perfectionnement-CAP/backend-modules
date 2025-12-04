@@ -11,41 +11,70 @@ use Exception;
 class AuthService
 {
     /**
-     * Authentifier un utilisateur
+     * Authentifier un utilisateur ou un professeur
      */
     public function login(array $credentials): array
     {
+        // Chercher d'abord dans la table users
         $user = User::where('email', $credentials['email'])->first();
 
-        if (!$user || !Hash::check($credentials['password'], $user->password)) {
-            throw ValidationException::withMessages([
-                'email' => ['Les identifiants fournis sont incorrects. '],
-            ]);
-        }
-        $user->tokens()->delete();
+        if ($user && Hash::check($credentials['password'], $user->password)) {
+            $user->tokens()->delete();
+            $token = $user->createToken('auth_token')->plainTextToken;
 
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        Log::info('Utilisateur connecté', [
-            'user_id' => $user->id,
-            'email' => $user->email,
-        ]);
-
-        $user->load('roles');
-        
-        return [
-            'access_token' => $token,
-            'token_type' => 'Bearer',
-            'user' => [
-                'id' => $user->id,
-                'first_name' => $user->first_name,
-                'last_name' => $user->last_name,
+            Log::info('Utilisateur connecté', [
+                'user_id' => $user->id,
                 'email' => $user->email,
-                'phone' => $user->phone,
-                'role' => $user->roles->first()?->slug ?? 'etudiant',
-                'role_display_name' => $user->roles->first()?->name ?? 'Étudiant',
-            ],
-        ];
+            ]);
+
+            $user->load('roles');
+            
+            return [
+                'access_token' => $token,
+                'token_type' => 'Bearer',
+                'user' => [
+                    'id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'email' => $user->email,
+                    'phone' => $user->phone,
+                    'role' => $user->roles->first()?->slug ?? 'etudiant',
+                    'role_display_name' => $user->roles->first()?->name ?? 'Étudiant',
+                ],
+            ];
+        }
+
+        // Sinon, chercher dans la table professors
+        $professor = \App\Modules\RH\Models\Professor::where('email', $credentials['email'])->first();
+
+        if ($professor && Hash::check($credentials['password'], $professor->password)) {
+            $professor->tokens()->delete();
+            $token = $professor->createToken('auth_token')->plainTextToken;
+
+            Log::info('Professeur connecté', [
+                'professor_id' => $professor->id,
+                'email' => $professor->email,
+            ]);
+
+            return [
+                'access_token' => $token,
+                'token_type' => 'Bearer',
+                'user' => [
+                    'id' => $professor->id,
+                    'first_name' => $professor->first_name,
+                    'last_name' => $professor->last_name,
+                    'email' => $professor->email,
+                    'phone' => $professor->phone,
+                    'role' => 'professeur',
+                    'role_display_name' => 'Professeur',
+                    'user_type' => 'professor',
+                ],
+            ];
+        }
+
+        throw ValidationException::withMessages([
+            'email' => ['Les identifiants fournis sont incorrects.'],
+        ]);
     }
 
     /**
@@ -76,35 +105,60 @@ class AuthService
     }
 
     /**
-     * Déconnecter un utilisateur (révoquer tous ses tokens)
+     * Déconnecter un utilisateur ou professeur (révoquer tous ses tokens)
      */
-    public function logout(User $user): void
+    public function logout($user): void
     {
         $user->tokens()->delete();
 
         Log::info('Utilisateur déconnecté', [
             'user_id' => $user->id,
+            'type' => get_class($user),
         ]);
     }
 
     /**
-     * Déconnecter un utilisateur (révoquer seulement le token actuel)
+     * Déconnecter un utilisateur ou professeur (révoquer seulement le token actuel)
      */
-    public function logoutCurrent(User $user, $currentToken): void
+    public function logoutCurrent($user, $currentToken): void
     {
         $currentToken->delete();
 
         Log::info('Token révoqué', [
             'user_id' => $user->id,
+            'type' => get_class($user),
         ]);
     }
 
     /**
      * Récupérer les informations de l'utilisateur authentifié
      */
-    public function me(User $user): User
+    public function me($user): array
     {
-        return $user->load('roles');
+        if ($user instanceof User) {
+            $user->load('roles');
+            return [
+                'id' => $user->id,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'role' => $user->roles->first()?->slug ?? 'etudiant',
+                'role_display_name' => $user->roles->first()?->name ?? 'Étudiant',
+            ];
+        }
+
+        // Professeur
+        return [
+            'id' => $user->id,
+            'first_name' => $user->first_name,
+            'last_name' => $user->last_name,
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'role' => 'professeur',
+            'role_display_name' => 'Professeur',
+            'user_type' => 'professor',
+        ];
     }
 
     /**

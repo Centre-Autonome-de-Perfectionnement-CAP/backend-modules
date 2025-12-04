@@ -1,134 +1,201 @@
+@php
+    $include_contact = isset($include_contact) ? $include_contact : false;
+@endphp
+
+
+
 <!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Liste CUCA-CUO</title>
-    <style>
-        @page {
-            margin: 1.5cm;
-            size: A4 landscape;
-        }
-        body {
-            font-family: 'DejaVu Sans', Arial, sans-serif;
-            font-size: 10pt;
-            line-height: 1.4;
-            color: #333;
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #4CAF50;
-        }
-        .header h1 {
-            color: #4CAF50;
-            margin: 0;
-            font-size: 20pt;
-        }
-        .header .subtitle {
-            color: #666;
-            font-size: 10pt;
-            margin-top: 5px;
-        }
-        table {
+  <html lang="fr">  
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title >CUCA-CUO</title>
+      <style>
+       
+          @font-face {
+            font-family: "Arial";
+            src: url('./arial.TTF');
+          }
+
+          body {
+            margin: 0.5cm 1cm;
+            box-sizing: border-box;
+            font-size: Arial;
+          }
+          
+    
+
+          .title{
+            font-weight: bold;
+            text-decoration: underline;
+          }
+
+          .entete {
+            font-family: sans-serif;
+            font-size: 1.1rem;
+             width: 170mm;
+            margin-bottom: 10px;
+            margin-top: 12px;
+            margin-left: 25px;
+          }
+          
+          .entete thead th{
+            padding: 5px;
+          }
+          .entete tbody{
+            text-align: left;
+            width: 70mm;
+          }
+          .entete tbody tr td{
+            border: none;
+          }
+          .entete tbody tr th{
+/*             width: 60mm; */
+            text-decoration: underline;
+            text-align: left;
+          }
+          .dossier ul{
+            text-align: left;
+          }
+          
+          .dossier{
+            padding: 0;
+          }
+
+          .liste {
             width: 100%;
             border-collapse: collapse;
-            margin: 15px 0;
-            font-size: 8pt;
-        }
-        table th, table td {
-            padding: 6px;
+            margin: 10px 0 0 0;
+            text-align: center;
+          }
+          .liste th, td {
+              border: 0.5px solid black;
+              padding: 5px;
+          }
+     
+ 
+thead {
+    display: table-row-group !important; /* Empêche la répétition */
+}
+
+.liste tr, .liste td, .liste th {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+}
+.liste tr {
+    page-break-inside: auto !important;
+}
+
+          .name{
+            padding: 5px;
+            font-size: 1rem;
+          }
+          
+          .avis-cuca, .decision{
+            width: 10%;
+          }
+          
+          .numero {
+            width: 3%;
+          }
+          .list-group-item{
             text-align: left;
-            border: 1px solid #ddd;
-        }
-        table th {
-            background: #f8f8f8;
-            font-weight: bold;
-            color: #333;
-        }
-        table tr:nth-child(even) {
-            background: #f9f9f9;
-        }
-        .info-box {
-            background: #f5f5f5;
-            padding: 10px;
-            border-left: 4px solid #4CAF50;
-            margin: 15px 0;
-            font-size: 9pt;
-        }
-        .info-box p {
-            margin: 3px 0;
-        }
-        .footer-signature {
-            margin-top: 40px;
-            text-align: right;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>LISTE CUCA-CUO</h1>
-        <div class="subtitle">{{ $anneeAcademique ?? '' }}</div>
-    </div>
+          }
+      </style>
+    </head>   
+    <body> 
 
-    <div class="info-box">
-        @if(isset($classe))
-            <p><strong>Classe :</strong> {{ $classe }}</p>
-        @endif
-        @if(isset($specialite))
-            <p><strong>Spécialité :</strong> {{ $specialite }}</p>
-        @endif
-        @if(isset($niveau))
-            <p><strong>Niveau :</strong> {{ $niveau }}</p>
-        @endif
-        @if(isset($dateGeneration))
-            <p><strong>Date de génération :</strong> {{ $dateGeneration }}</p>
-        @endif
-    </div>
-
-    <table>
-        <thead>
-            <tr>
-                <th style="width: 3%;">N°</th>
-                <th style="width: 10%;">Matricule</th>
-                <th style="width: 18%;">Nom et Prénoms</th>
-                <th style="width: 8%;">Date Nais.</th>
-                <th style="width: 12%;">Lieu Nais.</th>
-                <th style="width: 6%;">Sexe</th>
-                <th style="width: 10%;">Nationalité</th>
-                <th style="width: 13%;">Diplôme</th>
-                <th style="width: 20%;">Établ. Origine</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($etudiants as $index => $etudiant)
+      <main>
+          <table class="entete">
+            <tbody>
                 <tr>
-                    <td style="text-align: center;">{{ $index + 1 }}</td>
-                    <td>{{ $etudiant['matricule'] ?? $etudiant['student_id'] ?? '' }}</td>
-                    <td>{{ $etudiant['nom'] ?? $etudiant['name'] ?? '' }}</td>
-                    <td style="text-align: center;">{{ $etudiant['dateNaissance'] ?? '' }}</td>
-                    <td>{{ $etudiant['lieuNaissance'] ?? '' }}</td>
-                    <td style="text-align: center;">{{ $etudiant['sexe'] ?? '' }}</td>
-                    <td>{{ $etudiant['nationalite'] ?? '' }}</td>
-                    <td>{{ $etudiant['diplome'] ?? '' }}</td>
-                    <td>{{ $etudiant['etablissementOrigine'] ?? '' }}</td>
+                  <th scope="row" class="title">Etablissement: </th>
+                  <td>ECOLE POLYTECHNIQUE D'ABOMEY-CALAVI</td>
                 </tr>
-            @endforeach
-        </tbody>
-    </table>
-
-    <div style="margin-top: 20px;">
-        <p><strong>Nombre total d'étudiants :</strong> {{ count($etudiants) }}</p>
-        @if(isset($statistiques))
-            <p><strong>Garçons :</strong> {{ $statistiques['garcons'] ?? '' }} | <strong>Filles :</strong> {{ $statistiques['filles'] ?? '' }}</p>
-        @endif
-    </div>
-
-    <div class="footer-signature">
-        <p>Fait à {{ $lieu ?? '___________' }}, le {{ $date ?? now()->format('d/m/Y') }}</p>
-        <p style="margin-top: 40px;"><strong>Le Directeur des Études</strong></p>
-        <p style="margin-top: 50px;">Signature et Cachet</p>
-    </div>
-</body>
+                <tr>
+                  <th scope="row" class="title">DEPARTEMENT: </th>
+                  <td>Centre Autonome de Perfectionnement (CAP)</td>
+                </tr>
+                <tr>
+                  <th scope="row" class="title">FORMATION: </th>
+                  <td>{{ $department }} ({{ $formation }})</td>
+                </tr>
+                <tr>
+                  <th scope="row" class="title">ANNEE ACADEMIQUE: </th>
+                  <td>{{ $academicYear }}</td>
+                </tr>
+            </tbody>
+          </table>
+   
+          <table class="liste">
+            <thead>
+                <tr> 
+                    <th>N° d'ordre</th>
+                    <th>Nom et prénoms</th>
+                    
+                    @if($include_contact)
+                    <th>Contact(s)</th>
+                    @endif
+                    
+                    <th>Nationalité</th>
+                    <th>Spécialité et année d'études sollicitées</th>
+                    <th>Composition du dossier</th>
+                    <th>Avis du CUCA (spécialité et années d'études accordées)</th>
+                    <th>Raison/Motif</th>
+                    <th>Décision de la CUO</th>
+                </tr>
+            </thead> 
+            @php
+                $i = 0;
+            @endphp
+            <tbody>
+              @foreach($pendingStudents as $student)
+              @php
+                 $i++;
+               @endphp
+                <tr>
+                    <td class="numero">{{ $i }}</td>
+                    <td>{{ $student->personalInformation->last_name . ' ' . $student->personalInformation->first_names }}</td>
+                    
+                    @if($includeContact)
+                    <td>
+                        <ul class="list-group list-group-numbered">
+                            @php
+                                $contacts = $student->personalInformation->contacts;
+                                if (is_string($contacts)) {
+                                    $contacts = json_decode($contacts, true) ?? [];
+                                }
+                            @endphp
+                            @foreach($contacts as $contact)
+                                <li class="list-group-item">{{ is_array($contact) ? ($contact['phone'] ?? '') : $contact }}</li>
+                            @endforeach
+                        </ul>
+                    </td>
+                    @endif
+                    
+                    <td>{{ $student->personalInformation->birth_country }}</td>
+                    <td>Première année en {{ $student->department->name ?? '' }}</td>
+                    <td>
+                      <ul class="list-group list-group-numbered">
+                      @php
+                          $documents = $student->documents;
+                          if (is_string($documents)) {
+                              $documents = json_decode($documents, true) ?? [];
+                          }
+                      @endphp
+                      @foreach($documents as $piece => $path)
+                      <li class="list-group-item">{{ $piece }}</li>
+                      @endforeach
+                      </ul>
+                    </td>
+                    <td class="avis-cuca">{{ $student->cuca_opinion === 'pending' ? 'Non défini' : $student->cuca_opinion }}</td>
+                    <td>{{ $student->cuca_comment ?? '' }}</td>
+                    <td class="decision">{{ $student->cuo_opinion === 'pending' ? 'Non défini' : ($student->cuo_opinion ?? '') }}</td>
+                </tr>
+                @endforeach
+            </tbody>
+          </table>
+      </main>
+      <footer></footer>
+    </body>
 </html>

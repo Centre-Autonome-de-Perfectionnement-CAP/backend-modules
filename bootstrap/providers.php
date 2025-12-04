@@ -10,4 +10,7 @@ return [
     App\Modules\Stockage\Providers\StockageServiceProvider::class,
     App\Modules\Contact\Providers\ContactServiceProvider::class,
     App\Modules\Cours\Providers\CoursServiceProvider::class,
+    App\Modules\Notes\Providers\NotesServiceProvider::class,
+    App\Modules\Soutenance\Providers\SoutenanceServiceProvider::class,
+    App\Modules\Attestation\Providers\AttestationServiceProvider::class,
 ];

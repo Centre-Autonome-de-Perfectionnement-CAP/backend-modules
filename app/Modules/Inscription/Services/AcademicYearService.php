@@ -6,12 +6,16 @@ use App\Modules\Inscription\Models\AcademicYear;
 use App\Modules\Inscription\Models\SubmissionPeriod;
 use App\Modules\Inscription\Models\ReclamationPeriod;
 use App\Exceptions\BusinessException;
+use App\Modules\Notes\Services\AcademicPathProgressionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class AcademicYearService
 {
+    public function __construct(
+        protected AcademicPathProgressionService $progressionService
+    ) {}
     /**
      * Récupérer toutes les années académiques
      */
@@ -50,6 +54,13 @@ class AcademicYearService
                 );
             }
 
+            $now = now();
+            $isCurrent = $now->greaterThanOrEqualTo($data['year_start']) && $now->lessThanOrEqualTo($data['year_end']);
+
+            if ($isCurrent) {
+                AcademicYear::where('is_current', true)->update(['is_current' => false]);
+            }
+
             $year = AcademicYear::create([
                 'uuid' => (string) Str::uuid(),
                 'academic_year' => $academicYearLabel,
@@ -57,7 +68,7 @@ class AcademicYearService
                 'year_end' => $data['year_end'],
                 'submission_start' => $data['submission_start'] ?? null,
                 'submission_end' => $data['submission_end'] ?? null,
-                'is_current' => true,
+                'is_current' => $isCurrent,
             ]);
 
             // Créer les périodes de soumission pour les départements
@@ -77,7 +88,26 @@ class AcademicYearService
                 'label' => $academicYearLabel,
             ]);
 
-            return $year->fresh();
+            // Progression automatique des étudiants
+            Log::info('Début de la progression automatique des étudiants', [
+                'academic_year_id' => $year->id,
+            ]);
+            
+            $this->progressionService->progressStudents($year);
+            
+            Log::info('Fin de la progression automatique des étudiants', [
+                'academic_year_id' => $year->id,
+            ]);
+
+            $freshYear = $year->fresh();
+            
+            Log::info('Année académique créée avec succès - Résumé final', [
+                'academic_year_id' => $freshYear->id,
+                'label' => $academicYearLabel,
+                'is_current' => $freshYear->is_current,
+            ]);
+            
+            return $freshYear;
         });
     }
 
@@ -344,7 +374,9 @@ class AcademicYearService
             ->with('department')
             ->get()
             ->groupBy(function ($period) {
-                return $period->start_date->format('Y-m-d H:i:s') . '_' . $period->end_date->format('Y-m-d H:i:s');
+                $startDate = $period->start_date ? $period->start_date->format('Y-m-d') : 'null';
+                $endDate = $period->end_date ? $period->end_date->format('Y-m-d') : 'null';
+                return $startDate . '_' . $endDate;
             });
 
         foreach ($submissionPeriods as $key => $groupedPeriods) {
@@ -355,8 +387,8 @@ class AcademicYearService
 
             $periods[] = [
                 'type' => 'depot',
-                'start' => $firstPeriod->start_date->format('d/m/Y H:i'),
-                'end' => $firstPeriod->end_date->format('d/m/Y H:i'),
+                'start' => $firstPeriod->start_date ? $firstPeriod->start_date->format('d/m/Y') : '',
+                'end' => $firstPeriod->end_date ? $firstPeriod->end_date->format('d/m/Y') : '',
                 'filieres' => $departments,
             ];
         }
@@ -367,8 +399,8 @@ class AcademicYearService
         foreach ($reclamationPeriods as $period) {
             $periods[] = [
                 'type' => 'reclamation',
-                'start' => $period->start_date->format('d/m/Y H:i'),
-                'end' => $period->end_date->format('d/m/Y H:i'),
+                'start' => $period->start_date ? $period->start_date->format('d/m/Y') : '',
+                'end' => $period->end_date ? $period->end_date->format('d/m/Y') : '',
                 'filieres' => [], // Les réclamations n'ont pas de départements spécifiques
             ];
         }

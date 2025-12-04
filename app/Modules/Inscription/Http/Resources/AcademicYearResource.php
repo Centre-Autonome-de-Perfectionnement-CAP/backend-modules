@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inscription\Http\Resources;
 
+use App\Modules\Inscription\Models\AcademicYear;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -14,6 +15,14 @@ class AcademicYearResource extends JsonResource
     {
         $now = now();
         $isCurrent = $now->between($this->year_start, $this->year_end);
+        if ($this->is_current !== $isCurrent) {
+            $this->resource->update(['is_current' => $isCurrent]);
+            if ($isCurrent) {
+                AcademicYear::where('id', '!=', $this->id)
+                    ->where('is_current', true)
+                    ->update(['is_current' => false]);
+            }
+        }
         
         return [
             'id' => $this->id,

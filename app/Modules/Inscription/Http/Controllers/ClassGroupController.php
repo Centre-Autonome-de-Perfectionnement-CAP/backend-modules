@@ -3,12 +3,12 @@
 namespace App\Modules\Inscription\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Inscription\Models\ClassGroup;
 use App\Modules\Inscription\Services\ClassGroupService;
 use App\Modules\Inscription\Http\Requests\StoreClassGroupRequest;
+use App\Modules\Inscription\Http\Requests\GetClassGroupsRequest;
+use App\Modules\Inscription\Http\Requests\CreateDefaultGroupRequest;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 /**
  * @OA\Tag(
@@ -29,12 +29,13 @@ class ClassGroupController extends Controller
     /**
      * Liste des groupes pour une classe
      */
-    public function index(Request $request): JsonResponse
+    public function index(GetClassGroupsRequest $request): JsonResponse
     {
         $groups = $this->classGroupService->getGroups(
             $request->input('academic_year_id'),
             $request->input('department_id'),
-            $request->input('study_level')
+            $request->input('study_level'),
+            $request->input('cohort')
         );
 
         return $this->successResponse($groups, 'Groupes récupérés avec succès');
@@ -70,17 +71,33 @@ class ClassGroupController extends Controller
         return $this->deletedResponse('Groupe supprimé avec succès');
     }
 
+
+    
     /**
-     * Supprimer tous les groupes d'une classe
+     * Créer un groupe unique par défaut avec tous les étudiants
      */
-    public function destroyAll(Request $request): JsonResponse
+    public function createDefault(CreateDefaultGroupRequest $request): JsonResponse
     {
-        $deleted = $this->classGroupService->deleteAllGroups(
+        $result = $this->classGroupService->createDefaultGroup(
             $request->input('academic_year_id'),
             $request->input('department_id'),
-            $request->input('study_level')
+            $request->input('study_level'),
+            $request->input('cohort')
         );
         
-        return $this->deletedResponse("$deleted groupe(s) supprimé(s) avec succès");
+        if (!$result) {
+            return $this->errorResponse('Aucun étudiant trouvé pour cette cohorte', 404);
+        }
+        
+        return $this->createdResponse($result, 'Groupe unique créé avec succès');
+    }
+
+    /**
+     * Récupère les groupes d'une classe spécifique (pour création de programmes)
+     */
+    public function getGroupsByClass(int $classGroupId): JsonResponse
+    {
+        $groups = $this->classGroupService->getGroupsByClassId($classGroupId);
+        return $this->successResponse($groups, 'Groupes récupérés avec succès');
     }
 }

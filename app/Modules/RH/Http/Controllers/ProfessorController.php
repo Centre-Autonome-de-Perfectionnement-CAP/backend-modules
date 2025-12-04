@@ -20,7 +20,7 @@ class ProfessorController extends Controller
     public function __construct(
         protected ProfessorService $professorService
     ) {
-        $this->middleware('auth:sanctum');
+        $this->middleware('auth:sanctum')->except(['index']);
     }
 
     /**
@@ -106,5 +106,23 @@ class ProfessorController extends Controller
     {
         $this->professorService->delete($professor);
         return $this->deletedResponse('Professeur supprimé avec succès');
+    }
+
+    /**
+     * Récupérer la liste des banques utilisées
+     */
+    public function getBanks(): JsonResponse
+    {
+        $banks = Professor::whereNotNull('bank')
+            ->where('bank', '!=', '')
+            ->distinct()
+            ->pluck('bank')
+            ->sort()
+            ->values();
+
+        return $this->successResponse(
+            $banks,
+            'Banques récupérées avec succès'
+        );
     }
 }

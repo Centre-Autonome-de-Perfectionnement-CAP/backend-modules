@@ -11,7 +11,7 @@ class CourseElementProfessorService
     public function getAll(array $filters = [], int $perPage = 15)
     {
         $query = CourseElementProfessor::query()
-            ->with(['courseElement.teachingUnit', 'professor', 'principalProfessor', 'academicYear', 'classGroup']);
+            ->with(['courseElement.teachingUnit', 'professor', 'academicYear', 'classGroup']);
 
         if (!empty($filters['course_element_id'])) {
             $query->where('course_element_id', $filters['course_element_id']);
@@ -27,6 +27,10 @@ class CourseElementProfessorService
 
         if (!empty($filters['class_group_id'])) {
             $query->where('class_group_id', $filters['class_group_id']);
+        }
+
+        if (isset($filters['is_primary'])) {
+            $query->where('is_primary', (bool)$filters['is_primary']);
         }
 
         if (!empty($filters['search'])) {
@@ -59,10 +63,10 @@ class CourseElementProfessorService
             'id' => $assignment->id,
             'course_element_id' => $assignment->course_element_id,
             'professor_id' => $assignment->professor_id,
-            'principal_professor_id' => $assignment->principal_professor_id,
+            'is_primary' => $assignment->is_primary ?? false,
         ]);
 
-        return $assignment->load(['courseElement.teachingUnit', 'professor', 'principalProfessor']);
+        return $assignment->load(['courseElement.teachingUnit', 'professor']);
     }
 
     public function update(CourseElementProfessor $assignment, array $data): CourseElementProfessor
@@ -73,7 +77,7 @@ class CourseElementProfessorService
             'id' => $assignment->id,
         ]);
 
-        return $assignment->fresh(['courseElement.teachingUnit', 'professor', 'principalProfessor', 'academicYear', 'classGroup']);
+        return $assignment->fresh(['courseElement.teachingUnit', 'professor', 'academicYear', 'classGroup']);
     }
 
     public function delete(CourseElementProfessor $assignment): bool
@@ -99,7 +103,7 @@ class CourseElementProfessorService
     public function getByCourseElement(int $courseElementId, ?int $academicYearId = null, ?int $classGroupId = null)
     {
         $query = CourseElementProfessor::where('course_element_id', $courseElementId)
-            ->with(['professor', 'principalProfessor', 'courseElement', 'academicYear', 'classGroup']);
+            ->with(['professor', 'courseElement', 'academicYear', 'classGroup']);
 
         if ($academicYearId) {
             $query->where('academic_year_id', $academicYearId);
@@ -130,7 +134,6 @@ class CourseElementProfessorService
                     $created[] = CourseElementProfessor::create([
                         'course_element_id' => $assignment->course_element_id,
                         'professor_id' => $assignment->professor_id,
-                        'principal_professor_id' => $assignment->principal_professor_id,
                         'academic_year_id' => $nextAcademicYearId,
                         'class_group_id' => $assignment->class_group_id,
                         'is_primary' => $assignment->is_primary,

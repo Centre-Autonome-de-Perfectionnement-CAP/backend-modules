@@ -5,15 +5,19 @@ namespace App\Modules\Notes\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Notes\Services\LmdGradeService;
 use App\Modules\Notes\Services\OldGradeService;
+use App\Modules\Notes\Http\Requests\GetGradeSheetRequest;
+use App\Modules\Notes\Http\Requests\AddColumnRequest;
+use App\Modules\Notes\Http\Requests\UpdateSingleGradeRequest;
+use App\Modules\Notes\Http\Requests\SetWeightingRequest;
 use App\Modules\Cours\Models\Program;
-use App\Modules\Inscription\Models\ClassGroup;
 use App\Traits\ApiResponse;
+use App\Traits\HasPagination;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ProfessorGradeController extends Controller
 {
-    use ApiResponse;
+    use ApiResponse, HasPagination;
 
     private LmdGradeService $lmdGradeService;
     private OldGradeService $oldGradeService;
@@ -25,121 +29,285 @@ class ProfessorGradeController extends Controller
     }
 
     /**
-     * Obtient les classes d'un professeur pour un semestre donné
-     * 
-     * GET /api/notes/professor/my-classes-by-semester/{semester}
+     * Obtient les classes d'un professeur regroupées par cycle
      */
-    public function getClassesBySemester(Request $request, int $semester): JsonResponse
+    public function getMyClasses(Request $request): JsonResponse
     {
-        $professorId = $request->user()->professor_id ?? $request->input('professor_id');
+        // L'utilisateur connecté est le professeur lui-même
+        $professorId = $request->user()->id;
+        $academicYearId = $request->input('academic_year_id') ? (int) $request->input('academic_year_id') : null;
+        $departmentId = $request->input('department_id') ? (int) $request->input('department_id') : null;
+        $cohort = $request->input('cohort');
 
         if (!$professorId) {
             return $this->notFoundResponse('Professeur non trouvé');
         }
 
-        // Récupérer l'année académique courante
-        $academicYear = \App\Modules\Inscription\Models\AcademicYear::latest('start_date')->first();
+        $result = $this->lmdGradeService->getProfessorClassesByCycle(
+            $professorId, 
+            $academicYearId, 
+            $departmentId,
+            $cohort
+        );
 
-        if (!$academicYear) {
-            return $this->successResponse([
-                'classes' => [],
-                'semester' => $semester,
-            ], 'Aucune année académique trouvée');
-        }
-
-        // Récupérer les classes où le professeur a des programmes pour ce semestre
-        $classes = ClassGroup::where('academic_year_id', $academicYear->id)
-            ->whereHas('programs', function ($query) use ($professorId, $semester) {
-                $query->whereHas('courseElementProfessor', function ($subQuery) use ($professorId) {
-                    $subQuery->where('professor_id', $professorId);
-                });
-                // TODO: Ajouter filtre semestre si le champ existe dans programs
-            })
-            ->with(['department', 'cycle'])
-            ->get();
-
-        return $this->successResponse([
-            'classes' => $classes,
-            'semester' => $semester,
-            'academic_year' => $academicYear,
-        ], 'Classes récupérées avec succès');
+        return $this->successResponse($result, 'Classes récupérées avec succès');
     }
 
     /**
      * Obtient les programmes d'une classe pour un professeur
-     * 
-     * GET /api/notes/professor/programs-by-class/{class_group_id}
      */
     public function getProgramsByClass(Request $request, int $classGroupId): JsonResponse
     {
-        $professorId = $request->user()->professor_id ?? $request->input('professor_id');
+        // L'utilisateur connecté est le professeur lui-même
+        $professorId = $request->user()->id;
 
         if (!$professorId) {
             return $this->notFoundResponse('Professeur non trouvé');
         }
 
-        $classGroup = ClassGroup::with(['department', 'cycle'])->findOrFail($classGroupId);
+        $result = $this->lmdGradeService->getProgramsByClass($professorId, $classGroupId);
 
-        $programs = Program::where('class_group_id', $classGroupId)
-            ->whereHas('courseElementProfessor', function ($query) use ($professorId) {
-                $query->where('professor_id', $professorId);
-            })
-            ->with(['courseElementProfessor.courseElement', 'courseElementProfessor.professor'])
-            ->get();
-
-        return $this->successResponse([
-            'class_group' => $classGroup,
-            'programs' => $programs->map(function ($program) {
-                return [
-                    'id' => $program->id,
-                    'uuid' => $program->uuid,
-                    'course_name' => $program->courseElementProfessor->courseElement->name ?? 'N/A',
-                    'professor_name' => $program->courseElementProfessor->professor->name ?? 'N/A',
-                    'weighting' => $program->weighting ?? [],
-                    'column_count' => count($program->weighting ?? []),
-                ];
-            }),
-        ], 'Programmes récupérés avec succès');
+        return $this->successResponse($result, 'Programmes récupérés avec succès');
     }
 
     /**
-     * Obtient la fiche de notation pour un programme (avec les étudiants)
-     * Détecte automatiquement si c'est LMD ou ancien système
-     * 
-     * GET /api/notes/professor/students-by-program/{program_uuid}
+     * Obtient la fiche de notation pour un programme
      */
-    public function getStudentsByProgram(Request $request, string $programUuid): JsonResponse
+    public function getGradeSheet(Request $request, string $program): JsonResponse
     {
-        $program = Program::where('uuid', $programUuid)
-            ->with(['classGroup.cycle', 'courseElementProfessor.courseElement', 'courseElementProfessor.professor'])
+        $programModel = Program::where('uuid', $program)
+            ->with(['classGroup.cycle', 'courseElementProfessor.courseElement'])
             ->firstOrFail();
 
-        // Détecte si c'est LMD ou ancien système
+        $isLmd = $programModel->classGroup->cycle->is_lmd ?? false;
+        $service = $isLmd ? $this->lmdGradeService : $this->oldGradeService;
+        
+        $result = $service->getGradeSheet($programModel, $request->input('cohort'));
+
+        return $this->successResponse($result, 'Fiche de notation récupérée avec succès');
+    }
+
+    /**
+     * Obtient la liste des étudiants pour créer une évaluation
+     */
+    public function getStudentsForEvaluation(Request $request, string $program): JsonResponse
+    {
+        $programModel = Program::where('uuid', $program)
+            ->with(['classGroup.cycle', 'classGroup.department', 'courseElementProfessor.courseElement'])
+            ->firstOrFail();
+
+        $isLmd = $programModel->classGroup->cycle->is_lmd ?? false;
+        $service = $isLmd ? $this->lmdGradeService : $this->oldGradeService;
+        
+        $result = $service->getStudentsForEvaluation($programModel, $request->input('cohort'));
+
+        return $this->successResponse($result, 'Étudiants récupérés avec succès');
+    }
+
+    /**
+     * Crée une nouvelle évaluation (colonne de notes)
+     */
+    public function createEvaluation(AddColumnRequest $request): JsonResponse
+    {
+        // Accepter UUID ou ID numérique
+        $programId = $request->program_id;
+        if (is_string($programId) && strlen($programId) === 36) {
+            $program = Program::with('classGroup.cycle')->where('uuid', $programId)->firstOrFail();
+        } else {
+            $program = Program::with('classGroup.cycle')->findOrFail($programId);
+        }
+        
         $isLmd = $program->classGroup->cycle->is_lmd ?? false;
+        $service = $isLmd ? $this->lmdGradeService : $this->oldGradeService;
+
+        $result = $service->createEvaluation(
+            $program->id,
+            $request->notes,
+            $request->boolean('is_retake', false)
+        );
+
+        return $this->createdResponse($result, 'Évaluation créée avec succès');
+    }
+
+    /**
+     * Met à jour une note individuelle
+     */
+    public function updateGrade(UpdateSingleGradeRequest $request): JsonResponse
+    {
+        $programId = $request->program_id;
+        if (is_string($programId) && strlen($programId) === 36) {
+            $program = Program::with('classGroup.cycle')->where('uuid', $programId)->firstOrFail();
+        } else {
+            $program = Program::with('classGroup.cycle')->findOrFail($programId);
+        }
+        
+        $isLmd = $program->classGroup->cycle->is_lmd ?? false;
+        $service = $isLmd ? $this->lmdGradeService : $this->oldGradeService;
+
+        // Récupérer le nombre de colonnes depuis les notes de l'étudiant
+        $grade = \App\Modules\Notes\Models\LmdSystemGrade::where('student_pending_student_id', $request->student_pending_student_id)
+            ->where('program_id', $program->id)
+            ->first();
+        
+        $columnCount = $grade ? count($grade->grades ?? []) : 0;
+        $isSessionNormale = $request->position < $columnCount;
+        $adjustedPosition = $isSessionNormale ? $request->position : ($request->position - $columnCount);
+
+        $result = $service->updateNoteAtPosition(
+            $request->student_pending_student_id,
+            $program->id,
+            $adjustedPosition,
+            $request->value,
+            $isSessionNormale
+        );
+
+        return $this->updatedResponse($result, 'Note mise à jour avec succès');
+    }
+
+    /**
+     * Définit la pondération des évaluations
+     */
+    public function setWeighting(SetWeightingRequest $request): JsonResponse
+    {
+        $programId = $request->program_id;
+        if (is_string($programId) && strlen($programId) === 36) {
+            $program = Program::with('classGroup.cycle')->where('uuid', $programId)->firstOrFail();
+        } else {
+            $program = Program::with('classGroup.cycle')->findOrFail($programId);
+        }
+        
+        $isLmd = $program->classGroup->cycle->is_lmd ?? false;
+        $service = $isLmd ? $this->lmdGradeService : $this->oldGradeService;
+
+        $result = $service->setPonderation($program->id, $request->weighting);
+
+        return $this->updatedResponse($result, 'Pondération mise à jour avec succès');
+    }
+
+    /**
+     * Exporte la fiche récapitulative en PDF
+     */
+    public function exportGradeSheet(Request $request, string $program)
+    {
+        $programModel = Program::with([
+            'classGroup.department', 
+            'classGroup.cycle', 
+            'classGroup.academicYear',
+            'courseElementProfessor.courseElement',
+            'courseElementProfessor.professor'
+        ])->where('uuid', $program)->firstOrFail();
+        
+        $isLmd = $programModel->classGroup->cycle->is_lmd ?? false;
+        $service = $isLmd ? $this->lmdGradeService : $this->oldGradeService;
+
+        $gradeSheet = $service->getGradeSheet($programModel, $request->cohort);
+        
+        $includeRetake = $request->boolean('include_retake', false);
+        
+        $department = $programModel->classGroup->department;
+        $academicYear = $programModel->classGroup->academicYear;
+        $professor = $programModel->courseElementProfessor->professor ?? null;
+        $classeLabel = ($department->abbreviation ?? $department->name) . '-' . $programModel->classGroup->study_level;
+        
+        $data = [
+            'annee' => $academicYear ? $academicYear->academic_year : 'N/A',
+            'filiere' => $department->name ?? 'N/A',
+            'classe' => $classeLabel,
+            'matiere' => $programModel->courseElementProfessor->courseElement->name ?? 'N/A',
+            'enseignant' => $professor ? (($professor->last_name ?? '') . ' ' . ($professor->first_names ?? $professor->first_name ?? '')) : 'N/A',
+            'column_count' => $gradeSheet['program']['column_count'],
+            'weighting' => $gradeSheet['program']['weighting'],
+            'include_retake' => $includeRetake,
+            'retake_column_count' => $includeRetake ? $gradeSheet['program']['retake_column_count'] : 0,
+            'retake_weighting' => $includeRetake ? $gradeSheet['program']['retake_weighting'] : [],
+            'etudiants' => $gradeSheet['students']->map(function($student) use ($includeRetake) {
+                return (object)[
+                    'etudiant' => (object)[
+                        'student_id_number' => $student['student_id'] ?? 'N/A',
+                        'nom' => $student['last_name'],
+                        'prenoms' => $student['first_names']
+                    ],
+                    'notes' => $student['grades'],
+                    'moyenne' => $student['average'],
+                    'retake_grades' => $includeRetake ? ($student['retake_grades'] ?? []) : [],
+                    'retake_average' => $includeRetake ? ($student['retake_average'] ?? null) : null
+                ];
+            })
+        ];
+
+        $cohort = $request->cohort ?? 'all';
+        $dateTime = now()->format('Ymd_His');
+        $filename = 'FICHE_NOTES_' . str_replace(['/', '-', ' '], '_', $academicYear->academic_year ?? 'N_A') . '_COHORTE_' . $cohort . '_' . ($department->abbreviation ?? 'N_A') . '_' . $programModel->classGroup->study_level . '_' . $dateTime . '.pdf';
+        
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('core::pdfs.fiche-recapitulatif-notes', $data)
+            ->setPaper('a4', 'portrait');
+        
+        return response()->streamDownload(function() use ($pdf) {
+            echo $pdf->output();
+        }, $filename, ['Content-Type' => 'application/pdf']);
+    }
+
+    /**
+     * Duplique une colonne de notes complète
+     */
+    public function duplicateGrade(Request $request): JsonResponse
+    {
+        $request->validate([
+            'program_id' => 'required',
+            'column_index' => 'required|integer|min:0',
+            'session_normale' => 'boolean'
+        ]);
+
+        $programId = $request->program_id;
+        if (is_string($programId) && strlen($programId) === 36) {
+            $program = Program::with('classGroup.cycle')->where('uuid', $programId)->firstOrFail();
+        } else {
+            $program = Program::with('classGroup.cycle')->findOrFail($programId);
+        }
+        
+        $isLmd = $program->classGroup->cycle->is_lmd ?? false;
+        $service = $isLmd ? $this->lmdGradeService : $this->oldGradeService;
+
+        $result = $service->duplicateColumn(
+            $program->id,
+            $request->column_index,
+            $request->boolean('session_normale', true)
+        );
+
+        return $this->createdResponse($result, 'Colonne dupliquée avec succès');
+    }
+
+    /**
+     * Supprime une colonne de notes (évaluation)
+     */
+    public function deleteEvaluation(Request $request): JsonResponse
+    {
+        $request->validate([
+            'program_id' => 'required',
+            'column_index' => 'required|integer|min:0',
+            'session_normale' => 'boolean'
+        ]);
+
+        $programId = $request->program_id;
+        if (is_string($programId) && strlen($programId) === 36) {
+            $program = Program::with('classGroup.cycle')->where('uuid', $programId)->firstOrFail();
+        } else {
+            $program = Program::with('classGroup.cycle')->findOrFail($programId);
+        }
+        
+        $isLmd = $program->classGroup->cycle->is_lmd ?? false;
+        $service = $isLmd ? $this->lmdGradeService : $this->oldGradeService;
 
         if ($isLmd) {
-            $students = $this->lmdGradeService->getStudentsByProgram($program);
+            $service->deleteNoteColumn(
+                $program->id,
+                $request->column_index,
+                $request->boolean('session_normale', true)
+            );
         } else {
-            $students = $this->oldGradeService->getStudentsByProgram($program);
+            $service->deleteNoteColumn($program->id, $request->column_index);
         }
 
-        return $this->successResponse([
-            'program' => [
-                'id' => $program->id,
-                'uuid' => $program->uuid,
-                'name' => $program->courseElementProfessor->courseElement->name ?? 'N/A',
-                'class_group' => [
-                    'id' => $program->classGroup->id,
-                    'name' => $program->classGroup->name ?? 'N/A',
-                    'level' => $program->classGroup->level ?? 'N/A',
-                ],
-                'is_lmd' => $isLmd,
-                'weighting' => $program->weighting ?? [],
-                'retake_weighting' => $program->retake_weighting ?? [],
-                'column_count' => count($program->weighting ?? []),
-            ],
-            'students' => $students,
-            'total_students' => $students->count(),
-        ], 'Étudiants récupérés avec succès');
+        return $this->successResponse(null, 'Évaluation supprimée avec succès');
     }
 }

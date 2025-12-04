@@ -81,7 +81,7 @@ class StudentController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $filters = $request->only(['year', 'filiere', 'entry_diploma', 'niveau', 'redoublant', 'search']);
+        $filters = $request->only(['year', 'filiere', 'entry_diploma', 'niveau', 'cohort', 'redoublant', 'search']);
         $perPage = $this->getPerPage($request);
         
         $students = $this->studentService->getAll($filters, $perPage);
@@ -165,7 +165,14 @@ class StudentController extends Controller
      */
     public function exportFichePresence(Request $request)
     {
-        $filters = $request->only(['year', 'filiere', 'niveau', 'groupe']);
+        $request->validate([
+            'cohort' => 'required|not_in:all',
+        ], [
+            'cohort.required' => 'La sélection de la cohorte est obligatoire',
+            'cohort.not_in' => 'Veuillez sélectionner une cohorte spécifique',
+        ]);
+        
+        $filters = $request->only(['year', 'filiere', 'niveau', 'cohort', 'groupe']);
         return $this->studentService->exportFichePresence($filters);
     }
 
@@ -207,7 +214,14 @@ class StudentController extends Controller
      */
     public function exportFicheEmargement(Request $request)
     {
-        $filters = $request->only(['year', 'filiere', 'niveau', 'groupe']);
+        $request->validate([
+            'cohort' => 'required|not_in:all',
+        ], [
+            'cohort.required' => 'La sélection de la cohorte est obligatoire',
+            'cohort.not_in' => 'Veuillez sélectionner une cohorte spécifique',
+        ]);
+        
+        $filters = $request->only(['year', 'filiere', 'niveau', 'cohort', 'groupe']);
         return $this->studentService->exportFicheEmargement($filters);
     }
 

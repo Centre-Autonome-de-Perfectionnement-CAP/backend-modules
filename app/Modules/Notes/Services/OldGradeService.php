@@ -19,17 +19,44 @@ class OldGradeService
      * Récupère les étudiants d'un programme avec leurs notes
      * 
      * @param Program $program
+     * @param string|null $cohort
      * @return \Illuminate\Support\Collection
      */
-    public function getStudentsByProgram(Program $program)
+    public function getStudentsByProgram(Program $program, ?string $cohort = null)
     {
         $classGroup = $program->classGroup;
 
-        $academicPaths = \App\Modules\Inscription\Models\AcademicPath::whereHas('studentPendingStudent', function ($q) use ($classGroup) {
-            $q->where('academic_year_id', $classGroup->academic_year_id)
-                ->where('study_level', $classGroup->level)
-                ->where('year_decision', '!=', 'failed');
-        })->get();
+        $studentIds = \App\Modules\Inscription\Models\StudentGroup::where('class_group_id', $classGroup->id)
+            ->pluck('student_id')
+            ->toArray();
+
+        if (empty($studentIds)) {
+            return collect([]);
+        }
+
+        $studentPendingStudentIds = \App\Modules\Inscription\Models\StudentPendingStudent::whereIn('student_id', $studentIds)
+            ->pluck('id')
+            ->toArray();
+
+        if (empty($studentPendingStudentIds)) {
+            return collect([]);
+        }
+
+        $query = \App\Modules\Inscription\Models\AcademicPath::with([
+                'studentPendingStudent.pendingStudent.personalInformation'
+            ])
+            ->whereIn('student_pending_student_id', $studentPendingStudentIds)
+            ->where('academic_year_id', $classGroup->academic_year_id)
+            ->where(function ($q) {
+                $q->where('year_decision', '!=', 'failed')
+                  ->orWhereNull('year_decision');
+            });
+
+        if ($cohort) {
+            $query->where('cohort', $cohort);
+        }
+
+        $academicPaths = $query->get();
 
         return $academicPaths->map(function ($academicPath) use ($program) {
             $studentPending = $academicPath->studentPendingStudent;
@@ -50,6 +77,34 @@ class OldGradeService
         })->filter(function ($item) {
             return $item['last_name'] && $item['first_names'];
         })->sortBy('last_name')->values();
+    }
+
+    /**
+     * Obtient la liste des étudiants d'un programme (sans notes)
+     */
+    public function getStudentsForEvaluation(Program $program, ?string $cohort = null): array
+    {
+        $students = $this->getStudentsByProgram($program, $cohort);
+        
+        return [
+            'program' => [
+                'id' => $program->id,
+                'uuid' => $program->uuid,
+                'name' => $program->courseElementProfessor->courseElement->name ?? 'N/A',
+                'class_group' => [
+                    'id' => $program->classGroup->id,
+                    'name' => $program->classGroup->department->name . ' - Niveau ' . $program->classGroup->study_level . ($program->classGroup->group_name ? ' (' . $program->classGroup->group_name . ')' : ''),
+                    'level' => $program->classGroup->study_level,
+                ],
+            ],
+            'students' => $students->map(function ($student) {
+                return [
+                    'student_pending_student_id' => $student['student_pending_student_id'],
+                    'last_name' => $student['last_name'],
+                    'first_names' => $student['first_names'],
+                ];
+            })->values(),
+        ];
     }
 
     /**
@@ -213,5 +268,90 @@ class OldGradeService
         }
 
         return true;
+    }
+
+    /**
+     * Obtient la fiche de notation complète
+     */
+    public function getGradeSheet(Program $program, ?string $cohort = null): array
+    {
+        $students = $this->getStudentsByProgram($program, $cohort);
+        
+        $weighting = $program->weighting ?? [];
+        $weightingArray = is_array($weighting) ? array_values($weighting) : [];
+        
+        return [
+            'program' => [
+                'id' => $program->id,
+                'uuid' => $program->uuid,
+                'name' => $program->courseElementProfessor->courseElement->name ?? 'N/A',
+                'class_group' => [
+                    'id' => $program->classGroup->id,
+                    'name' => $program->classGroup->department->name . ' - Niveau ' . $program->classGroup->study_level . ($program->classGroup->group_name ? ' (' . $program->classGroup->group_name . ')' : ''),
+                    'level' => $program->classGroup->study_level,
+                ],
+                'weighting' => $weightingArray,
+                'column_count' => count($weightingArray)
+            ],
+            'students' => $students,
+            'total_students' => $students->count(),
+            'completed_students' => $students->filter(function ($student) {
+                return !in_array(-1, $student['grades'] ?? []);
+            })->count()
+        ];
+    }
+
+    /**
+     * Crée une nouvelle évaluation
+     */
+    public function createEvaluation(int $programId, array $notes, bool $isRetake = false): array
+    {
+        $defaultNotes = [];
+        $program = Program::findOrFail($programId);
+        $students = $this->getStudentsByProgram($program);
+        
+        foreach ($students as $student) {
+            $defaultNotes[$student['student_pending_student_id']] = -1;
+        }
+        
+        foreach ($notes as $studentId => $note) {
+            if (isset($defaultNotes[$studentId])) {
+                $defaultNotes[$studentId] = $note;
+            }
+        }
+        
+        return $this->addNoteColumn($programId, $defaultNotes);
+    }
+
+    /**
+     * Duplique une colonne de notes complète
+     */
+    public function duplicateColumn(int $programId, int $columnIndex, bool $sessionNormale = true): array
+    {
+        $program = Program::findOrFail($programId);
+        $grades = OldSystemGrade::where('program_id', $programId)->get();
+        
+        DB::beginTransaction();
+        try {
+            $notesToAdd = [];
+            
+            foreach ($grades as $grade) {
+                $gradesArray = $grade->grades ?? [];
+                
+                if (isset($gradesArray[$columnIndex])) {
+                    $notesToAdd[$grade->student_pending_student_id] = $gradesArray[$columnIndex];
+                } else {
+                    $notesToAdd[$grade->student_pending_student_id] = -1;
+                }
+            }
+            
+            $result = $this->addNoteColumn($programId, $notesToAdd);
+            
+            DB::commit();
+            return $result;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
     }
 }

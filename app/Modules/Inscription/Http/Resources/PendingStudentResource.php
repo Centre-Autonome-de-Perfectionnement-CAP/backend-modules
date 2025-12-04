@@ -27,9 +27,14 @@ class PendingStudentResource extends JsonResource
         $documents = [];
         if ($this->documents) {
             foreach ($this->documents as $name => $value) {
-                $documents[$name] = url("/api/inscription/files/legacy?path=" . urlencode($value));
+                // Ajouter 'public/' au chemin si nécessaire
+                $path = str_starts_with($value, 'public/') ? $value : 'public/' . $value;
+                $documents[$name] = url("/api/inscription/files/legacy?path=" . urlencode($path));
             }
         }
+
+        // Utiliser le statut réel de la base de données
+        $status = $this->status ?? 'pending';
 
         return [
             'id' => $this->id,
@@ -38,20 +43,21 @@ class PendingStudentResource extends JsonResource
             'last_name' => $this->personalInformation?->last_name,
             'phone' => $phone,
             'gender' => $this->personalInformation?->gender,
-            'status' => $this->cuca_opinion ?? 'pending',
+            'status' => $status,
             'documents' => $documents,
             'submitted_at' => $this->created_at?->toISOString(),
             'department' => $this->department?->name,
             'exonere' => $this->exonere === 'Oui' ? 'Oui' : 'Non',
             'sponsorise' => $this->sponsorise === 'Oui' ? 'Oui' : 'Non',
-            'opinionCuca' => $this->cuca_opinion,
+            'opinionCuca' => $this->cuca_opinion ? ucfirst(strtolower($this->cuca_opinion)) : 'pending',
             'commentaireCuca' => $this->cuca_comment,
-            'opinionCuo' => $this->cuo_opinion,
-            'commentaireCuo' => null,
-            'mailCucaEnvoye' => 'Non',
-            'mailCucaCount' => 0,
-            'mailCuoEnvoye' => 'Non',
-            'mailCuoCount' => 0,
+            'opinionCuo' => $this->cuo_opinion ? ucfirst(strtolower($this->cuo_opinion)) : null,
+            'commentaireCuo' => $this->cuo_comment,
+            'mailCucaEnvoye' => $this->mail_cuca_sent ? 'Oui' : 'Non',
+            'mailCucaCount' => $this->mail_cuca_count ?? 0,
+            'mailCuoEnvoye' => $this->mail_cuo_sent ? 'Oui' : 'Non',
+            'mailCuoCount' => $this->mail_cuo_count ?? 0,
+            'level' => $this->level,
             'entry_diploma' => $this->whenLoaded('entryDiploma', function () {
                 return [
                     'id' => $this->entryDiploma->id,

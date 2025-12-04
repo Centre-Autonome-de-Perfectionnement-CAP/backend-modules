@@ -33,10 +33,14 @@ Route::prefix('api/cours')->group(function () {
         Route::post('programs/bulk', [ProgramController::class, 'bulkStore']);
         Route::post('programs/copy', [ProgramController::class, 'copyPrograms']);
         Route::post('programs/renew', [ProgramController::class, 'renewForNextYear']);
+        Route::post('programs/{program}/renew', [ProgramController::class, 'renewProgram']);
         
         // Routes utilitaires pour les programmes
         Route::get('class-groups/{classGroupId}/programs', [ProgramController::class, 'getByClassGroup']);
         Route::get('professors/{professorId}/programs', [ProgramController::class, 'getByProfessor']);
         Route::get('course-elements/{courseElementId}/programs', [ProgramController::class, 'getByCourseElement']);
+        
+        // Route pour récupérer toutes les classes
+        Route::get('class-groups', [ProgramController::class, 'getClassGroups']);
     });
 });

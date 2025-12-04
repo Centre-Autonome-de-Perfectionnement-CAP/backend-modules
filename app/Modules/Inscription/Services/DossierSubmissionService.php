@@ -17,6 +17,7 @@ use App\Exceptions\FileUploadException;
 use App\Modules\Inscription\Mail\DossierSubmissionConfirmation;
 use App\Modules\Inscription\Mail\DossierCompletedConfirmation;
 use App\Modules\Stockage\Services\FileStorageService;
+use App\Services\StringUtilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -46,6 +47,10 @@ class DossierSubmissionService
             }
 
             $department = Department::findOrFail($request->department_id);
+            Log::debug('DEBUG', [
+                    'department->cycle?->name' => $department->cycle?->name,
+                    'cycleName' => $cycleName,
+                ]);
             if ($department->cycle?->name !== $cycleName) {
                 throw new BusinessException(
                     message: "La filière choisie ne fait pas partie du cycle {$cycleName}",
@@ -65,7 +70,6 @@ class DossierSubmissionService
 
             $personalInformation = null;
             if ($isPersonalInfoRequired) {
-                // Log pour debug
                 Log::info('Creating PersonalInformation', [
                     'birth_date' => $request->birth_date,
                     'birth_place' => $request->birth_place,
@@ -74,20 +78,17 @@ class DossierSubmissionService
                 ]);
 
                 $personalInformation = PersonalInformation::create([
-                    'last_name' => $request->last_name,
-                    'first_names' => $request->first_names,
+                    'last_name' => strtoupper(trim($request->last_name)),
+                    'first_names' => StringUtilityService::capitalize($request->first_names),
                     'email' => $request->email,
                     'birth_date' => $request->birth_date ?? null,
                     'birth_place' => $request->birth_place ?? null,
                     'birth_country' => $request->birth_country ?? 'Bénin',
                     'gender' => $request->gender,
-                    'contacts' => $request->contacts, // Le cast 'array' dans le modèle gère la conversion JSON
+                    'contacts' => $request->contacts, 
                 ]);
             } else {
-                // Récupère les informations d'identité depuis une inscription antérieure
                 $student = Student::where('student_id_number', $request->student_id_number)->firstOrFail();
-                
-                // Récupérer le premier dossier (pending_student) de l'étudiant pour obtenir les infos personnelles
                 $studentPendingStudent = StudentPendingStudent::where('student_id', $student->id)
                     ->with('pendingStudent.personalInformation')
                     ->firstOrFail();
@@ -132,7 +133,7 @@ class DossierSubmissionService
                 'cuo_opinion' => null,
                 'rejection_reason' => null,
                 'cuco_mail_sent' => false,
-                'documents' => $documents, // Le cast 'array' encode automatiquement en JSON
+                'documents' => $documents, 
                 'level' => $request->study_level,
                 'entry_diploma_id' => $request->entry_diploma_id ?? null,
                 'photo' => $photoPath,
@@ -213,15 +214,12 @@ class DossierSubmissionService
                 }
             }
 
-            // Fusionner les anciens documents avec les nouveaux
             $existingDocuments = $pendingStudent->documents ?? [];
             $mergedDocuments = array_merge((array) $existingDocuments, $documents);
             
             $pendingStudent->update([
-                'documents' => $mergedDocuments, // Le cast 'array' encode automatiquement
+                'documents' => $mergedDocuments, 
             ]);
-
-            // Récupérer les infos nécessaires pour l'email
             $department = Department::findOrFail($pendingStudent->department_id);
             $personalInformation = $pendingStudent->personalInformation;
 

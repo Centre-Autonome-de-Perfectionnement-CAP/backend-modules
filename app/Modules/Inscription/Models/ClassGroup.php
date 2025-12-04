@@ -22,7 +22,7 @@ class ClassGroup extends Model
         'academic_year_id',
         'department_id',
         'study_level',
-        'semester1_credits', 'semester2_credits',
+        'validation_average',
         'group_name',
     ];
 
@@ -39,7 +39,22 @@ class ClassGroup extends Model
      */
     public function department()
     {
-        return $this->belongsTo(\App\Models\Department::class, 'department_id');
+        return $this->belongsTo(Department::class, 'department_id');
+    }
+
+    /**
+     * Relation avec le cycle via le département
+     */
+    public function cycle()
+    {
+        return $this->hasOneThrough(
+            Cycle::class,
+            Department::class,
+            'id',
+            'id',
+            'department_id',
+            'cycle_id'
+        );
     }
 
     /**
@@ -48,6 +63,14 @@ class ClassGroup extends Model
     public function coursePrograms()
     {
         return $this->hasMany(\App\Modules\Cours\Models\Program::class);
+    }
+
+    /**
+     * Alias pour coursePrograms
+     */
+    public function programs()
+    {
+        return $this->coursePrograms();
     }
 
     /**

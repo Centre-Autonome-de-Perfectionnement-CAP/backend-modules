@@ -23,18 +23,20 @@ class LmdGradeController extends Controller
     /**
      * Obtient la fiche de notation (tous les étudiants avec leurs notes)
      * 
-     * GET /api/notes/lmd-grades/grade-sheet?program_id=45
+     * GET /api/notes/lmd-grades/grade-sheet?program_id=45&cohort=1
      */
     public function getGradeSheet(Request $request): JsonResponse
     {
         $request->validate([
             'program_id' => 'required|exists:programs,id',
+            'cohort' => 'nullable|string',
         ]);
 
         $program = Program::with(['classGroup', 'courseElementProfessor.courseElement', 'courseElementProfessor.professor'])
             ->findOrFail($request->program_id);
         
-        $students = $this->gradeService->getStudentsByProgram($program);
+        $cohort = $request->input('cohort');
+        $students = $this->gradeService->getStudentsByProgram($program, $cohort);
 
         return $this->successResponse([
             'program' => [
@@ -222,16 +224,18 @@ class LmdGradeController extends Controller
     /**
      * Liste des étudiants en rattrapage (7 <= moyenne < 10)
      * 
-     * GET /api/notes/lmd-grades/retake-list?program_id=45
+     * GET /api/notes/lmd-grades/retake-list?program_id=45&cohort=1
      */
     public function getRetakeList(Request $request): JsonResponse
     {
         $request->validate([
             'program_id' => 'required|exists:programs,id',
+            'cohort' => 'nullable|string',
         ]);
 
         $program = Program::findOrFail($request->program_id);
-        $students = $this->gradeService->getStudentsByProgram($program);
+        $cohort = $request->input('cohort');
+        $students = $this->gradeService->getStudentsByProgram($program, $cohort);
 
         // Filtre les étudiants en rattrapage
         $retakeStudents = $students->filter(function ($student) {

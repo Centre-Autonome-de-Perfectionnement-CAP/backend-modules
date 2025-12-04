@@ -5,6 +5,7 @@ namespace App\Modules\RH\Services;
 use App\Modules\RH\Models\Professor;
 use App\Modules\Stockage\Services\FileStorageService;
 use App\Services\PasswordGeneratorService;
+use App\Services\StringUtilityService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -68,6 +69,16 @@ class ProfessorService
             // $data['password'] = Hash::make($this->passwordGenerator->generate());
             $data['password'] = Hash::make('password');
             $data['uuid'] = Str::uuid();
+            
+            // Définir le rôle par défaut "Professeur" (ID: 6) si non fourni
+            if (empty($data['role_id'])) {
+                $data['role_id'] = 6;
+            }
+            
+            // Capitaliser le nom de la banque
+            if (!empty($data['bank'])) {
+                $data['bank'] = StringUtilityService::capitalize($data['bank']);
+            }
             if ($ribFile) {
                 $uploadedRib = $this->fileStorageService->uploadFile(
                     uploadedFile: $ribFile,
@@ -131,6 +142,11 @@ class ProfessorService
                 $data['password'] = Hash::make($data['password']);
             } else {
                 unset($data['password']);
+            }
+            
+            // Capitaliser le nom de la banque
+            if (!empty($data['bank'])) {
+                $data['bank'] = StringUtilityService::capitalize($data['bank']);
             }
 
             // Upload RIB si fourni

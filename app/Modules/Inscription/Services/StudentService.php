@@ -5,6 +5,7 @@ namespace App\Modules\Inscription\Services;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Modules\Core\Services\PdfService;
+use App\Modules\Core\Services\NationalityService;
 
 /**
  * Service de gestion des étudiants
@@ -25,8 +26,8 @@ class StudentService
             ->join('personal_information', 'pending_students.personal_information_id', '=', 'personal_information.id')
             ->join('departments', 'pending_students.department_id', '=', 'departments.id')
             ->join('academic_years', 'pending_students.academic_year_id', '=', 'academic_years.id')
+            ->join('student_pending_student', 'pending_students.id', '=', 'student_pending_student.pending_student_id')
             ->leftJoin('entry_diplomas', 'pending_students.entry_diploma_id', '=', 'entry_diplomas.id')
-            ->leftJoin('student_pending_student', 'pending_students.id', '=', 'student_pending_student.pending_student_id')
             ->leftJoin('student_groups', 'student_pending_student.student_id', '=', 'student_groups.student_id')
             ->leftJoin('class_groups', function ($join) {
                 $join->on('student_groups.class_group_id', '=', 'class_groups.id')
@@ -55,11 +56,19 @@ class StudentService
 
         // Filtres
         if (!empty($filters['year']) && $filters['year'] !== 'all') {
-            $query->where('academic_years.academic_year', $filters['year']);
+            if (is_numeric($filters['year'])) {
+                $query->where('academic_years.id', $filters['year']);
+            } else {
+                $query->where('academic_years.academic_year', $filters['year']);
+            }
         }
 
         if (!empty($filters['filiere']) && $filters['filiere'] !== 'all') {
-            $query->where('departments.name', $filters['filiere']);
+            if (is_numeric($filters['filiere'])) {
+                $query->where('departments.id', $filters['filiere']);
+            } else {
+                $query->where('departments.name', $filters['filiere']);
+            }
         }
 
         if (!empty($filters['entry_diploma']) && $filters['entry_diploma'] !== 'all') {
@@ -68,6 +77,16 @@ class StudentService
 
         if (!empty($filters['niveau']) && $filters['niveau'] !== 'all') {
             $query->where('pending_students.level', $filters['niveau']);
+        }
+        
+        if (!empty($filters['cohort']) && $filters['cohort'] !== 'all') {
+            $query->whereNotNull('student_pending_student.id')
+                  ->whereExists(function ($subQuery) use ($filters) {
+                      $subQuery->select(DB::raw(1))
+                          ->from('academic_paths')
+                          ->whereColumn('academic_paths.student_pending_student_id', 'student_pending_student.id')
+                          ->where('academic_paths.cohort', $filters['cohort']);
+                  });
         }
 
         if (!empty($filters['search'])) {
@@ -85,7 +104,7 @@ class StudentService
 
         // Ajouter le statut redoublant pour chaque étudiant
         $results->getCollection()->transform(function ($student) {
-            $student->redoublant = $this->isRepeatingStudent($student->student_pending_student_id, $student->niveau) ? 'Oui' : 'Non';
+            $student->redoublant = ($student->niveau && $this->isRepeatingStudent($student->student_pending_student_id, $student->niveau)) ? 'Oui' : 'Non';
             return $student;
         });
 
@@ -101,8 +120,8 @@ class StudentService
             ->join('personal_information', 'pending_students.personal_information_id', '=', 'personal_information.id')
             ->join('departments', 'pending_students.department_id', '=', 'departments.id')
             ->join('academic_years', 'pending_students.academic_year_id', '=', 'academic_years.id')
+            ->join('student_pending_student', 'pending_students.id', '=', 'student_pending_student.pending_student_id')
             ->leftJoin('entry_diplomas', 'pending_students.entry_diploma_id', '=', 'entry_diplomas.id')
-            ->leftJoin('student_pending_student', 'pending_students.id', '=', 'student_pending_student.pending_student_id')
             ->leftJoin('student_groups', 'student_pending_student.student_id', '=', 'student_groups.student_id')
             ->leftJoin('class_groups', function ($join) {
                 $join->on('student_groups.class_group_id', '=', 'class_groups.id')
@@ -131,7 +150,7 @@ class StudentService
             ->first();
 
         if ($student) {
-            $student->redoublant = $this->isRepeatingStudent($student->student_pending_student_id, $student->niveau) ? 'Oui' : 'Non';
+            $student->redoublant = ($student->niveau && $this->isRepeatingStudent($student->student_pending_student_id, $student->niveau)) ? 'Oui' : 'Non';
         }
 
         return $student;
@@ -198,6 +217,18 @@ class StudentService
         // Récupérer tous les étudiants avec les filtres
         $students = $this->getAllForExport($filters);
 
+        // Récupérer les libellés depuis la base de données
+        $academicYear = null;
+        $department = null;
+        
+        if (!empty($filters['year']) && is_numeric($filters['year'])) {
+            $academicYear = DB::table('academic_years')->where('id', $filters['year'])->first();
+        }
+        
+        if (!empty($filters['filiere']) && is_numeric($filters['filiere'])) {
+            $department = DB::table('departments')->where('id', $filters['filiere'])->first();
+        }
+
         // Préparer les données pour la vue
         $etudiantsEnAttente = $students->map(function ($student) {
             return [
@@ -205,21 +236,26 @@ class StudentService
                 'nom' => explode(' ', $student->nomPrenoms)[0] ?? '',
                 'prenoms' => implode(' ', array_slice(explode(' ', $student->nomPrenoms), 1)) ?: '',
                 'red' => $student->redoublant === 'Oui',
-                'nationalite' => 'CI', // Par défaut, à adapter si vous avez cette info
+                'nationalite' => NationalityService::getNationality($student->nationality ?? ''),
             ];
         });
 
+        $classeLabel = ($department && $department->abbreviation ? $department->abbreviation : ($filters['filiere'] ?? 'N/A')) . '-' . ($filters['niveau'] ?? 'N/A');
+
         $data = [
-            'filiere' => $filters['filiere'] ?? 'N/A',
-            'classe' => $filters['niveau'] ?? 'N/A',
+            'annee' => $academicYear ? $academicYear->academic_year : ($filters['year'] ?? 'N/A'),
+            'filiere' => $department ? $department->name : ($filters['filiere'] ?? 'N/A'),
+            'classe' => $classeLabel,
             'etudiantsEnAttente' => $etudiantsEnAttente,
         ];
 
-        $filename = 'fiche-presence-' . ($filters['filiere'] ?? 'classe') . '-' . ($filters['niveau'] ?? '');
+        $cohort = $filters['cohort'] ?? 'all';
+        $dateTime = now()->format('Ymd_His');
+        $filename = 'FICHE_PRESENCE_' . ($academicYear ? str_replace(['/', '-'], '_', $academicYear->academic_year) : 'N_A') . '_COHORTE_' . $cohort . '_' . ($department && $department->abbreviation ? $department->abbreviation : 'N_A') . '_' . ($filters['niveau'] ?? 'N_A');
         if (!empty($filters['groupe'])) {
-            $filename .= '-' . $filters['groupe'];
+            $filename .= '_GROUPE_' . $filters['groupe'];
         }
-        $filename .= '.pdf';
+        $filename .= '_' . $dateTime . '.pdf';
 
         return $pdfService->downloadWithTemplate(
             'liste-presence',
@@ -239,6 +275,18 @@ class StudentService
         // Récupérer tous les étudiants avec les filtres
         $students = $this->getAllForExport($filters);
 
+        // Récupérer les libellés depuis la base de données
+        $academicYear = null;
+        $department = null;
+        
+        if (!empty($filters['year']) && is_numeric($filters['year'])) {
+            $academicYear = DB::table('academic_years')->where('id', $filters['year'])->first();
+        }
+        
+        if (!empty($filters['filiere']) && is_numeric($filters['filiere'])) {
+            $department = DB::table('departments')->where('id', $filters['filiere'])->first();
+        }
+
         // Préparer les données pour la vue (format adapté au template)
         $etudiants = $students->map(function ($student) {
             return (object) [
@@ -251,17 +299,22 @@ class StudentService
             ];
         });
 
+        $classeLabel = ($department && $department->abbreviation ? $department->abbreviation : ($filters['filiere'] ?? 'N/A')) . '-' . ($filters['niveau'] ?? 'N/A');
+
         $data = [
-            'filiere' => $filters['filiere'] ?? 'N/A',
-            'classe' => $filters['niveau'] ?? 'N/A',
+            'annee' => $academicYear ? $academicYear->academic_year : ($filters['year'] ?? 'N/A'),
+            'filiere' => $department ? $department->name : ($filters['filiere'] ?? 'N/A'),
+            'classe' => $classeLabel,
             'etudiants' => $etudiants,
         ];
 
-        $filename = 'fiche-emargement-' . ($filters['filiere'] ?? 'classe') . '-' . ($filters['niveau'] ?? '');
+        $cohort = $filters['cohort'] ?? 'all';
+        $dateTime = now()->format('Ymd_His');
+        $filename = 'FICHE_EMARGEMENT_' . ($academicYear ? str_replace(['/', '-'], '_', $academicYear->academic_year) : 'N_A') . '_COHORTE_' . $cohort . '_' . ($department && $department->abbreviation ? $department->abbreviation : 'N_A') . '_' . ($filters['niveau'] ?? 'N_A');
         if (!empty($filters['groupe'])) {
-            $filename .= '-' . $filters['groupe'];
+            $filename .= '_GROUPE_' . $filters['groupe'];
         }
-        $filename .= '.pdf';
+        $filename .= '_' . $dateTime . '.pdf';
 
         return $pdfService->downloadWithTemplate(
             'liste-emargement',
@@ -276,13 +329,13 @@ class StudentService
      */
     private function getAllForExport(array $filters = [])
     {
-        $query = DB::table('pending_students')
+        $query = DB::table('students')
+            ->join('student_pending_student', 'students.id', '=', 'student_pending_student.student_id')
+            ->join('pending_students', 'student_pending_student.pending_student_id', '=', 'pending_students.id')
             ->join('personal_information', 'pending_students.personal_information_id', '=', 'personal_information.id')
             ->join('departments', 'pending_students.department_id', '=', 'departments.id')
             ->join('academic_years', 'pending_students.academic_year_id', '=', 'academic_years.id')
-            ->leftJoin('entry_diplomas', 'pending_students.entry_diploma_id', '=', 'entry_diplomas.id')
-            ->leftJoin('student_pending_student', 'pending_students.id', '=', 'student_pending_student.pending_student_id')
-            ->leftJoin('student_groups', 'student_pending_student.student_id', '=', 'student_groups.student_id')
+            ->leftJoin('student_groups', 'students.id', '=', 'student_groups.student_id')
             ->leftJoin('class_groups', function ($join) {
                 $join->on('student_groups.class_group_id', '=', 'class_groups.id')
                      ->on('class_groups.academic_year_id', '=', 'pending_students.academic_year_id')
@@ -290,27 +343,44 @@ class StudentService
                      ->on('class_groups.study_level', '=', 'pending_students.level');
             })
             ->select(
-                'pending_students.id',
+                'students.id',
                 'student_pending_student.id as student_pending_student_id',
-                'student_pending_student.student_id',
+                'students.student_id_number as matricule',
                 DB::raw("CONCAT(personal_information.last_name, ' ', personal_information.first_names) as nomPrenoms"),
                 'pending_students.level as niveau',
-                DB::raw("(SELECT student_id_number FROM students WHERE students.id = student_pending_student.student_id) as matricule"),
-                'class_groups.group_name as groupe'
-            )
-            ->where('pending_students.status', '!=', 'pending');
+                'class_groups.group_name as groupe',
+                'personal_information.nationality'
+            );
 
         // Filtres
         if (!empty($filters['year']) && $filters['year'] !== 'all') {
-            $query->where('academic_years.academic_year', $filters['year']);
+            if (is_numeric($filters['year'])) {
+                $query->where('academic_years.id', $filters['year']);
+            } else {
+                $query->where('academic_years.academic_year', $filters['year']);
+            }
         }
 
         if (!empty($filters['filiere']) && $filters['filiere'] !== 'all') {
-            $query->where('departments.name', $filters['filiere']);
+            if (is_numeric($filters['filiere'])) {
+                $query->where('departments.id', $filters['filiere']);
+            } else {
+                $query->where('departments.name', $filters['filiere']);
+            }
         }
 
         if (!empty($filters['niveau']) && $filters['niveau'] !== 'all') {
             $query->where('pending_students.level', $filters['niveau']);
+        }
+        
+        if (!empty($filters['cohort']) && $filters['cohort'] !== 'all') {
+            $query->whereNotNull('student_pending_student.id')
+                  ->whereExists(function ($subQuery) use ($filters) {
+                      $subQuery->select(DB::raw(1))
+                          ->from('academic_paths')
+                          ->whereColumn('academic_paths.student_pending_student_id', 'student_pending_student.id')
+                          ->where('academic_paths.cohort', $filters['cohort']);
+                  });
         }
 
         if (!empty($filters['groupe']) && $filters['groupe'] !== 'all') {
@@ -324,7 +394,7 @@ class StudentService
 
         // Ajouter le statut redoublant pour chaque étudiant
         $results->transform(function ($student) {
-            $student->redoublant = $this->isRepeatingStudent($student->student_pending_student_id, $student->niveau) ? 'Oui' : 'Non';
+            $student->redoublant = ($student->niveau && $this->isRepeatingStudent($student->student_pending_student_id, $student->niveau)) ? 'Oui' : 'Non';
             return $student;
         });
 
