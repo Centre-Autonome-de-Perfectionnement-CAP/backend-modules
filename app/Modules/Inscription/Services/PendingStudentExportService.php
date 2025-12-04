@@ -38,12 +38,12 @@ class PendingStudentExportService
         
         $pendingCount = $query->where('status', 'pending')->count();
         
-        if ($pendingCount > 0) {
-            return [
-                'error' => true,
-                'message' => "Impossible d'exporter la liste CUCA-CUO : {$pendingCount} étudiant(s) ont un statut 'En attente'. Veuillez définir un avis CUCA (Admis/Refusé) pour tous les étudiants avant d'exporter."
-            ];
-        }
+        // if ($pendingCount > 0) {
+        //     return [
+        //         'error' => true,
+        //         'message' => "Impossible d'exporter la liste CUCA-CUO : {$pendingCount} étudiant(s) ont un statut 'En attente'. Veuillez définir un avis CUCA (Admis/Refusé) pour tous les étudiants avant d'exporter."
+        //     ];
+        // }
         
         return null;
     }
