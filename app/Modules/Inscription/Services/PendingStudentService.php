@@ -64,10 +64,9 @@ class PendingStudentService
             $query->where(function ($q) use ($search) {
                 $q->where('tracking_code', 'like', "%{$search}%")
                   ->orWhereHas('personalInformation', function ($subQuery) use ($search) {
-                      $subQuery->where('first_name', 'like', "%{$search}%")
+                      $subQuery->where('first_names', 'like', "%{$search}%")
                               ->orWhere('last_name', 'like', "%{$search}%")
-                              ->orWhere('email', 'like', "%{$search}%")
-                              ->orWhere('phone', 'like', "%{$search}%");
+                              ->orWhere('email', 'like', "%{$search}%");
                   });
             });
         }
