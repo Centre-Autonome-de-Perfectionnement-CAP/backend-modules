@@ -73,7 +73,7 @@ class PaiementService
             throw new ResourceNotFoundException('Étudiant');
         }
 
-        // Récupérer les informations personnelles via la relation
+        // Récupérer les informations personnelles via l'accessor
         $personalInfo = $student->personalInformation;
 
         // Récupérer les filières/départements via student_pending_student
@@ -88,13 +88,19 @@ class PaiementService
 
         $hasNoFilieres = empty($filieres);
 
+        // Extraire le téléphone correctement depuis le JSON contacts
+        $tel = null;
+        if ($personalInfo && is_array($personalInfo->contacts)) {
+            $tel = $personalInfo->contacts['phone'] ?? $personalInfo->contacts['telephone'] ?? null;
+        }
+
         return [
             'id' => $student->id,
             'student_id_number' => $student->student_id_number,
             'nom' => $personalInfo?->last_name ?? null,
             'prenoms' => $personalInfo?->first_names ?? null,
             'email' => $personalInfo?->email ?? null,
-            'tel' => $personalInfo && is_array($personalInfo->contacts ?? null) ? ($personalInfo->contacts[0] ?? null) : null,
+            'tel' => $tel,
             'filieres' => $filieres,
             'has_no_filieres' => $hasNoFilieres,
             'message' => $hasNoFilieres ? 'Aucune filière associée à ce matricule. Veuillez d\'abord soumettre une candidature.' : null,
@@ -178,8 +184,10 @@ class PaiementService
             // Envoyer un email de confirmation si un email est fourni
             try {
                 if (!empty($paiement->email)) {
-                    // Charger les informations personnelles pour personnaliser le mail
-                    $student->load('pendingStudents.personalInformation');
+                    // Charger les informations personnelles via l'accessor
+                    if (!$student->relationLoaded('pendingStudents')) {
+                        $student->load('pendingStudents.personalInformation');
+                    }
                     $personalInfo = $student->personalInformation;
                     
                     $mailData = [

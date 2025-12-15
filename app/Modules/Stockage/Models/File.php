@@ -131,6 +131,11 @@ class File extends Model
      */
     public function getUrlAttribute(): ?string
     {
+        // Si c'est un lien externe, retourner directement le lien
+        if ($this->disk === 'external' || $this->extension === 'url') {
+            return $this->file_path;
+        }
+        
         if ($this->visibility === 'public') {
             return Storage::disk($this->disk)->url($this->path);
         }
