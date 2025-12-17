@@ -58,11 +58,16 @@ class Amount extends Model
     }
 
     /**
-     * Relation: Department
+     * Relation: Classes auxquelles ce tarif s'applique
      */
-    public function department()
+    public function classGroups()
     {
-        return $this->belongsTo(\App\Modules\Inscription\Models\Department::class);
+        return $this->belongsToMany(
+            \App\Modules\Inscription\Models\ClassGroup::class,
+            'amount_class_groups',
+            'amount_id',
+            'department_id'
+        )->withPivot('academic_year_id', 'study_level');
     }
 
     /**

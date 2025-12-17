@@ -28,6 +28,7 @@ Route::prefix('api/finance')->group(function () {
     
     // Tarifs
     Route::get('/tarifs', [TarifController::class, 'index']);
+    Route::get('/tarifs/available-classes', [TarifController::class, 'getAvailableClasses']);
     Route::post('/tarifs', [TarifController::class, 'store']);
     Route::put('/tarifs/{id}', [TarifController::class, 'update']);
     Route::delete('/tarifs/{id}', [TarifController::class, 'destroy']);

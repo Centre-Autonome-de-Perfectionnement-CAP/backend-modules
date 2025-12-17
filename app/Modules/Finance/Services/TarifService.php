@@ -13,10 +13,21 @@ class TarifService
      */
     public function getAllTarifs()
     {
-        return [
-            'amounts' => Amount::with(['academicYear', 'cycle', 'department'])->get(),
-            'exonerations' => Exoneration::with(['academicYear'])->get()
-        ];
+        return Amount::with(['academicYear'])
+            ->withCount('classGroups')
+            ->get()
+            ->map(function($amount) {
+                $classes = DB::table('amount_class_groups')
+                    ->join('departments', 'amount_class_groups.department_id', '=', 'departments.id')
+                    ->where('amount_id', $amount->id)
+                    ->select('departments.name', 'amount_class_groups.study_level')
+                    ->get()
+                    ->map(fn($c) => $c->name . '-' . $c->study_level)
+                    ->join(', ');
+                
+                $amount->classes_list = $classes;
+                return $amount;
+            });
     }
 
     /**
@@ -27,14 +38,24 @@ class TarifService
         DB::beginTransaction();
         
         try {
-            if ($data['type'] === 'exoneration') {
-                $tarif = Exoneration::create($data);
-            } else {
-                $tarif = Amount::create($data);
+            $classGroups = $data['class_groups'];
+            unset($data['class_groups']);
+            
+            $tarif = Amount::create($data);
+            
+            foreach ($classGroups as $class) {
+                DB::table('amount_class_groups')->insert([
+                    'amount_id' => $tarif->id,
+                    'academic_year_id' => $class['academic_year_id'],
+                    'department_id' => $class['department_id'],
+                    'study_level' => $class['study_level'],
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
             }
             
             DB::commit();
-            return $tarif;
+            return $tarif->load('classGroups');
         } catch (\Exception $e) {
             DB::rollback();
             throw $e;

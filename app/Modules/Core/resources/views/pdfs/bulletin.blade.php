@@ -40,6 +40,9 @@
 
 @section('content')
 <div class="main" style="position: relative;">
+    <div style="position: absolute; top: -2px; left: 0;">
+        <img src="data:image/svg+xml;base64,{{ $qrcode }}" width="100px" height="100px" class="qrcode" alt="Code QR">
+    </div>
     <div style="text-align: center; font-weight: bold; margin-bottom: 7px; font-size: 25px;">BULLETIN DE NOTES</div>
     <div style="text-align: center; font-weight: bold; margin-bottom: 20px; font-size: 15px;">Année Académique: {{ $annee }}</div>
     <div style="position: absolute; top: -2px; right: 0;">

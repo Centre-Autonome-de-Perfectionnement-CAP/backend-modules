@@ -39,6 +39,47 @@ class TarifController extends Controller
     }
 
     /**
+     * Liste toutes les classes disponibles
+     */
+    public function getAvailableClasses(Request $request)
+    {
+        try {
+            $academicYearId = $request->query('academic_year_id');
+            
+            $classes = \DB::table('class_groups')
+                ->join('departments', 'class_groups.department_id', '=', 'departments.id')
+                ->where('class_groups.academic_year_id', $academicYearId)
+                ->select(
+                    'class_groups.academic_year_id',
+                    'class_groups.department_id',
+                    'class_groups.study_level',
+                    'departments.name as department_name'
+                )
+                ->distinct()
+                ->get()
+                ->map(function($class) {
+                    return [
+                        'academic_year_id' => $class->academic_year_id,
+                        'department_id' => $class->department_id,
+                        'study_level' => $class->study_level,
+                        'label' => $class->department_name . ' - Niveau ' . $class->study_level,
+                    ];
+                });
+            
+            return response()->json([
+                'success' => true,
+                'data' => $classes
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la récupération des classes',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Crée un nouveau tarif
      */
     public function store(CreateTarifRequest $request)
