@@ -42,9 +42,9 @@
 <div class="main" style="position: relative;">
     <div style="position: absolute; top: -5px; left: 0;">
         @if(ucfirst($etudiant->genre) == 'Masculin')
-                        <img src="{{ storage_path('app/avatars/homme.png') }}" style="width: 80px; height: 80px;" alt="">
+                        <img src="{{ storage_path('avatars/homme.png') }}" style="width: 80px; height: 80px;" alt="">
                     @else
-                        <img src="{{ storage_path('app/avatars/femme.png') }}" style="width: 80px; height: 80px;" alt="">
+                        <img src="{{ storage_path('avatars/femme.png') }}" style="width: 80px; height: 80px;" alt="">
                     @endif
     </div>
     <div style="text-align: center; font-weight: bold; margin-bottom: 7px; font-size: 25px;">BULLETIN DE NOTES</div>
