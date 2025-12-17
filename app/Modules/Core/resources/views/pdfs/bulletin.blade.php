@@ -40,7 +40,7 @@
 
 @section('content')
 <div class="main" style="position: relative;">
-    <div style="position: absolute; top: -5px; left: 0;">
+    <div style="position: absolute; top: 0px; left: 0;">
         @if(ucfirst($etudiant->genre) == 'Masculin')
                         <img src="{{ storage_path('avatars/homme.png') }}" style="width: 80px; height: 80px;" alt="">
                     @else
