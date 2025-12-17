@@ -66,7 +66,7 @@
     @endif
 
 
-      <div style="position: absolute; top: 0px; left: 0;">
+      <div style="position: absolute; top: {{ !$loop->first ? '120px' : '0px' }}; left: 0;">
         @if(ucfirst($bulletin['etudiant']->genre) == 'Masculin')
                         <img src="{{ storage_path('avatars/homme.png') }}" style="width: 80px; height: 80px;" alt="">
                     @else
