@@ -14,13 +14,19 @@ class TarifService
     public function getAllTarifs()
     {
 <<<<<<< HEAD
+<<<<<<< HEAD
         return Amount::with(['academicYear'])
+=======
+        return Amount::with(['academicYear'])
+            ->withCount('classGroups')
+>>>>>>> 7854261 (commit)
             ->get()
             ->map(function($amount) {
                 $classes = DB::table('amount_class_groups')
                     ->join('departments', 'amount_class_groups.department_id', '=', 'departments.id')
                     ->where('amount_id', $amount->id)
                     ->select('departments.name', 'amount_class_groups.study_level')
+<<<<<<< HEAD
                     ->get();
                 
                 $classesList = $classes->map(function($c) {
@@ -37,6 +43,15 @@ class TarifService
             'exonerations' => Exoneration::with(['academicYear'])->get()
         ];
 >>>>>>> eea2b06 (draft)
+=======
+                    ->get()
+                    ->map(fn($c) => $c->name . '-' . $c->study_level)
+                    ->join(', ');
+                
+                $amount->classes_list = $classes;
+                return $amount;
+            });
+>>>>>>> 7854261 (commit)
     }
 
     /**
@@ -48,6 +63,9 @@ class TarifService
         
         try {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 7854261 (commit)
             $classGroups = $data['class_groups'];
             unset($data['class_groups']);
             
@@ -62,6 +80,7 @@ class TarifService
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
+<<<<<<< HEAD
             }
             
             DB::commit();
@@ -76,6 +95,12 @@ class TarifService
             DB::commit();
             return $tarif;
 >>>>>>> eea2b06 (draft)
+=======
+            }
+            
+            DB::commit();
+            return $tarif->load('classGroups');
+>>>>>>> 7854261 (commit)
         } catch (\Exception $e) {
             DB::rollback();
             throw $e;

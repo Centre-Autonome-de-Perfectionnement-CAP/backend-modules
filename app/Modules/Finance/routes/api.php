@@ -7,14 +7,11 @@ use App\Modules\Finance\Http\Controllers\DashboardController;
 use App\Modules\Finance\Http\Controllers\TarifController;
 use App\Modules\Finance\Http\Controllers\HistoriqueController;
 use App\Modules\Finance\Http\Controllers\ValidationController;
-<<<<<<< HEAD
 use App\Modules\Finance\Http\Controllers\TransactionController;
 use App\Modules\Finance\Http\Controllers\ExonerationController;
 use App\Modules\Finance\Http\Controllers\StudentFinanceController;
 use App\Modules\Finance\Http\Controllers\ReportController;
 use App\Modules\Finance\Http\Controllers\AcademicLevelFeeController;
-=======
->>>>>>> eea2b06 (draft)
 
 // Routes for Finance module
 
@@ -33,9 +30,13 @@ Route::prefix('api/finance')->group(function () {
     // Tarifs
     Route::get('/tarifs', [TarifController::class, 'index']);
 <<<<<<< HEAD
+<<<<<<< HEAD
     Route::get('/tarifs/available-classes', [TarifController::class, 'getAvailableClasses']);
 =======
 >>>>>>> eea2b06 (draft)
+=======
+    Route::get('/tarifs/available-classes', [TarifController::class, 'getAvailableClasses']);
+>>>>>>> 7854261 (commit)
     Route::post('/tarifs', [TarifController::class, 'store']);
     Route::put('/tarifs/{id}', [TarifController::class, 'update']);
     Route::delete('/tarifs/{id}', [TarifController::class, 'destroy']);
