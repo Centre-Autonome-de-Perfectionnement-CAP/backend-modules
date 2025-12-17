@@ -64,6 +64,17 @@
         <hr>
     </div>
     @endif
+
+
+      <div style="position: absolute; top: 0px; left: 0;">
+        @if(ucfirst($bulletin['etudiant']->genre) == 'Masculin')
+                        <img src="{{ storage_path('avatars/homme.png') }}" style="width: 80px; height: 80px;" alt="">
+                    @else
+                        <img src="{{ storage_path('avatars/femme.png') }}" style="width: 80px; height: 80px;" alt="">
+                    @endif
+    </div>
+
+    
     <div style="text-align: center; font-weight: bold; margin-bottom: 7px; font-size: 25px;">BULLETIN DE NOTES</div>
     <div style="text-align: center; font-weight: bold; margin-bottom: 20px; font-size: 15px;">Année Académique: {{ $bulletin['annee'] ?? '' }}</div>
     @if(isset($bulletin['qrcode']))
