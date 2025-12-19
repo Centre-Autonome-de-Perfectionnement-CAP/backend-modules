@@ -394,7 +394,7 @@ class AttestationService
             }
             
             $moyenne = $totalUE > 0 ? round(($totalAverage / $totalUE) * 5, 2) : 0;
-            $grade = $moyenne >= 90 ? 'A' : ($moyenne >= 80 ? 'B' : ($moyenne >= 70 ? 'C' : ($moyenne >= 60 ? 'D' : 'F')));
+            $grade = $moyenne >= 90 ? 'A(Excellent)' : ($moyenne >= 80 ? 'B(Très Bien)' : ($moyenne >= 70 ? 'C(Bien)' : ($moyenne >= 60 ? 'D(Assez-Bien)' : 'E(Passable)')));
             
             $dateNaissance = $personalInfo?->birth_date ? 
                 $personalInfo->birth_date->format('d') . ' ' . 
@@ -590,7 +590,7 @@ class AttestationService
         }
 
         $moyenne = $totalUE > 0 ? round(($totalAverage / $totalUE) * 5, 2) : 0; // Moyenne sur 100
-        $grade = $moyenne >= 90 ? 'A' : ($moyenne >= 80 ? 'B' : ($moyenne >= 70 ? 'C' : ($moyenne >= 60 ? 'D' : 'F')));
+        $grade = $moyenne >= 90 ? 'A(Excellent)' : ($moyenne >= 80 ? 'B(Très Bien)' : ($moyenne >= 70 ? 'C(Bien)' : ($moyenne >= 60 ? 'D(Assez-Bien)' : 'E(Passable)')));
 
         // Formater la date de naissance en français
         $dateNaissance = $personalInfo?->birth_date ? 
