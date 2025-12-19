@@ -375,7 +375,8 @@ class AttestationService
             $totalUE = $grades->count();
             
             foreach ($grades as $grade) {
-                $isValidated = $grade->average >= $validationAverage;
+                //$isValidated = $grade->average >= $validationAverage;
+                $isValidated = $grade->average >= 12;
                 $bulletinData[] = [
                     'code' => $grade->code,
                     'nom' => $grade->name,
