@@ -21,7 +21,7 @@ class DashboardService
             $academicYear = AcademicYear::where('is_current', true)->first();
             if (!$academicYear) {
                 // Fallback: prendre la dernière année académique
-                $academicYear = AcademicYear::orderBy('date_debut', 'desc')->first();
+                $academicYear = AcademicYear::orderBy('year_start', 'desc')->first();
             }
         }
         
