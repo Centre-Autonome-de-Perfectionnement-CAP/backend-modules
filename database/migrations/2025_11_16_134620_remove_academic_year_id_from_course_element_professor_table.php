@@ -11,11 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('course_element_professor', function (Blueprint $table) {
-            $table->dropForeign(['academic_year_id']);
-            $table->dropForeign(['class_group_id']);
-            $table->dropColumn(['academic_year_id', 'class_group_id']);
-        });
+        // Les colonnes n'existent pas dans la table initiale
     }
 
     /**

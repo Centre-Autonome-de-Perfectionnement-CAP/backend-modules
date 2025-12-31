@@ -81,10 +81,7 @@ class StudentSeeder extends Seeder
         // Traiter les étudiants
         foreach ($studentsData as $data) {
             // 1. Créer PersonalInformation
-            $personalInfo = PersonalInformation::create(array_merge(
-                $data['personal_info'],
-                ['entry_diploma_id' => $data['entry_diploma']->id]
-            ));
+            $personalInfo = PersonalInformation::create($data['personal_info']);
 
             // 2. Créer PendingStudent
             $pendingStatus = $data['is_current_year'] ? 'pending' : 'approved';

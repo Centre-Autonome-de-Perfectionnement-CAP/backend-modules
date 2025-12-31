@@ -46,22 +46,26 @@ class TarifController extends Controller
         try {
             $academicYearId = $request->query('academic_year_id');
             
-            $classes = \DB::table('class_groups')
-                ->join('departments', 'class_groups.department_id', '=', 'departments.id')
-                ->where('class_groups.academic_year_id', $academicYearId)
-                ->select(
+            $query = \DB::table('class_groups')
+                ->join('departments', 'class_groups.department_id', '=', 'departments.id');
+            
+            if ($academicYearId) {
+                $query->where('class_groups.academic_year_id', $academicYearId);
+            }
+            
+            $classes = $query->select(
                     'class_groups.academic_year_id',
                     'class_groups.department_id',
                     'class_groups.study_level',
                     'departments.name as department_name'
                 )
-                ->distinct()
+                ->groupBy('class_groups.academic_year_id', 'class_groups.department_id', 'class_groups.study_level', 'departments.name')
                 ->get()
                 ->map(function($class) {
                     return [
-                        'academic_year_id' => $class->academic_year_id,
-                        'department_id' => $class->department_id,
-                        'study_level' => $class->study_level,
+                        'academic_year_id' => (int) $class->academic_year_id,
+                        'department_id' => (int) $class->department_id,
+                        'study_level' => (int) $class->study_level,
                         'label' => $class->department_name . ' - Niveau ' . $class->study_level,
                     ];
                 });
@@ -76,6 +80,39 @@ class TarifController extends Controller
                 'message' => 'Erreur lors de la récupération des classes',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Récupère un tarif avec ses classes
+     */
+    public function show($id)
+    {
+        try {
+            $amount = \App\Modules\Finance\Models\Amount::with('academicYear')->findOrFail($id);
+            
+            $classGroups = \DB::table('amount_class_groups')
+                ->where('amount_id', $id)
+                ->select('academic_year_id', 'department_id', 'study_level')
+                ->get()
+                ->map(fn($c) => [
+                    'academic_year_id' => (int) $c->academic_year_id,
+                    'department_id' => (int) $c->department_id,
+                    'study_level' => (int) $c->study_level,
+                ]);
+            
+            $amount->class_groups = $classGroups;
+            
+            return response()->json([
+                'success' => true,
+                'data' => $amount
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tarif non trouvé',
+                'error' => $e->getMessage()
+            ], 404);
         }
     }
 
