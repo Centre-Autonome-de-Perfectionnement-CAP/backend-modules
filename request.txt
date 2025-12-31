@@ -1,7 +1,7 @@
 INSERT INTO grades (uuid, name, code, level, description, created_at, updated_at)
 VALUES
   (
-    UUID(),
+    gen_random_uuid(),
     'Professeur Titulaire',
     'Pr',
     5,
@@ -10,7 +10,7 @@ VALUES
     NOW()
   ),
   (
-    UUID(),
+    gen_random_uuid(),
     'Maitre de Conférences',
     'Dr(MC)',
     4,
@@ -19,7 +19,7 @@ VALUES
     NOW()
   ),
   (
-    UUID(),
+    gen_random_uuid(),
     'Maitre-Assistant',
     'Dr(MA)',
     3,
@@ -28,7 +28,7 @@ VALUES
     NOW()
   ),
   (
-    UUID(),
+    gen_random_uuid(),
     'Docteur',
     'Dr',
     2,
@@ -37,7 +37,7 @@ VALUES
     NOW()
   ),
   (
-    UUID(),
+    gen_random_uuid(),
     'Monsieur',
     'Mr',
     1,
@@ -54,58 +54,107 @@ VALUES
   INSERT INTO roles (uuid, name, slug, created_at, updated_at)
 VALUES
   (
-    UUID(),
+    gen_random_uuid(),
     'Chef CAP',
     'chef-cap',
     NOW(),
     NOW()
   ),
   (
-    UUID(),
+    gen_random_uuid(),
     'Chef de division',
     'chef-division',
     NOW(),
     NOW()
   ),
   (
-    UUID(),
+    gen_random_uuid(),
     'Secrétaire',
     'secretaire',
     NOW(),
     NOW()
   ),
   (
-    UUID(),
+    gen_random_uuid(),
     'Comptable',
     'comptable',
     NOW(),
     NOW()
   ),
   (
-    UUID(),
+    gen_random_uuid(),
     'Soutien informatique',
     'soutien-informatique',
     NOW(),
     NOW()
   ),
   (
-    UUID(),
+    gen_random_uuid(),
     'Professeur',
     'professeur',
     NOW(),
     NOW()
   ),
   (
-    UUID(),
+    gen_random_uuid(),
     'Étudiant',
     'etudiant',
     NOW(),
     NOW()
   ),
   (
-    UUID(),
+    gen_random_uuid(),
     'Responsable',
     'responsable',
+    NOW(),
+    NOW()
+  );
+
+
+INSERT INTO grades (uuid, name, code, level, description, created_at, updated_at)
+VALUES
+  (
+    gen_random_uuid(),
+    'Professeur Titulaire',
+    'Pr',
+    5,
+    'Professeur Titulaire des Universités du CAMES',
+    NOW(),
+    NOW()
+  ),
+  (
+    gen_random_uuid(),
+    'Maitre de Conférences',
+    'Dr(MC)',
+    4,
+    'Maitre de Conférences des Universités du CAMES',
+    NOW(),
+    NOW()
+  ),
+  (
+    gen_random_uuid(),
+    'Maitre-Assistant',
+    'Dr(MA)',
+    3,
+    'Maitre-Assistant des Universités du CAMES',
+    NOW(),
+    NOW()
+  ),
+  (
+    gen_random_uuid(),
+    'Docteur',
+    'Dr',
+    2,
+    'Docteur',
+    NOW(),
+    NOW()
+  ),
+  (
+    gen_random_uuid(),
+    'Monsieur',
+    'Mr',
+    1,
+    'Enseignant sans grade académique spécifique (Monsieur)',
     NOW(),
     NOW()
   );

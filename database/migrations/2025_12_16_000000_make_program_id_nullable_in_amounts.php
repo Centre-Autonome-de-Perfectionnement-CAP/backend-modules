@@ -8,15 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('amounts', function (Blueprint $table) {
-            $table->unsignedBigInteger('program_id')->nullable()->change();
-        });
+        // La colonne program_id n'existe pas dans la table amounts
     }
 
     public function down(): void
     {
-        Schema::table('amounts', function (Blueprint $table) {
-            $table->unsignedBigInteger('program_id')->nullable(false)->change();
-        });
+        // Rien à faire
     }
 };

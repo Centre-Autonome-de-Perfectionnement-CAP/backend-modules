@@ -18,8 +18,8 @@ return new class extends Migration
             $table->date('date_publication')->nullable()->after('document_categorie');
             
             // Ajouter des alias pour compatibilité avec le code existant
-            $table->string('name')->nullable()->after('uuid')->virtualAs('stored_name');
-            $table->string('path')->nullable()->after('file_path')->virtualAs('file_path');
+            $table->string('name')->nullable()->after('uuid')->storedAs('stored_name');
+            $table->string('path')->nullable()->after('file_path')->storedAs('file_path');
             $table->string('disk')->nullable()->default('public')->after('path');
             
             $table->index('is_official_document');
