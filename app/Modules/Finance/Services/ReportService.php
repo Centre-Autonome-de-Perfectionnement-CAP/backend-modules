@@ -3,6 +3,7 @@
 namespace App\Modules\Finance\Services;
 
 use App\Modules\Finance\Models\Paiement;
+use App\Services\DatabaseAdapter;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -75,7 +76,7 @@ class ReportService
         return Paiement::where('status', 'approved')
             ->whereBetween('payment_date', [$startDate, $endDate])
             ->select(
-                DB::raw("DATE_FORMAT(payment_date, '{$dateFormat}') as period"),
+                DB::raw(DatabaseAdapter::dateFormat('payment_date', $dateFormat) . ' as period'),
                 DB::raw('SUM(amount) as total'),
                 DB::raw('COUNT(*) as count')
             )

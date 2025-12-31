@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Inscription\Models\Student;
 use App\Modules\Inscription\Models\PendingStudent;
 use App\Modules\Finance\Models\Paiement;
+use App\Services\DatabaseAdapter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -184,18 +185,18 @@ class AdministrationService
         };
 
         return [
-            'users' => User::select(DB::raw("DATE_FORMAT(created_at, '{$dateFormat}') as period"), DB::raw('COUNT(*) as count'))
+            'users' => User::select(DB::raw(DatabaseAdapter::dateFormat('created_at', $dateFormat) . ' as period'), DB::raw('COUNT(*) as count'))
                 ->groupBy('period')
                 ->orderBy('period', 'desc')
                 ->limit(12)
                 ->get(),
-            'students' => Student::select(DB::raw("DATE_FORMAT(created_at, '{$dateFormat}') as period"), DB::raw('COUNT(*) as count'))
+            'students' => Student::select(DB::raw(DatabaseAdapter::dateFormat('created_at', $dateFormat) . ' as period'), DB::raw('COUNT(*) as count'))
                 ->groupBy('period')
                 ->orderBy('period', 'desc')
                 ->limit(12)
                 ->get(),
             'payments' => Paiement::select(
-                DB::raw("DATE_FORMAT(created_at, '{$dateFormat}') as period"),
+                DB::raw(DatabaseAdapter::dateFormat('created_at', $dateFormat) . ' as period'),
                 DB::raw('COUNT(*) as count'),
                 DB::raw('SUM(montant) as total_amount')
             )

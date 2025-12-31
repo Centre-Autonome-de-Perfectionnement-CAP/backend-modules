@@ -6,6 +6,7 @@ use App\Modules\Finance\Models\Paiement;
 use App\Modules\Finance\Models\Amount;
 use App\Modules\Inscription\Models\Student;
 use App\Modules\Inscription\Models\AcademicYear;
+use App\Services\DatabaseAdapter;
 use Illuminate\Support\Facades\DB;
 
 class DashboardService
@@ -102,7 +103,7 @@ class DashboardService
                 $academicYear->year_end
             ])
             ->select(
-                DB::raw('MONTH(payment_date) as month'),
+                DB::raw(DatabaseAdapter::month('payment_date') . ' as month'),
                 DB::raw('SUM(amount) as total')
             )
             ->groupBy('month')

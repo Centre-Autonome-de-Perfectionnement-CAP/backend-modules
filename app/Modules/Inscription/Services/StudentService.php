@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inscription\Services;
 
+use App\Services\DatabaseAdapter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Modules\Core\Services\PdfService;
@@ -39,7 +40,7 @@ class StudentService
                 'pending_students.id',
                 'student_pending_student.id as student_pending_student_id',
                 'student_pending_student.student_id',
-                DB::raw("CONCAT(personal_information.last_name, ' ', personal_information.first_names) as nomPrenoms"),
+                DB::raw(DatabaseAdapter::concat(['personal_information.last_name', "' '", 'personal_information.first_names']) . ' as nomPrenoms'),
                 'personal_information.gender as sexe',
                 'personal_information.birth_date as dateNaissance',
                 'departments.name as filiere',
@@ -92,7 +93,7 @@ class StudentService
         if (!empty($filters['search'])) {
             $search = $filters['search'];
             $query->where(function ($q) use ($search) {
-                $q->where(DB::raw("CONCAT(personal_information.last_name, ' ', personal_information.first_names)"), 'like', "%{$search}%")
+                $q->where(DB::raw(DatabaseAdapter::concat(['personal_information.last_name', "' '", 'personal_information.first_names'])), 'like', "%{$search}%")
                     ->orWhere(DB::raw("(SELECT student_id_number FROM students WHERE students.id = student_pending_student.student_id)"), 'like', "%{$search}%");
             });
         }
@@ -132,7 +133,7 @@ class StudentService
             ->select(
                 'pending_students.id',
                 'student_pending_student.id as student_pending_student_id',
-                DB::raw("CONCAT(personal_information.last_name, ' ', personal_information.first_names) as nomPrenoms"),
+                DB::raw(DatabaseAdapter::concat(['personal_information.last_name', "' '", 'personal_information.first_names']) . ' as nomPrenoms'),
                 'personal_information.gender as sexe',
                 'personal_information.birth_date as dateNaissance',
                 'personal_information.photo',
@@ -346,7 +347,7 @@ class StudentService
                 'students.id',
                 'student_pending_student.id as student_pending_student_id',
                 'students.student_id_number as matricule',
-                DB::raw("CONCAT(personal_information.last_name, ' ', personal_information.first_names) as nomPrenoms"),
+                DB::raw(DatabaseAdapter::concat(['personal_information.last_name', "' '", 'personal_information.first_names']) . ' as nomPrenoms'),
                 'pending_students.level as niveau',
                 'class_groups.group_name as groupe',
                 'personal_information.nationality'
