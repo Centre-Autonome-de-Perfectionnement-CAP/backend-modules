@@ -42,6 +42,9 @@ Route::prefix('api/finance')->group(function () {
     Route::delete('/tarifs/{id}', [TarifController::class, 'destroy']);
     
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> f2a73ba (commit)
     // Tarifs par niveau académique
     Route::get('/academic-level-fees', [AcademicLevelFeeController::class, 'index']);
     Route::post('/academic-level-fees', [AcademicLevelFeeController::class, 'store']);
@@ -50,8 +53,11 @@ Route::prefix('api/finance')->group(function () {
     Route::delete('/academic-level-fees/{uuid}', [AcademicLevelFeeController::class, 'destroy']);
     Route::post('/academic-level-fees/student-fee', [AcademicLevelFeeController::class, 'getStudentFee']);
     
+<<<<<<< HEAD
 =======
 >>>>>>> eea2b06 (draft)
+=======
+>>>>>>> f2a73ba (commit)
     // Historique
     Route::get('/historique/class', [HistoriqueController::class, 'getByClass']);
     Route::get('/historique/student/{studentId}', [HistoriqueController::class, 'getStudentFinancialState']);

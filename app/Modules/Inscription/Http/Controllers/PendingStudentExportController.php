@@ -3,17 +3,9 @@
 namespace App\Modules\Inscription\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-<<<<<<< HEAD
 use App\Modules\Inscription\Services\PendingStudentExportService;
 use App\Modules\Inscription\Http\Requests\ExportPendingStudentsRequest;
 use App\Traits\ApiResponse;
-=======
-use App\Modules\Inscription\Models\PendingStudent;
-use App\Modules\Inscription\Models\AcademicYear;
-use App\Traits\ApiResponse;
-use Illuminate\Http\Request;
-use Illuminate\Http\Response;
->>>>>>> eea2b06 (draft)
 use Barryvdh\DomPDF\Facade\Pdf;
 use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\IOFactory;
@@ -45,6 +37,7 @@ class PendingStudentExportController extends Controller
         $filename = $this->exportService->generateFilename('pdf', $data);
         
         \Log::info('Export PDF filename:', ['filename' => $filename, 'data' => $data]);
+<<<<<<< HEAD
 =======
     public function __construct()
     {
@@ -57,11 +50,16 @@ class PendingStudentExportController extends Controller
         $template = $this->getTemplate($data['isPrepa']);
         $filename = $this->generateFilename('pdf', $data);
 >>>>>>> eea2b06 (draft)
+=======
+>>>>>>> f2a73ba (commit)
         
         $pdf = Pdf::loadView("core::pdfs.{$template}", $data)
             ->setPaper('a4', 'landscape');
         
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> f2a73ba (commit)
         $output = $pdf->output();
         
         return response()->make($output, 200)
@@ -154,6 +152,7 @@ class PendingStudentExportController extends Controller
         $filename = $this->exportService->generateFilename('docx', $data);
         
         \Log::info('Export Word filename:', ['filename' => $filename]);
+<<<<<<< HEAD
 =======
         return response()->download($temp_file, $filename)->deleteFileAfterSend();
     }
@@ -164,6 +163,8 @@ class PendingStudentExportController extends Controller
         $template = $this->getTemplate($data['isPrepa']);
         $filename = $this->generateFilename('docx', $data);
 >>>>>>> eea2b06 (draft)
+=======
+>>>>>>> f2a73ba (commit)
         
         $phpWord = new PhpWord();
         $section = $phpWord->addSection(['orientation' => 'landscape']);
@@ -229,6 +230,7 @@ class PendingStudentExportController extends Controller
 
     public function exportEmails(ExportPendingStudentsRequest $request)
     {
+<<<<<<< HEAD
         \Log::channel('single')->info('=== DEBUT exportEmails ===');
         \Log::channel('single')->info('Request URL: ' . $request->fullUrl());
         \Log::channel('single')->info('Request Method: ' . $request->method());
@@ -328,12 +330,21 @@ class PendingStudentExportController extends Controller
         
         $pdf = Pdf::loadView('core::pdfs.liste-etudiants-valides-par-type', $data)
             ->setPaper('a4', 'landscape');
+=======
+        $filters = $request->only(['year', 'filiere', 'cohort']);
+        $data = $this->exportService->prepareEmailsExportData($filters);
+        $filename = $this->exportService->generateEmailsFilename($data);
+        
+        $pdf = Pdf::loadView('core::pdfs.liste-emails-etudiants', $data)
+            ->setPaper('a4', 'portrait');
+>>>>>>> f2a73ba (commit)
         
         $output = $pdf->output();
         
         return response()->make($output, 200)
             ->header('Content-Type', 'application/pdf')
             ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+<<<<<<< HEAD
     }}
 =======
         return response()->download($temp_file, $filename)->deleteFileAfterSend();
@@ -403,3 +414,7 @@ class PendingStudentExportController extends Controller
     }
 }
 >>>>>>> eea2b06 (draft)
+=======
+    }
+}
+>>>>>>> f2a73ba (commit)

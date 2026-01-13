@@ -1,8 +1,12 @@
+<<<<<<<< HEAD:public/app-cap-frontend/assets/index.esm-CE4fs2aM.js
 <<<<<<<< HEAD:public/app-cap-frontend/assets/index.esm-fmqSpuVB.js
 import{r as nt,R as ft}from"./index-CbALTDLj.js";/*!
 ========
 import{r as nt,R as ft}from"./index-khCzjUTv.js";/*!
 >>>>>>>> f355611 (draft):public/app-cap-frontend/assets/index.esm-CE4fs2aM.js
+========
+import{r as nt,R as ft}from"./index-o8HLPDVG.js";/*!
+>>>>>>>> f2a73ba (commit):public/app-cap-frontend/assets/index.esm-CGxW4B-0.js
  * @kurkle/color v0.3.4
  * https://github.com/kurkle/color#readme
  * (c) 2024 Jukka Kurkela

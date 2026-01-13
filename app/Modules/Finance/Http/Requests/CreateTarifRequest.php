@@ -47,6 +47,7 @@ class CreateTarifRequest extends FormRequest
             'class_groups.*.department_id' => 'required|exists:departments,id',
             'class_groups.*.study_level' => 'required|integer|min:1|max:5',
 <<<<<<< HEAD
+<<<<<<< HEAD
             'uemoa_training_fee' => 'nullable|numeric|min:0',
             'non_uemoa_training_fee' => 'nullable|numeric|min:0',
 =======
@@ -55,6 +56,10 @@ class CreateTarifRequest extends FormRequest
 >>>>>>> eea2b06 (draft)
 =======
 >>>>>>> 7854261 (commit)
+=======
+            'uemoa_training_fee' => 'nullable|numeric|min:0',
+            'non_uemoa_training_fee' => 'nullable|numeric|min:0',
+>>>>>>> f2a73ba (commit)
         ];
     }
 

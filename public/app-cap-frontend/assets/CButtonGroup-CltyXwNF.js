@@ -1,1 +1,5 @@
+<<<<<<<< HEAD:public/app-cap-frontend/assets/CButtonGroup-CltyXwNF.js
 import{r as n,_ as p,R as m,c as u,P as e}from"./index-CbALTDLj.js";const a=n.forwardRef((s,t)=>{var{children:o,className:c,size:r,vertical:l}=s,i=p(s,["children","className","size","vertical"]);return m.createElement("div",Object.assign({className:u(l?"btn-group-vertical":"btn-group",{[`btn-group-${r}`]:r},c)},i,{ref:t}),o)});a.propTypes={children:e.node,className:e.string,size:e.oneOf(["sm","lg"]),vertical:e.bool};a.displayName="CButtonGroup";export{a as C};
+========
+import{r as n,_ as p,R as m,c as u,P as e}from"./index-o8HLPDVG.js";const a=n.forwardRef((s,t)=>{var{children:o,className:c,size:r,vertical:l}=s,i=p(s,["children","className","size","vertical"]);return m.createElement("div",Object.assign({className:u(l?"btn-group-vertical":"btn-group",{[`btn-group-${r}`]:r},c)},i,{ref:t}),o)});a.propTypes={children:e.node,className:e.string,size:e.oneOf(["sm","lg"]),vertical:e.bool};a.displayName="CButtonGroup";export{a as C};
+>>>>>>>> f2a73ba (commit):public/app-cap-frontend/assets/CButtonGroup-C3b8kwv-.js

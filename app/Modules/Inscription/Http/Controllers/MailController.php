@@ -19,6 +19,7 @@ class MailController
     {
         $students = $request->input('students', []);
 <<<<<<< HEAD
+<<<<<<< HEAD
         $errors = [];
         $success = [];
         
@@ -89,20 +90,71 @@ class MailController
                     if ($hasCuo) {
                         $pendingStudent->increment('mail_cuo_count');
                         $pendingStudent->update(['mail_cuo_sent' => true]);
+=======
+        $errors = [];
+        $success = [];
+        
+        foreach ($students as $studentData) {
+            try {
+                SendPendingStudentMailJob::dispatch($studentData);
+                
+                $studentId = $studentData['id'] ?? $studentData['studentId'] ?? null;
+                if ($studentId) {
+                    $pendingStudent = PendingStudent::find($studentId);
+                    if ($pendingStudent) {
+                        // Détecter automatiquement le type de mail
+                        $hasCuca = !empty($studentData['opinionCuca']);
+                        $hasCuo = !empty($studentData['opinionCuo']);
+                        
+                        if ($hasCuca) {
+                            $pendingStudent->increment('mail_cuca_count');
+                            $pendingStudent->update(['mail_cuca_sent' => true]);
+                        }
+                        if ($hasCuo) {
+                            $pendingStudent->increment('mail_cuo_count');
+                            $pendingStudent->update(['mail_cuo_sent' => true]);
+                        }
+                        
+                        $success[] = [
+                            'id' => $studentId,
+                            'nom' => $pendingStudent->personalInformation->last_name ?? '',
+                            'prenoms' => $pendingStudent->personalInformation->first_names ?? '',
+                        ];
+>>>>>>> f2a73ba (commit)
                     }
                 }
+            } catch (\Exception $e) {
+                $studentId = $studentData['id'] ?? $studentData['studentId'] ?? 'inconnu';
+                $errors[] = [
+                    'id' => $studentId,
+                    'message' => $e->getMessage()
+                ];
             }
 >>>>>>> eea2b06 (draft)
         }
         
+        if (!empty($errors)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Certains mails n\'ont pas pu être envoyés',
+                'errors' => $errors,
+                'success' => $success
+            ], 422);
+        }
+        
         return response()->json([
             'success' => true,
+<<<<<<< HEAD
 <<<<<<< HEAD
             'message' => 'Mails en cours d\'envoi',
             'success' => $success
 =======
             'message' => 'Mails en cours d\'envoi'
 >>>>>>> f355611 (draft)
+=======
+            'message' => 'Mails en cours d\'envoi',
+            'success' => $success
+>>>>>>> f2a73ba (commit)
         ]);
     }
 }

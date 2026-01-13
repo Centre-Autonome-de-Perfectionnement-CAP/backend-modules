@@ -35,6 +35,9 @@ class PendingStudentResource extends JsonResource
         if ($this->documents) {
             foreach ($this->documents as $name => $value) {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> f2a73ba (commit)
                 // Gérer le format objet {url, custom_name} ou string
                 $url = is_array($value) ? ($value['url'] ?? '') : $value;
                 $customName = is_array($value) ? ($value['custom_name'] ?? null) : null;
@@ -44,11 +47,14 @@ class PendingStudentResource extends JsonResource
                     'url' => url("/api/inscription/files/legacy?path=" . urlencode($path)),
                     'custom_name' => $customName
                 ];
+<<<<<<< HEAD
 =======
                 // Ajouter 'public/' au chemin si nécessaire
                 $path = str_starts_with($value, 'public/') ? $value : 'public/' . $value;
                 $documents[$name] = url("/api/inscription/files/legacy?path=" . urlencode($path));
 >>>>>>> eea2b06 (draft)
+=======
+>>>>>>> f2a73ba (commit)
             }
         }
 
