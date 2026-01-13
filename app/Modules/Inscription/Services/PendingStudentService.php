@@ -341,6 +341,33 @@ class PendingStudentService
             'level' => $pendingStudent->level,
         ]);
 
+        // Vérifier qu'un tarif existe pour ce niveau et cette filière
+        $fee = \App\Modules\Finance\Models\AcademicLevelFee::where('academic_year_id', $pendingStudent->academic_year_id)
+            ->where('department_id', $pendingStudent->department_id)
+            ->where('study_level', $pendingStudent->level)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$fee) {
+            $department = $pendingStudent->department;
+            $departmentName = $department ? $department->name : 'inconnue';
+            
+            Log::error('Impossible de créer l\'étudiant: aucun tarif défini', [
+                'pending_student_id' => $pendingStudent->id,
+                'academic_year_id' => $pendingStudent->academic_year_id,
+                'department_id' => $pendingStudent->department_id,
+                'level' => $pendingStudent->level,
+                'department_name' => $departmentName,
+            ]);
+            
+            throw new \Exception(
+                "Impossible d'accepter cet étudiant. Aucun tarif actif n'est défini pour le niveau {$pendingStudent->level} " .
+                "de la filière {$departmentName}. Veuillez configurer les tarifs dans le module Finance avant d'accepter des étudiants."
+            );
+        }
+
+        Log::info('Tarif trouvé, création de l\'étudiant autorisée', ['fee_id' => $fee->id]);
+
         // Chercher si un Student existe déjà pour cette personne
         Log::info('Recherche d\'un Student existant via personal_information_id', [
             'personal_information_id' => $pendingStudent->personal_information_id,

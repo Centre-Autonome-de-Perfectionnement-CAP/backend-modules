@@ -26,6 +26,8 @@ class CreateTarifRequest extends FormRequest
             'class_groups.*.academic_year_id' => 'required|exists:academic_years,id',
             'class_groups.*.department_id' => 'required|exists:departments,id',
             'class_groups.*.study_level' => 'required|integer|min:1|max:5',
+            'uemoa_training_fee' => 'nullable|numeric|min:0',
+            'non_uemoa_training_fee' => 'nullable|numeric|min:0',
         ];
     }
 

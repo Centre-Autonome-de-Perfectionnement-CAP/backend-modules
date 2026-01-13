@@ -7,6 +7,7 @@ use App\Modules\Inscription\Models\PendingStudent;
 use App\Modules\Inscription\Http\Requests\CreatePendingStudentRequest;
 use App\Modules\Inscription\Http\Requests\SubmitDocumentsRequest;
 use App\Modules\Inscription\Http\Requests\UpdatePendingStudentLevelRequest;
+use App\Modules\Inscription\Http\Requests\RenamePieceRequest;
 use App\Modules\Inscription\Http\Resources\PendingStudentResource;
 use App\Modules\Inscription\Services\PendingStudentService;
 use Illuminate\Http\JsonResponse;
@@ -393,6 +394,43 @@ public function updateStatus(Request $request, PendingStudent $pendingStudent): 
         );
 
         return $this->successResponse($result, 'Documents soumis avec succès');
+    }
+
+    /**
+     * Renommer une pièce pour un étudiant
+     */
+    public function renamePiece(RenamePieceRequest $request, PendingStudent $pendingStudent): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $documents = is_string($pendingStudent->documents) 
+            ? json_decode($pendingStudent->documents, true) 
+            : ($pendingStudent->documents ?? []);
+        
+        if (!isset($documents[$validated['piece_key']])) {
+            return $this->errorResponse('Pièce non trouvée', 404, 'PIECE_NOT_FOUND');
+        }
+
+        // Convertir en format objet si c'est une string
+        $currentValue = $documents[$validated['piece_key']];
+        if (is_string($currentValue)) {
+            $documents[$validated['piece_key']] = [
+                'url' => $currentValue,
+                'custom_name' => $validated['custom_name']
+            ];
+        } else {
+            $documents[$validated['piece_key']] = array_merge(
+                is_array($currentValue) ? $currentValue : [],
+                ['custom_name' => $validated['custom_name']]
+            );
+        }
+
+        $pendingStudent->update(['documents' => $documents]);
+
+        return $this->successResponse(
+            new PendingStudentResource($pendingStudent),
+            'Nom de la pièce mis à jour avec succès'
+        );
     }
 
     /**

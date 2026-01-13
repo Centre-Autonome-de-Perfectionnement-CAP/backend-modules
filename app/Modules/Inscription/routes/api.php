@@ -27,6 +27,7 @@ Route::prefix('api/inscription')->group(function () {
             Route::get('/{pendingStudent}/documents', [PendingStudentController::class, 'getDocuments']);
             Route::patch('/{pendingStudent}/financial-status', [PendingStudentController::class, 'updateStatus']);
             Route::patch('/{pendingStudent}/level', [PendingStudentController::class, 'updateLevel']);
+            Route::patch('/{pendingStudent}/pieces/rename', [PendingStudentController::class, 'renamePiece']);
         });
         Route::post('/', [PendingStudentController::class, 'store']);
         Route::post('/{pendingStudent}/documents', [PendingStudentController::class, 'submitDocuments']);
@@ -120,6 +121,7 @@ Route::prefix('api/inscription')->group(function () {
         Route::get('export/pdf', [PendingStudentExportController::class, 'exportPdf']);
         Route::get('export/excel', [PendingStudentExportController::class, 'exportExcel']);
         Route::get('export/word', [PendingStudentExportController::class, 'exportWord']);
+        Route::get('export/emails', [PendingStudentExportController::class, 'exportEmails']);
     });
 
 }); // Fin du groupe api/inscription

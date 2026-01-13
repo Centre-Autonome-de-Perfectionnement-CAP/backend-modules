@@ -11,6 +11,7 @@ use App\Modules\Finance\Http\Controllers\TransactionController;
 use App\Modules\Finance\Http\Controllers\ExonerationController;
 use App\Modules\Finance\Http\Controllers\StudentFinanceController;
 use App\Modules\Finance\Http\Controllers\ReportController;
+use App\Modules\Finance\Http\Controllers\AcademicLevelFeeController;
 
 // Routes for Finance module
 
@@ -32,6 +33,14 @@ Route::prefix('api/finance')->group(function () {
     Route::post('/tarifs', [TarifController::class, 'store']);
     Route::put('/tarifs/{id}', [TarifController::class, 'update']);
     Route::delete('/tarifs/{id}', [TarifController::class, 'destroy']);
+    
+    // Tarifs par niveau académique
+    Route::get('/academic-level-fees', [AcademicLevelFeeController::class, 'index']);
+    Route::post('/academic-level-fees', [AcademicLevelFeeController::class, 'store']);
+    Route::post('/academic-level-fees/bulk', [AcademicLevelFeeController::class, 'storeBulk']);
+    Route::put('/academic-level-fees/{uuid}', [AcademicLevelFeeController::class, 'update']);
+    Route::delete('/academic-level-fees/{uuid}', [AcademicLevelFeeController::class, 'destroy']);
+    Route::post('/academic-level-fees/student-fee', [AcademicLevelFeeController::class, 'getStudentFee']);
     
     // Historique
     Route::get('/historique/class', [HistoriqueController::class, 'getByClass']);

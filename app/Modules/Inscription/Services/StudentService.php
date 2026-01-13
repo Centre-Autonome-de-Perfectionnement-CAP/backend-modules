@@ -49,7 +49,7 @@ class StudentService
                 'entry_diplomas.name as entryDiploma',
                 'pending_students.status as statut',
                 'personal_information.email',
-                DB::raw("JSON_UNQUOTE(JSON_EXTRACT(personal_information.contacts, '$.phone')) as telephone"),
+                DB::raw(DatabaseAdapter::jsonExtract('personal_information.contacts', '$.phone') . ' as telephone'),
                 DB::raw("(SELECT student_id_number FROM students WHERE students.id = student_pending_student.student_id) as matricule"),
                 'class_groups.group_name as groupe'
             )
@@ -143,7 +143,7 @@ class StudentService
                 'entry_diplomas.name as entryDiploma',
                 'pending_students.status as statut',
                 'personal_information.email',
-                DB::raw("JSON_UNQUOTE(JSON_EXTRACT(personal_information.contacts, '$.phone')) as telephone"),
+                DB::raw(DatabaseAdapter::jsonExtract('personal_information.contacts', '$.phone') . ' as telephone'),
                 DB::raw("(SELECT student_id_number FROM students WHERE students.id = student_pending_student.student_id) as matricule"),
                 'class_groups.group_name as groupe'
             )

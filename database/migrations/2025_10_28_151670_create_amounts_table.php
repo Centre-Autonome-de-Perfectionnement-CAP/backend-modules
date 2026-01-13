@@ -23,11 +23,10 @@ return new class extends Migration
             // Frais d'inscription
             $table->decimal('registration_fee', 10, 2)->default(0);
             
-            // Frais de formation selon le statut de l'étudiant
-            $table->decimal('national_training_fee', 10, 2)->default(0); // Nationaux
-            $table->decimal('international_training_fee', 10, 2)->default(0); // Non-nationaux
+            // Frais de formation selon l'origine de l'étudiant
+            $table->decimal('uemoa_training_fee', 10, 2)->default(0); // Pays UEMOA
+            $table->decimal('non_uemoa_training_fee', 10, 2)->default(0); // Hors UEMOA
             $table->decimal('exempted_training_fee', 10, 2)->default(0); // Exonérés
-            $table->decimal('sponsored_training_fee', 10, 2)->default(0); // Sponsorisés
             
             $table->timestamps();
             $table->softDeletes();

@@ -122,6 +122,23 @@ class SendPendingStudentMailJob
         
         if ($isFavorable) {
             try {
+                // Vérifier qu'un tarif existe avant de créer l'étudiant
+                $feeExists = \App\Modules\Finance\Models\AcademicLevelFee::where('academic_year_id', $student->academic_year_id)
+                    ->where('department_id', $student->department_id)
+                    ->where('study_level', $student->level)
+                    ->where('is_active', true)
+                    ->exists();
+
+                if (!$feeExists) {
+                    Log::error('Impossible de créer l\'étudiant: aucun tarif défini', [
+                        'pending_student_id' => $student->id,
+                        'academic_year_id' => $student->academic_year_id,
+                        'department_id' => $student->department_id,
+                        'level' => $student->level,
+                    ]);
+                    throw new \Exception('Impossible d\'accepter cet étudiant. Aucun tarif n\'est défini pour le niveau ' . $student->level . ' de la filière ' . $student->department->name . '. Veuillez configurer les tarifs avant d\'accepter des étudiants.');
+                }
+
                 // Vérifier si le student existe déjà
                 $existingLink = StudentPendingStudent::where('pending_student_id', $student->id)->first();
                 
@@ -135,6 +152,7 @@ class SendPendingStudentMailJob
                 }
             } catch (\Exception $e) {
                 Log::error('Erreur création Student', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+                throw $e;
             }
         }
     }
