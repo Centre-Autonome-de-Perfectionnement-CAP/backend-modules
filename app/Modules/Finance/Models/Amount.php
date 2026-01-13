@@ -71,30 +71,29 @@ class Amount extends Model
     }
 
     /**
-     * Get the appropriate training fee based on student status
+     * Get the appropriate training fee based on student origin
      * 
-     * @param string $status - 'national', 'international', 'exempted', 'sponsored'
+     * @param string $origin - 'uemoa', 'non_uemoa', 'exempted'
      * @return float
      */
-    public function getTrainingFeeByStatus(string $status): float
+    public function getTrainingFeeByOrigin(string $origin): float
     {
-        return match($status) {
-            'national' => (float) $this->national_training_fee,
-            'international' => (float) $this->international_training_fee,
+        return match($origin) {
+            'uemoa' => (float) $this->uemoa_training_fee,
+            'non_uemoa' => (float) $this->non_uemoa_training_fee,
             'exempted' => (float) $this->exempted_training_fee,
-            'sponsored' => (float) $this->sponsored_training_fee,
-            default => (float) $this->national_training_fee,
+            default => (float) $this->uemoa_training_fee,
         };
     }
 
     /**
-     * Get total fee (registration + training) based on student status
+     * Get total fee (registration + training) based on student origin
      * 
-     * @param string $status
+     * @param string $origin
      * @return float
      */
-    public function getTotalFeeByStatus(string $status): float
+    public function getTotalFeeByOrigin(string $origin): float
     {
-        return (float) $this->registration_fee + $this->getTrainingFeeByStatus($status);
+        return (float) $this->registration_fee + $this->getTrainingFeeByOrigin($origin);
     }
 }

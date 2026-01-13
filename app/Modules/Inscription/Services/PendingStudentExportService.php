@@ -118,11 +118,79 @@ class PendingStudentExportService
         $cohort = $data['cohort'] ?? 'all';
         $dateTime = now()->format('Ymd_His');
         
-        return "LISTE_CUCA_CUO_{$academicYear}_COHORTE_{$cohort}_{$department}_{$dateTime}.{$extension}";
+        return "LISTE_CUCA_CUO_{$academicYear}_{$department}_{$cohort}_{$dateTime}.{$extension}";
     }
 
     public function getTemplate(bool $isPrepa): string
     {
         return $isPrepa ? 'liste-cuca-cuo-prepa' : 'liste-cuca-cuo';
+    }
+
+    public function prepareEmailsExportData(array $filters): array
+    {
+        $query = PendingStudent::with(['personalInformation', 'department', 'academicYear']);
+        
+        if (!empty($filters['year']) && $filters['year'] !== 'all') {
+            if (is_numeric($filters['year'])) {
+                $query->where('academic_year_id', $filters['year']);
+            }
+        }
+        
+        if (!empty($filters['filiere']) && $filters['filiere'] !== 'all') {
+            if (is_numeric($filters['filiere'])) {
+                $query->where('department_id', $filters['filiere']);
+            }
+        }
+        
+        if (!empty($filters['cohort']) && $filters['cohort'] !== 'all' && !empty($filters['year']) && is_numeric($filters['year'])) {
+            $periods = \DB::table('submission_periods')
+                ->where('academic_year_id', $filters['year'])
+                ->select('start_date', 'end_date')
+                ->groupBy('start_date', 'end_date')
+                ->orderBy('start_date')
+                ->get();
+            
+            $cohortIndex = (int)$filters['cohort'] - 1;
+            if (isset($periods[$cohortIndex])) {
+                $period = $periods[$cohortIndex];
+                $query->whereDate('created_at', '>=', $period->start_date)
+                      ->whereDate('created_at', '<=', $period->end_date);
+            }
+        }
+        
+        $pendingStudents = $query->get();
+        
+        $academicYear = null;
+        if (!empty($filters['year']) && is_numeric($filters['year'])) {
+            $academicYear = AcademicYear::find($filters['year']);
+        } else {
+            $academicYear = AcademicYear::where('is_current', true)->first();
+        }
+        
+        $department = $pendingStudents->first()?->department;
+        
+        $emails = $pendingStudents->map(function($student) {
+            return [
+                'name' => $student->personalInformation->last_name . ' ' . $student->personalInformation->first_names,
+                'email' => $student->personalInformation->email,
+            ];
+        });
+        
+        return [
+            'emails' => $emails,
+            'academicYear' => $academicYear?->academic_year ?? 'N/A',
+            'department' => $department?->name ?? 'Toutes filières',
+            'totalStudents' => $pendingStudents->count(),
+            'exportDate' => now()->format('d/m/Y'),
+        ];
+    }
+
+    public function generateEmailsFilename(array $data): string
+    {
+        $department = str_replace(' ', '_', $data['department']);
+        $academicYear = str_replace(['/', '-'], '_', $data['academicYear']);
+        $dateTime = now()->format('Ymd_His');
+        
+        return "EMAILS_ETUDIANTS_{$academicYear}_{$department}_{$dateTime}.pdf";
     }
 }

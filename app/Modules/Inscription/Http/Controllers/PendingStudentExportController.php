@@ -35,12 +35,16 @@ class PendingStudentExportController extends Controller
         $template = $this->exportService->getTemplate($data['isPrepa']);
         $filename = $this->exportService->generateFilename('pdf', $data);
         
+        \Log::info('Export PDF filename:', ['filename' => $filename, 'data' => $data]);
+        
         $pdf = Pdf::loadView("core::pdfs.{$template}", $data)
             ->setPaper('a4', 'landscape');
         
-        return response()->streamDownload(function() use ($pdf) {
-            echo $pdf->output();
-        }, $filename, ['Content-Type' => 'application/pdf']);
+        $output = $pdf->output();
+        
+        return response()->make($output, 200)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
     }
 
     public function exportExcel(ExportPendingStudentsRequest $request)
@@ -116,6 +120,8 @@ class PendingStudentExportController extends Controller
         $template = $this->exportService->getTemplate($data['isPrepa']);
         $filename = $this->exportService->generateFilename('docx', $data);
         
+        \Log::info('Export Word filename:', ['filename' => $filename]);
+        
         $phpWord = new PhpWord();
         $section = $phpWord->addSection(['orientation' => 'landscape']);
         
@@ -177,5 +183,19 @@ class PendingStudentExportController extends Controller
         ])->deleteFileAfterSend();
     }
 
-
+    public function exportEmails(ExportPendingStudentsRequest $request)
+    {
+        $filters = $request->only(['year', 'filiere', 'cohort']);
+        $data = $this->exportService->prepareEmailsExportData($filters);
+        $filename = $this->exportService->generateEmailsFilename($data);
+        
+        $pdf = Pdf::loadView('core::pdfs.liste-emails-etudiants', $data)
+            ->setPaper('a4', 'portrait');
+        
+        $output = $pdf->output();
+        
+        return response()->make($output, 200)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+    }
 }

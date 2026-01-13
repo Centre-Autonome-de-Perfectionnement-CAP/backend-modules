@@ -38,6 +38,12 @@ class DashboardService
     public function getGraphData($academicYearId = null): array
     {
         $currentYear = null;
+        
+        // Nettoyer l'ID si c'est la chaîne 'null'
+        if ($academicYearId === 'null' || $academicYearId === '') {
+            $academicYearId = null;
+        }
+        
         if (!$academicYearId) {
             $currentYear = AcademicYear::where('is_current', true)->first();
             $academicYearId = $currentYear ? $currentYear->id : null;
@@ -71,7 +77,7 @@ class DashboardService
         return $departments->map(function ($department) use ($academicYearId) {
             $query = PendingStudent::where('department_id', $department->id);
             
-            if ($academicYearId) {
+            if ($academicYearId && $academicYearId !== 'null') {
                 $query->where('academic_year_id', $academicYearId);
             }
             
@@ -98,7 +104,7 @@ class DashboardService
                 $q->where('cycle_id', $cycle->id);
             });
             
-            if ($academicYearId) {
+            if ($academicYearId && $academicYearId !== 'null') {
                 $query->where('academic_year_id', $academicYearId);
             }
             
@@ -117,7 +123,7 @@ class DashboardService
         $query = PendingStudent::select('status', DB::raw('count(*) as nombre'))
             ->groupBy('status');
         
-        if ($academicYearId) {
+        if ($academicYearId && $academicYearId !== 'null') {
             $query->where('academic_year_id', $academicYearId);
         }
         
