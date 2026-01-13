@@ -185,32 +185,36 @@ class PendingStudentExportController extends Controller
 
     public function exportEmails(ExportPendingStudentsRequest $request)
     {
-        \Log::info('=== DEBUT exportEmails ===');
+        \Log::channel('single')->info('=== DEBUT exportEmails ===');
+        \Log::channel('single')->info('Request URL: ' . $request->fullUrl());
+        \Log::channel('single')->info('Request Method: ' . $request->method());
+        \Log::channel('single')->info('Auth header: ' . $request->header('Authorization'));
+        
         $filters = $request->only(['year', 'filiere', 'cohort']);
-        \Log::info('Filters:', $filters);
+        \Log::channel('single')->info('Filters:', $filters);
         
         $data = $this->exportService->prepareEmailsExportData($filters);
-        \Log::info('Data prepared:', ['totalStudents' => $data['totalStudents'], 'academicYear' => $data['academicYear']]);
+        \Log::channel('single')->info('Data prepared:', ['totalStudents' => $data['totalStudents'], 'academicYear' => $data['academicYear']]);
         
         $filename = $this->exportService->generateEmailsFilename($data);
-        \Log::info('Filename generated:', ['filename' => $filename]);
+        \Log::channel('single')->info('Filename generated:', ['filename' => $filename]);
         
         $pdf = Pdf::loadView('core::pdfs.liste-emails-etudiants', $data)
             ->setPaper('a4', 'portrait');
-        \Log::info('PDF view loaded');
+        \Log::channel('single')->info('PDF view loaded');
         
         $output = $pdf->output();
-        \Log::info('PDF output generated:', ['size' => strlen($output)]);
+        \Log::channel('single')->info('PDF output generated:', ['size' => strlen($output)]);
         
         $response = response()->make($output, 200)
             ->header('Content-Type', 'application/pdf')
             ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
         
-        \Log::info('Response headers:', [
+        \Log::channel('single')->info('Response headers:', [
             'Content-Type' => $response->headers->get('Content-Type'),
             'Content-Disposition' => $response->headers->get('Content-Disposition')
         ]);
-        \Log::info('=== FIN exportEmails ===');
+        \Log::channel('single')->info('=== FIN exportEmails ===');
         
         return $response;
     }

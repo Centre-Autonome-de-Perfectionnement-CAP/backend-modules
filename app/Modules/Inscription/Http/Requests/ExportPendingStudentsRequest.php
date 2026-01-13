@@ -14,7 +14,7 @@ class ExportPendingStudentsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'cohort' => 'required|not_in:all',
+            'cohort' => 'nullable|not_in:all',
             'year' => 'nullable|string',
             'filiere' => 'nullable|string',
         ];

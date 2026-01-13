@@ -127,15 +127,6 @@
                 @endforeach
             </tbody>
         </table>
-
-        <div class="email-list">
-            <h3>Liste des emails (copier-coller)</h3>
-            <p>
-                @foreach($students as $index => $student)
-                    {{ $student->personalInformation->email }}@if($index < $students->count() - 1), @endif
-                @endforeach
-            </p>
-        </div>
     </div>
     @endforeach
 

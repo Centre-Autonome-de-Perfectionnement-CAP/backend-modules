@@ -206,10 +206,9 @@ class PendingStudentExportService
 
     public function generateEmailsFilename(array $data): string
     {
-        $department = str_replace(' ', '_', $data['department']);
         $academicYear = str_replace(['/', '-'], '_', $data['academicYear']);
         $dateTime = now()->format('Ymd_His');
         
-        return "EMAILS_ETUDIANTS_{$academicYear}_{$department}_{$dateTime}.pdf";
+        return "EMAILS_ETUDIANTS_{$academicYear}_{$dateTime}.pdf";
     }
 }
