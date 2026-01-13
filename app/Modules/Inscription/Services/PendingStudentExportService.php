@@ -158,7 +158,12 @@ class PendingStudentExportService
             }
         }
         
-        $pendingStudents = $query->get();
+        // Trier par département puis par nom
+        $pendingStudents = $query->orderBy('department_id')
+            ->get()
+            ->sortBy(function($student) {
+                return $student->personalInformation->last_name;
+            });
         
         $academicYear = null;
         if (!empty($filters['year']) && is_numeric($filters['year'])) {
@@ -167,19 +172,23 @@ class PendingStudentExportService
             $academicYear = AcademicYear::where('is_current', true)->first();
         }
         
-        $department = $pendingStudents->first()?->department;
+        // Grouper par filière
+        $studentsByDepartment = $pendingStudents->groupBy(function($student) {
+            return $student->department->name ?? 'Sans filière';
+        });
         
         $emails = $pendingStudents->map(function($student) {
             return [
                 'name' => $student->personalInformation->last_name . ' ' . $student->personalInformation->first_names,
                 'email' => $student->personalInformation->email,
+                'department' => $student->department->name ?? 'N/A',
             ];
         });
         
         return [
             'emails' => $emails,
+            'studentsByDepartment' => $studentsByDepartment,
             'academicYear' => $academicYear?->academic_year ?? 'N/A',
-            'department' => $department?->name ?? 'Toutes filières',
             'totalStudents' => $pendingStudents->count(),
             'exportDate' => now()->format('d/m/Y'),
         ];

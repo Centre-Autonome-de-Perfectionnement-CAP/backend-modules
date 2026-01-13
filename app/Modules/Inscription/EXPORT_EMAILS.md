@@ -29,35 +29,37 @@ Le PDF généré contient :
 ### En-tête
 - Titre : "Liste des Emails - Étudiants en Attente"
 - Année académique
-- Filière (ou "Toutes filières")
 - Nombre total d'étudiants
 - Date d'export
 
-### Tableau
+### Sections par Filière
+Les étudiants sont groupés et triés par filière. Pour chaque filière :
+
+#### Tableau
 | N° | Nom et Prénoms | Email |
 |----|----------------|-------|
 | 1  | DUPONT Jean    | jean.dupont@example.com |
 | 2  | MARTIN Marie   | marie.martin@example.com |
 
-### Section Copier-Coller
-Une zone avec tous les emails séparés par des virgules :
+#### Section Copier-Coller
+Une zone avec tous les emails de la filière séparés par des virgules :
 ```
 jean.dupont@example.com, marie.martin@example.com, ...
 ```
 
 ## Cas d'usage
 
-### 1. Envoi d'email groupé
-Copier la liste des emails pour envoyer un message à tous les étudiants d'une année académique.
+### 1. Envoi d'email groupé par filière
+Copier la liste des emails d'une filière spécifique pour envoyer un message ciblé.
 
-### 2. Communication par filière
-Exporter uniquement les emails d'une filière spécifique pour une communication ciblée.
+### 2. Communication globale
+Exporter tous les étudiants de toutes les filières pour une communication générale, avec les emails organisés par filière.
 
 ### 3. Communication par cohorte
-Contacter uniquement les étudiants d'une cohorte particulière.
+Contacter uniquement les étudiants d'une cohorte particulière, groupés par filière.
 
 ### 4. Archivage
-Conserver une trace des emails des étudiants pour une année académique donnée.
+Conserver une trace des emails des étudiants pour une année académique donnée, organisée par filière.
 
 ## API Endpoint
 
