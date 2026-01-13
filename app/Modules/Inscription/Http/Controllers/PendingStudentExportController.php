@@ -199,23 +199,63 @@ class PendingStudentExportController extends Controller
         $filename = $this->exportService->generateEmailsFilename($data);
         \Log::channel('single')->info('Filename generated:', ['filename' => $filename]);
         
-        $pdf = Pdf::loadView('core::pdfs.liste-emails-etudiants', $data)
-            ->setPaper('a4', 'portrait');
-        \Log::channel('single')->info('PDF view loaded');
+        // Export Excel
+        $filename = str_replace('.pdf', '.xlsx', $filename);
         
-        $output = $pdf->output();
-        \Log::channel('single')->info('PDF output generated:', ['size' => strlen($output)]);
+        $spreadsheet = new Spreadsheet();
+        $worksheet = $spreadsheet->getActiveSheet();
         
-        $response = response()->make($output, 200)
-            ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+        $row = 1;
+        $worksheet->setCellValue('A' . $row, 'Liste des Emails - Étudiants en Attente');
+        $worksheet->mergeCells('A1:C1');
+        $worksheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
         
-        \Log::channel('single')->info('Response headers:', [
-            'Content-Type' => $response->headers->get('Content-Type'),
-            'Content-Disposition' => $response->headers->get('Content-Disposition')
-        ]);
-        \Log::channel('single')->info('=== FIN exportEmails ===');
+        $row += 2;
+        $worksheet->setCellValue('A' . $row, 'Année Académique: ' . $data['academicYear']);
+        $row++;
+        $worksheet->setCellValue('A' . $row, 'Total étudiants: ' . $data['totalStudents']);
+        $row++;
+        $worksheet->setCellValue('A' . $row, 'Date: ' . $data['exportDate']);
+        $row += 2;
         
-        return $response;
+        foreach ($data['studentsByDepartment'] as $departmentName => $students) {
+            $worksheet->setCellValue('A' . $row, $departmentName . ' (' . $students->count() . ' étudiant(s))');
+            $worksheet->mergeCells('A' . $row . ':C' . $row);
+            $worksheet->getStyle('A' . $row)->getFont()->setBold(true);
+            $row++;
+            
+            $worksheet->setCellValue('A' . $row, 'N°');
+            $worksheet->setCellValue('B' . $row, 'Nom et Prénoms');
+            $worksheet->setCellValue('C' . $row, 'Email');
+            $worksheet->getStyle('A' . $row . ':C' . $row)->getFont()->setBold(true);
+            $row++;
+            
+            $i = 1;
+            foreach ($students as $student) {
+                $worksheet->setCellValue('A' . $row, $i);
+                $worksheet->setCellValue('B' . $row, $student->personalInformation->last_name . ' ' . $student->personalInformation->first_names);
+                $worksheet->setCellValue('C' . $row, $student->personalInformation->email);
+                $row++;
+                $i++;
+            }
+            
+            $emailList = $students->pluck('personalInformation.email')->implode(', ');
+            $row++;
+            $worksheet->setCellValue('A' . $row, 'Emails (copier-coller):');
+            $worksheet->getStyle('A' . $row)->getFont()->setBold(true);
+            $row++;
+            $worksheet->setCellValue('A' . $row, $emailList);
+            $worksheet->mergeCells('A' . $row . ':C' . $row);
+            $row += 2;
+        }
+        
+        $writer = new Xlsx($spreadsheet);
+        $temp_file = tempnam(sys_get_temp_dir(), $filename);
+        $writer->save($temp_file);
+        
+        return response()->download($temp_file, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"'
+        ])->deleteFileAfterSend();
     }
 }
