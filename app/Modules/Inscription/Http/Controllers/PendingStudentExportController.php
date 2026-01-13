@@ -185,17 +185,33 @@ class PendingStudentExportController extends Controller
 
     public function exportEmails(ExportPendingStudentsRequest $request)
     {
+        \Log::info('=== DEBUT exportEmails ===');
         $filters = $request->only(['year', 'filiere', 'cohort']);
+        \Log::info('Filters:', $filters);
+        
         $data = $this->exportService->prepareEmailsExportData($filters);
+        \Log::info('Data prepared:', ['totalStudents' => $data['totalStudents'], 'academicYear' => $data['academicYear']]);
+        
         $filename = $this->exportService->generateEmailsFilename($data);
+        \Log::info('Filename generated:', ['filename' => $filename]);
         
         $pdf = Pdf::loadView('core::pdfs.liste-emails-etudiants', $data)
             ->setPaper('a4', 'portrait');
+        \Log::info('PDF view loaded');
         
         $output = $pdf->output();
+        \Log::info('PDF output generated:', ['size' => strlen($output)]);
         
-        return response()->make($output, 200)
+        $response = response()->make($output, 200)
             ->header('Content-Type', 'application/pdf')
             ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+        
+        \Log::info('Response headers:', [
+            'Content-Type' => $response->headers->get('Content-Type'),
+            'Content-Disposition' => $response->headers->get('Content-Disposition')
+        ]);
+        \Log::info('=== FIN exportEmails ===');
+        
+        return $response;
     }
 }

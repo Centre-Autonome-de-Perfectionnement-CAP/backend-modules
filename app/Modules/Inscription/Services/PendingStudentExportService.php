@@ -128,17 +128,20 @@ class PendingStudentExportService
 
     public function prepareEmailsExportData(array $filters): array
     {
+        \Log::info('=== prepareEmailsExportData START ===');
         $query = PendingStudent::with(['personalInformation', 'department', 'academicYear']);
         
         if (!empty($filters['year']) && $filters['year'] !== 'all') {
             if (is_numeric($filters['year'])) {
                 $query->where('academic_year_id', $filters['year']);
+                \Log::info('Filter by year:', ['year' => $filters['year']]);
             }
         }
         
         if (!empty($filters['filiere']) && $filters['filiere'] !== 'all') {
             if (is_numeric($filters['filiere'])) {
                 $query->where('department_id', $filters['filiere']);
+                \Log::info('Filter by filiere:', ['filiere' => $filters['filiere']]);
             }
         }
         
@@ -155,6 +158,7 @@ class PendingStudentExportService
                 $period = $periods[$cohortIndex];
                 $query->whereDate('created_at', '>=', $period->start_date)
                       ->whereDate('created_at', '<=', $period->end_date);
+                \Log::info('Filter by cohort:', ['cohort' => $filters['cohort']]);
             }
         }
         
@@ -164,6 +168,8 @@ class PendingStudentExportService
             ->sortBy(function($student) {
                 return $student->personalInformation->last_name;
             });
+        
+        \Log::info('Students fetched:', ['count' => $pendingStudents->count()]);
         
         $academicYear = null;
         if (!empty($filters['year']) && is_numeric($filters['year'])) {
@@ -177,6 +183,8 @@ class PendingStudentExportService
             return $student->department->name ?? 'Sans filière';
         });
         
+        \Log::info('Grouped by department:', ['departments' => $studentsByDepartment->keys()->toArray()]);
+        
         $emails = $pendingStudents->map(function($student) {
             return [
                 'name' => $student->personalInformation->last_name . ' ' . $student->personalInformation->first_names,
@@ -184,6 +192,8 @@ class PendingStudentExportService
                 'department' => $student->department->name ?? 'N/A',
             ];
         });
+        
+        \Log::info('=== prepareEmailsExportData END ===');
         
         return [
             'emails' => $emails,
