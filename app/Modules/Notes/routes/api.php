@@ -4,6 +4,13 @@ use Illuminate\Support\Facades\Route;
 use App\Modules\Notes\Http\Controllers\ProfessorGradeController;
 use App\Modules\Notes\Http\Controllers\AdminGradeController;
 use App\Modules\Notes\Http\Controllers\CourseRetakeController;
+use App\Modules\Notes\Http\Controllers\PublicGradeController;
+
+// Routes publiques pour consultation des résultats par les étudiants
+Route::prefix('api/public/notes')->group(function () {
+    Route::post('authenticate', [PublicGradeController::class, 'authenticate']);
+    Route::post('results', [PublicGradeController::class, 'getResults']);
+});
 
 Route::prefix('api/notes')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
