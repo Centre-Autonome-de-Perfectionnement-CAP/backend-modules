@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::table('amounts', function (Blueprint $table) {
             // program_id et sponsored_amount n'existent pas
-            $table->dropColumn('level');
+            // $table->dropColumn('level');
         });
     }
 

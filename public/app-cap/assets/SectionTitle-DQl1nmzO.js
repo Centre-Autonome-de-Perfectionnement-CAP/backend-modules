@@ -1,1 +1,0 @@
-import{j as a}from"./index-DB70poix.js";const o=({title:s,subtitle:e,dataAos:t="fade-up",dataAosDelay:i})=>a.jsxs("div",{className:"container section-title","data-aos":t,"data-aos-delay":i,children:[a.jsx("h2",{children:s}),e&&a.jsx("p",{children:e})]});export{o as S};
