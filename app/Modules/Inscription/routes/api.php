@@ -14,6 +14,7 @@ use App\Modules\Inscription\Http\Controllers\DashboardController;
 use App\Modules\Inscription\Http\Controllers\ClassGroupController;
 use App\Modules\Inscription\Http\Controllers\StudentController;
 use App\Modules\Inscription\Http\Controllers\PendingStudentExportController;
+use App\Http\Controllers\PhotoValidationController;
 
 
 Route::prefix('api/inscription')->group(function () {
@@ -74,6 +75,9 @@ Route::prefix('api/inscription')->group(function () {
         Route::post('/complement/{trackingCode}', [DossierSubmissionController::class, 'submitComplementDossier']);
         Route::get('/{trackingCode}', [DossierSubmissionController::class, 'getDossier']);
     });
+
+    // Route publique pour la validation de photo (pas d'authentification requise)
+    Route::post('validate-photo', [PhotoValidationController::class, 'validatePhoto']);
 
     Route::prefix('students')->group(function () {
         Route::middleware('auth:sanctum')->group(function () {
