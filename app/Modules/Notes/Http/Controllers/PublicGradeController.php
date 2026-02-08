@@ -33,14 +33,17 @@ class PublicGradeController extends Controller
         }
 
         try {
-            // Rechercher l'étudiant par matricule
+            // Rechercher l'étudiant par matricule via la table students
             $student = StudentPendingStudent::with([
                 'pendingStudent.personalInformation',
                 'academicPaths.academicYear',
                 'academicPaths.classGroup.department',
-                'academicPaths.classGroup.cycle'
+                'academicPaths.classGroup.cycle',
+                'student'
             ])
-            ->where('student_id_number', $request->student_id_number)
+            ->whereHas('student', function ($query) use ($request) {
+                $query->where('student_id_number', $request->student_id_number);
+            })
             ->first();
 
             if (!$student) {
@@ -67,7 +70,7 @@ class PublicGradeController extends Controller
             return $this->successResponse([
                 'student' => [
                     'id' => $student->id,
-                    'student_id_number' => $student->student_id_number,
+                    'student_id_number' => $student->student->student_id_number,
                     'last_name' => $personalInfo->last_name,
                     'first_names' => $personalInfo->first_names,
                     'birth_date' => $personalInfo->birth_date,
