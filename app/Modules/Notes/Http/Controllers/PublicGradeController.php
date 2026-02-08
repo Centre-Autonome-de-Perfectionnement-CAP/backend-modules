@@ -24,11 +24,8 @@ class PublicGradeController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'student_id_number' => 'required|string',
-            'birth_date' => 'required|date',
         ], [
             'student_id_number.required' => 'Le matricule est requis',
-            'birth_date.required' => 'La date de naissance est requise',
-            'birth_date.date' => 'La date de naissance doit être une date valide',
         ]);
 
         if ($validator->fails()) {
@@ -54,11 +51,6 @@ class PublicGradeController extends Controller
             
             if (!$personalInfo) {
                 return $this->errorResponse('Informations personnelles introuvables', 404);
-            }
-
-            // Vérifier la date de naissance
-            if ($personalInfo->birth_date !== $request->birth_date) {
-                return $this->errorResponse('Date de naissance incorrecte', 401);
             }
 
             // Récupérer les parcours académiques
