@@ -8,6 +8,7 @@ use App\Modules\Inscription\Models\AcademicPath;
 use App\Modules\Notes\Models\LmdSystemGrade;
 use App\Modules\Notes\Models\OldSystemGrade;
 use App\Modules\Cours\Models\Program;
+use App\Modules\Finance\Services\FinancialCalculationService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,6 +17,13 @@ use Illuminate\Support\Facades\Validator;
 class PublicGradeController extends Controller
 {
     use ApiResponse;
+
+    private FinancialCalculationService $financialService;
+
+    public function __construct(FinancialCalculationService $financialService)
+    {
+        $this->financialService = $financialService;
+    }
 
     /**
      * Authentifie un étudiant et retourne ses informations de base
@@ -110,6 +118,17 @@ class PublicGradeController extends Controller
 
             if (!$academicPath) {
                 return $this->notFoundResponse('Aucun parcours académique trouvé pour cette année');
+            }
+
+            // Vérifier si l'étudiant a validé sa scolarité (solde = 0)
+            $financialStatus = $this->financialService->calculateBalance($studentId, $academicYearId);
+            
+            if ($financialStatus['balance'] > 0) {
+                return $this->errorResponse(
+                    'Vous devez être en règle avec la scolarité pour consulter vos résultats. Solde restant : ' . 
+                    number_format($financialStatus['balance'], 0, ',', ' ') . ' FCFA',
+                    403
+                );
             }
 
             // Récupérer les notes LMD
