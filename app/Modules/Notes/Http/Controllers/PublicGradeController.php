@@ -114,19 +114,25 @@ class PublicGradeController extends Controller
 
             // Récupérer les notes LMD pour cette année académique
             $lmdGrades = LmdSystemGrade::where('student_pending_student_id', $studentId)
-                ->with(['program.courseElementProfessor.courseElement', 'program.courseElementProfessor.professor'])
-                ->whereHas('program', function ($query) use ($academicYearId) {
-                    $query->where('academic_year_id', $academicYearId);
-                })
+                ->with(['program.courseElementProfessor.courseElement', 'program.courseElementProfessor.professor', 'program'])
                 ->get();
+
+            // Filtrer par année académique si le programme a academic_year_id
+            $lmdGrades = $lmdGrades->filter(function ($grade) use ($academicYearId) {
+                return $grade->program && 
+                       ($grade->program->academic_year_id == $academicYearId || !$grade->program->academic_year_id);
+            });
 
             // Récupérer les notes ancien système pour cette année académique
             $oldGrades = OldSystemGrade::where('student_pending_student_id', $studentId)
-                ->with(['program.courseElementProfessor.courseElement', 'program.courseElementProfessor.professor'])
-                ->whereHas('program', function ($query) use ($academicYearId) {
-                    $query->where('academic_year_id', $academicYearId);
-                })
+                ->with(['program.courseElementProfessor.courseElement', 'program.courseElementProfessor.professor', 'program'])
                 ->get();
+
+            // Filtrer par année académique si le programme a academic_year_id
+            $oldGrades = $oldGrades->filter(function ($grade) use ($academicYearId) {
+                return $grade->program && 
+                       ($grade->program->academic_year_id == $academicYearId || !$grade->program->academic_year_id);
+            });
 
             $results = [];
             $totalCredits = 0;
