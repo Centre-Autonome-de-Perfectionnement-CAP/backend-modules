@@ -117,22 +117,34 @@ class PublicGradeController extends Controller
                 ->with(['program.courseElementProfessor.courseElement', 'program.courseElementProfessor.professor', 'program'])
                 ->get();
 
+            // DEBUG: Vérifier si on a des notes
+            \Log::info('LMD Grades count: ' . $lmdGrades->count());
+            foreach ($lmdGrades as $grade) {
+                \Log::info('Grade ID: ' . $grade->id . ', Program: ' . ($grade->program ? $grade->program->id : 'NULL') . ', Academic Year: ' . ($grade->program ? $grade->program->academic_year_id : 'NULL'));
+            }
+
             // Filtrer par année académique si le programme a academic_year_id
             $lmdGrades = $lmdGrades->filter(function ($grade) use ($academicYearId) {
                 return $grade->program && 
                        ($grade->program->academic_year_id == $academicYearId || !$grade->program->academic_year_id);
             });
 
+            \Log::info('Filtered LMD Grades count: ' . $lmdGrades->count());
+
             // Récupérer les notes ancien système pour cette année académique
             $oldGrades = OldSystemGrade::where('student_pending_student_id', $studentId)
                 ->with(['program.courseElementProfessor.courseElement', 'program.courseElementProfessor.professor', 'program'])
                 ->get();
+
+            \Log::info('Old Grades count: ' . $oldGrades->count());
 
             // Filtrer par année académique si le programme a academic_year_id
             $oldGrades = $oldGrades->filter(function ($grade) use ($academicYearId) {
                 return $grade->program && 
                        ($grade->program->academic_year_id == $academicYearId || !$grade->program->academic_year_id);
             });
+
+            \Log::info('Filtered Old Grades count: ' . $oldGrades->count());
 
             $results = [];
             $totalCredits = 0;
