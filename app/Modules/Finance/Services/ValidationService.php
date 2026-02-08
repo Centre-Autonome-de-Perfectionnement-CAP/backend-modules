@@ -23,7 +23,10 @@ class ValidationService
      */
     public function getPendingPayments($filters = [])
     {
-        $query = Paiement::with(['student', 'studentPendingStudent'])
+        $query = Paiement::with([
+            'student', 
+            'studentPendingStudent.pendingStudent.personalInformation'
+        ])
             ->pending();
         
         if (isset($filters['search']) && !empty($filters['search'])) {
@@ -31,8 +34,8 @@ class ValidationService
             $query->where(function($q) use ($search) {
                 $q->where('student_id_number', 'like', "%$search%")
                   ->orWhere('reference', 'like', "%$search%")
-                  ->orWhereHas('student', function($sq) use ($search) {
-                      $sq->where('first_name', 'like', "%$search%")
+                  ->orWhereHas('studentPendingStudent.pendingStudent.personalInformation', function($sq) use ($search) {
+                      $sq->where('first_names', 'like', "%$search%")
                         ->orWhere('last_name', 'like', "%$search%");
                   });
             });
