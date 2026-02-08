@@ -37,8 +37,6 @@ class PublicGradeController extends Controller
             $student = StudentPendingStudent::with([
                 'pendingStudent.personalInformation',
                 'academicPaths.academicYear',
-                'academicPaths.classGroup.department',
-                'academicPaths.classGroup.cycle',
                 'student'
             ])
             ->whereHas('student', function ($query) use ($request) {
@@ -61,9 +59,7 @@ class PublicGradeController extends Controller
                 return [
                     'id' => $path->academicYear->id,
                     'label' => $path->academicYear->academic_year,
-                    'level' => $path->classGroup->study_level ?? null,
-                    'department' => $path->classGroup->department->name ?? null,
-                    'is_lmd' => $path->classGroup->cycle->is_lmd ?? false,
+                    'level' => $path->study_level ?? null,
                 ];
             })->unique('id')->values();
 
@@ -107,29 +103,24 @@ class PublicGradeController extends Controller
             $academicYearId = $request->academic_year_id;
 
             // Récupérer le parcours académique
-            $academicPath = AcademicPath::with([
-                'academicYear',
-                'classGroup.department',
-                'classGroup.cycle'
-            ])
-            ->where('student_pending_student_id', $studentId)
-            ->where('academic_year_id', $academicYearId)
-            ->first();
+            $academicPath = AcademicPath::with(['academicYear'])
+                ->where('student_pending_student_id', $studentId)
+                ->where('academic_year_id', $academicYearId)
+                ->first();
 
             if (!$academicPath) {
                 return $this->notFoundResponse('Aucun parcours académique trouvé pour cette année');
             }
 
-            $isLmd = $academicPath->classGroup->cycle->is_lmd ?? false;
+            // Récupérer les notes LMD
+            $lmdGrades = LmdSystemGrade::where('student_pending_student_id', $studentId)
+                ->with(['program.courseElementProfessor.courseElement', 'program.courseElementProfessor.professor'])
+                ->get();
 
-            // Récupérer les programmes de l'étudiant
-            $programs = Program::with([
-                'courseElementProfessor.courseElement',
-                'courseElementProfessor.professor',
-                'classGroup'
-            ])
-            ->where('class_group_id', $academicPath->class_group_id)
-            ->get();
+            // Récupérer les notes ancien système
+            $oldGrades = OldSystemGrade::where('student_pending_student_id', $studentId)
+                ->with(['program.courseElementProfessor.courseElement', 'program.courseElementProfessor.professor'])
+                ->get();
 
             $results = [];
             $totalCredits = 0;
@@ -137,29 +128,15 @@ class PublicGradeController extends Controller
             $totalCoefficient = 0;
             $weightedSum = 0;
 
-            foreach ($programs as $program) {
-                $grade = null;
+            // Traiter les notes LMD
+            foreach ($lmdGrades as $grade) {
+                if (!$grade->program || !$grade->program->courseElementProfessor) continue;
                 
-                if ($isLmd) {
-                    $grade = LmdSystemGrade::where('student_pending_student_id', $studentId)
-                        ->where('program_id', $program->id)
-                        ->first();
-                } else {
-                    $grade = OldSystemGrade::where('student_pending_student_id', $studentId)
-                        ->where('program_id', $program->id)
-                        ->first();
-                }
-
-                if (!$grade) {
-                    continue;
-                }
-
-                $courseElement = $program->courseElementProfessor->courseElement;
-                $professor = $program->courseElementProfessor->professor;
+                $courseElement = $grade->program->courseElementProfessor->courseElement;
+                $professor = $grade->program->courseElementProfessor->professor;
                 
-                // Calculer la moyenne finale (avec rattrapage si applicable)
                 $finalAverage = $grade->average;
-                if ($isLmd && isset($grade->retake_average) && $grade->retake_average !== null) {
+                if (isset($grade->retake_average) && $grade->retake_average !== null) {
                     $finalAverage = min($grade->retake_average, 12);
                 }
 
@@ -183,37 +160,62 @@ class PublicGradeController extends Controller
                     'coefficient' => $coefficient,
                     'semester' => $courseElement->semester ?? null,
                     'average' => round($grade->average, 2),
-                    'retake_average' => $isLmd && isset($grade->retake_average) ? round($grade->retake_average, 2) : null,
+                    'retake_average' => isset($grade->retake_average) ? round($grade->retake_average, 2) : null,
                     'final_average' => round($finalAverage, 2),
                     'validated' => $isValidated,
-                    'must_retake' => $isLmd ? ($grade->must_retake ?? false) : false,
+                    'must_retake' => $grade->must_retake ?? false,
+                ];
+            }
+
+            // Traiter les notes ancien système
+            foreach ($oldGrades as $grade) {
+                if (!$grade->program || !$grade->program->courseElementProfessor) continue;
+                
+                $courseElement = $grade->program->courseElementProfessor->courseElement;
+                $professor = $grade->program->courseElementProfessor->professor;
+                
+                $finalAverage = $grade->average;
+                $credits = $courseElement->credits ?? 0;
+                $coefficient = $courseElement->coefficient ?? 1;
+                $isValidated = $finalAverage >= 12;
+
+                if ($isValidated) {
+                    $obtainedCredits += $credits;
+                }
+
+                $totalCredits += $credits;
+                $totalCoefficient += $coefficient;
+                $weightedSum += ($finalAverage * $coefficient);
+
+                $results[] = [
+                    'course_name' => $courseElement->name,
+                    'course_code' => $courseElement->code ?? null,
+                    'professor' => $professor ? ($professor->last_name . ' ' . ($professor->first_names ?? $professor->first_name ?? '')) : 'N/A',
+                    'credits' => $credits,
+                    'coefficient' => $coefficient,
+                    'semester' => $courseElement->semester ?? null,
+                    'average' => round($grade->average, 2),
+                    'retake_average' => null,
+                    'final_average' => round($finalAverage, 2),
+                    'validated' => $isValidated,
+                    'must_retake' => false,
                 ];
             }
 
             // Calculer la moyenne générale
             $generalAverage = $totalCoefficient > 0 ? round($weightedSum / $totalCoefficient, 2) : 0;
 
-            // Récupérer les décisions
-            $semesterDecisions = [
-                's1' => $academicPath->semester1_decision ?? null,
-                's2' => $academicPath->semester2_decision ?? null,
-            ];
-            $yearDecision = $academicPath->year_decision ?? null;
-
             return $this->successResponse([
                 'academic_info' => [
                     'academic_year' => $academicPath->academicYear->academic_year,
-                    'level' => $academicPath->classGroup->study_level,
-                    'department' => $academicPath->classGroup->department->name,
-                    'is_lmd' => $isLmd,
+                    'level' => $academicPath->study_level,
                 ],
                 'results' => $results,
                 'summary' => [
                     'total_credits' => $totalCredits,
                     'obtained_credits' => $obtainedCredits,
                     'general_average' => $generalAverage,
-                    'semester_decisions' => $semesterDecisions,
-                    'year_decision' => $yearDecision,
+                    'year_decision' => $academicPath->year_decision,
                 ],
             ], 'Résultats récupérés avec succès');
 
