@@ -122,9 +122,12 @@ class ValidationService
             throw new \Exception('Quittance non trouvée');
         }
         
+        // Nettoyer le nom du fichier en remplaçant les caractères interdits
+        $cleanReference = str_replace(['/', '\\'], '_', $payment->reference);
+        
         return [
             'path' => Storage::path($payment->receipt_path),
-            'filename' => 'quittance_' . $payment->reference . '.' . pathinfo($payment->receipt_path, PATHINFO_EXTENSION)
+            'filename' => 'quittance_' . $cleanReference . '.' . pathinfo($payment->receipt_path, PATHINFO_EXTENSION)
         ];
     }
 }
