@@ -112,14 +112,20 @@ class PublicGradeController extends Controller
                 return $this->notFoundResponse('Aucun parcours académique trouvé pour cette année');
             }
 
-            // Récupérer les notes LMD
+            // Récupérer les notes LMD pour cette année académique
             $lmdGrades = LmdSystemGrade::where('student_pending_student_id', $studentId)
                 ->with(['program.courseElementProfessor.courseElement', 'program.courseElementProfessor.professor'])
+                ->whereHas('program', function ($query) use ($academicYearId) {
+                    $query->where('academic_year_id', $academicYearId);
+                })
                 ->get();
 
-            // Récupérer les notes ancien système
+            // Récupérer les notes ancien système pour cette année académique
             $oldGrades = OldSystemGrade::where('student_pending_student_id', $studentId)
                 ->with(['program.courseElementProfessor.courseElement', 'program.courseElementProfessor.professor'])
+                ->whereHas('program', function ($query) use ($academicYearId) {
+                    $query->where('academic_year_id', $academicYearId);
+                })
                 ->get();
 
             $results = [];
