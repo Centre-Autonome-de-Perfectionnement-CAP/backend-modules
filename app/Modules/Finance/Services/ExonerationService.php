@@ -9,14 +9,18 @@ class ExonerationService
 {
     public function getAll(array $filters = [])
     {
-        $query = Exoneration::with(['studentPendingStudent.pendingStudent.personalInformation']);
+        $query = Exoneration::query();
 
-        if (!empty($filters['student_pending_student_id'])) {
-            $query->where('student_pending_student_id', $filters['student_pending_student_id']);
+        if (!empty($filters['matricule'])) {
+            $query->where('matricule', $filters['matricule']);
         }
 
-        if (!empty($filters['academic_year_id'])) {
-            $query->where('academic_year_id', $filters['academic_year_id']);
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+
+        if (!empty($filters['type'])) {
+            $query->where('type', $filters['type']);
         }
 
         return $query->orderBy('created_at', 'desc')->get();
@@ -40,8 +44,30 @@ class ExonerationService
 
     public function getStudentExoneration(int $studentPendingStudentId, int $academicYearId): ?Exoneration
     {
-        return Exoneration::where('student_pending_student_id', $studentPendingStudentId)
+        // Récupérer le matricule de l'étudiant
+        $academicPath = \App\Modules\Inscription\Models\AcademicPath::where('student_pending_student_id', $studentPendingStudentId)
             ->where('academic_year_id', $academicYearId)
+            ->with('studentPendingStudent.pendingStudent.personalInformation')
+            ->first();
+
+        if (!$academicPath || !$academicPath->studentPendingStudent) {
+            return null;
+        }
+
+        $matricule = $academicPath->studentPendingStudent->matricule;
+
+        if (!$matricule) {
+            return null;
+        }
+
+        // Rechercher l'exonération par matricule et vérifier les dates
+        return Exoneration::where('matricule', $matricule)
+            ->where('status', 'approved')
+            ->where('start_date', '<=', now())
+            ->where(function($query) {
+                $query->whereNull('end_date')
+                    ->orWhere('end_date', '>=', now());
+            })
             ->first();
     }
 
@@ -51,10 +77,21 @@ class ExonerationService
             return $baseAmount;
         }
 
-        if ($exoneration->type === 'percentage') {
-            return $baseAmount * (1 - $exoneration->value / 100);
+        // Si exonération totale
+        if ($exoneration->type === 'full') {
+            return 0;
         }
 
-        return max(0, $baseAmount - $exoneration->value);
+        // Si exonération partielle avec pourcentage
+        if ($exoneration->percentage) {
+            return $baseAmount * (1 - $exoneration->percentage / 100);
+        }
+
+        // Si exonération partielle avec montant fixe
+        if ($exoneration->amount) {
+            return max(0, $baseAmount - $exoneration->amount);
+        }
+
+        return $baseAmount;
     }
 }
