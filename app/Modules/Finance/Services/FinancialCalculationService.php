@@ -87,28 +87,36 @@ class FinancialCalculationService
 
     public function calculateBalance(int $studentPendingStudentId, int $academicYearId): array
     {
-        $due = $this->calculateTotalDue($studentPendingStudentId, $academicYearId);
+        // TEMPORAIRE : Montant fixe en dur pour solution immédiate
+        // TODO : Remplacer par la logique dynamique basée sur la table amounts quand les tarifs seront configurés
+        $totalDue = 425000; // Montant total à payer (inscription + frais de formation)
         
-        // Récupérer uniquement les paiements APPROUVÉS pour cet étudiant et cette année académique
-        // On filtre par student_pending_student_id directement
+        /* ANCIENNE LOGIQUE (à réactiver plus tard) :
+        $due = $this->calculateTotalDue($studentPendingStudentId, $academicYearId);
+        $totalDue = $due['total'];
+        */
+        
+        // Récupérer uniquement les paiements APPROUVÉS pour cet étudiant
         $paid = Paiement::where('student_pending_student_id', $studentPendingStudentId)
             ->where('status', 'approved')
             ->sum('amount');
 
-        // Log pour débogage (à retirer en production)
-        \Log::info('Financial Balance Calculation', [
+        $balance = $totalDue - $paid;
+
+        // Log pour débogage
+        \Log::info('Financial Balance Calculation (HARDCODED)', [
             'student_pending_student_id' => $studentPendingStudentId,
             'academic_year_id' => $academicYearId,
-            'total_due' => $due['total'],
+            'total_due' => $totalDue,
             'total_paid' => $paid,
-            'balance' => $due['total'] - $paid,
+            'balance' => $balance,
         ]);
 
         return [
-            'total_due' => $due['total'],
+            'total_due' => $totalDue,
             'total_paid' => $paid,
-            'balance' => $due['total'] - $paid,
-            'details' => $due['details']
+            'balance' => $balance,
+            'details' => [] // Vide pour l'instant car montant en dur
         ];
     }
 }
