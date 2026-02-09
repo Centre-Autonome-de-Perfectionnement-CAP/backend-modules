@@ -19,15 +19,24 @@ class ValidationService
     }
 
     /**
-     * Récupère les paiements en attente de validation
+     * Récupère les paiements selon le statut
      */
     public function getPendingPayments($filters = [])
     {
         $query = Paiement::with([
             'student', 
             'studentPendingStudent.pendingStudent.personalInformation'
-        ])
-            ->pending();
+        ]);
+        
+        // Filtrer par statut
+        $status = $filters['status'] ?? 'pending';
+        if ($status === 'pending') {
+            $query->pending();
+        } elseif ($status === 'approved') {
+            $query->where('status', 'approved');
+        } elseif ($status === 'rejected') {
+            $query->where('status', 'rejected');
+        }
         
         if (isset($filters['search']) && !empty($filters['search'])) {
             $search = $filters['search'];
@@ -43,7 +52,7 @@ class ValidationService
         
         $perPage = $filters['per_page'] ?? 15;
         
-        return $query->orderBy('created_at', 'desc')->paginate($perPage);
+        return $query->orderBy('updated_at', 'desc')->paginate($perPage);
     }
 
     /**
