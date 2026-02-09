@@ -120,13 +120,16 @@ class PublicGradeController extends Controller
                 return $this->notFoundResponse('Aucun parcours académique trouvé pour cette année');
             }
 
-            // Vérifier si l'étudiant a validé sa scolarité (solde = 0)
+            // Vérifier si l'étudiant a soldé sa scolarité
+            // On vérifie uniquement les paiements APPROUVÉS pour cette année académique
             $financialStatus = $this->financialService->calculateBalance($studentId, $academicYearId);
             
+            // L'étudiant doit avoir un solde de 0 ou négatif (trop payé) pour accéder aux résultats
             if ($financialStatus['balance'] > 0) {
                 return $this->errorResponse(
-                    'Vous devez être en règle avec la scolarité pour consulter vos résultats. Solde restant : ' . 
-                    number_format($financialStatus['balance'], 0, ',', ' ') . ' FCFA',
+                    'Vous devez être en règle avec la scolarité pour consulter vos résultats. ' . 
+                    'Solde restant : ' . number_format($financialStatus['balance'], 0, ',', ' ') . ' FCFA. ' .
+                    'Veuillez attendre la validation de votre quittance par le service financier.',
                     403
                 );
             }

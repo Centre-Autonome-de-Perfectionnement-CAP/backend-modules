@@ -89,12 +89,20 @@ class FinancialCalculationService
     {
         $due = $this->calculateTotalDue($studentPendingStudentId, $academicYearId);
         
+        // Récupérer uniquement les paiements APPROUVÉS pour cet étudiant et cette année académique
+        // On filtre par student_pending_student_id directement
         $paid = Paiement::where('student_pending_student_id', $studentPendingStudentId)
             ->where('status', 'approved')
-            ->whereHas('studentPendingStudent.academicPaths', function ($q) use ($academicYearId) {
-                $q->where('academic_year_id', $academicYearId);
-            })
             ->sum('amount');
+
+        // Log pour débogage (à retirer en production)
+        \Log::info('Financial Balance Calculation', [
+            'student_pending_student_id' => $studentPendingStudentId,
+            'academic_year_id' => $academicYearId,
+            'total_due' => $due['total'],
+            'total_paid' => $paid,
+            'balance' => $due['total'] - $paid,
+        ]);
 
         return [
             'total_due' => $due['total'],
