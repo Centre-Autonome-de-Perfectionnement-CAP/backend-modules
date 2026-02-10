@@ -466,9 +466,10 @@ class PendingStudentService
      */
     private function determineCohort(PendingStudent $pendingStudent): ?string
     {
-        // Récupérer les périodes distinctes pour cette année académique
+        // Récupérer les périodes distinctes pour cette année académique ET cette filière
         $periods = DB::table('submission_periods')
             ->where('academic_year_id', $pendingStudent->academic_year_id)
+            ->where('department_id', $pendingStudent->department_id)
             ->select('start_date', 'end_date')
             ->groupBy('start_date', 'end_date')
             ->orderBy('start_date', 'asc')
