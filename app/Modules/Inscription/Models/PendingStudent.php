@@ -102,16 +102,32 @@ class PendingStudent extends Model
 
 
 
-    /**
+   /**
      * Accessor pour modifier l'affichage du document "Quittance de 15.000F"
+     * et gérer les cas où documents n'est pas un tableau valide
      */
     public function getDocumentsAttribute($value)
     {
-        // $value est déjà un array grâce au cast 'array'
-        if (is_array($value) && isset($value['Quittance de 15.000F'])) {
-            // On copie la valeur sous le nouveau nom
+        // Si ce n'est pas déjà un tableau, on essaie de le corriger
+        if (!is_array($value)) {
+            // Cas où c'est une string JSON (normalement casté, mais au cas où)
+            if (is_string($value)) {
+                $decoded = json_decode($value, true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $value = $decoded ?: [];
+                } else {
+                    // JSON invalide → on vide pour éviter les erreurs
+                    $value = [];
+                }
+            } else {
+                // null ou autre type → tableau vide
+                $value = [];
+            }
+        }
+    
+        // Maintenant qu'on est sûr que c'est un tableau, on applique la modification demandée
+        if (isset($value['Quittance de 15.000F'])) {
             $value['Quittance de 20.000F'] = $value['Quittance de 15.000F'];
-            // On supprime l'ancien nom
             unset($value['Quittance de 15.000F']);
         }
     
