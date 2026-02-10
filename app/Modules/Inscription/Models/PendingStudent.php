@@ -97,4 +97,30 @@ class PendingStudent extends Model
             ->where('module_name', 'inscription')
             ->where('module_resource_type', 'pending_student');
     }
+
+
+
+
+
+    /**
+     * Accessor pour modifier l'affichage du document "Quittance de 15.000F"
+     */
+    public function getDocumentsAttribute($value)
+    {
+        // $value est déjà un array grâce au cast 'array'
+        if (is_array($value) && isset($value['Quittance de 15.000F'])) {
+            // On copie la valeur sous le nouveau nom
+            $value['Quittance de 20.000F'] = $value['Quittance de 15.000F'];
+            // On supprime l'ancien nom
+            unset($value['Quittance de 15.000F']);
+        }
+    
+        return $value;
+    }
+
+
+
+
+
+    
 }
