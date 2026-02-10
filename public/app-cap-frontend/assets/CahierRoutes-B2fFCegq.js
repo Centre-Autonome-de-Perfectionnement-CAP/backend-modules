@@ -1,1 +1,0 @@
-import{j as e,r as t,n as r,o as a,N as s,p as o}from"./index-D7_Sgl-M.js";const u=()=>e.jsx(t.Suspense,{fallback:e.jsx(o,{fullPage:!0,message:"Chargement du module Cahier de Texte..."}),children:e.jsxs(r,{children:[e.jsx(a,{path:"/",element:e.jsx(s,{to:"/cahier-texte/dashboard",replace:!0})}),e.jsx(a,{path:"*",element:e.jsx(s,{to:"/404",replace:!0})})]})});export{u as default};
