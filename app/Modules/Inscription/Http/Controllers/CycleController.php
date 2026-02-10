@@ -166,20 +166,27 @@ class CycleController extends Controller
     }
 
     /**
-     * Liste des cohortes disponibles pour une année académique
+     * Liste des cohortes disponibles pour une année académique et optionnellement une filière
      */
     public function cohorts(Request $request): JsonResponse
     {
         $academicYearId = $request->get('academic_year_id');
+        $departmentId = $request->get('department_id');
         
         if (!$academicYearId) {
             return $this->successResponse([], 'Aucune année académique spécifiée');
         }
         
         // Récupérer les périodes distinctes et compter
-        $periods = \DB::table('submission_periods')
-            ->where('academic_year_id', $academicYearId)
-            ->select('start_date', 'end_date')
+        $query = \DB::table('submission_periods')
+            ->where('academic_year_id', $academicYearId);
+        
+        // Filtrer par filière si spécifiée
+        if ($departmentId) {
+            $query->where('department_id', $departmentId);
+        }
+        
+        $periods = $query->select('start_date', 'end_date')
             ->distinct()
             ->orderBy('start_date')
             ->get();
