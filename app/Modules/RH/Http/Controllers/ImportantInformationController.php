@@ -63,6 +63,11 @@ class ImportantInformationController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        // Convertir les valeurs string en boolean pour FormData
+        if ($request->has('is_active') && is_string($request->is_active)) {
+            $request->merge(['is_active' => filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN)]);
+        }
+        
         $data = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'required|string',
@@ -104,6 +109,11 @@ class ImportantInformationController extends Controller
 
     public function update(Request $request, ImportantInformation $important_information): JsonResponse
     {
+        // Convertir les valeurs string en boolean pour FormData
+        if ($request->has('is_active') && is_string($request->is_active)) {
+            $request->merge(['is_active' => filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN)]);
+        }
+        
         $data = $request->validate([
             'title' => 'sometimes|string|max:255',
             'description' => 'sometimes|string',
