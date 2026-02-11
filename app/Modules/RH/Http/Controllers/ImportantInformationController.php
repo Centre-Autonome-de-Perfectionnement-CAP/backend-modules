@@ -28,7 +28,6 @@ class ImportantInformationController extends Controller
                 'file' => $info->file ? [
                     'id' => $info->file->id,
                     'name' => $info->file->original_name,
-                    'url' => $info->file->url,
                 ] : null,
             ]);
 
@@ -51,7 +50,6 @@ class ImportantInformationController extends Controller
                 'file' => $info->file ? [
                     'id' => $info->file->id,
                     'name' => $info->file->original_name,
-                    'url' => $info->file->url,
                 ] : null,
                 'is_active' => $info->is_active,
                 'order' => $info->order,
