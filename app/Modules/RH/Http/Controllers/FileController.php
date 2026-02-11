@@ -18,13 +18,13 @@ class FileController extends Controller
             return redirect($file->file_path);
         }
 
-        $path = 'files/' . $file->file_path;
-        if (!Storage::disk($file->disk)->exists($path)) {
+        // Le file_path contient déjà le chemin complet
+        if (!Storage::disk($file->disk)->exists($file->file_path)) {
             abort(404);
         }
 
-        return response()->stream(function () use ($file, $path) {
-            $stream = Storage::disk($file->disk)->readStream($path);
+        return response()->stream(function () use ($file) {
+            $stream = Storage::disk($file->disk)->readStream($file->file_path);
             fpassthru($stream);
             fclose($stream);
         }, 200, [

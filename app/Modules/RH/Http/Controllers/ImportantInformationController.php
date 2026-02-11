@@ -70,12 +70,36 @@ class ImportantInformationController extends Controller
             'color' => 'required|in:primary,success,info,warning,danger',
             'link' => 'nullable|string',
             'file_id' => 'nullable|exists:files,id',
+            'file' => 'nullable|file|mimes:pdf|max:51200', // 50 MB
             'is_active' => 'boolean',
             'order' => 'integer',
         ]);
 
+        // Si un fichier est uploadé, on le stocke
+        if ($request->hasFile('file')) {
+            $fileStorageService = app(\App\Modules\Stockage\Services\FileStorageService::class);
+            $uploadedFile = $fileStorageService->uploadFile(
+                uploadedFile: $request->file('file'),
+                userId: auth()->id(),
+                visibility: 'public',
+                collection: 'important_informations',
+                moduleName: 'RH',
+                moduleResourceType: 'ImportantInformation'
+            );
+
+            $uploadedFile->update([
+                'original_name' => $data['title'],
+                'description' => $data['description'],
+                'is_official_document' => true,
+                'disk' => 'public',
+            ]);
+
+            $data['file_id'] = $uploadedFile->id;
+            unset($data['file']);
+        }
+
         $information = ImportantInformation::create($data);
-        return $this->successResponse($information, 'Information créée avec succès', 201);
+        return $this->successResponse($information->load('file'), 'Information créée avec succès', 201);
     }
 
     public function update(Request $request, ImportantInformation $important_information): JsonResponse
@@ -87,12 +111,36 @@ class ImportantInformationController extends Controller
             'color' => 'sometimes|in:primary,success,info,warning,danger',
             'link' => 'nullable|string',
             'file_id' => 'nullable|exists:files,id',
+            'file' => 'nullable|file|mimes:pdf|max:51200', // 50 MB
             'is_active' => 'boolean',
             'order' => 'integer',
         ]);
 
+        // Si un fichier est uploadé, on le stocke
+        if ($request->hasFile('file')) {
+            $fileStorageService = app(\App\Modules\Stockage\Services\FileStorageService::class);
+            $uploadedFile = $fileStorageService->uploadFile(
+                uploadedFile: $request->file('file'),
+                userId: auth()->id(),
+                visibility: 'public',
+                collection: 'important_informations',
+                moduleName: 'RH',
+                moduleResourceType: 'ImportantInformation'
+            );
+
+            $uploadedFile->update([
+                'original_name' => $data['title'] ?? $important_information->title,
+                'description' => $data['description'] ?? $important_information->description,
+                'is_official_document' => true,
+                'disk' => 'public',
+            ]);
+
+            $data['file_id'] = $uploadedFile->id;
+            unset($data['file']);
+        }
+
         $important_information->update($data);
-        return $this->successResponse($important_information, 'Information mise à jour');
+        return $this->successResponse($important_information->load('file'), 'Information mise à jour');
     }
 
     public function destroy(ImportantInformation $important_information): JsonResponse
