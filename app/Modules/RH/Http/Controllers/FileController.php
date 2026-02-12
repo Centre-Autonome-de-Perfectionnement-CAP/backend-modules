@@ -19,12 +19,19 @@ class FileController extends Controller
         }
 
         // Le file_path contient déjà le chemin complet
-        if (!Storage::disk($file->disk)->exists($file->file_path)) {
-            abort(404);
+        $filePath = $file->file_path;
+        
+        // Si le chemin commence par 'public/', on l'enlève car le disk 'public' pointe déjà vers storage/app/public
+        if (str_starts_with($filePath, 'public/')) {
+            $filePath = substr($filePath, 7);
+        }
+        
+        if (!Storage::disk($file->disk)->exists($filePath)) {
+            abort(404, 'File not found at: ' . $filePath);
         }
 
-        return response()->stream(function () use ($file) {
-            $stream = Storage::disk($file->disk)->readStream($file->file_path);
+        return response()->stream(function () use ($file, $filePath) {
+            $stream = Storage::disk($file->disk)->readStream($filePath);
             fpassthru($stream);
             fclose($stream);
         }, 200, [

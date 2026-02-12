@@ -94,7 +94,7 @@ class ImportantInformationController extends Controller
                 'original_name' => $data['title'],
                 'description' => $data['description'],
                 'is_official_document' => true,
-                'disk' => 'public',
+                // Ne pas changer le disk, garder celui défini par FileStorageService
             ]);
 
             $data['file_id'] = $uploadedFile->id;
@@ -140,7 +140,7 @@ class ImportantInformationController extends Controller
                 'original_name' => $data['title'] ?? $important_information->title,
                 'description' => $data['description'] ?? $important_information->description,
                 'is_official_document' => true,
-                'disk' => 'public',
+                // Ne pas changer le disk, garder celui défini par FileStorageService
             ]);
 
             $data['file_id'] = $uploadedFile->id;
