@@ -38,7 +38,20 @@ class CreatePaiementRequest extends FormRequest
                 },
             ],
             'montant' => 'nullable|numeric|min:0',
-            'reference' => 'required|string|max:255|unique:payments,reference',
+            'reference' => [
+                'required',
+                'string',
+                'max:255',
+                function ($attribute, $value, $fail) {
+                    $exists = \App\Modules\Finance\Models\Paiement::where('reference', $value)
+                        ->whereIn('status', ['pending', 'approved'])
+                        ->exists();
+                    
+                    if ($exists) {
+                        $fail('Cette référence existe déjà dans le système.');
+                    }
+                },
+            ],
             'department_id' => 'required|integer|exists:departments,id',
             'numero_compte' => [
                 'required',
