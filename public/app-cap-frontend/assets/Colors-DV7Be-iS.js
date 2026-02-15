@@ -1,12 +1,4 @@
-<<<<<<<< HEAD:public/app-cap-frontend/assets/Colors-DV7Be-iS.js
-<<<<<<<< HEAD:public/app-cap-frontend/assets/Colors-DV7Be-iS.js
 import{Z as x,j as r,r as d}from"./index-CbALTDLj.js";import{C as f,a as u}from"./CCardBody-Dq_C6KpT.js";import{C as p}from"./CCardHeader-D0h60bIr.js";import{C as j,a as C}from"./CRow-Bfk2E1UH.js";var h={exports:{}};/*!
-========
-import{M as x,j as r,r as d}from"./index-khCzjUTv.js";import{C as f,a as u}from"./CCardBody-C5n9eXLs.js";import{C as p}from"./CCardHeader-Su-5twbq.js";import{C as j,a as C}from"./CRow-NFi6H0tm.js";var h={exports:{}};/*!
->>>>>>>> f355611 (draft):public/app-cap-frontend/assets/Colors-eiCS5JnF.js
-========
-import{U as x,j as r,r as d}from"./index-o8HLPDVG.js";import{C as f,a as u}from"./CCardBody-C2MJ4XYJ.js";import{C as p}from"./CCardHeader-02uJU2uK.js";import{C as j,a as C}from"./CRow-3Fwc2MXA.js";var h={exports:{}};/*!
->>>>>>>> f2a73ba (commit):public/app-cap-frontend/assets/Colors-Bv5kr3Iq.js
 	Copyright (c) 2018 Jed Watson.
 	Licensed under the MIT License (MIT), see
 	http://jedwatson.github.io/classnames

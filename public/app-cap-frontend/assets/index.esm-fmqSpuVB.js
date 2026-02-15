@@ -1,8 +1,4 @@
-<<<<<<<< HEAD:public/app-cap-frontend/assets/index.esm-fmqSpuVB.js
 import{r as nt,R as ft}from"./index-CbALTDLj.js";/*!
-========
-import{r as nt,R as ft}from"./index-khCzjUTv.js";/*!
->>>>>>>> f355611 (draft):public/app-cap-frontend/assets/index.esm-CE4fs2aM.js
  * @kurkle/color v0.3.4
  * https://github.com/kurkle/color#readme
  * (c) 2024 Jukka Kurkela
