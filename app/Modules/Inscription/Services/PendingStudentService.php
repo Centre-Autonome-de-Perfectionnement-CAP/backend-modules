@@ -342,11 +342,8 @@ class PendingStudentService
         ]);
 
         // Vérifier qu'un tarif existe pour ce niveau et cette filière
-<<<<<<< HEAD
         // COMMENTÉ TEMPORAIREMENT - À réactiver plus tard
         /*
-=======
->>>>>>> f2a73ba (commit)
         $fee = \App\Modules\Finance\Models\AcademicLevelFee::where('academic_year_id', $pendingStudent->academic_year_id)
             ->where('department_id', $pendingStudent->department_id)
             ->where('study_level', $pendingStudent->level)
@@ -372,10 +369,7 @@ class PendingStudentService
         }
 
         Log::info('Tarif trouvé, création de l\'étudiant autorisée', ['fee_id' => $fee->id]);
-<<<<<<< HEAD
         */
-=======
->>>>>>> f2a73ba (commit)
 
         // Chercher si un Student existe déjà pour cette personne
         Log::info('Recherche d\'un Student existant via personal_information_id', [

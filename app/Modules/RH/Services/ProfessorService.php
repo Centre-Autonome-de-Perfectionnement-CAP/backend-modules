@@ -70,14 +70,11 @@ class ProfessorService
             $data['password'] = Hash::make('password');
             $data['uuid'] = Str::uuid();
             
-<<<<<<< HEAD
             // Définir le rôle par défaut "Professeur" (ID: 6) si non fourni
             if (empty($data['role_id'])) {
                 $data['role_id'] = 6;
             }
             
-=======
->>>>>>> eea2b06 (draft)
             // Capitaliser le nom de la banque
             if (!empty($data['bank'])) {
                 $data['bank'] = StringUtilityService::capitalize($data['bank']);

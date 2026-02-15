@@ -29,22 +29,11 @@ Route::prefix('api/finance')->group(function () {
     
     // Tarifs
     Route::get('/tarifs', [TarifController::class, 'index']);
-<<<<<<< HEAD
-<<<<<<< HEAD
     Route::get('/tarifs/available-classes', [TarifController::class, 'getAvailableClasses']);
-=======
->>>>>>> eea2b06 (draft)
-=======
-    Route::get('/tarifs/available-classes', [TarifController::class, 'getAvailableClasses']);
->>>>>>> 7854261 (commit)
     Route::post('/tarifs', [TarifController::class, 'store']);
     Route::put('/tarifs/{id}', [TarifController::class, 'update']);
     Route::delete('/tarifs/{id}', [TarifController::class, 'destroy']);
     
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> f2a73ba (commit)
     // Tarifs par niveau académique
     Route::get('/academic-level-fees', [AcademicLevelFeeController::class, 'index']);
     Route::post('/academic-level-fees', [AcademicLevelFeeController::class, 'store']);
@@ -53,11 +42,6 @@ Route::prefix('api/finance')->group(function () {
     Route::delete('/academic-level-fees/{uuid}', [AcademicLevelFeeController::class, 'destroy']);
     Route::post('/academic-level-fees/student-fee', [AcademicLevelFeeController::class, 'getStudentFee']);
     
-<<<<<<< HEAD
-=======
->>>>>>> eea2b06 (draft)
-=======
->>>>>>> f2a73ba (commit)
     // Historique
     Route::get('/historique/class', [HistoriqueController::class, 'getByClass']);
     Route::get('/historique/student/{studentId}', [HistoriqueController::class, 'getStudentFinancialState']);
@@ -68,7 +52,6 @@ Route::prefix('api/finance')->group(function () {
     Route::post('/validation/{paymentId}/validate', [ValidationController::class, 'validatePayment']);
     Route::post('/validation/{paymentId}/reject', [ValidationController::class, 'rejectPayment']);
     Route::get('/validation/{paymentId}/receipt', [ValidationController::class, 'downloadReceipt']);
-<<<<<<< HEAD
     
     // Transactions
     Route::get('/transactions/student/{studentPendingStudentId}', [TransactionController::class, 'getStudentTransactions']);
@@ -88,6 +71,4 @@ Route::prefix('api/finance')->group(function () {
     Route::get('/reports/export-payments', [ReportController::class, 'exportPayments']);
     Route::get('/reports/stats-by-department', [ReportController::class, 'getFinancialStatsByDepartment']);
     Route::get('/reports/revenue-by-period', [ReportController::class, 'getRevenueByPeriod']);
-=======
->>>>>>> eea2b06 (draft)
 });
