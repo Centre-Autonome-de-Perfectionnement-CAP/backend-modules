@@ -122,6 +122,7 @@ Route::prefix('api/inscription')->group(function () {
         Route::get('export/excel', [PendingStudentExportController::class, 'exportExcel']);
         Route::get('export/word', [PendingStudentExportController::class, 'exportWord']);
         Route::get('export/emails', [PendingStudentExportController::class, 'exportEmails']);
+        Route::get('export/validated-students', [PendingStudentExportController::class, 'exportValidatedStudents']);
     });
 
 }); // Fin du groupe api/inscription

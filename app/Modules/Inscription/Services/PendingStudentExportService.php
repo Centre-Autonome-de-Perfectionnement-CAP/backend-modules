@@ -211,4 +211,81 @@ class PendingStudentExportService
         
         return "EMAILS_ETUDIANTS_{$academicYear}_{$dateTime}.pdf";
     }
-}
+
+    /**
+     * Prépare les données pour l'export des étudiants validés par type
+     */
+    public function prepareValidatedStudentsByTypeExportData(array $filters): array
+    {
+        $academicYearId = $filters['year'];
+        $type = $filters['type']; // 'prepa', 'licence', 'specialite'
+        
+        $query = PendingStudent::with(['personalInformation', 'department.cycle', 'academicYear'])
+            ->where('academic_year_id', $academicYearId);
+        
+        $students = collect();
+        $typeLabel = '';
+        $validationCriteria = '';
+        
+        switch ($type) {
+            case 'prepa':
+                $students = $query->get()->filter(function($student) {
+                    $departmentName = strtolower($student->department->name ?? '');
+                    $isPrepa = strpos($departmentName, 'prepa') !== false || strpos($departmentName, 'prépa') !== false;
+                    return $isPrepa && $student->cuca_opinion === 'favorable';
+                });
+                $typeLabel = 'Classes Préparatoires';
+                $validationCriteria = 'CUCA';
+                break;
+                
+            case 'licence':
+                $students = $query->get()->filter(function($student) {
+                    $departmentName = strtolower($student->department->name ?? '');
+                    $isPrepa = strpos($departmentName, 'prepa') !== false || strpos($departmentName, 'prépa') !== false;
+                    $isSpecialite = strpos($departmentName, 'spécialité') !== false || strpos($departmentName, 'specialite') !== false;
+                    return !$isPrepa && !$isSpecialite && $student->cuo_opinion === 'favorable';
+                });
+                $typeLabel = 'Licence / Master';
+                $validationCriteria = 'CUO';
+                break;
+                
+            case 'specialite':
+                $students = $query->get()->filter(function($student) {
+                    $departmentName = strtolower($student->department->name ?? '');
+                    $isSpecialite = strpos($departmentName, 'spécialité') !== false || strpos($departmentName, 'specialite') !== false;
+                    return $isSpecialite && $student->cuo_opinion === 'favorable';
+                });
+                $typeLabel = 'Première Année de Spécialité';
+                $validationCriteria = 'CUO';
+                break;
+        }
+        
+        $students = $students->sortBy(function($student) {
+            return $student->personalInformation->last_name;
+        });
+        
+        $academicYear = AcademicYear::find($academicYearId);
+        
+        return [
+            'students' => $students,
+            'totalStudents' => $students->count(),
+            'typeLabel' => $typeLabel,
+            'validationCriteria' => $validationCriteria,
+            'type' => $type,
+            'academicYear' => $academicYear?->academic_year ?? 'N/A',
+            'exportDate' => now()->format('d/m/Y'),
+            'exportTime' => now()->format('H:i'),
+        ];
+    }
+    
+    /**
+     * Génère le nom de fichier pour l'export des étudiants validés
+     */
+    public function generateValidatedStudentsFilename(array $data): string
+    {
+        $academicYear = str_replace(['/', '-'], '_', $data['academicYear']);
+        $type = strtoupper($data['type']);
+        $dateTime = now()->format('Ymd_His');
+        
+        return "ETUDIANTS_VALIDES_{$type}_{$academicYear}_{$dateTime}.pdf";
+    }}
