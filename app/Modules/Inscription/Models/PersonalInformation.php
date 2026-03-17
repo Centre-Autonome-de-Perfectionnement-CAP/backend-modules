@@ -3,20 +3,13 @@
 namespace App\Modules\Inscription\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Laravel\Sanctum\HasApiTokens;
 use App\Traits\HasUuid;
 
-class PersonalInformation extends Model
+class PersonalInformation extends Authenticatable
 {
-    use HasFactory, HasUuid;
-
-    /**
-     * Create a new factory instance for the model.
-     */
-    protected static function newFactory()
-    {
-        return \Database\Factories\PersonalInformationFactory::new();
-    }
+    use HasFactory, HasUuid, HasApiTokens;
 
     protected $fillable = [
         'last_name',
@@ -29,6 +22,8 @@ class PersonalInformation extends Model
         'contacts',
         'nationality',
         'photo',
+        'password',
+        'role_id',
     ];
 
     protected $casts = [
@@ -36,16 +31,24 @@ class PersonalInformation extends Model
         'contacts' => 'array',
     ];
 
-    public function student()
-    {
-        return $this->belongsTo(Student::class);
-    }
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
 
     /**
-     * Relation vers les dossiers (pending_students)
+     * Relation vers les dossiers
      */
     public function pendingStudents()
     {
         return $this->hasMany(PendingStudent::class, 'personal_information_id');
+    }
+
+    /**
+     * Relation vers student
+     */
+    public function student()
+    {
+        return $this->hasOne(Student::class, 'personal_information_id');
     }
 }

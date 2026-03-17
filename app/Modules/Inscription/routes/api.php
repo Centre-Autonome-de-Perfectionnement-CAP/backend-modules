@@ -78,6 +78,8 @@ Route::prefix('api/inscription')->group(function () {
     Route::prefix('students')->group(function () {
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('/', [StudentController::class, 'index']);
+            Route::post('/{id}/assign-class-responsible', [StudentController::class, 'assignClassResponsible']);
+            Route::post('/{id}/remove-class-responsible', [StudentController::class, 'removeClassResponsible']);
             Route::get('/export/fiche-presence', [StudentController::class, 'exportFichePresence']);
             Route::get('/export/fiche-emargement', [StudentController::class, 'exportFicheEmargement']);
             Route::get('/{id}', [StudentController::class, 'show']);

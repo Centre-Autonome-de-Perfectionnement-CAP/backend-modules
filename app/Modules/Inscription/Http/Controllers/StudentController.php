@@ -4,19 +4,18 @@ namespace App\Modules\Inscription\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Inscription\Services\StudentService;
+use App\Modules\Inscription\Models\PersonalInformation; 
+use Illuminate\Support\Facades\DB;
 use App\Traits\ApiResponse;
 use App\Traits\HasPagination;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use App\Modules\Inscription\Models\PendingStudent;
+use App\Modules\Inscription\Models\StudentGroup;
 
-/**
- * @OA\Tag(
- *     name="Students",
- *     description="Gestion des étudiants inscrits"
- * )
- */
-class StudentController extends Controller
-{
+class StudentController extends Controller{
     use ApiResponse, HasPagination;
 
     public function __construct(
@@ -25,97 +24,16 @@ class StudentController extends Controller
         $this->middleware('auth:sanctum');
     }
 
-    /**
-     * @OA\Get(
-     *     path="/api/inscription/students",
-     *     summary="Liste des étudiants inscrits",
-     *     description="Récupère la liste paginée des étudiants inscrits avec possibilité de filtrage",
-     *     operationId="getStudents",
-     *     tags={"Students"},
-     *     security={{"sanctum": {}}},
-     *     @OA\Parameter(
-     *         name="year",
-     *         in="query",
-     *         description="Filtrer par année académique",
-     *         required=false,
-     *         @OA\Schema(type="string")
-     *     ),
-     *     @OA\Parameter(
-     *         name="filiere",
-     *         in="query",
-     *         description="Filtrer par filière",
-     *         required=false,
-     *         @OA\Schema(type="string")
-     *     ),
-     *     @OA\Parameter(
-     *         name="niveau",
-     *         in="query",
-     *         description="Filtrer par niveau d'études",
-     *         required=false,
-     *         @OA\Schema(type="string")
-     *     ),
-     *     @OA\Parameter(
-     *         name="search",
-     *         in="query",
-     *         description="Recherche par nom, prénom ou matricule",
-     *         required=false,
-     *         @OA\Schema(type="string")
-     *     ),
-     *     @OA\Parameter(
-     *         name="page",
-     *         in="query",
-     *         description="Numéro de page",
-     *         required=false,
-     *         @OA\Schema(type="integer", minimum=1)
-     *     ),
-     *     @OA\Response(
-     *         response=200,
-     *         description="Liste des étudiants récupérée avec succès",
-     *         @OA\JsonContent(
-     *             @OA\Property(property="success", type="boolean", example=true),
-     *             @OA\Property(property="data", type="object")
-     *         )
-     *     ),
-     *     @OA\Response(response=401, description="Non authentifié")
-     * )
-     */
     public function index(Request $request): JsonResponse
     {
         $filters = $request->only(['year', 'filiere', 'entry_diploma', 'niveau', 'cohort', 'redoublant', 'search']);
         $perPage = $this->getPerPage($request);
-        
+
         $students = $this->studentService->getAll($filters, $perPage);
 
         return $this->successResponse($students, 'Étudiants récupérés avec succès');
     }
 
-    /**
-     * @OA\Get(
-     *     path="/api/inscription/students/{id}",
-     *     summary="Détails d'un étudiant",
-     *     description="Récupère les détails complets d'un étudiant par son ID",
-     *     operationId="getStudentDetails",
-     *     tags={"Students"},
-     *     security={{"sanctum": {}}},
-     *     @OA\Parameter(
-     *         name="id",
-     *         in="path",
-     *         description="ID de l'étudiant",
-     *         required=true,
-     *         @OA\Schema(type="integer")
-     *     ),
-     *     @OA\Response(
-     *         response=200,
-     *         description="Détails de l'étudiant récupérés avec succès",
-     *         @OA\JsonContent(
-     *             @OA\Property(property="success", type="boolean", example=true),
-     *             @OA\Property(property="data", type="object")
-     *         )
-     *     ),
-     *     @OA\Response(response=404, description="Étudiant non trouvé"),
-     *     @OA\Response(response=401, description="Non authentifié")
-     * )
-     */
     public function show(Request $request, int $id): JsonResponse
     {
         $student = $this->studentService->getById($id);
@@ -127,42 +45,6 @@ class StudentController extends Controller
         return $this->successResponse($student, 'Détails de l\'étudiant récupérés');
     }
 
-    /**
-     * @OA\Get(
-     *     path="/api/inscription/students/export/fiche-presence",
-     *     summary="Exporter la fiche de présence",
-     *     description="Génère un PDF de la fiche de présence pour une classe donnée",
-     *     operationId="exportFichePresence",
-     *     tags={"Students"},
-     *     security={{"sanctum": {}}},
-     *     @OA\Parameter(
-     *         name="year",
-     *         in="query",
-     *         description="Année académique",
-     *         required=true,
-     *         @OA\Schema(type="string")
-     *     ),
-     *     @OA\Parameter(
-     *         name="filiere",
-     *         in="query",
-     *         description="Filière",
-     *         required=true,
-     *         @OA\Schema(type="string")
-     *     ),
-     *     @OA\Parameter(
-     *         name="niveau",
-     *         in="query",
-     *         description="Niveau d'études",
-     *         required=true,
-     *         @OA\Schema(type="string")
-     *     ),
-     *     @OA\Response(
-     *         response=200,
-     *         description="PDF généré avec succès"
-     *     ),
-     *     @OA\Response(response=401, description="Non authentifié")
-     * )
-     */
     public function exportFichePresence(Request $request)
     {
         $request->validate([
@@ -170,47 +52,11 @@ class StudentController extends Controller
         ], [
             'cohort.required' => 'La sélection de la cohorte est obligatoire',
         ]);
-        
+
         $filters = $request->only(['year', 'filiere', 'niveau', 'cohort', 'groupe']);
         return $this->studentService->exportFichePresence($filters);
     }
 
-    /**
-     * @OA\Get(
-     *     path="/api/inscription/students/export/fiche-emargement",
-     *     summary="Exporter la fiche d'émargement",
-     *     description="Génère un PDF de la fiche d'émargement pour une classe donnée",
-     *     operationId="exportFicheEmargement",
-     *     tags={"Students"},
-     *     security={{"sanctum": {}}},
-     *     @OA\Parameter(
-     *         name="year",
-     *         in="query",
-     *         description="Année académique",
-     *         required=true,
-     *         @OA\Schema(type="string")
-     *     ),
-     *     @OA\Parameter(
-     *         name="filiere",
-     *         in="query",
-     *         description="Filière",
-     *         required=true,
-     *         @OA\Schema(type="string")
-     *     ),
-     *     @OA\Parameter(
-     *         name="niveau",
-     *         in="query",
-     *         description="Niveau d'études",
-     *         required=true,
-     *         @OA\Schema(type="string")
-     *     ),
-     *     @OA\Response(
-     *         response=200,
-     *         description="PDF généré avec succès"
-     *     ),
-     *     @OA\Response(response=401, description="Non authentifié")
-     * )
-     */
     public function exportFicheEmargement(Request $request)
     {
         $request->validate([
@@ -218,59 +64,18 @@ class StudentController extends Controller
         ], [
             'cohort.required' => 'La sélection de la cohorte est obligatoire',
         ]);
-        
+
         $filters = $request->only(['year', 'filiere', 'niveau', 'cohort', 'groupe']);
         return $this->studentService->exportFicheEmargement($filters);
     }
 
-    /**
-     * @OA\Put(
-     *     path="/api/inscription/students/{id}",
-     *     summary="Mettre à jour un étudiant",
-     *     description="Met à jour les informations d'un étudiant",
-     *     operationId="updateStudent",
-     *     tags={"Students"},
-     *     security={{"sanctum": {}}},
-     *     @OA\Parameter(
-     *         name="id",
-     *         in="path",
-     *         description="ID de l'étudiant",
-     *         required=true,
-     *         @OA\Schema(type="integer")
-     *     ),
-     *     @OA\RequestBody(
-     *         required=true,
-     *         @OA\JsonContent(
-     *             @OA\Property(property="first_name", type="string"),
-     *             @OA\Property(property="last_name", type="string"),
-     *             @OA\Property(property="email", type="string", format="email"),
-     *             @OA\Property(property="phone", type="string"),
-     *             @OA\Property(property="gender", type="string", enum={"M", "F"}),
-     *             @OA\Property(property="date_of_birth", type="string", format="date")
-     *         )
-     *     ),
-     *     @OA\Response(
-     *         response=200,
-     *         description="Étudiant mis à jour avec succès",
-     *         @OA\JsonContent(
-     *             @OA\Property(property="success", type="boolean", example=true),
-     *             @OA\Property(property="message", type="string"),
-     *             @OA\Property(property="data", type="object")
-     *         )
-     *     ),
-     *     @OA\Response(response=404, description="Étudiant non trouvé"),
-     *     @OA\Response(response=422, description="Données invalides"),
-     *     @OA\Response(response=401, description="Non authentifié")
-     * )
-     */
-    public function update(Request $request, int $id): JsonResponse
-    {
+    public function update(Request $request, int $id): JsonResponse {
         $validated = $request->validate([
-            'first_name' => 'sometimes|required|string|max:255',
-            'last_name' => 'sometimes|required|string|max:255',
-            'email' => 'sometimes|required|email|max:255',
-            'phone' => 'nullable|string|max:20',
-            'gender' => 'sometimes|required|in:M,F,Masculin,Féminin',
+            'first_name'    => 'sometimes|required|string|max:255',
+            'last_name'     => 'sometimes|required|string|max:255',
+            'email'         => 'sometimes|required|email|max:255',
+            'phone'         => 'nullable|string|max:20',
+            'gender'        => 'sometimes|required|in:M,F,Masculin,Féminin',
             'date_of_birth' => 'nullable|date',
         ]);
 
@@ -282,4 +87,153 @@ class StudentController extends Controller
 
         return $this->successResponse($updated, 'Étudiant mis à jour avec succès');
     }
+
+    public function assignClassResponsible($id): JsonResponse {
+        try {
+
+            DB::beginTransaction();
+
+            $personalInfo = PersonalInformation::findOrFail($id);
+
+            //
+            if ($personalInfo->role_id == 9) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cet étudiant est déjà responsable de classe'
+                ], 400);
+            }
+
+            // Récupérer le dossier approuvé
+            $pendingStudent = PendingStudent::where('personal_information_id', $id)
+                ->where('status', 'approved')
+                ->first();
+
+            if (!$pendingStudent) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Aucun dossier étudiant approuvé trouvé'
+                ], 400);
+            }
+
+            // Récupérer l'étudiant via la table pivot
+            $student = $pendingStudent->students()->first();
+
+            if (!$student) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Aucun compte étudiant associé'
+                ], 400);
+            }
+
+            // Vérifier appartenance à un groupe
+            $studentGroup = StudentGroup::where('student_id', $student->id)
+                ->with('classGroup')
+                ->first();
+
+            if (!$studentGroup) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cet étudiant n\'appartient à aucun groupe'
+                ], 400);
+            }
+
+            $classGroup = $studentGroup->classGroup;
+
+            // 6️Vérifier le nombre de responsables dans ce groupe
+            $responsablesCount = StudentGroup::where('class_group_id', $classGroup->id)
+                ->whereHas('student.pendingStudents.personalInformation', function ($query) {
+                    $query->where('role_id', 9);
+                })
+                ->count();
+
+            if ($responsablesCount >= 2) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Ce groupe possède déjà 2 responsables'
+                ], 400);
+            }
+
+            $matricule = $student->student_id_number ?? 'etudiant';
+            $defaultPassword = 'password';
+
+            // 8️⃣ Mise à jour du rôle
+            $personalInfo->role_id = 9;
+            $personalInfo->password = Hash::make($defaultPassword);
+            $personalInfo->save();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Responsable de classe ajouté avec succès',
+                'data' => [
+                    'student_id' => $student->id,
+                    'class_group_id' => $classGroup->id,
+                    'role_id' => $personalInfo->role_id
+                ]
+            ], 200);
+
+        } catch (ModelNotFoundException $e) {
+
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Informations personnelles introuvables'
+            ], 404);
+
+        } catch (\Throwable $e) {
+
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur serveur',
+                'error' => config('app.debug') ? $e->getMessage() : null
+            ], 500);
+        }
+    }
+
+    public function removeClassResponsible($id): JsonResponse{
+        try {
+
+            $personalInfo = PersonalInformation::findOrFail($id);
+
+            if ($personalInfo->role_id != 9) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cet étudiant n\'est pas responsable de classe'
+                ], 400);
+            }
+
+            $personalInfo->role_id = 3;
+            $personalInfo->password = null;
+            $personalInfo->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Responsable retiré avec succès'
+            ]);
+
+        } catch (ModelNotFoundException $e) {
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Étudiant introuvable'
+            ], 404);
+
+        } catch (\Throwable $e) {
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur serveur'
+            ], 500);
+        }
+    }
+
 }

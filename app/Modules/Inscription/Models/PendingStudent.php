@@ -68,10 +68,9 @@ class PendingStudent extends Model
         return $this->belongsTo(EntryDiploma::class);
     }
 
-    public function studentPendingStudents()
-{
-    return $this->hasMany(StudentPendingStudent::class, 'pending_student_id');
-}
+    public function studentPendingStudents() {
+        return $this->hasMany(StudentPendingStudent::class, 'pending_student_id');
+    }
 
     /**
      * Relation vers les parcours académiques via StudentPendingStudent
@@ -132,6 +131,15 @@ class PendingStudent extends Model
         }
     
         return $value;
+    }
+
+    public function students(){
+        return $this->belongsToMany(
+            Student::class,
+            'student_pending_student',
+            'pending_student_id',
+            'student_id'
+        );
     }
 
 
