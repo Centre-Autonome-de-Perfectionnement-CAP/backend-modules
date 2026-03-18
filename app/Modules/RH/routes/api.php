@@ -17,6 +17,34 @@ Route::prefix('api/rh')->group(function () {
     Route::get('files/{file}', [FileController::class, 'viewDocument']);
     Route::get('documents', [DocumentManagementController::class, 'index']);
     
+    // Route de debug temporaire
+    Route::get('debug/file/{fileId}', function($fileId) {
+        $file = \App\Modules\Stockage\Models\File::find($fileId);
+        
+        if (!$file) {
+            return response()->json(['error' => 'Fichier non trouvé', 'file_id' => $fileId]);
+        }
+        
+        $filePath = $file->file_path;
+        if (str_starts_with($filePath, 'public/')) {
+            $filePath = substr($filePath, 7);
+        }
+        
+        $exists = \Storage::disk($file->disk)->exists($filePath);
+        $fullPath = \Storage::disk($file->disk)->path($filePath);
+        
+        return response()->json([
+            'file_id' => $fileId,
+            'file_path' => $file->file_path,
+            'processed_path' => $filePath,
+            'disk' => $file->disk,
+            'full_system_path' => $fullPath,
+            'exists' => $exists,
+            'is_official_document' => $file->is_official_document,
+            'original_name' => $file->original_name
+        ]);
+    });
+    
     Route::middleware('auth:sanctum')->group(function () {
         // Gestion des documents
         Route::apiResource('documents', DocumentManagementController::class)->except(['index']);
@@ -34,7 +62,6 @@ Route::prefix('api/rh')->group(function () {
         Route::post('admin-users/{adminUser}/roles/attach', [AdminUserController::class, 'attachRole']);
         Route::post('admin-users/{adminUser}/roles/detach', [AdminUserController::class, 'detachRole']);
         Route::get('admin-users-statistics', [AdminUserController::class, 'statistics']);
-        // Route::get('grades', [GradeController::class, 'index']);
         Route::get('banks', [ProfessorController::class, 'getBanks']);
         
         Route::get('roles', function () {
