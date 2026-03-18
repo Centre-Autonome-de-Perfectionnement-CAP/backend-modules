@@ -29,7 +29,7 @@ class ProfessorController extends Controller
     public function index(Request $request): JsonResponse
     {
         $filters = $request->only([
-            'search', 'status', 'grade_id', 'bank',
+            'search', ' statut', 'grade_id', 'bank',
             'sort_by', 'sort_order',
             'nationality', 'city',
         ]);
@@ -153,9 +153,9 @@ class ProfessorController extends Controller
         $stats = [
             'total_contrats'      => Contrat::where('professor_id', $professorId)->count(),
             'active_contrats'     => Contrat::where('professor_id', $professorId)
-                                            ->where('status', 'ongoing')->count(),
+                                            ->where(' statut', 'ongoing')->count(),
             'completed_contrats'  => Contrat::where('professor_id', $professorId)
-                                            ->where('status', 'completed')->count(),
+                                            ->where(' statut', 'completed')->count(),
             'total_amount'        => Contrat::where('professor_id', $professorId)
                                             ->sum('amount'),
         ];

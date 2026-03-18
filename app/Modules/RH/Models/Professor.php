@@ -34,7 +34,7 @@ class Professor extends Authenticatable
         'ifu_number',
         'ifu',
         'bank',
-        'status',
+        'statut',
         'grade_id',
         'specialty',
         'bio',
@@ -123,7 +123,7 @@ class Professor extends Authenticatable
      */
     public function scopeActive($query)
     {
-        return $query->where('status', 'active');
+        return $query->where('statut', 'active');
     }
 
     // ─────────────────────────────────────────
