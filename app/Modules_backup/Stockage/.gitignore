@@ -1,0 +1,11 @@
+# Fichiers temporaires
+*.tmp
+*.temp
+*.log
+
+# Fichiers de test
+/tests/fixtures/files/*
+!/tests/fixtures/files/.gitkeep
+
+# Fichiers de cache
+.phpunit.cache

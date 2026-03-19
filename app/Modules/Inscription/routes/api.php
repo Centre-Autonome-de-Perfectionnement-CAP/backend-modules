@@ -16,7 +16,7 @@ use App\Modules\Inscription\Http\Controllers\StudentController;
 use App\Modules\Inscription\Http\Controllers\PendingStudentExportController;
 
 
-Route::prefix('api/inscription')->group(function () {
+Route::prefix('inscription')->group(function () {
 
     Route::prefix('pending-students')->group(function () {
         Route::middleware('auth:sanctum')->group(function () {

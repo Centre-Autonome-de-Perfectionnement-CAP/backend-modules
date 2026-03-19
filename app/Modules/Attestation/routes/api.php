@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Modules\Attestation\Http\Controllers\AttestationController;
 
-Route::prefix('api/attestations')->group(function () {
+Route::prefix('attestations')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         
         Route::get('eligible/success', [AttestationController::class, 'getEligibleForSuccess']);

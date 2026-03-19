@@ -9,7 +9,7 @@ use App\Modules\RH\Http\Controllers\DocumentManagementController;
 use App\Modules\RH\Http\Controllers\ImportantInformationController;
 use App\Modules\RH\Http\Controllers\FileController;
 
-Route::prefix('api/rh')->group(function () {
+Route::prefix('rh')->group(function () {
     // Routes publiques
     Route::get('important-informations', [ImportantInformationController::class, 'index']);
     Route::get('professors', [ProfessorController::class, 'index']);
