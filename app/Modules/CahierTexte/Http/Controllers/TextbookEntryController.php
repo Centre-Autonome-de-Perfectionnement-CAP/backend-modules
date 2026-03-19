@@ -167,7 +167,7 @@ class TextbookEntryController extends Controller
     /**
      * Valider une entrée
      */
-    public function validate(Request $request, $id)
+    public function validateEntry(Request $request, $id)
     {
         try {
             $entry = $this->textbookEntryService->validate($id, $request->user());

@@ -16,7 +16,7 @@ Route::middleware(['auth:sanctum'])->prefix('cahier-texte')->group(function () {
     
     // Actions spéciales
     Route::post('/{id}/publish', [TextbookEntryController::class, 'publish']);
-    Route::post('/{id}/validate', [TextbookEntryController::class, 'validate']);
+    Route::post('/{id}/validate', [TextbookEntryController::class, 'validateEntry']);
     
     // Vues par entité
     Route::get('/class-group/{classGroupId}', [TextbookEntryController::class, 'byClassGroup']);
