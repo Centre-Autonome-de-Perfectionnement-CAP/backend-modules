@@ -14,7 +14,7 @@ Route::prefix('api/public/grades')->group(function () {
 
 Route::prefix('api/notes')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
-        
+
         // Routes pour les professeurs
         Route::prefix('professor')->group(function () {
             Route::get('my-classes', [ProfessorGradeController::class, 'getMyClasses']);
@@ -28,7 +28,7 @@ Route::prefix('api/notes')->group(function () {
             Route::post('delete-evaluation', [ProfessorGradeController::class, 'deleteEvaluation']);
             Route::get('export-grade-sheet/{program}', [ProfessorGradeController::class, 'exportGradeSheet']);
         });
-        
+
         // Routes pour l'administration
         Route::prefix('admin')->group(function () {
             Route::get('dashboard', [AdminGradeController::class, 'dashboard']);
@@ -36,13 +36,13 @@ Route::prefix('api/notes')->group(function () {
             Route::get('program-details/{program_id}', [AdminGradeController::class, 'getProgramDetails']);
             Route::post('export-grades-by-department', [AdminGradeController::class, 'exportGradesByDepartment']);
         });
-        
+
         // Routes pour les reprises
         Route::prefix('retakes')->group(function () {
             Route::get('my-retakes', [CourseRetakeController::class, 'getStudentRetakes']);
-            Route::put('{retake_id}/status', [CourseRetakeController::class, 'updateRetakeStatus']);
+            Route::put('{retake_id}/status', [CourseRetakeController::class, 'updateRetakestatus']);
         });
-        
+
         // Routes pour les décisions et PV
         Route::prefix('decisions')->group(function () {
             Route::get('students-by-semester', [\App\Modules\Notes\Http\Controllers\DecisionController::class, 'getStudentsBySemester']);

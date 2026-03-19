@@ -14,7 +14,7 @@ class UpdateProfessorRequest extends FormRequest
     public function rules(): array
     {
         $professorId = $this->route('professor');
-        
+
         return [
             'last_name' => 'sometimes|required|string|max:255',
             'first_name' => 'sometimes|required|string|max:255',
@@ -27,7 +27,7 @@ class UpdateProfessorRequest extends FormRequest
             'ifu_number' => 'nullable|string|max:255',
             'ifu' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'bank' => 'nullable|string|max:255',
-            'status' => 'nullable|in:active,inactive,suspended',
+            'statut' => 'nullable|in:active,inactive,suspended',
             'grade_id' => 'nullable|exists:grades,id',
         ];
     }

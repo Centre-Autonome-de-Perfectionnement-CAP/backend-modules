@@ -132,7 +132,7 @@
     </div>
     
     <div class="section">
-            <div style="text-indent: 2em; font-size: 18px; line-height: 1.8; text-align: justify; ">Je soussigné <strong>{{ $titre }} {{ $nom }} {{ $prenom }}</strong>, {{$statut}} du jury ayant jugé le mémoire de <strong>{{ $nometu }} {{ $prenometu }}</strong>, candidat au Diplôme de « <strong>{{ $diplome }}</strong> » au Centre Autonome de Perfectionnement, atteste que les corrections exigées par le jury en sa séance du <strong>{{ $date_soutenance }}</strong> ont été prises en compte. </div>
+            <div style="text-indent: 2em; font-size: 18px; line-height: 1.8; text-align: justify; ">Je soussigné <strong>{{ $titre }} {{ $nom }} {{ $prenom }}</strong>, {{$status}} du jury ayant jugé le mémoire de <strong>{{ $nometu }} {{ $prenometu }}</strong>, candidat au Diplôme de « <strong>{{ $diplome }}</strong> » au Centre Autonome de Perfectionnement, atteste que les corrections exigées par le jury en sa séance du <strong>{{ $date_soutenance }}</strong> ont été prises en compte. </div>
             <br/>
             <div style="text-indent: 2em; font-size: 18px; line-height: 1.8; text-align: justify; ">En foi de quoi, le présent quitus lui est délivré pour servir et valoir ce que de droit.</div>
             

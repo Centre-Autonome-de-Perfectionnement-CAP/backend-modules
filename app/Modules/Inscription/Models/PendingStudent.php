@@ -123,13 +123,13 @@ class PendingStudent extends Model
                 $value = [];
             }
         }
-    
+
         // Maintenant qu'on est sûr que c'est un tableau, on applique la modification demandée
         if (isset($value['Quittance de 15.000F'])) {
             $value['Quittance de 20.000F'] = $value['Quittance de 15.000F'];
             unset($value['Quittance de 15.000F']);
         }
-    
+
         return $value;
     }
 
@@ -146,5 +146,5 @@ class PendingStudent extends Model
 
 
 
-    
+
 }

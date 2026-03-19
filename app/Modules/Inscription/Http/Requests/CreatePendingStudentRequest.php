@@ -32,7 +32,7 @@ class CreatePendingStudentRequest extends FormRequest
             $rules['email'] .= '|unique:pending_students,email';
         }
 
-        // Pour la mise à jour, permettre la mise à jour du statut et du sponsoring
+        // Pour la mise à jour, permettre la mise à jour du status et du sponsoring
         if ($this->isMethod('put') || $this->isMethod('patch')) {
             $rules['status'] = 'sometimes|in:pending,approved,rejected,withdrawn';
             $rules['sponsorise'] = 'sometimes|in:Oui,Non';
@@ -60,7 +60,7 @@ class CreatePendingStudentRequest extends FormRequest
             'academic_year_id.exists' => 'L\'année académique sélectionnée n\'existe pas.',
             'entry_diploma_id.required' => 'Le diplôme d\'entrée est requis.',
             'entry_diploma_id.exists' => 'Le diplôme d\'entrée sélectionné n\'existe pas.',
-            'status.in' => 'Le statut doit être l\'un des suivants : pending, approved, rejected, withdrawn.',
+            'status.in' => 'Le status doit être l\'un des suivants : pending, approved, rejected, withdrawn.',
             'sponsorise.in' => 'Le sponsoring doit être "Oui" ou "Non".',
             'cuca_opinion.in' => 'L\'opinion CUCA doit être favorable, défavorable ou en attente.',
             'cuo_opinion.in' => 'L\'opinion CUO doit être favorable, défavorable ou en attente.',

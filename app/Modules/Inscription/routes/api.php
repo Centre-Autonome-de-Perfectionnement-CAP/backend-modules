@@ -25,7 +25,7 @@ Route::prefix('api/inscription')->group(function () {
             Route::put('/{pendingStudent}', [PendingStudentController::class, 'update']);
             Route::delete('/{pendingStudent}', [PendingStudentController::class, 'destroy']);
             Route::get('/{pendingStudent}/documents', [PendingStudentController::class, 'getDocuments']);
-            Route::patch('/{pendingStudent}/financial-status', [PendingStudentController::class, 'updateStatus']);
+            Route::patch('/{pendingStudent}/financial-statut', [PendingStudentController::class, 'updatestatut']);
             Route::patch('/{pendingStudent}/level', [PendingStudentController::class, 'updateLevel']);
             Route::patch('/{pendingStudent}/pieces/rename', [PendingStudentController::class, 'renamePiece']);
         });
@@ -36,8 +36,8 @@ Route::prefix('api/inscription')->group(function () {
     Route::prefix('submissions')->group(function () {
         Route::get('/active-periods', [SubmissionController::class, 'getActiveSubmissionPeriods']);
         Route::get('/active-reclamation-periods', [SubmissionController::class, 'getActiveReclamationPeriods']);
-        Route::post('/check-status', [SubmissionController::class, 'checkSubmissionStatus']);
-        Route::post('/check-reclamation-status', [SubmissionController::class, 'checkReclamationStatus']);
+        Route::post('/check-statut', [SubmissionController::class, 'checkSubmissionstatut']);
+        Route::post('/check-reclamation-statut', [SubmissionController::class, 'checkReclamationstatut']);
 
         // Admin-only CRUD for submission periods
         Route::middleware('auth:sanctum')->group(function () {

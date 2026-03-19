@@ -42,9 +42,9 @@ class PaiementController extends Controller
      *         @OA\Schema(type="string")
      *     ),
      *     @OA\Parameter(
-     *         name="statut",
+     *         name="status",
      *         in="query",
-     *         description="Filtrer par statut",
+     *         description="Filtrer par status",
      *         required=false,
      *         @OA\Schema(type="string", enum={"attente", "accepte", "rejete"})
      *     ),
@@ -93,7 +93,7 @@ class PaiementController extends Controller
      *                 @OA\Property(property="matricule", type="string"),
      *                 @OA\Property(property="montant", type="number"),
      *                 @OA\Property(property="reference", type="string"),
-     *                 @OA\Property(property="statut", type="string"),
+     *                 @OA\Property(property="status", type="string"),
      *                 @OA\Property(property="date_versement", type="string", format="date"),
      *                 @OA\Property(property="created_at", type="string", format="datetime")
      *             )),
@@ -117,9 +117,9 @@ class PaiementController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $filters = $request->only(['search', 'statut', 'matricule', 'date_debut', 'date_fin']);
+        $filters = $request->only(['search', 'status', 'matricule', 'date_debut', 'date_fin']);
         $perPage = $this->getPerPage($request);
-        
+
         $paiements = $this->paiementService->getAll($filters, $perPage);
 
         return $this->successPaginatedResponse(
@@ -166,7 +166,7 @@ class PaiementController extends Controller
      *                 @OA\Property(property="matricule", type="string", example="202300001"),
      *                 @OA\Property(property="montant", type="number", example=50000),
      *                 @OA\Property(property="reference", type="string", example="REF-2023-001"),
-     *                 @OA\Property(property="statut", type="string", example="attente"),
+     *                 @OA\Property(property="status", type="string", example="attente"),
      *                 @OA\Property(property="created_at", type="string", format="datetime")
      *             )
      *         )
@@ -221,9 +221,9 @@ class PaiementController extends Controller
     /**
      * @OA\Get(
      *     path="/api/finance/paiements/{reference}",
-     *     summary="Consulter le statut d'un paiement",
-     *     description="Permet de vérifier le statut d'un paiement via sa référence",
-     *     operationId="getPaiementStatus",
+     *     summary="Consulter le status d'un paiement",
+     *     description="Permet de vérifier le status d'un paiement via sa référence",
+     *     operationId="getPaiementstatus",
      *     tags={"Paiements"},
      *     @OA\Parameter(
      *         name="reference",
@@ -234,14 +234,14 @@ class PaiementController extends Controller
      *     ),
      *     @OA\Response(
      *         response=200,
-     *         description="Statut du paiement récupéré avec succès",
+     *         description="status du paiement récupéré avec succès",
      *         @OA\JsonContent(
      *             @OA\Property(property="success", type="boolean", example=true),
      *             @OA\Property(
      *                 property="data",
      *                 type="object",
      *                 @OA\Property(property="reference", type="string", example="REF-2023-001"),
-     *                 @OA\Property(property="statut", type="string", example="attente"),
+     *                 @OA\Property(property="status", type="string", example="attente"),
      *                 @OA\Property(property="montant", type="number", example=50000),
      *                 @OA\Property(property="date_versement", type="string", format="date"),
      *                 @OA\Property(property="created_at", type="string", format="datetime")
@@ -293,7 +293,7 @@ class PaiementController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            
+
             return $this->errorResponse(
                 'Erreur lors de la récupération du paiement: ' . $e->getMessage(),
                 500,
@@ -346,7 +346,7 @@ class PaiementController extends Controller
     public function getStudentInfo(string $matricule): JsonResponse
     {
         $studentInfo = $this->paiementService->getStudentInfo($matricule);
-        
+
         return $this->successResponse(
             $studentInfo,
             'Informations étudiant récupérées avec succès'

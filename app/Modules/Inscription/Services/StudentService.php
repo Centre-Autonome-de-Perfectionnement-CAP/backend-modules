@@ -46,7 +46,7 @@ class StudentService
                 'pending_students.level as niveau',
                 'academic_years.academic_year as annee',
                 'entry_diplomas.name as entryDiploma',
-                'pending_students.status as statut',
+                'pending_students.status as status',
                 'personal_information.email',
                 DB::raw(DatabaseAdapter::jsonExtract('personal_information.contacts', '$.phone') . ' as telephone'),
                 DB::raw("(SELECT student_id_number FROM students WHERE students.id = student_pending_student.student_id) as matricule"),
@@ -124,7 +124,7 @@ class StudentService
 
         // Transformation : ajout des champs calculés
         $results->getCollection()->transform(function ($student) use ($filters) {
-            // Statut redoublant
+            // status redoublant
             $student->redoublant = (
                 $student->niveau &&
                 $this->isRepeatingStudent($student->student_pending_student_id, $student->niveau)
@@ -177,7 +177,7 @@ class StudentService
                 'pending_students.level as niveau',
                 'academic_years.academic_year as annee',
                 'entry_diplomas.name as entryDiploma',
-                'pending_students.status as statut',
+                'pending_students.status as status',
                 'personal_information.email',
                 DB::raw(DatabaseAdapter::jsonExtract('personal_information.contacts', '$.phone') . ' as telephone'),
                 DB::raw("(SELECT student_id_number FROM students WHERE students.id = student_pending_student.student_id) as matricule"),
@@ -217,7 +217,7 @@ class StudentService
 
             return $count > 1;
         } catch (\Exception $e) {
-            Log::error('Erreur lors de la vérification du statut redoublant', [
+            Log::error('Erreur lors de la vérification du status redoublant', [
                 'student_pending_student_id' => $studentPendingStudentId,
                 'level' => $level,
                 'error' => $e->getMessage()

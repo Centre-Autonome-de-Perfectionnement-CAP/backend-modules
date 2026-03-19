@@ -23,7 +23,7 @@ class Contrat extends Model
         'amount',
         'validation_date',
         'is_validated',
-        'status',
+        'statut',
         'notes',
     ];
 
@@ -66,9 +66,9 @@ class Contrat extends Model
     /**
      * Libellé du statut en français
      */
-    public function getStatusLabelAttribute(): string
+    public function getstatutLabelAttribute(): string
     {
-        return match($this->status) {
+        return match($this->statut) {
             'pending'   => 'En attente',
             'signed'    => 'Signé',
             'ongoing'   => 'En cours',

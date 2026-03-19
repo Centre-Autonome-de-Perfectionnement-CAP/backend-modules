@@ -4,7 +4,7 @@ namespace App\Modules\Inscription\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Inscription\Services\StudentService;
-use App\Modules\Inscription\Models\PersonalInformation; 
+use App\Modules\Inscription\Models\PersonalInformation;
 use Illuminate\Support\Facades\DB;
 use App\Traits\ApiResponse;
 use App\Traits\HasPagination;

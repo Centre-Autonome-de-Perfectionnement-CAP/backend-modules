@@ -22,7 +22,7 @@ class CourseRetakeController extends Controller
     public function getStudentRetakes(Request $request): JsonResponse
     {
         $studentPendingStudentId = $request->user()->studentPendingStudents()->first()?->id;
-        
+
         if (!$studentPendingStudentId) {
             return $this->notFoundResponse('Étudiant non trouvé');
         }
@@ -35,19 +35,19 @@ class CourseRetakeController extends Controller
         return $this->successResponse($retakes, 'Reprises récupérées avec succès');
     }
 
-    public function updateRetakeStatus(Request $request, int $retakeId): JsonResponse
+    public function updateRetakestatus(Request $request, int $retakeId): JsonResponse
     {
         $request->validate([
             'status' => 'required|in:pending,in_progress,passed,failed',
             'final_grade' => 'nullable|numeric|min:0|max:20'
         ]);
 
-        $result = $this->retakeService->updateRetakeStatus(
+        $result = $this->retakeService->updateRetakestatus(
             $retakeId,
             $request->status,
             $request->final_grade
         );
 
-        return $this->updatedResponse($result, 'Statut de reprise mis à jour');
+        return $this->updatedResponse($result, 'status de reprise mis à jour');
     }
 }

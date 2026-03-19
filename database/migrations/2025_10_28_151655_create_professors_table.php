@@ -25,15 +25,15 @@ return new class extends Migration
             $table->unsignedBigInteger('ifu')->nullable();
             $table->string('bank')->nullable();
             $table->string('specialty')->nullable();
-            $table->enum('status', ['active', 'inactive'])->default('active');
+            $table->enum('statut', ['active', 'inactive'])->default('active');
             $table->foreignId('grade_id')->nullable()->constrained('grades')->onDelete('set null');
             $table->foreignId('role_id')->nullable()->constrained('roles')->onDelete('set null');
             $table->text('bio')->nullable();
             $table->timestamps();
             $table->softDeletes();
-            
+
             $table->index('email');
-            $table->index('status');
+            $table->index('statut');
         });
     }
 

@@ -9,7 +9,7 @@ class BusinessException extends Exception
 {
     protected $statusCode;
     protected $errorCode;
-    
+
     public function __construct(
         string $message = "Une erreur métier s'est produite",
         string $errorCode = 'BUSINESS_ERROR',
@@ -20,7 +20,7 @@ class BusinessException extends Exception
         $this->statusCode = $statusCode;
         $this->errorCode = $errorCode;
     }
-    
+
     public function render(): JsonResponse
     {
         return response()->json([
@@ -29,12 +29,12 @@ class BusinessException extends Exception
             'error_code' => $this->errorCode,
         ], $this->statusCode);
     }
-    
-    public function getStatusCode(): int
+
+    public function getstatusCode(): int
     {
         return $this->statusCode;
     }
-    
+
     public function getErrorCode(): string
     {
         return $this->errorCode;

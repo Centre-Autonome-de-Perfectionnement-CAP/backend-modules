@@ -12,7 +12,7 @@ class AcademicPathsSeeder extends Seeder
     {
         DB::statement('SET FOREIGN_KEY_CHECKS=0;');
         DB::table('academic_paths')->truncate();
- 
+
         // Fractionner les inserts par lots de 50 lignes
         foreach (array_chunk($this->data(), 50) as $chunk) {
             DB::table('academic_paths')->insert($chunk);

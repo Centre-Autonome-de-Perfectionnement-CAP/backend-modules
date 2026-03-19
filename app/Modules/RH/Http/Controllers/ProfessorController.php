@@ -15,7 +15,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
-
 class ProfessorController extends Controller
 {
     use ApiResponse, HasPagination;
@@ -25,14 +24,15 @@ class ProfessorController extends Controller
     ) {
         $this->middleware('auth:sanctum')->except(['index']);
     }
-/** @var \Illuminate\Http\Request $request */
+
     public function index(Request $request): JsonResponse
     {
         $filters = $request->only([
-            'search', ' statut', 'grade_id', 'bank',
+            'search', 'statut', 'grade_id', 'bank',
             'sort_by', 'sort_order',
             'nationality', 'city',
         ]);
+
         $perPage = $this->getPerPage($request);
 
         $professors = $this->professorService->getAll($filters, $perPage);
@@ -55,9 +55,9 @@ class ProfessorController extends Controller
 
         $professor = $this->professorService->create(
             $data,
-     Auth::id(),
-     $ribFile,
-     $ifuFile
+            Auth::id(),
+            $ribFile,
+            $ifuFile
         );
 
         return $this->createdResponse(
@@ -65,7 +65,7 @@ class ProfessorController extends Controller
             'Professeur créé avec succès'
         );
     }
-/** @var \App\Modules\RH\Models\Professor $professor */
+
     public function show(Professor $professor): JsonResponse
     {
         return $this->successResponse(
@@ -83,7 +83,7 @@ class ProfessorController extends Controller
         $professor = $this->professorService->update(
             $professor,
             $data,
-            $userId = (int)
+            Auth::id(),
             $ribFile,
             $ifuFile
         );
@@ -97,6 +97,7 @@ class ProfessorController extends Controller
     public function destroy(Professor $professor): JsonResponse
     {
         $this->professorService->delete($professor);
+
         return $this->deletedResponse('Professeur supprimé avec succès');
     }
 
@@ -151,12 +152,12 @@ class ProfessorController extends Controller
         $professorId = $professor->getKey();
 
         $stats = [
-            'total_contrats'      => Contrat::where('professor_id', $professorId)->count(),
-            'active_contrats'     => Contrat::where('professor_id', $professorId)
-                                            ->where(' statut', 'ongoing')->count(),
-            'completed_contrats'  => Contrat::where('professor_id', $professorId)
-                                            ->where(' statut', 'completed')->count(),
-            'total_amount'        => Contrat::where('professor_id', $professorId)
+            'total_contrats'     => Contrat::where('professor_id', $professorId)->count(),
+            'active_contrats'    => Contrat::where('professor_id', $professorId)
+                                            ->where('statut', 'ongoing')->count(),
+            'completed_contrats' => Contrat::where('professor_id', $professorId)
+                                            ->where('statut', 'completed')->count(),
+            'total_amount'       => Contrat::where('professor_id', $professorId)
                                             ->sum('amount'),
         ];
 

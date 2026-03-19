@@ -16,9 +16,9 @@ class DefenseSubmission extends Model
     use HasFactory, HasUuid;
 
     protected $fillable = [
-        'last_name', 
-        'first_names', 
-        'email', 
+        'last_name',
+        'first_names',
+        'email',
         'contacts',
         'department_id',
         'student_id_number',

@@ -29,7 +29,7 @@ class PendingStudentsMigrationSeeder extends Seeder
         'errors' => 0,
     ];
     private $errors = [];
-    
+
     private $idMapping = [
         'cycles' => [],
         'departments' => [],
@@ -45,7 +45,7 @@ class PendingStudentsMigrationSeeder extends Seeder
     public function run(): void
     {
         $this->command->info('🚀 Début de la migration des candidats en attente (avec pièces)...');
-        
+
         if (!file_exists($this->sqlFile)) {
             $this->command->error('❌ Fichier SQL introuvable');
             return;
@@ -56,14 +56,14 @@ class PendingStudentsMigrationSeeder extends Seeder
 
         // Extraire les candidats
         $candidates = $this->extractCandidatesFromSQL();
-        
+
         if (empty($candidates)) {
             $this->command->error('❌ Aucun candidat trouvé');
             return;
         }
 
         $this->command->info('📊 ' . count($candidates) . ' candidats trouvés');
-        
+
         $bar = $this->command->getOutput()->createProgressBar(count($candidates));
         $bar->start();
 
@@ -83,7 +83,7 @@ class PendingStudentsMigrationSeeder extends Seeder
 
         $bar->finish();
         $this->command->newLine(2);
-        
+
         $this->displayStats();
     }
 
@@ -135,31 +135,31 @@ class PendingStudentsMigrationSeeder extends Seeder
             47 => 21,  // GME Licence
             48 => 22,  // GMP Licence
         ];
-        
+
         $this->idMapping['departments'] = $departmentMapping;
     }
 
     private function extractCandidatesFromSQL(): array
     {
         $this->command->info('🔍 Extraction depuis le fichier SQL...');
-        
+
         $sqlContent = file_get_contents($this->sqlFile);
-        
+
         // Pattern pour trouver tous les INSERT de etudiant_en_attentes
         $pattern = '/INSERT INTO `etudiant_en_attentes`.*?VALUES\s*(.*?);/s';
-        
+
         preg_match_all($pattern, $sqlContent, $allMatches, PREG_SET_ORDER);
-        
+
         if (empty($allMatches)) {
             return [];
         }
 
         $candidates = [];
-        
+
         foreach ($allMatches as $match) {
             $insertData = $match[1];
             $extractedRows = $this->extractRows($insertData);
-            
+
             foreach ($extractedRows as $row) {
                 $values = $this->parseRow($row);
                 $candidates[] = $values;
@@ -177,11 +177,11 @@ class PendingStudentsMigrationSeeder extends Seeder
         $inString = false;
         $stringChar = '';
         $length = strlen($data);
-        
+
         for ($i = 0; $i < $length; $i++) {
             $char = $data[$i];
             $prevChar = $i > 0 ? $data[$i - 1] : '';
-            
+
             if (($char === "'" || $char === '"') && $prevChar !== '\\') {
                 if (!$inString) {
                     $inString = true;
@@ -190,7 +190,7 @@ class PendingStudentsMigrationSeeder extends Seeder
                     $inString = false;
                 }
             }
-            
+
             if (!$inString) {
                 if ($char === '(') {
                     $depth++;
@@ -207,12 +207,12 @@ class PendingStudentsMigrationSeeder extends Seeder
                     }
                 }
             }
-            
+
             if ($depth > 0) {
                 $currentRow .= $char;
             }
         }
-        
+
         return $rows;
     }
 
@@ -254,24 +254,24 @@ class PendingStudentsMigrationSeeder extends Seeder
         $this->stats['total']++;
 
         DB::beginTransaction();
-        
+
         try {
             // 1. Créer ou trouver PersonalInformation
             $personalInfo = $this->createOrFindPersonalInformation($candidate);
-            
+
             // 2. Créer PendingStudent avec les pièces
             $pendingStudent = $this->createPendingStudentWithDocuments($candidate, $personalInfo);
-            
+
             // 3. Chercher si un Student existe déjà (via pending_students avec même personal_information)
             // Ne JAMAIS créer de student depuis etudiant_en_attentes
             $existingPendingStudent = PendingStudent::where('personal_information_id', $personalInfo->id)
                 ->where('tracking_code', 'LIKE', 'MIG-%')
                 ->first();
-            
+
             if ($existingPendingStudent) {
                 // Trouver le student via le lien student_pending_student
                 $existingLink = StudentPendingStudent::where('pending_student_id', $existingPendingStudent->id)->first();
-                
+
                 if ($existingLink) {
                     // Créer le lien entre le student existant et ce nouveau pending_student
                     StudentPendingStudent::create([
@@ -280,9 +280,9 @@ class PendingStudentsMigrationSeeder extends Seeder
                     ]);
                 }
             }
-            
+
             DB::commit();
-            
+
         } catch (\Exception $e) {
             DB::rollBack();
             throw $e;
@@ -345,7 +345,7 @@ class PendingStudentsMigrationSeeder extends Seeder
         // Année académique
         $anneeEntree = $candidate['annee_entree'] ?? date('Y');
         $academicYearId = $this->idMapping['academic_years'][$anneeEntree] ?? null;
-        
+
         if (!$academicYearId) {
             $academicYearString = $anneeEntree . '-' . ($anneeEntree + 1);
             $academicYear = AcademicYear::firstOrCreate(
@@ -376,7 +376,7 @@ class PendingStudentsMigrationSeeder extends Seeder
             // Nettoyer les échappements du JSON
             $cleanedPieces = stripslashes($candidate['pieces']);
             $decodedDocs = json_decode($cleanedPieces, true);
-            
+
             if (is_array($decodedDocs) && !empty($decodedDocs)) {
                 $documents = $decodedDocs;
             } else {
@@ -388,7 +388,7 @@ class PendingStudentsMigrationSeeder extends Seeder
             }
         }
 
-        // Déterminer le statut
+        // Déterminer le status
         $status = 'pending';
         if ($candidate['avis_cuca'] == 1 && $candidate['avis_cuo'] == 1) {
             $status = 'approved';
@@ -402,7 +402,7 @@ class PendingStudentsMigrationSeeder extends Seeder
         // Générer un tracking_code unique
         $matricule = trim($candidate['matricule'] ?? '');
         $trackingCode = 'PEND-';
-        
+
         if (!empty($matricule) && strtoupper($matricule) !== 'NULL' && $matricule !== 'null') {
             $trackingCode .= $matricule;
         } else {

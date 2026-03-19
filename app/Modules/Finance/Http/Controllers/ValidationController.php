@@ -18,14 +18,14 @@ class ValidationController extends Controller
     }
 
     /**
-     * Liste les paiements selon le statut
+     * Liste les paiements selon le status
      */
     public function getPendingPayments(Request $request)
     {
         try {
             $filters = $request->only(['search', 'page', 'per_page', 'status']);
             $payments = $this->validationService->getPendingPayments($filters);
-            
+
             return response()->json([
                 'success' => true,
                 'data' => $payments
@@ -46,7 +46,7 @@ class ValidationController extends Controller
     {
         try {
             $result = $this->validationService->validatePayment($paymentId, $request->validated());
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Paiement validé avec succès',
@@ -68,7 +68,7 @@ class ValidationController extends Controller
     {
         try {
             $result = $this->validationService->rejectPayment($paymentId, $request->validated());
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Paiement rejeté avec succès',
@@ -90,7 +90,7 @@ class ValidationController extends Controller
     {
         try {
             $receipt = $this->validationService->getReceiptFile($paymentId);
-            
+
             return response()->download($receipt['path'], $receipt['filename']);
         } catch (\Exception $e) {
             return response()->json([

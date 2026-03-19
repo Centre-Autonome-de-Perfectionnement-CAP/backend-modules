@@ -25,7 +25,7 @@ class CreateProfessorRequest extends FormRequest
             'ifu_number' => 'nullable|string|max:255',
             'ifu' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'bank' => 'nullable|string|max:255',
-            'status' => 'nullable|in:active,inactive,suspended',
+            'statut' => 'nullable|in:active,inactive,suspended',
             'grade_id' => 'nullable|exists:grades,id',
         ];
     }
