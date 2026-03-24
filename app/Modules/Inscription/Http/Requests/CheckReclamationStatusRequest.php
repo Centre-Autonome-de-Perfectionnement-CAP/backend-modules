@@ -4,7 +4,7 @@ namespace App\Modules\Inscription\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class CheckReclamationstatusRequest extends FormRequest
+class CheckReclamationStatusRequest extends FormRequest
 {
     public function authorize(): bool
     {

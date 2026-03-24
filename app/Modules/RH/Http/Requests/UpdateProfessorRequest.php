@@ -13,12 +13,12 @@ class UpdateProfessorRequest extends FormRequest
 
     public function rules(): array
     {
-        $professorId = $this->route('professor');
+        $professorId = $this->route('professor')?->id;
 
         return [
             'last_name' => 'sometimes|required|string|max:255',
             'first_name' => 'sometimes|required|string|max:255',
-            'email' => 'sometimes|required|email|unique:professors,email,' . $professorId,
+            'email'      => 'sometimes|required|email|unique:professors,email,' . $professorId,
             'phone' => 'nullable|string|max:20',
             'password' => 'nullable|string|min:8',
             'role_id' => 'nullable|exists:roles,id',

@@ -6,18 +6,15 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
-class ProfessorsSeeder extends Seeder
-{
-    public function run(): void
-    {
+class ProfessorsSeeder extends Seeder{
+    public function run(): void {
         DB::statement('SET FOREIGN_KEY_CHECKS=0;');
         DB::table('professors')->truncate();
         DB::table('professors')->insert($this->data());
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');
     }
 
-    private function data(): array
-    {
+    private function data(): array {
         $password = Hash::make('password123');
 
         return [

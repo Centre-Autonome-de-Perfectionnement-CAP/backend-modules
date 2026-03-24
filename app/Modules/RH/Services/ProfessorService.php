@@ -3,33 +3,22 @@
 namespace App\Modules\RH\Services;
 
 use App\Modules\RH\Models\Professor;
-use App\Modules\Stockage\Services\FileStorageService;
-use App\Services\PasswordGeneratorService;
-use App\Services\StringUtilityService;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Exception;
+use Illuminate\Support\Facades\DB;
 
 class ProfessorService
 {
-    public function __construct(
-        protected FileStorageService $fileStorageService,
-        protected PasswordGeneratorService $passwordGenerator
-    ) {}
-
-    /**
-     * Récupérer la liste des professeurs avec filtres
-     */
-    public function getAll(array $filters = [], int $perPage = 15)
+    // ───────────────────────── GET ALL AVEC FILTRES ET PAGINATION
+    public function getAll(array $filters, int $perPage)
     {
-        $query = Professor::query()->with(['grade']);
+        $query = Professor::query();
 
-        // Recherche
         if (!empty($filters['search'])) {
             $search = $filters['search'];
-            $query->where(function ($q) use ($search) {
+            $query->where(function($q) use ($search) {
                 $q->where('first_name', 'like', "%{$search}%")
                   ->orWhere('last_name', 'like', "%{$search}%")
                   ->orWhere('email', 'like', "%{$search}%")
@@ -37,7 +26,6 @@ class ProfessorService
             });
         }
 
-        // ⚠️ CORRIGÉ : statut au lieu de statut
         if (!empty($filters['statut'])) {
             $query->where('statut', $filters['statut']);
         }
@@ -50,191 +38,114 @@ class ProfessorService
             $query->where('bank', $filters['bank']);
         }
 
-        // Tri
+        if (!empty($filters['nationality'])) {
+            $query->where('nationality', $filters['nationality']);
+        }
+
+        if (!empty($filters['city'])) {
+            $query->where('city', $filters['city']);
+        }
+
+        if (!empty($filters['profession'])) {
+            $query->where('profession', 'like', "%{$filters['profession']}%");
+        }
+
         $sortBy = $filters['sort_by'] ?? 'created_at';
         $sortOrder = $filters['sort_order'] ?? 'desc';
 
-        $query->orderBy($sortBy, $sortOrder);
-
-        return $query->paginate($perPage);
+        return $query->orderBy($sortBy, $sortOrder)->paginate($perPage);
     }
 
-    /**
-     * Créer un professeur
-     */
-    public function create(array $data, int $userId, $ribFile = null, $ifuFile = null): Professor
+    // ───────────────────────── CREATE PROFESSOR
+    public function create(array $data, int $authUserId, $ribFile = null, $ifuFile = null): Professor
     {
-        return DB::transaction(function () use ($data, $ribFile, $ifuFile, $userId) {
+        DB::beginTransaction();
 
-            // Mot de passe
-            $data['password'] = Hash::make('password');
-
-            // UUID
-            $data['uuid'] = Str::uuid();
-
-            // Rôle par défaut
-            if (empty($data['role_id'])) {
-                $data['role_id'] = 6;
+        try {
+            // Générer UUID si non fourni
+            if (!isset($data['uuid'])) {
+                $data['uuid'] = (string) Str::uuid();
             }
 
-            // Capitaliser banque
-            if (!empty($data['bank'])) {
-                $data['bank'] = StringUtilityService::capitalize($data['bank']);
+            // Hash password si fourni
+            if (!empty($data['password'])) {
+                $data['password'] = Hash::make($data['password']);
             }
 
-            // Upload RIB
+            // Upload fichiers
             if ($ribFile) {
-                $uploadedRib = $this->fileStorageService->uploadFile(
-                    uploadedFile: $ribFile,
-                    userId: $userId,
-                    visibility: 'private',
-                    collection: 'rib',
-                    moduleName: 'RH',
-                    moduleResourceType: 'Professor',
-                    metadata: ['type' => 'rib']
-                );
-
-                $data['rib'] = $uploadedRib->id;
+                $data['rib'] = $this->storeFile($ribFile, 'ribs');
             }
 
-            // Upload IFU
             if ($ifuFile) {
-                $uploadedIfu = $this->fileStorageService->uploadFile(
-                    uploadedFile: $ifuFile,
-                    userId: $userId,
-                    visibility: 'private',
-                    collection: 'ifu',
-                    moduleName: 'RH',
-                    moduleResourceType: 'Professor',
-                    metadata: ['type' => 'ifu']
-                );
-
-                $data['ifu'] = $uploadedIfu->id;
+                $data['ifu'] = $this->storeFile($ifuFile, 'ifus');
             }
 
             $professor = Professor::create($data);
 
-            // Lier fichiers après création
-            if (isset($uploadedRib)) {
-                $uploadedRib->update(['module_resource_id' => $professor->id]);
-            }
+            DB::commit();
 
-            if (isset($uploadedIfu)) {
-                $uploadedIfu->update(['module_resource_id' => $professor->id]);
-            }
-
-            Log::info('Professeur créé', [
-                'id' => $professor->id,
-                'email' => $professor->email,
-            ]);
-
-            return $professor;
-        });
+            return $professor->fresh();
+        } catch (Exception $e) {
+            DB::rollBack();
+            throw new Exception("Erreur création professeur : " . $e->getMessage());
+        }
     }
 
-    /**
-     * Mettre à jour un professeur
-     */
-    public function update(Professor $professor, array $data, int $userId, $ribFile = null, $ifuFile = null): Professor
+    // ───────────────────────── UPDATE PROFESSOR
+    public function update(Professor $professor, array $data, int $authUserId, $ribFile = null, $ifuFile = null): Professor
     {
-        return DB::transaction(function () use ($professor, $data, $ribFile, $ifuFile, $userId) {
+        DB::beginTransaction();
 
-            // Mot de passe
+        try {
+            // Hash password si fourni
             if (!empty($data['password'])) {
                 $data['password'] = Hash::make($data['password']);
-            } else {
-                unset($data['password']);
             }
 
-            // Capitaliser banque
-            if (!empty($data['bank'])) {
-                $data['bank'] = StringUtilityService::capitalize($data['bank']);
-            }
-
-            // Upload RIB
+            // Upload fichiers
             if ($ribFile) {
-                $uploadedRib = $this->fileStorageService->uploadFile(
-                    uploadedFile: $ribFile,
-                    userId: $userId,
-                    visibility: 'private',
-                    collection: 'rib',
-                    moduleName: 'RH',
-                    moduleResourceType: 'Professor',
-                    moduleResourceId: $professor->id,
-                    metadata: ['type' => 'rib']
-                );
-
-                $data['rib'] = $uploadedRib->id;
+                $this->deleteFile($professor->rib);
+                $data['rib'] = $this->storeFile($ribFile, 'ribs');
             }
 
-            // Upload IFU
             if ($ifuFile) {
-                $uploadedIfu = $this->fileStorageService->uploadFile(
-                    uploadedFile: $ifuFile,
-                    userId: $userId,
-                    visibility: 'private',
-                    collection: 'ifu',
-                    moduleName: 'RH',
-                    moduleResourceType: 'Professor',
-                    moduleResourceId: $professor->id,
-                    metadata: ['type' => 'ifu']
-                );
-
-                $data['ifu'] = $uploadedIfu->id;
+                $this->deleteFile($professor->ifu);
+                $data['ifu'] = $this->storeFile($ifuFile, 'ifus');
             }
 
             $professor->update($data);
 
-            Log::info('Professeur mis à jour', [
-                'id' => $professor->id,
-            ]);
+            DB::commit();
 
-            return $professor->fresh(['grade']);
-        });
-    }
-
-    /**
-     * Supprimer
-     */
-    public function delete(Professor $professor): bool
-    {
-        try {
-            $professor->delete();
-
-            Log::info('Professeur supprimé', [
-                'id' => $professor->id,
-            ]);
-
-            return true;
-
+            return $professor->fresh();
         } catch (Exception $e) {
-
-            Log::error('Erreur suppression professeur', [
-                'id' => $professor->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            throw $e;
+            DB::rollBack();
+            throw new Exception("Erreur mise à jour professeur : " . $e->getMessage());
         }
     }
 
-    /**
-     * Actifs
-     */
-    public function getActive()
+    // ───────────────────────── DELETE PROFESSOR
+    public function delete(Professor $professor)
     {
-        return Professor::where('statut', 'actif')
-            ->with('grade')
-            ->get();
+        // Supprimer fichiers si existants
+        $this->deleteFile($professor->rib);
+        $this->deleteFile($professor->ifu);
+
+        $professor->delete();
     }
 
-    /**
-     * Changer statut
-     */
-    public function changestatut(Professor $professor, string $statut): Professor
+    // ───────────────────────── STOCKAGE FICHIERS
+    protected function storeFile($file, string $folder): string
     {
-        $professor->update(['statut' => $statut]);
+        $filename = time() . '_' . $file->getClientOriginalName();
+        return $file->storeAs("professors/{$folder}", $filename, 'public');
+    }
 
-        return $professor->fresh();
+    protected function deleteFile(?string $path)
+    {
+        if ($path && Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
     }
 }

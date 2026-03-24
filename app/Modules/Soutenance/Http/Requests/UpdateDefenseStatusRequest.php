@@ -4,7 +4,7 @@ namespace App\Modules\Soutenance\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class UpdateDefensestatusRequest extends FormRequest
+class UpdateDefenseStatusRequest extends FormRequest
 {
     public function authorize(): bool
     {

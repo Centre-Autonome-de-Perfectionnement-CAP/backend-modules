@@ -47,6 +47,10 @@ class PendingStudent extends Model
         'mail_cuo_count' => 'integer',
     ];
 
+     public function studentGroups() {
+        return $this->hasMany(\App\Modules\Inscription\Models\StudentGroup::class, 'student_id');
+    }
+
 
     public function personalInformation()
     {
