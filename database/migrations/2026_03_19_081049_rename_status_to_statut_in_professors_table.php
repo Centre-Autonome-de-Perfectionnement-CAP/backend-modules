@@ -7,11 +7,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        DB::statement("ALTER TABLE professors CHANGE status status ENUM('active','inactive') NOT NULL DEFAULT 'active'");
+        DB::statement("ALTER TABLE professors CHANGE statut status ENUM('active','inactive') NOT NULL DEFAULT 'active'");
     }
 
     public function down(): void
     {
-        DB::statement("ALTER TABLE professors CHANGE status status ENUM('active','inactive') NOT NULL DEFAULT 'active'");
+        DB::statement("ALTER TABLE professors CHANGE statut status ENUM('active','inactive') NOT NULL DEFAULT 'active'");
     }
 };

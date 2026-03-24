@@ -27,8 +27,8 @@ return new class extends Migration
             }
         });
 
-        // ✅ 4. Corriger l'enum statut
-        DB::statement("ALTER TABLE professors MODIFY COLUMN statut ENUM('active', 'inactive', 'suspended') DEFAULT 'active'");
+        // ✅ 4. Corriger l'enum status
+        DB::statement("ALTER TABLE professors MODIFY COLUMN status ENUM('active', 'inactive', 'suspended') DEFAULT 'active'");
     }
 
     public function down(): void
@@ -38,6 +38,6 @@ return new class extends Migration
             $table->unsignedBigInteger('ifu')->nullable()->change();
         });
 
-        DB::statement("ALTER TABLE professors MODIFY COLUMN statut ENUM('active', 'inactive') DEFAULT 'active'");
+        DB::statement("ALTER TABLE professors MODIFY COLUMN status ENUM('active', 'inactive') DEFAULT 'active'");
     }
 };
