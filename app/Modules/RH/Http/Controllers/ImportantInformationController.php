@@ -174,8 +174,12 @@ class ImportantInformationController extends Controller
             $studentsQuery = \App\Modules\Inscription\Models\Student::query()
                 ->with(['pendingStudents.personalInformation', 'pendingStudents.department', 'pendingStudents.cycle'])
                 ->whereHas('pendingStudents', function ($query) use ($data) {
-                    $query->where('cycle_id', $data['cycle_id'])
-                        ->where('status', 'accepted');
+                    $query->where('status', 'accepted');
+
+                    // Filtrer par cycle via la relation department
+                    $query->whereHas('department', function ($deptQuery) use ($data) {
+                        $deptQuery->where('cycle_id', $data['cycle_id']);
+                    });
 
                     if (!$data['all_departments']) {
                         $query->whereIn('department_id', $data['department_ids']);
