@@ -203,7 +203,7 @@ class ImportantInformationController extends Controller
                     // Filtrer par département via studentPendingStudent
                     $pathQuery->whereHas('studentPendingStudent', function ($spsQuery) use ($data) {
                         $spsQuery->whereHas('pendingStudent', function ($psQuery) use ($data) {
-                            $psQuery->where('status', 'accepted');
+                            $psQuery->where('status', 'approved');
 
                             // Filtrer par cycle via la relation department
                             $psQuery->whereHas('department', function ($deptQuery) use ($data) {
@@ -236,12 +236,72 @@ class ImportantInformationController extends Controller
                 $pathsInYear = \App\Modules\Inscription\Models\AcademicPath::where('academic_year_id', $currentAcademicYear->id)->count();
                 \Log::info('Academic paths dans l\'année courante', ['count' => $pathsInYear]);
 
+                // 1b. Vérifier quelques exemples d'academic_paths
+                $samplePaths = \App\Modules\Inscription\Models\AcademicPath::where('academic_year_id', $currentAcademicYear->id)
+                    ->with('studentPendingStudent.pendingStudent.department')
+                    ->limit(5)
+                    ->get()
+                    ->map(function($path) {
+                        return [
+                            'id' => $path->id,
+                            'study_level' => $path->study_level,
+                            'department_id' => $path->studentPendingStudent?->pendingStudent?->department_id,
+                            'department_name' => $path->studentPendingStudent?->pendingStudent?->department?->name,
+                            'cycle_id' => $path->studentPendingStudent?->pendingStudent?->department?->cycle_id,
+                        ];
+                    });
+                \Log::info('Exemples d\'academic paths', ['samples' => $samplePaths]);
+
+                // 2. Vérifier les départements du cycle 3
+                $departmentsInCycle = \DB::table('departments')->where('cycle_id', $data['cycle_id'])->get(['id', 'name']);
+                \Log::info('Départements dans le cycle', [
+                    'cycle_id' => $data['cycle_id'],
+                    'departments' => $departmentsInCycle,
+                ]);
+
+                // 3. Vérifier les pending_students dans ces départements
+                $pendingStudentsInDepts = \DB::table('pending_students')
+                    ->whereIn('department_id', $data['department_ids'])
+                    ->where('status', 'approved')
+                    ->count();
+                \Log::info('Pending students dans les départements', [
+                    'department_ids' => $data['department_ids'],
+                    'count' => $pendingStudentsInDepts,
+                ]);
+
+                // 4. Vérifier les student_pending_student liés
+                $spsCount = \DB::table('student_pending_student')
+                    ->whereIn('pending_student_id', function($query) use ($data) {
+                        $query->select('id')
+                            ->from('pending_students')
+                            ->whereIn('department_id', $data['department_ids'])
+                            ->where('status', 'approved');
+                    })
+                    ->count();
+                \Log::info('Student_pending_student liés', ['count' => $spsCount]);
+
+                // 5. Vérifier les academic_paths pour ces student_pending_student
+                $pathsForSps = \DB::table('academic_paths')
+                    ->where('academic_year_id', $currentAcademicYear->id)
+                    ->whereIn('student_pending_student_id', function($query) use ($data) {
+                        $query->select('student_pending_student.id')
+                            ->from('student_pending_student')
+                            ->join('pending_students', 'student_pending_student.pending_student_id', '=', 'pending_students.id')
+                            ->whereIn('pending_students.department_id', $data['department_ids'])
+                            ->where('pending_students.status', 'approved');
+                    })
+                    ->get(['id', 'study_level', 'student_pending_student_id']);
+                \Log::info('Academic paths pour les départements sélectionnés', [
+                    'count' => $pathsForSps->count(),
+                    'samples' => $pathsForSps->take(5),
+                ]);
+
                 // 2. Vérifier les étudiants dans le cycle via academic_paths
                 $studentsInCycle = \App\Modules\Inscription\Models\Student::query()
                     ->whereHas('academicPaths', function ($pathQuery) use ($data, $currentAcademicYear) {
                         $pathQuery->where('academic_year_id', $currentAcademicYear->id)
                             ->whereHas('studentPendingStudent.pendingStudent', function ($psQuery) use ($data) {
-                                $psQuery->where('status', 'accepted')
+                                $psQuery->where('status', 'approved')
                                     ->whereHas('department', function ($deptQuery) use ($data) {
                                         $deptQuery->where('cycle_id', $data['cycle_id']);
                                     });
@@ -256,7 +316,7 @@ class ImportantInformationController extends Controller
                 // 3. Vérifier les niveaux disponibles dans academic_paths
                 $availableLevels = \App\Modules\Inscription\Models\AcademicPath::where('academic_year_id', $currentAcademicYear->id)
                     ->whereHas('studentPendingStudent.pendingStudent', function ($psQuery) use ($data) {
-                        $psQuery->where('status', 'accepted')
+                        $psQuery->where('status', 'approved')
                             ->whereHas('department', function ($deptQuery) use ($data) {
                                 $deptQuery->where('cycle_id', $data['cycle_id']);
                             });
