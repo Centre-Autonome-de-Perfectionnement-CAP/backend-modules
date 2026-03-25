@@ -188,25 +188,34 @@ class ImportantInformationController extends Controller
                 'academic_year' => $currentAcademicYear->academic_year,
             ]);
 
-            // Récupérer les étudiants selon les critères
+            // Récupérer les étudiants via academic_paths pour avoir le niveau actuel
             $studentsQuery = \App\Modules\Inscription\Models\Student::query()
                 ->with(['pendingStudents.personalInformation', 'pendingStudents.department'])
-                ->whereHas('pendingStudents', function ($query) use ($data, $currentAcademicYear) {
-                    $query->where('status', 'accepted')
-                          ->where('academic_year_id', $currentAcademicYear->id);
+                ->whereHas('academicPaths', function ($pathQuery) use ($data, $currentAcademicYear) {
+                    // Filtrer par année académique courante
+                    $pathQuery->where('academic_year_id', $currentAcademicYear->id);
 
-                    // Filtrer par cycle via la relation department
-                    $query->whereHas('department', function ($deptQuery) use ($data) {
-                        $deptQuery->where('cycle_id', $data['cycle_id']);
-                    });
-
-                    if (!$data['all_departments']) {
-                        $query->whereIn('department_id', $data['department_ids']);
-                    }
-
+                    // Filtrer par niveau si spécifié
                     if (!$data['all_levels']) {
-                        $query->whereIn('level', $data['levels']);
+                        $pathQuery->whereIn('study_level', $data['levels']);
                     }
+
+                    // Filtrer par département via studentPendingStudent
+                    $pathQuery->whereHas('studentPendingStudent', function ($spsQuery) use ($data) {
+                        $spsQuery->whereHas('pendingStudent', function ($psQuery) use ($data) {
+                            $psQuery->where('status', 'accepted');
+
+                            // Filtrer par cycle via la relation department
+                            $psQuery->whereHas('department', function ($deptQuery) use ($data) {
+                                $deptQuery->where('cycle_id', $data['cycle_id']);
+                            });
+
+                            // Filtrer par département si spécifié
+                            if (!$data['all_departments']) {
+                                $psQuery->whereIn('department_id', $data['department_ids']);
+                            }
+                        });
+                    });
                 });
 
             \Log::info('Requête SQL construite', [
@@ -223,65 +232,44 @@ class ImportantInformationController extends Controller
             if ($students->isEmpty()) {
                 // Logs détaillés pour comprendre pourquoi aucun étudiant n'est trouvé
                 
-                // 1. Vérifier les étudiants dans le cycle
+                // 1. Vérifier les academic_paths dans l'année courante
+                $pathsInYear = \App\Modules\Inscription\Models\AcademicPath::where('academic_year_id', $currentAcademicYear->id)->count();
+                \Log::info('Academic paths dans l\'année courante', ['count' => $pathsInYear]);
+
+                // 2. Vérifier les étudiants dans le cycle via academic_paths
                 $studentsInCycle = \App\Modules\Inscription\Models\Student::query()
-                    ->whereHas('pendingStudents', function ($query) use ($data, $currentAcademicYear) {
-                        $query->where('status', 'accepted')
-                              ->where('academic_year_id', $currentAcademicYear->id)
-                              ->whereHas('department', function ($deptQuery) use ($data) {
-                                  $deptQuery->where('cycle_id', $data['cycle_id']);
-                              });
+                    ->whereHas('academicPaths', function ($pathQuery) use ($data, $currentAcademicYear) {
+                        $pathQuery->where('academic_year_id', $currentAcademicYear->id)
+                            ->whereHas('studentPendingStudent.pendingStudent', function ($psQuery) use ($data) {
+                                $psQuery->where('status', 'accepted')
+                                    ->whereHas('department', function ($deptQuery) use ($data) {
+                                        $deptQuery->where('cycle_id', $data['cycle_id']);
+                                    });
+                            });
                     })->count();
 
-                \Log::info('Étudiants dans le cycle', [
+                \Log::info('Étudiants dans le cycle (via academic_paths)', [
                     'cycle_id' => $data['cycle_id'],
                     'count' => $studentsInCycle,
                 ]);
 
-                // 2. Vérifier les étudiants dans les départements
-                if (!$data['all_departments']) {
-                    $studentsInDepartments = \App\Modules\Inscription\Models\Student::query()
-                        ->whereHas('pendingStudents', function ($query) use ($data, $currentAcademicYear) {
-                            $query->where('status', 'accepted')
-                                  ->where('academic_year_id', $currentAcademicYear->id)
-                                  ->whereIn('department_id', $data['department_ids']);
-                        })->count();
-
-                    \Log::info('Étudiants dans les départements sélectionnés', [
-                        'department_ids' => $data['department_ids'],
-                        'count' => $studentsInDepartments,
-                    ]);
-                }
-
-                // 3. Vérifier les étudiants par niveau
-                if (!$data['all_levels']) {
-                    foreach ($data['levels'] as $level) {
-                        $studentsInLevel = \App\Modules\Inscription\Models\Student::query()
-                            ->whereHas('pendingStudents', function ($query) use ($level, $currentAcademicYear) {
-                                $query->where('status', 'accepted')
-                                      ->where('academic_year_id', $currentAcademicYear->id)
-                                      ->where('level', $level);
-                            })->count();
-
-                        \Log::info('Étudiants au niveau', [
-                            'level' => $level,
-                            'count' => $studentsInLevel,
-                        ]);
-                    }
-                }
-
-                // 4. Vérifier les niveaux disponibles dans les départements sélectionnés
-                $availableLevels = \DB::table('pending_students')
-                    ->where('status', 'accepted')
-                    ->where('academic_year_id', $currentAcademicYear->id)
-                    ->whereIn('department_id', $data['all_departments'] 
-                        ? \DB::table('departments')->where('cycle_id', $data['cycle_id'])->pluck('id')
-                        : $data['department_ids'])
+                // 3. Vérifier les niveaux disponibles dans academic_paths
+                $availableLevels = \App\Modules\Inscription\Models\AcademicPath::where('academic_year_id', $currentAcademicYear->id)
+                    ->whereHas('studentPendingStudent.pendingStudent', function ($psQuery) use ($data) {
+                        $psQuery->where('status', 'accepted')
+                            ->whereHas('department', function ($deptQuery) use ($data) {
+                                $deptQuery->where('cycle_id', $data['cycle_id']);
+                            });
+                        
+                        if (!$data['all_departments']) {
+                            $psQuery->whereIn('department_id', $data['department_ids']);
+                        }
+                    })
                     ->distinct()
-                    ->pluck('level')
+                    ->pluck('study_level')
                     ->toArray();
 
-                \Log::info('Niveaux disponibles dans les départements', [
+                \Log::info('Niveaux disponibles dans academic_paths', [
                     'available_levels' => $availableLevels,
                     'requested_levels' => $data['levels'],
                 ]);
