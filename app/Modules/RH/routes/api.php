@@ -51,6 +51,8 @@ Route::prefix('api/rh')->group(function () {
         
         // Gestion des informations importantes
         Route::get('important-informations/admin', [ImportantInformationController::class, 'indexAdmin']);
+        Route::post('important-informations/{important_information}/broadcast', [ImportantInformationController::class, 'broadcast']);
+        Route::get('broadcast-status/{broadcastId}', [ImportantInformationController::class, 'getBroadcastStatus']);
         Route::apiResource('important-informations', ImportantInformationController::class)->except(['index']);
         
         // CRUD Professeurs (sauf index qui est public)

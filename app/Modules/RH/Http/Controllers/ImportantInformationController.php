@@ -156,4 +156,122 @@ class ImportantInformationController extends Controller
         $important_information->delete();
         return $this->successResponse(null, 'Information supprimée');
     }
+
+    public function broadcast(Request $request, ImportantInformation $important_information): JsonResponse
+    {
+        $data = $request->validate([
+            'cycle_id' => 'required|exists:cycles,id',
+            'department_ids' => 'required|array',
+            'department_ids.*' => 'exists:departments,id',
+            'levels' => 'required|array',
+            'levels.*' => 'string',
+            'all_departments' => 'boolean',
+            'all_levels' => 'boolean',
+        ]);
+
+        try {
+            // Récupérer les étudiants selon les critères
+            $studentsQuery = \App\Modules\Inscription\Models\Student::query()
+                ->with(['pendingStudents.personalInformation', 'pendingStudents.department', 'pendingStudents.cycle'])
+                ->whereHas('pendingStudents', function ($query) use ($data) {
+                    $query->where('cycle_id', $data['cycle_id'])
+                        ->where('status', 'accepted');
+
+                    if (!$data['all_departments']) {
+                        $query->whereIn('department_id', $data['department_ids']);
+                    }
+
+                    if (!$data['all_levels']) {
+                        $query->whereIn('level', $data['levels']);
+                    }
+                });
+
+            $students = $studentsQuery->get();
+
+            if ($students->isEmpty()) {
+                return $this->errorResponse('Aucun étudiant trouvé avec ces critères', 404);
+            }
+
+            // Préparer les données de l'information
+            $informationData = [
+                'title' => $important_information->title,
+                'description' => $important_information->description,
+                'link' => $important_information->link,
+            ];
+
+            // Récupérer le chemin du fichier si disponible
+            $fileUrl = null;
+            if ($important_information->file_id) {
+                $file = $important_information->file;
+                if ($file) {
+                    $filePath = $file->file_path;
+                    if (str_starts_with($filePath, 'public/')) {
+                        $filePath = substr($filePath, 7);
+                    }
+                    $fileUrl = \Storage::disk($file->disk)->path($filePath);
+                }
+            }
+
+            // Générer un ID unique pour ce broadcast
+            $broadcastId = uniqid('broadcast_', true);
+
+            // Initialiser le statut dans le cache
+            \Cache::put("broadcast_status_{$broadcastId}", [
+                'total_students' => $students->count(),
+                'emails_sent' => 0,
+                'emails_failed' => 0,
+                'status' => 'queued',
+                'started_at' => now(),
+            ], now()->addHours(24));
+
+            // Diviser les étudiants en chunks de 50 pour éviter les jobs trop lourds
+            $chunks = $students->chunk(50);
+            
+            foreach ($chunks as $chunk) {
+                // Dispatcher le job en queue
+                \App\Modules\RH\Jobs\BroadcastImportantInformationJob::dispatch(
+                    $chunk->toArray(),
+                    $informationData,
+                    $fileUrl,
+                    $broadcastId
+                )->onQueue('emails');
+            }
+
+            \Log::info('Broadcast d\'information importante lancé', [
+                'broadcast_id' => $broadcastId,
+                'information_id' => $important_information->id,
+                'total_students' => $students->count(),
+                'chunks' => $chunks->count(),
+            ]);
+
+            return $this->successResponse([
+                'broadcast_id' => $broadcastId,
+                'total_students' => $students->count(),
+                'status' => 'queued',
+                'message' => 'La diffusion a été mise en file d\'attente. Les emails seront envoyés progressivement.',
+            ], "Diffusion lancée pour {$students->count()} étudiant(s)");
+
+        } catch (\Exception $e) {
+            \Log::error('Erreur diffusion information importante', [
+                'information_id' => $important_information->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return $this->errorResponse('Erreur lors de la diffusion: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Récupère le statut d'un broadcast
+     */
+    public function getBroadcastStatus(string $broadcastId): JsonResponse
+    {
+        $status = \Cache::get("broadcast_status_{$broadcastId}");
+
+        if (!$status) {
+            return $this->errorResponse('Broadcast non trouvé ou expiré', 404);
+        }
+
+        return $this->successResponse($status);
+    }
 }
