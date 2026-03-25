@@ -170,11 +170,30 @@ class ImportantInformationController extends Controller
         ]);
 
         try {
+            \Log::info('Début broadcast information importante', [
+                'information_id' => $important_information->id,
+                'criteria' => $data,
+            ]);
+
+            // Récupérer l'année académique courante
+            $currentAcademicYear = \App\Modules\Inscription\Models\AcademicYear::where('is_current', true)->first();
+            
+            if (!$currentAcademicYear) {
+                \Log::warning('Aucune année académique courante trouvée');
+                return $this->errorResponse('Aucune année académique courante définie', 400);
+            }
+
+            \Log::info('Année académique courante', [
+                'academic_year_id' => $currentAcademicYear->id,
+                'academic_year' => $currentAcademicYear->academic_year,
+            ]);
+
             // Récupérer les étudiants selon les critères
             $studentsQuery = \App\Modules\Inscription\Models\Student::query()
-                ->with(['pendingStudents.personalInformation', 'pendingStudents.department', 'pendingStudents.cycle'])
-                ->whereHas('pendingStudents', function ($query) use ($data) {
-                    $query->where('status', 'accepted');
+                ->with(['pendingStudents.personalInformation', 'pendingStudents.department'])
+                ->whereHas('pendingStudents', function ($query) use ($data, $currentAcademicYear) {
+                    $query->where('status', 'accepted')
+                          ->where('academic_year_id', $currentAcademicYear->id);
 
                     // Filtrer par cycle via la relation department
                     $query->whereHas('department', function ($deptQuery) use ($data) {
@@ -190,9 +209,83 @@ class ImportantInformationController extends Controller
                     }
                 });
 
+            \Log::info('Requête SQL construite', [
+                'sql' => $studentsQuery->toSql(),
+                'bindings' => $studentsQuery->getBindings(),
+            ]);
+
             $students = $studentsQuery->get();
 
+            \Log::info('Résultat de la requête', [
+                'total_students' => $students->count(),
+            ]);
+
             if ($students->isEmpty()) {
+                // Logs détaillés pour comprendre pourquoi aucun étudiant n'est trouvé
+                
+                // 1. Vérifier les étudiants dans le cycle
+                $studentsInCycle = \App\Modules\Inscription\Models\Student::query()
+                    ->whereHas('pendingStudents', function ($query) use ($data, $currentAcademicYear) {
+                        $query->where('status', 'accepted')
+                              ->where('academic_year_id', $currentAcademicYear->id)
+                              ->whereHas('department', function ($deptQuery) use ($data) {
+                                  $deptQuery->where('cycle_id', $data['cycle_id']);
+                              });
+                    })->count();
+
+                \Log::info('Étudiants dans le cycle', [
+                    'cycle_id' => $data['cycle_id'],
+                    'count' => $studentsInCycle,
+                ]);
+
+                // 2. Vérifier les étudiants dans les départements
+                if (!$data['all_departments']) {
+                    $studentsInDepartments = \App\Modules\Inscription\Models\Student::query()
+                        ->whereHas('pendingStudents', function ($query) use ($data, $currentAcademicYear) {
+                            $query->where('status', 'accepted')
+                                  ->where('academic_year_id', $currentAcademicYear->id)
+                                  ->whereIn('department_id', $data['department_ids']);
+                        })->count();
+
+                    \Log::info('Étudiants dans les départements sélectionnés', [
+                        'department_ids' => $data['department_ids'],
+                        'count' => $studentsInDepartments,
+                    ]);
+                }
+
+                // 3. Vérifier les étudiants par niveau
+                if (!$data['all_levels']) {
+                    foreach ($data['levels'] as $level) {
+                        $studentsInLevel = \App\Modules\Inscription\Models\Student::query()
+                            ->whereHas('pendingStudents', function ($query) use ($level, $currentAcademicYear) {
+                                $query->where('status', 'accepted')
+                                      ->where('academic_year_id', $currentAcademicYear->id)
+                                      ->where('level', $level);
+                            })->count();
+
+                        \Log::info('Étudiants au niveau', [
+                            'level' => $level,
+                            'count' => $studentsInLevel,
+                        ]);
+                    }
+                }
+
+                // 4. Vérifier les niveaux disponibles dans les départements sélectionnés
+                $availableLevels = \DB::table('pending_students')
+                    ->where('status', 'accepted')
+                    ->where('academic_year_id', $currentAcademicYear->id)
+                    ->whereIn('department_id', $data['all_departments'] 
+                        ? \DB::table('departments')->where('cycle_id', $data['cycle_id'])->pluck('id')
+                        : $data['department_ids'])
+                    ->distinct()
+                    ->pluck('level')
+                    ->toArray();
+
+                \Log::info('Niveaux disponibles dans les départements', [
+                    'available_levels' => $availableLevels,
+                    'requested_levels' => $data['levels'],
+                ]);
+
                 return $this->errorResponse('Aucun étudiant trouvé avec ces critères', 404);
             }
 
