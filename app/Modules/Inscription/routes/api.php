@@ -142,6 +142,18 @@ Route::prefix('api/inscription')->group(function () {
         Route::get('/classes', [ResponsableController::class, 'getClasses']);
         Route::get('/export/{type}', [ResponsableController::class, 'export']);
     });
+
+  Route::prefix('responsable')->middleware('auth.multi')->group(function () {
+    // Dashboard principal
+    Route::get('/dashboard',  [ResponsableController::class, 'dashboard']);
+    // Liste des classes du responsable
+    Route::get('/classes',    [ResponsableController::class, 'getClasses']);
+    // Étudiants d'une classe spécifique
+    Route::get('/classes/{classGroupId}/students', [ResponsableController::class, 'getStudentsByClass']);
+    // Exports PDF
+    Route::get('/export/{type}', [ResponsableController::class, 'export']);
+});
+ 
     
     // Routes pour les classes
     Route::prefix('classes')->middleware(['auth:sanctum'])->group(function () {
