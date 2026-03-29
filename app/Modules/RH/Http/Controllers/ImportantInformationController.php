@@ -14,7 +14,7 @@ class ImportantInformationController extends Controller
 
     public function index(): JsonResponse
     {
-        $informations = ImportantInformation::with('file')
+        $informations = ImportantInformation::with(['file', 'files'])
             ->active()
             ->ordered()
             ->get()
@@ -29,6 +29,10 @@ class ImportantInformationController extends Controller
                     'id' => $info->file->id,
                     'name' => $info->file->original_name,
                 ] : null,
+                'files' => $info->files->map(fn($file) => [
+                    'id' => $file->id,
+                    'name' => $file->original_name,
+                ]),
             ]);
 
         return $this->successResponse($informations);
@@ -36,7 +40,7 @@ class ImportantInformationController extends Controller
 
     public function indexAdmin(): JsonResponse
     {
-        $informations = ImportantInformation::with('file')
+        $informations = ImportantInformation::with(['file', 'files'])
             ->ordered()
             ->get()
             ->map(fn($info) => [
@@ -51,6 +55,10 @@ class ImportantInformationController extends Controller
                     'id' => $info->file->id,
                     'name' => $info->file->original_name,
                 ] : null,
+                'files' => $info->files->map(fn($file) => [
+                    'id' => $file->id,
+                    'name' => $file->original_name,
+                ]),
                 'is_active' => $info->is_active,
                 'order' => $info->order,
                 'created_at' => $info->created_at,
@@ -74,13 +82,17 @@ class ImportantInformationController extends Controller
             'link' => 'nullable|string',
             'file_id' => 'nullable|exists:files,id',
             'file' => 'nullable|file|mimes:pdf|max:51200', // 50 MB
+            'files' => 'nullable|array',
+            'files.*' => 'file|mimes:pdf|max:51200', // 50 MB
             'is_active' => 'boolean',
             'order' => 'integer',
         ]);
 
-        // Si un fichier est uploadé, on le stocke
+        $fileStorageService = app(\App\Modules\Stockage\Services\FileStorageService::class);
+        $uploadedFileIds = [];
+
+        // Si un fichier principal est uploadé
         if ($request->hasFile('file')) {
-            $fileStorageService = app(\App\Modules\Stockage\Services\FileStorageService::class);
             $uploadedFile = $fileStorageService->uploadFile(
                 uploadedFile: $request->file('file'),
                 userId: auth()->id(),
@@ -94,15 +106,46 @@ class ImportantInformationController extends Controller
                 'original_name' => $data['title'],
                 'description' => $data['description'],
                 'is_official_document' => true,
-                // Ne pas changer le disk, garder celui défini par FileStorageService
             ]);
 
             $data['file_id'] = $uploadedFile->id;
             unset($data['file']);
         }
 
+        // Si plusieurs fichiers sont uploadés
+        if ($request->hasFile('files')) {
+            foreach ($request->file('files') as $index => $file) {
+                $uploadedFile = $fileStorageService->uploadFile(
+                    uploadedFile: $file,
+                    userId: auth()->id(),
+                    visibility: 'public',
+                    collection: 'important_informations',
+                    moduleName: 'RH',
+                    moduleResourceType: 'ImportantInformation'
+                );
+
+                $uploadedFile->update([
+                    'original_name' => $data['title'] . ' - Document ' . ($index + 1),
+                    'description' => $data['description'],
+                    'is_official_document' => true,
+                ]);
+
+                $uploadedFileIds[] = $uploadedFile->id;
+            }
+        }
+
+        unset($data['files']);
+
         $information = ImportantInformation::create($data);
-        return $this->successResponse($information->load('file'), 'Information créée avec succès', 201);
+        
+        // Attacher les fichiers additionnels
+        if (!empty($uploadedFileIds)) {
+            foreach ($uploadedFileIds as $index => $fileId) {
+                $information->files()->attach($fileId, ['order' => $index]);
+            }
+        }
+
+        return $this->successResponse($information->load(['file', 'files']), 'Information créée avec succès', 201);
     }
 
     public function update(Request $request, ImportantInformation $important_information): JsonResponse
@@ -120,13 +163,17 @@ class ImportantInformationController extends Controller
             'link' => 'nullable|string',
             'file_id' => 'nullable|exists:files,id',
             'file' => 'nullable|file|mimes:pdf|max:51200', // 50 MB
+            'files' => 'nullable|array',
+            'files.*' => 'file|mimes:pdf|max:51200', // 50 MB
             'is_active' => 'boolean',
             'order' => 'integer',
         ]);
 
-        // Si un fichier est uploadé, on le stocke
+        $fileStorageService = app(\App\Modules\Stockage\Services\FileStorageService::class);
+        $uploadedFileIds = [];
+
+        // Si un fichier principal est uploadé
         if ($request->hasFile('file')) {
-            $fileStorageService = app(\App\Modules\Stockage\Services\FileStorageService::class);
             $uploadedFile = $fileStorageService->uploadFile(
                 uploadedFile: $request->file('file'),
                 userId: auth()->id(),
@@ -140,15 +187,47 @@ class ImportantInformationController extends Controller
                 'original_name' => $data['title'] ?? $important_information->title,
                 'description' => $data['description'] ?? $important_information->description,
                 'is_official_document' => true,
-                // Ne pas changer le disk, garder celui défini par FileStorageService
             ]);
 
             $data['file_id'] = $uploadedFile->id;
             unset($data['file']);
         }
 
+        // Si plusieurs fichiers sont uploadés
+        if ($request->hasFile('files')) {
+            foreach ($request->file('files') as $index => $file) {
+                $uploadedFile = $fileStorageService->uploadFile(
+                    uploadedFile: $file,
+                    userId: auth()->id(),
+                    visibility: 'public',
+                    collection: 'important_informations',
+                    moduleName: 'RH',
+                    moduleResourceType: 'ImportantInformation'
+                );
+
+                $uploadedFile->update([
+                    'original_name' => ($data['title'] ?? $important_information->title) . ' - Document ' . ($index + 1),
+                    'description' => $data['description'] ?? $important_information->description,
+                    'is_official_document' => true,
+                ]);
+
+                $uploadedFileIds[] = $uploadedFile->id;
+            }
+        }
+
+        unset($data['files']);
+
         $important_information->update($data);
-        return $this->successResponse($important_information->load('file'), 'Information mise à jour');
+        
+        // Attacher les nouveaux fichiers additionnels
+        if (!empty($uploadedFileIds)) {
+            $currentMaxOrder = $important_information->files()->max('order') ?? -1;
+            foreach ($uploadedFileIds as $index => $fileId) {
+                $important_information->files()->attach($fileId, ['order' => $currentMaxOrder + $index + 1]);
+            }
+        }
+
+        return $this->successResponse($important_information->load(['file', 'files']), 'Information mise à jour');
     }
 
     public function destroy(ImportantInformation $important_information): JsonResponse
@@ -344,16 +423,23 @@ class ImportantInformationController extends Controller
                 'link' => $important_information->link,
             ];
 
-            // Récupérer le chemin du fichier si disponible
-            $fileUrl = null;
-            if ($important_information->file_id) {
-                $file = $important_information->file;
-                if ($file) {
-                    $filePath = $file->file_path;
-                    if (str_starts_with($filePath, 'public/')) {
-                        $filePath = substr($filePath, 7);
-                    }
-                    $fileUrl = \Storage::disk($file->disk)->path($filePath);
+            // Récupérer tous les fichiers (principal + additionnels)
+            $fileUrls = [];
+            $important_information->load(['file', 'files']);
+            
+            $allFiles = $important_information->getAllFiles();
+            
+            foreach ($allFiles as $file) {
+                $filePath = $file->file_path;
+                if (str_starts_with($filePath, 'public/')) {
+                    $filePath = substr($filePath, 7);
+                }
+                $fullPath = \Storage::disk($file->disk)->path($filePath);
+                if (file_exists($fullPath)) {
+                    $fileUrls[] = [
+                        'path' => $fullPath,
+                        'name' => $file->original_name,
+                    ];
                 }
             }
 
@@ -377,7 +463,7 @@ class ImportantInformationController extends Controller
                 \App\Modules\RH\Jobs\BroadcastImportantInformationJob::dispatch(
                     $chunk->toArray(),
                     $informationData,
-                    $fileUrl,
+                    $fileUrls,
                     $broadcastId
                 )->onQueue('emails');
             }

@@ -26,6 +26,11 @@ class Student extends Authenticatable
     protected $hidden = ['password', 'remember_token'];
 
     /**
+     * Attributs à ajouter lors de la sérialisation
+     */
+    protected $appends = ['personal_information'];
+
+    /**
      * Relations vers les dossiers (pending_students) via la table pivot
      */
     public function studentPendingStudents()

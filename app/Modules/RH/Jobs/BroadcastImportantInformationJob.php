@@ -20,17 +20,17 @@ class BroadcastImportantInformationJob implements ShouldQueue
 
     protected $students;
     protected $informationData;
-    protected $fileUrl;
+    protected $fileUrls; // Changé de $fileUrl à $fileUrls (array)
     protected $broadcastId;
 
     /**
      * Create a new job instance.
      */
-    public function __construct($students, $informationData, $fileUrl, $broadcastId)
+    public function __construct($students, $informationData, $fileUrls, $broadcastId)
     {
         $this->students = $students;
         $this->informationData = $informationData;
-        $this->fileUrl = $fileUrl;
+        $this->fileUrls = $fileUrls;
         $this->broadcastId = $broadcastId;
     }
 
@@ -44,31 +44,54 @@ class BroadcastImportantInformationJob implements ShouldQueue
         $failedEmails = [];
 
         foreach ($this->students as $student) {
-            $personalInfo = $student->personalInformation ?? $student['personal_information'] ?? null;
+            // Debug: logger les données reçues
+            Log::debug('Processing student in broadcast job', [
+                'broadcast_id' => $this->broadcastId,
+                'student_id' => $student['id'] ?? 'unknown',
+                'has_personal_information' => isset($student['personal_information']),
+                'personal_info_type' => isset($student['personal_information']) ? gettype($student['personal_information']) : 'not set',
+            ]);
+
+            $personalInfo = $student['personal_information'] ?? null;
             
-            if ($personalInfo && isset($personalInfo->email)) {
-                try {
-                    Mail::to($personalInfo->email)->send(
-                        new ImportantInformationNotification($this->informationData, $this->fileUrl)
-                    );
-                    $sentCount++;
-                    
-                    Log::info('Email information importante envoyé', [
+            if ($personalInfo) {
+                // Si c'est un tableau, accéder comme un tableau
+                $email = is_array($personalInfo) ? ($personalInfo['email'] ?? null) : ($personalInfo->email ?? null);
+                
+                if ($email) {
+                    try {
+                        Mail::to($email)->send(
+                            new ImportantInformationNotification($this->informationData, $this->fileUrls)
+                        );
+                        $sentCount++;
+                        
+                        Log::info('Email information importante envoyé', [
+                            'broadcast_id' => $this->broadcastId,
+                            'student_id' => $student['id'] ?? 'unknown',
+                            'email' => $email,
+                        ]);
+                    } catch (\Exception $e) {
+                        $failedCount++;
+                        $failedEmails[] = $email;
+                        
+                        Log::error('Erreur envoi email information importante', [
+                            'broadcast_id' => $this->broadcastId,
+                            'student_id' => $student['id'] ?? 'unknown',
+                            'email' => $email,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                } else {
+                    Log::warning('Student sans email', [
                         'broadcast_id' => $this->broadcastId,
-                        'student_id' => $student->id ?? $student['id'],
-                        'email' => $personalInfo->email,
-                    ]);
-                } catch (\Exception $e) {
-                    $failedCount++;
-                    $failedEmails[] = $personalInfo->email;
-                    
-                    Log::error('Erreur envoi email information importante', [
-                        'broadcast_id' => $this->broadcastId,
-                        'student_id' => $student->id ?? $student['id'],
-                        'email' => $personalInfo->email,
-                        'error' => $e->getMessage(),
+                        'student_id' => $student['id'] ?? 'unknown',
                     ]);
                 }
+            } else {
+                Log::warning('Student sans personal_information', [
+                    'broadcast_id' => $this->broadcastId,
+                    'student_id' => $student['id'] ?? 'unknown',
+                ]);
             }
         }
 

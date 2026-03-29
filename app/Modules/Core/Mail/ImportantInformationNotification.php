@@ -11,25 +11,27 @@ class ImportantInformationNotification extends Mailable
     use Queueable, SerializesModels;
 
     public $information;
-    public $fileUrl;
+    public $fileUrls; // Changé de $fileUrl à $fileUrls (array)
 
-    public function __construct($information, $fileUrl = null)
+    public function __construct($information, $fileUrls = [])
     {
         $this->information = $information;
-        $this->fileUrl = $fileUrl;
+        $this->fileUrls = is_array($fileUrls) ? $fileUrls : [];
     }
 
     public function build()
     {
         $mail = $this->subject('Information Importante - ' . $this->information['title'])
-            ->view('Core::emails.important-information');
+            ->view('core::emails.important-information');
 
-        // Attacher le fichier si disponible
-        if ($this->fileUrl && file_exists($this->fileUrl)) {
-            $mail->attach($this->fileUrl, [
-                'as' => basename($this->fileUrl),
-                'mime' => 'application/pdf',
-            ]);
+        // Attacher tous les fichiers si disponibles
+        foreach ($this->fileUrls as $fileData) {
+            if (isset($fileData['path']) && file_exists($fileData['path'])) {
+                $mail->attach($fileData['path'], [
+                    'as' => $fileData['name'] ?? basename($fileData['path']),
+                    'mime' => 'application/pdf',
+                ]);
+            }
         }
 
         return $mail;

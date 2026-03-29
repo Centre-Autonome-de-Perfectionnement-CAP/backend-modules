@@ -83,9 +83,9 @@
         </p>
         @endif
 
-        @if($fileUrl)
+        @if(!empty($fileUrls))
         <p style="background: #e8f5f3; padding: 15px; border-radius: 5px; text-align: center;">
-            📎 Un document PDF est joint à cet email
+            📎 {{ count($fileUrls) }} document(s) PDF joint(s) à cet email
         </p>
         @endif
     </div>

@@ -6,6 +6,7 @@ use App\Modules\Inscription\Models\PendingStudent;
 use App\Modules\Inscription\Models\AcademicYear;
 use App\Modules\Inscription\Models\Cycle;
 use App\Modules\Inscription\Models\Department;
+use App\Services\DatabaseAdapter;
 use Illuminate\Support\Facades\DB;
 
 class DashboardService
@@ -39,16 +40,21 @@ class DashboardService
     {
         $currentYear = null;
         
-        // Nettoyer l'ID si c'est la chaîne 'null'
-        if ($academicYearId === 'null' || $academicYearId === '') {
-            $academicYearId = null;
-        }
-        
-        if (!$academicYearId) {
-            $currentYear = AcademicYear::where('is_current', true)->first();
+        // Si l'ID ressemble à une année académique (ex: "2026-2027"), chercher par academic_year
+        if (is_string($academicYearId) && preg_match('/^\d{4}-\d{4}$/', $academicYearId)) {
+            $currentYear = AcademicYear::where('academic_year', $academicYearId)->first();
             $academicYearId = $currentYear ? $currentYear->id : null;
         } else {
-            $currentYear = AcademicYear::find($academicYearId);
+            // Sanitize l'ID pour PostgreSQL (convertir en int ou null)
+            $academicYearId = DatabaseAdapter::sanitizeId($academicYearId);
+            
+            if ($academicYearId) {
+                $currentYear = AcademicYear::find($academicYearId);
+            } else {
+                // Si pas d'ID valide, utiliser l'année courante
+                $currentYear = AcademicYear::where('is_current', true)->first();
+                $academicYearId = $currentYear ? $currentYear->id : null;
+            }
         }
 
         $inscritsParFiliere = $this->getStudentsByDepartment($academicYearId);
