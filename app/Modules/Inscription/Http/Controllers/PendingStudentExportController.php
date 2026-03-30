@@ -258,4 +258,40 @@ class PendingStudentExportController extends Controller
             'Content-Disposition' => 'attachment; filename="' . $filename . '"'
         ])->deleteFileAfterSend();
     }
+<<<<<<< HEAD
 }
+=======
+
+    /*
+     * Export PDF des étudiants validés par la CUO groupés par Prépa et Licence
+     */
+    public function exportValidatedStudents(ExportPendingStudentsRequest $request)
+    {
+        $filters = $request->only(['year', 'type']);
+        
+        if (empty($filters['year']) || $filters['year'] === 'all') {
+            return $this->errorResponse('Veuillez sélectionner une année académique', 422);
+        }
+        
+        if (empty($filters['type'])) {
+            return $this->errorResponse('Veuillez sélectionner un type d\'étudiant', 422);
+        }
+        
+        $data = $this->exportService->prepareValidatedStudentsByTypeExportData($filters);
+        
+        if ($data['totalStudents'] === 0) {
+            return $this->errorResponse('Aucun étudiant validé trouvé pour cette année académique et ce type', 404);
+        }
+        
+        $filename = $this->exportService->generateValidatedStudentsFilename($data);
+        
+        $pdf = Pdf::loadView('core::pdfs.liste-etudiants-valides-par-type', $data)
+            ->setPaper('a4', 'landscape');
+        
+        $output = $pdf->output();
+        
+        return response()->make($output, 200)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+    }}
+>>>>>>> be0384f0d56cb4491eb015c3bc1466c68a041a8f

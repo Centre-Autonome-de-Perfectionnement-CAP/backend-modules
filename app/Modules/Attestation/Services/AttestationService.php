@@ -322,6 +322,17 @@ class AttestationService
             $personalInfo = $academicPath->studentPendingStudent?->pendingStudent?->personalInformation;
             $department = $academicPath->studentPendingStudent?->pendingStudent?->department;
             $student = $academicPath->studentPendingStudent?->student;
+            $pendingStudent = $academicPath->studentPendingStudent?->pendingStudent;
+            
+            // Récupérer la photo de l'étudiant
+            $photoPath = null;
+            if ($pendingStudent && $pendingStudent->photo) {
+                // Le champ photo contient l'ID du fichier dans la table files
+                $photoFile = \App\Modules\Stockage\Models\File::find($pendingStudent->photo);
+                if ($photoFile && $photoFile->exists()) {
+                    $photoPath = \Illuminate\Support\Facades\Storage::disk($photoFile->disk)->path($photoFile->file_path);
+                }
+            }
             
             // Récupérer le class_group_id de l'étudiant
             $classGroupId = DB::table('student_groups')
@@ -411,6 +422,7 @@ class AttestationService
                 'prenoms' => $personalInfo?->first_names ?? '',
                 'date_naissance' => $dateNaissance,
                 'lieu_de_naissance' => $personalInfo?->birth_place ?? '',
+                'photo' => $photoPath,
                 'filiere' => (object) [
                     'nom' => $filiereNom,
                     'diplome' => (object) ['nom' => $cycle?->name ?? 'LMD']
@@ -604,6 +616,17 @@ class AttestationService
         // Récupérer le cycle
         $cycle = $department?->cycle;
 
+        // Récupérer la photo de l'étudiant
+        $pendingStudent = $academicPath->studentPendingStudent?->pendingStudent;
+        $photoPath = null;
+        if ($pendingStudent && $pendingStudent->photo) {
+            // Le champ photo contient l'ID du fichier dans la table files
+            $photoFile = \App\Modules\Stockage\Models\File::find($pendingStudent->photo);
+            if ($photoFile && $photoFile->exists()) {
+                $photoPath = \Illuminate\Support\Facades\Storage::disk($photoFile->disk)->path($photoFile->file_path);
+            }
+        }
+        
         $etudiant = (object) [
             'matricule' => $student?->student_id_number ?? '',
             'genre' => $personalInfo?->gender === 'F' ? 'féminin' : 'masculin',
@@ -611,6 +634,7 @@ class AttestationService
             'prenoms' => $personalInfo?->first_names ?? '',
             'date_naissance' => $dateNaissance,
             'lieu_de_naissance' => $personalInfo?->birth_place ?? '',
+            'photo' => $photoPath,
             'filiere' => (object) [
                 'nom' => $filiereNom,
                 'diplome' => (object) ['nom' => $cycle?->name ?? 'LMD']

@@ -16,6 +16,8 @@ class UpdateDocumentRequest extends FormRequest
         return [
             'titre' => 'sometimes|string|max:255',
             'description' => 'sometimes|string',
+            'file' => 'nullable|file|max:10240',
+            'lien' => 'nullable|url',
             'datePublication' => 'sometimes|date',
             'categorie' => 'sometimes|in:administratif,pedagogique,legal,organisation',
         ];

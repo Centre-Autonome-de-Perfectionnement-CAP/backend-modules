@@ -17,7 +17,14 @@ use App\Modules\Inscription\Http\Controllers\PendingStudentExportController;
 use App\Modules\Inscription\Http\Controllers\ResponsableController;
 
 
+<<<<<<< HEAD
 Route::prefix('inscription')->group(function () {
+=======
+use App\Modules\Inscription\Http\Controllers\StudentBroadcastController;
+
+
+Route::prefix('api/inscription')->group(function () {
+>>>>>>> be0384f0d56cb4491eb015c3bc1466c68a041a8f
 
     Route::prefix('pending-students')->group(function () {
         Route::middleware('auth:sanctum')->group(function () {
@@ -120,12 +127,17 @@ Route::prefix('inscription')->group(function () {
 
     Route::middleware('auth:sanctum')->get('files/legacy', [\App\Modules\Inscription\Http\Controllers\FileController::class, 'viewLegacyFile']);
     Route::middleware('auth:sanctum')->post('send-mail', [\App\Modules\Inscription\Http\Controllers\MailController::class, 'sendMail']);
+    
+    // Broadcast messages aux étudiants
+    Route::middleware('auth:sanctum')->post('broadcast/whatsapp-invitation', [StudentBroadcastController::class, 'sendWhatsAppInvitation']);
+    Route::middleware('auth:sanctum')->get('broadcast/whatsapp-status/{broadcastId}', [StudentBroadcastController::class, 'getBroadcastStatus']);
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('export/pdf', [PendingStudentExportController::class, 'exportPdf']);
         Route::get('export/excel', [PendingStudentExportController::class, 'exportExcel']);
         Route::get('export/word', [PendingStudentExportController::class, 'exportWord']);
         Route::get('export/emails', [PendingStudentExportController::class, 'exportEmails']);
+        Route::get('export/validated-students', [PendingStudentExportController::class, 'exportValidatedStudents']);
     });
 
 

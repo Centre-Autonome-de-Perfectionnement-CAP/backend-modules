@@ -18,9 +18,16 @@ class PendingStudentResource extends JsonResource
             $contacts = is_array($this->personalInformation->contacts)
                 ? $this->personalInformation->contacts
                 : json_decode($this->personalInformation->contacts, true);
+            
             // Contacts peut être un array de numéros ou un objet avec clé 'phone'
             if (is_array($contacts)) {
-                $phone = $contacts['phone'] ?? $contacts[0] ?? null;
+                // Essayer différentes clés possibles
+                $phone = $contacts['phone'] 
+                    ?? $contacts['telephone'] 
+                    ?? $contacts['mobile'] 
+                    ?? $contacts['tel'] 
+                    ?? $contacts[0] 
+                    ?? null;
             }
         }
 
