@@ -258,9 +258,9 @@ class PendingStudentExportController extends Controller
             'Content-Disposition' => 'attachment; filename="' . $filename . '"'
         ])->deleteFileAfterSend();
     }
-<<<<<<< HEAD
-}
-=======
+
+
+
 
     /*
      * Export PDF des étudiants validés par la CUO groupés par Prépa et Licence
@@ -293,5 +293,6 @@ class PendingStudentExportController extends Controller
         return response()->make($output, 200)
             ->header('Content-Type', 'application/pdf')
             ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
-    }}
->>>>>>> be0384f0d56cb4491eb015c3bc1466c68a041a8f
+    }
+    }
+

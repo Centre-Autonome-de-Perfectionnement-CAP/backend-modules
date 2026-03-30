@@ -15,16 +15,12 @@ use App\Modules\Inscription\Http\Controllers\ClassGroupController;
 use App\Modules\Inscription\Http\Controllers\StudentController;
 use App\Modules\Inscription\Http\Controllers\PendingStudentExportController;
 use App\Modules\Inscription\Http\Controllers\ResponsableController;
-
-
-<<<<<<< HEAD
-Route::prefix('inscription')->group(function () {
-=======
 use App\Modules\Inscription\Http\Controllers\StudentBroadcastController;
 
 
+
 Route::prefix('api/inscription')->group(function () {
->>>>>>> be0384f0d56cb4491eb015c3bc1466c68a041a8f
+
 
     Route::prefix('pending-students')->group(function () {
         Route::middleware('auth:sanctum')->group(function () {

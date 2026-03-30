@@ -12,7 +12,7 @@ function returnIndexHtml($path = 'index.html') {
     abort(404, 'Fichier introuvable : '.$path);
 }
 
-<<<<<<< HEAD
+
 // Route principale
 Route::get('/', fn() => returnIndexHtml());
 
@@ -23,7 +23,7 @@ Route::get('/services/{any?}', fn() => returnIndexHtml('services/index.html'))
 // Catch-all pour app-cap, excluant API et services
 Route::get('/{any}', fn() => returnIndexHtml())
     ->where('any', '^(?!api/)(?!services/)(?!.*\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot|map)).*');
-=======
+
 // Route pour app-cap-frontend - exclure les fichiers statiques
 Route::get('/services/{any?}', function () {
     return file_get_contents(public_path('app-cap-frontend/index.html'));
@@ -33,4 +33,4 @@ Route::get('/services/{any?}', function () {
 Route::get('/{any}', function () {
     return file_get_contents(public_path('app-cap/index.html'));
 })->where('any', '^(?!api/)(?!services/)(?!.*\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot|map)).*');
->>>>>>> be0384f0d56cb4491eb015c3bc1466c68a041a8f
+

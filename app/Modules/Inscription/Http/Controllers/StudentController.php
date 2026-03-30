@@ -47,30 +47,28 @@ class StudentController extends Controller{
 
     public function exportFichePresence(Request $request)
     {
-<<<<<<< HEAD
+
         $request->validate([
             'cohort' => 'required',
         ], [
             'cohort.required' => 'La sélection de la cohorte est obligatoire',
         ]);
 
-=======
->>>>>>> be0384f0d56cb4491eb015c3bc1466c68a041a8f
+
+
         $filters = $request->only(['year', 'filiere', 'niveau', 'cohort', 'groupe']);
         return $this->studentService->exportFichePresence($filters);
     }
 
     public function exportFicheEmargement(Request $request)
     {
-<<<<<<< HEAD
+
         $request->validate([
             'cohort' => 'required',
         ], [
             'cohort.required' => 'La sélection de la cohorte est obligatoire',
         ]);
 
-=======
->>>>>>> be0384f0d56cb4491eb015c3bc1466c68a041a8f
         $filters = $request->only(['year', 'filiere', 'niveau', 'cohort', 'groupe']);
         return $this->studentService->exportFicheEmargement($filters);
     }
