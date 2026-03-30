@@ -12,14 +12,14 @@ class PaiementSeeder extends Seeder
     public function run(): void
     {
         $students = Student::limit(3)->get();
-        
+
         if ($students->isEmpty()) {
             $this->command->warn('⚠️  Aucun étudiant trouvé. Exécutez StudentSeeder d\'abord.');
             return;
         }
 
         $paiements = [];
-        
+
         foreach ($students as $index => $student) {
             // Frais d'inscription
             $paiements[] = [
@@ -48,18 +48,18 @@ class PaiementSeeder extends Seeder
             ];
 
             // Deuxième semestre (en attente pour certains)
-            $statut = $index === 0 ? 'pending' : 'approved';
+            $status = $index === 0 ? 'pending' : 'approved';
             $paiements[] = [
                 'reference' => 'PAY-' . strtoupper(Str::random(8)),
                 'student_id_number' => $student->student_id_number,
                 'amount' => 250000,
                 'payment_date' => now()->subDays(30 + $index),
                 'purpose' => 'Frais de scolarité 2ème semestre',
-                'status' => $statut,
+                'status' => $status,
                 'email' => $student->email,
                 'contact' => '+225 07 00 00 ' . sprintf('%02d', $index + 1),
                 'account_number' => 'CI01234567890' . sprintf('%03d', $index + 1),
-                'observation' => $statut === 'pending' ? 'En attente de validation' : null,
+                'observation' => $status === 'pending' ? 'En attente de validation' : null,
             ];
 
             // Frais d'examen

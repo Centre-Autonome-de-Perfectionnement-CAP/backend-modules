@@ -28,7 +28,7 @@
             <td style="padding: 10px;">{{ $filiere }}</td>
         </tr>
         <tr>
-            <td style="padding: 10px;"><strong>Statut :</strong></td>
+            <td style="padding: 10px;"><strong>status :</strong></td>
             <td style="padding: 10px; color: #f44336; font-weight: bold;">Non retenu(e)</td>
         </tr>
     </table>

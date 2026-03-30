@@ -49,7 +49,7 @@ class PaymentsMigrationSeeder extends Seeder
                 'strict' => false,
             ]
         ]);
-        
+
         $this->oldDb = DB::connection('old_mysql');
     }
 
@@ -78,7 +78,7 @@ class PaymentsMigrationSeeder extends Seeder
         // Étape 2: Extraire les paiements
         $this->command->info('🔍 Extraction des paiements...');
         $payments = $this->extractPaymentsFromDB();
-        
+
         if (empty($payments)) {
             $this->command->warn('Aucun paiement à migrer');
             return;
@@ -96,14 +96,14 @@ class PaymentsMigrationSeeder extends Seeder
         foreach ($payments as $payment) {
             $etudiantId = $payment['etudiant_id'];
             $studentDetails = $this->studentDetailedMapping[$etudiantId] ?? null;
-            
+
             if (!$studentDetails) {
                 continue;
             }
 
             // Trouver le PersonalInformation via identité
             $personalInfoId = $this->findPersonalInformation($studentDetails);
-            
+
             if (!$personalInfoId) {
                 $this->stats['identity_not_found']++;
                 $this->errors[] = [
@@ -143,26 +143,26 @@ class PaymentsMigrationSeeder extends Seeder
                 $filiereId = $group['filiere_id'];
                 $anneeEntree = $group['annee_entree'];
                 $groupPayments = $group['payments'];
-                
+
                 // Récupérer le matricule depuis le premier paiement du groupe
                 $firstPayment = $groupPayments[0] ?? null;
                 if (!$firstPayment) {
                     continue;
                 }
-                
+
                 $etudiantId = $firstPayment['etudiant_id'];
                 $studentDetails = $this->studentDetailedMapping[$etudiantId] ?? null;
-                
+
                 if (!$studentDetails) {
                     throw new \Exception("Détails étudiant introuvables pour etudiant_id {$etudiantId}");
                 }
-                
+
                 if (empty($studentDetails['matricule'])) {
                     throw new \Exception("Matricule vide pour etudiant_id {$etudiantId}");
                 }
-                
+
                 $matricule = $studentDetails['matricule'];
-                
+
                 // Trier les paiements par date
                 usort($groupPayments, function($a, $b) {
                     $dateA = $a['date_versement'] ?? '1970-01-01';
@@ -176,10 +176,10 @@ class PaymentsMigrationSeeder extends Seeder
                 if ($isIngenieurFiliere) {
                     // Trouver les liens PREP et SPEC pour cette formation Ingénierie
                     $links = $this->findIngenieurLinks($matricule);
-                    
+
                     // Dispatcher les paiements selon la règle 425k
                     $dispatchedPayments = $this->dispatchPaymentsForIngenieur($groupPayments, $links);
-                    
+
                     // Créer chaque paiement dispatché
                     foreach ($dispatchedPayments as $payment) {
                         $this->migratePayment($payment);
@@ -220,9 +220,9 @@ class PaymentsMigrationSeeder extends Seeder
 
         $bar->finish();
         $this->command->newLine(2);
-        
+
         $this->displayStats();
-        
+
         // Exporter les erreurs dans un fichier si nécessaire
         if (!empty($this->errors)) {
             $this->exportErrors();
@@ -237,7 +237,7 @@ class PaymentsMigrationSeeder extends Seeder
         $students = $this->oldDb->table('etudiants')
             ->select('id', 'nom', 'prenoms', 'date_naissance', 'lieu_de_naissance', 'matricule', 'filiere_id', 'annee_entree')
             ->get();
-        
+
         foreach ($students as $oldStudent) {
             $oldId = (int) $oldStudent->id;
             $nom = trim($oldStudent->nom ?? '');
@@ -247,7 +247,7 @@ class PaymentsMigrationSeeder extends Seeder
             $matricule = trim($oldStudent->matricule ?? '');
             $filiereId = (int) ($oldStudent->filiere_id ?? 0);
             $anneeEntree = (int) ($oldStudent->annee_entree ?? 0);
-            
+
             if ($oldId > 0) {
                 $this->studentDetailedMapping[$oldId] = [
                     'nom' => $nom,
@@ -269,8 +269,8 @@ class PaymentsMigrationSeeder extends Seeder
     private function extractPaymentsFromDB(): array
     {
         return $this->oldDb->table('paiements')
-            ->select('id', 'etudiant_id', 'montant', 'reference', 'numero_compte', 'date_versement', 
-                     'quittance', 'motif', 'observation', 'email', 'statut', 'contact', 'created_at', 'updated_at')
+            ->select('id', 'etudiant_id', 'montant', 'reference', 'numero_compte', 'date_versement',
+                     'quittance', 'motif', 'observation', 'email', 'status', 'contact', 'created_at', 'updated_at')
             ->get()
             ->map(function($payment) {
                 return [
@@ -284,7 +284,7 @@ class PaymentsMigrationSeeder extends Seeder
                     'motif' => $payment->motif,
                     'observation' => $payment->observation,
                     'email' => $payment->email,
-                    'statut' => $payment->statut,
+                    'status' => $payment->status,
                     'contact' => $payment->contact,
                     'created_at' => $payment->created_at,
                     'updated_at' => $payment->updated_at,
@@ -299,27 +299,27 @@ class PaymentsMigrationSeeder extends Seeder
     private function extractStudentsFromSQL(): array
     {
         $sqlContent = file_get_contents($this->sqlFile);
-        
+
         // Trouver le début de INSERT INTO etudiants
         $start = strpos($sqlContent, 'INSERT INTO `etudiants`');
         if ($start === false) {
             return [];
         }
-        
+
         // Trouver la fin (prochaine section)
         $end1 = strpos($sqlContent, 'CREATE TABLE', $start + 1);
         $end2 = strpos($sqlContent, 'INSERT INTO `etudiant_en_attentes`', $start + 1);
         $end = min($end1 ?: PHP_INT_MAX, $end2 ?: PHP_INT_MAX);
-        
+
         if ($end === PHP_INT_MAX) {
             $studentsSection = substr($sqlContent, $start);
         } else {
             $studentsSection = substr($sqlContent, $start, $end - $start);
         }
-        
+
         // Extraire toutes les lignes qui commencent par "("
         preg_match_all('/^\(.*?\)[,;]/m', $studentsSection, $rows);
-        
+
         $students = [];
         foreach ($rows[0] as $row) {
             $row = rtrim($row, ',;');
@@ -328,7 +328,7 @@ class PaymentsMigrationSeeder extends Seeder
                 $students[] = $values;
             }
         }
-        
+
         return $students;
     }
 
@@ -339,9 +339,9 @@ class PaymentsMigrationSeeder extends Seeder
     {
         // Nettoyer les parenthèses
         $row = trim($row, '() ');
-        
+
         $values = str_getcsv($row, ',', "'");
-        
+
         if (count($values) < 5) {
             return null;
         }
@@ -364,27 +364,27 @@ class PaymentsMigrationSeeder extends Seeder
     private function extractPaymentsFromSQL(): array
     {
         $sqlContent = file_get_contents($this->sqlFile);
-        
+
         // Trouver le début de INSERT INTO paiements
         $start = strpos($sqlContent, 'INSERT INTO `paiements`');
         if ($start === false) {
             return [];
         }
-        
+
         // Trouver la fin (prochaine section)
         $end1 = strpos($sqlContent, 'CREATE TABLE', $start + 1);
         $end2 = strpos($sqlContent, 'INSERT INTO `password_reset_tokens`', $start + 1);
         $end = min($end1 ?: PHP_INT_MAX, $end2 ?: PHP_INT_MAX);
-        
+
         if ($end === PHP_INT_MAX) {
             $paymentsSection = substr($sqlContent, $start);
         } else {
             $paymentsSection = substr($sqlContent, $start, $end - $start);
         }
-        
+
         // Extraire toutes les lignes qui commencent par "("
         preg_match_all('/^\(.*?\)[,;]/m', $paymentsSection, $rows);
-        
+
         $payments = [];
         foreach ($rows[0] as $row) {
             $row = rtrim($row, ',;');
@@ -393,7 +393,7 @@ class PaymentsMigrationSeeder extends Seeder
                 $payments[] = $values;
             }
         }
-        
+
         return $payments;
     }
 
@@ -408,11 +408,11 @@ class PaymentsMigrationSeeder extends Seeder
         $inString = false;
         $stringChar = '';
         $length = strlen($data);
-        
+
         for ($i = 0; $i < $length; $i++) {
             $char = $data[$i];
             $prevChar = $i > 0 ? $data[$i - 1] : '';
-            
+
             if (($char === "'" || $char === '"') && $prevChar !== '\\') {
                 if (!$inString) {
                     $inString = true;
@@ -421,7 +421,7 @@ class PaymentsMigrationSeeder extends Seeder
                     $inString = false;
                 }
             }
-            
+
             if (!$inString) {
                 if ($char === '(') {
                     $depth++;
@@ -440,12 +440,12 @@ class PaymentsMigrationSeeder extends Seeder
                     }
                 }
             }
-            
+
             if ($depth > 0) {
                 $currentRow .= $char;
             }
         }
-        
+
         return $rows;
     }
 
@@ -456,11 +456,11 @@ class PaymentsMigrationSeeder extends Seeder
     {
         // Nettoyer les parenthèses
         $row = trim($row, '() ');
-        
-        // Format: id, etudiant_id, montant, reference, numero_compte, date_versement, 
-        //         quittance, motif, observation, email, statut, contact, created_at, updated_at
+
+        // Format: id, etudiant_id, montant, reference, numero_compte, date_versement,
+        //         quittance, motif, observation, email, status, contact, created_at, updated_at
         $values = str_getcsv($row, ',', "'");
-        
+
         if (count($values) < 11) {
             return null;
         }
@@ -476,7 +476,7 @@ class PaymentsMigrationSeeder extends Seeder
             'motif' => trim($values[7], "'"),
             'observation' => !empty($values[8]) && $values[8] !== 'NULL' ? trim($values[8], "'") : null,
             'email' => !empty($values[9]) && $values[9] !== 'NULL' ? trim($values[9], "'") : null,
-            'statut' => trim($values[10], "'"),
+            'status' => trim($values[10], "'"),
             'contact' => !empty($values[11]) && $values[11] !== 'NULL' ? trim($values[11], "'") : null,
             'created_at' => !empty($values[12]) && $values[12] !== 'NULL' ? trim($values[12], "'") : null,
             'updated_at' => !empty($values[13]) && $values[13] !== 'NULL' ? trim($values[13], "'") : null,
@@ -492,7 +492,7 @@ class PaymentsMigrationSeeder extends Seeder
 
         // Vérifier si le paiement existe déjà
         $existingPayment = Paiement::where('reference', $oldPayment['reference'])->first();
-        
+
         if ($existingPayment) {
             $this->stats['skipped']++;
             return;
@@ -500,22 +500,22 @@ class PaymentsMigrationSeeder extends Seeder
 
         // Récupérer les détails de l'étudiant
         $studentDetails = $this->studentDetailedMapping[$oldPayment['etudiant_id']] ?? null;
-        
+
         if (!$studentDetails || empty($studentDetails['matricule'])) {
             throw new \Exception("Matricule introuvable pour etudiant_id {$oldPayment['etudiant_id']}");
         }
-        
+
         $matricule = $studentDetails['matricule'];
 
         // Trouver le student
         $student = Student::where('student_id_number', $matricule)->first();
-        
+
         if (!$student) {
             throw new \Exception("Student introuvable pour matricule {$matricule}");
         }
 
-        // Mapper le statut - TOUS les paiements validés retournent en attente
-        $status = match($oldPayment['statut']) {
+        // Mapper le status - TOUS les paiements validés retournent en attente
+        $status = match($oldPayment['status']) {
             'attente' => 'pending',
             'accepte' => 'pending', // ⚠️ Quittances validées ramenées en attente
             'rejete' => 'rejected',
@@ -549,7 +549,7 @@ class PaymentsMigrationSeeder extends Seeder
     {
         // Créer une clé de cache
         $cacheKey = mb_strtolower($studentDetails['nom']) . '_' . mb_strtolower($studentDetails['prenoms']) . '_' . $studentDetails['date_naissance'];
-        
+
         // Vérifier le cache
         if (isset($this->personalInfoCache[$cacheKey])) {
             return $this->personalInfoCache[$cacheKey];
@@ -586,10 +586,10 @@ class PaymentsMigrationSeeder extends Seeder
         }
 
         $result = $personalInfo ? $personalInfo->id : null;
-        
+
         // Mettre en cache
         $this->personalInfoCache[$cacheKey] = $result;
-        
+
         return $result;
     }
 
@@ -599,21 +599,21 @@ class PaymentsMigrationSeeder extends Seeder
     private function findStudentByPersonalInfo(int $personalInfoId): ?Student
     {
         $personalInfo = \App\Modules\Inscription\Models\PersonalInformation::find($personalInfoId);
-        
+
         if (!$personalInfo) {
             return null;
         }
 
         // Trouver le Student via PendingStudent
         $pendingStudent = $personalInfo->pendingStudents()->first();
-        
+
         if (!$pendingStudent) {
             return null;
         }
 
         // Récupérer le Student via StudentPendingStudent
         $studentPendingStudent = $pendingStudent->studentPendingStudents()->first();
-        
+
         return $studentPendingStudent?->student;
     }
 
@@ -634,7 +634,7 @@ class PaymentsMigrationSeeder extends Seeder
     {
         $prepLink = null;
         $specLink = null;
-        
+
         // Trouver le student
         $student = Student::where('student_id_number', $matricule)->first();
         if (!$student) {
@@ -645,15 +645,15 @@ class PaymentsMigrationSeeder extends Seeder
         $links = StudentPendingStudent::where('student_id', $student->id)
             ->with('pendingStudent.department.cycle')
             ->get();
-        
+
         foreach ($links as $link) {
             $department = $link->pendingStudent?->department;
             $cycle = $department?->cycle;
             $abbreviation = $department?->abbreviation ?? '';
-            
+
             // Vérifier si c'est un cycle Ingénierie
             $isIngenieur = $cycle && (stripos($cycle->name, 'Ingé') !== false || stripos($cycle->name, 'Ing') !== false);
-            
+
             if ($isIngenieur) {
                 // Prépa = département commence par P- (P-GC, P-GT, P-GE, P-GME)
                 if (str_starts_with($abbreviation, 'P-')) {
@@ -664,7 +664,7 @@ class PaymentsMigrationSeeder extends Seeder
                 }
             }
         }
-        
+
         return [
             'prep' => $prepLink,
             'spec' => $specLink,
@@ -678,10 +678,10 @@ class PaymentsMigrationSeeder extends Seeder
     {
         $prepLink = $links['prep'];
         $specLink = $links['spec'];
-        
+
         // Si pas de lien PREP, utiliser SPEC comme fallback
         $targetLink = $prepLink ?: $specLink;
-        
+
         if (!$targetLink) {
             // Aucun lien trouvé, retourner les paiements sans modification
             foreach ($payments as &$payment) {
@@ -691,14 +691,14 @@ class PaymentsMigrationSeeder extends Seeder
             }
             return $payments;
         }
-        
+
         // TOUT va sur PRÉPA (ou SPEC si pas de PREP)
         foreach ($payments as &$payment) {
             $payment['_computed_link_id'] = $targetLink->id;
             $payment['_computed_amount'] = $payment['montant'];
             $payment['_is_split'] = false;
         }
-        
+
         return $payments;
     }
 
@@ -786,9 +786,9 @@ class PaymentsMigrationSeeder extends Seeder
     {
         $timestamp = date('Y-m-d_H-i-s');
         $filename = database_path("../payment_migration_errors_{$timestamp}.csv");
-        
+
         $file = fopen($filename, 'w');
-        
+
         // En-têtes CSV
         fputcsv($file, [
             'Référence',
@@ -798,7 +798,7 @@ class PaymentsMigrationSeeder extends Seeder
             'Filière ID',
             'Erreur',
         ]);
-        
+
         // Lignes d'erreurs
         foreach ($this->errors as $error) {
             fputcsv($file, [
@@ -810,9 +810,9 @@ class PaymentsMigrationSeeder extends Seeder
                 $error['error'] ?? 'N/A',
             ]);
         }
-        
+
         fclose($file);
-        
+
         $this->command->newLine();
         $this->command->warn("📄 Fichier d'erreurs exporté: {$filename}");
         $this->command->info("   " . count($this->errors) . " erreurs détaillées");
@@ -827,28 +827,28 @@ class PaymentsMigrationSeeder extends Seeder
         $this->command->info('║           STATISTIQUES MIGRATION PAIEMENTS                    ║');
         $this->command->info('╚═══════════════════════════════════════════════════════════════╝');
         $this->command->newLine();
-        
+
         // Compter les lignes créées dans la nouvelle BDD
         $newCount = \App\Modules\Finance\Models\Paiement::count();
-        
+
         $this->command->info("📊 ANCIENNE BDD: 481 paiements");
         $this->command->info("📊 NOUVELLE BDD: {$newCount} lignes créées");
         $this->command->newLine();
-        
+
         $this->command->info("📋 Détails de la migration:");
         $this->command->info("   ✅ Paiements traités: {$this->stats['success']}");
         $this->command->info("   🎓 Paiements Ingénierie (sur Prépa): {$this->stats['ingenieur_payments']}");
         $this->command->info("   📚 Paiements normaux (autres filières): {$this->stats['normal_payments']}");
         $this->command->info("   ⏭️  Ignorés (déjà existants): {$this->stats['skipped']}");
-        
+
         if ($this->stats['errors'] > 0) {
             $this->command->error("   ❌ Erreurs: {$this->stats['errors']}");
         } else {
             $this->command->info("   ✅ Aucune erreur");
         }
-        
+
         $this->command->newLine();
-        
+
         if (!empty($this->errors)) {
             $this->command->warn("⚠️  Premières erreurs:");
             foreach (array_slice($this->errors, 0, 10) as $error) {

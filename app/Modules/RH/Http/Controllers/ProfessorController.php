@@ -12,6 +12,11 @@ use App\Traits\ApiResponse;
 use App\Traits\HasPagination;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
+use Exception;
 
 class ProfessorController extends Controller
 {
@@ -23,106 +28,230 @@ class ProfessorController extends Controller
         $this->middleware('auth:sanctum')->except(['index']);
     }
 
-    /**
-     * Liste des professeurs avec recherche et filtres
-     */
+    // ───────────────────────── LISTE
     public function index(Request $request): JsonResponse
     {
-        $filters = $request->only(['search', 'status', 'grade_id', 'bank', 'sort_by', 'sort_order']);
-        $perPage = $this->getPerPage($request);
-        
-        $professors = $this->professorService->getAll($filters, $perPage);
+        try {
+            $filters = $request->only([
+                'search', 'statut', 'grade_id', 'bank',
+                'sort_by', 'sort_order',
+                'nationality', 'city', 'profession'
+            ]);
 
-        $professors->setCollection(
-            ProfessorResource::collection($professors->getCollection())->collection
-        );
+            $perPage = $this->getPerPage($request);
 
-        return $this->successPaginatedResponse(
-            $professors,
-            'Professeurs récupérés avec succès'
-        );
+            $professors = $this->professorService->getAll($filters, $perPage);
+
+            $professors->setCollection(
+                ProfessorResource::collection($professors->getCollection())->collection
+            );
+
+            return $this->successPaginatedResponse(
+                $professors,
+                'Professeurs récupérés avec succès'
+            );
+        } catch (Exception $e) {
+            return $this->errorResponse(
+                'Erreur lors de la récupération des professeurs',
+                500,
+                $e->getMessage()
+            );
+        }
     }
 
-    /**
-     * Créer un nouveau professeur
-     */
+    // ───────────────────────── CREATE
     public function store(CreateProfessorRequest $request): JsonResponse
     {
-        $data = $request->except(['rib', 'ifu']);
-        $ribFile = $request->file('rib');
-        $ifuFile = $request->file('ifu');
+        try {
+            $data = $request->validated();
 
-        $professor = $this->professorService->create(
-            $data,
-            auth()->id(),
-            $ribFile,
-            $ifuFile
-        );
+            // Gestion des fichiers
+            if ($request->hasFile('rib')) {
+                $path = $request->file('rib')->store('ribs', 'public');
+                $data['rib_url'] = Storage::url($path);
+            }
 
-        return $this->createdResponse(
-            new ProfessorResource($professor->load('grade')),
-            'Professeur créé avec succès'
-        );
+            if ($request->hasFile('ifu')) {
+                $path = $request->file('ifu')->store('ifus', 'public');
+                $data['ifu_url'] = Storage::url($path);
+            }
+
+            $professor = $this->professorService->create($data, Auth::id());
+
+            return $this->createdResponse(
+                new ProfessorResource($professor),
+                'Professeur créé avec succès'
+            );
+        } catch (Exception $e) {
+            return $this->errorResponse(
+                'Erreur lors de la création du professeur'.$e->getMessage(),
+                500,
+                $e->getMessage()
+            );
+        }
     }
 
-    /**
-     * Afficher un professeur
-     */
+    // ───────────────────────── SHOW
     public function show(Professor $professor): JsonResponse
     {
-        return $this->successResponse(
-            new ProfessorResource($professor->load('grade')),
-            'Professeur récupéré avec succès'
-        );
+        try {
+            return $this->successResponse(
+                new ProfessorResource($professor->load('grade')),
+                'Professeur récupéré avec succès'
+            );
+        } catch (Exception $e) {
+            return $this->errorResponse(
+                'Erreur lors de la récupération du professeur',
+                500,
+                $e->getMessage()
+            );
+        }
     }
 
-    /**
-     * Mettre à jour un professeur
-     */
+    // ───────────────────────── UPDATE
     public function update(UpdateProfessorRequest $request, Professor $professor): JsonResponse
     {
-        $data = $request->except(['rib', 'ifu']);
-        $ribFile = $request->file('rib');
-        $ifuFile = $request->file('ifu');
+        DB::beginTransaction();
+        try {
+            $data = $request->validated();
 
-        $professor = $this->professorService->update(
-            $professor,
-            $data,
-            auth()->id(),
-            $ribFile,
-            $ifuFile
-        );
+            $ribFile = $request->file('rib');
+            $ifuFile = $request->file('ifu');
 
-        return $this->updatedResponse(
-            new ProfessorResource($professor),
-            'Professeur mis à jour avec succès'
-        );
+            $professor = $this->professorService->update(
+                $professor,
+                $data,
+                Auth::id(),
+                $ribFile,
+                $ifuFile
+            );
+
+            DB::commit();
+
+            return $this->updatedResponse(
+                new ProfessorResource($professor->load('grade')),
+                'Professeur mis à jour avec succès'
+            );
+        } catch (Exception $e) {
+            DB::rollBack();
+            return $this->errorResponse(
+                'Erreur lors de la mise à jour du professeur',
+                500,
+                $e->getMessage()
+            );
+        }
     }
 
-    /**
-     * Supprimer un professeur
-     */
+    // ───────────────────────── DELETE
     public function destroy(Professor $professor): JsonResponse
     {
-        $this->professorService->delete($professor);
-        return $this->deletedResponse('Professeur supprimé avec succès');
+        try {
+            $this->professorService->delete($professor);
+
+            return $this->deletedResponse('Professeur supprimé avec succès');
+        } catch (Exception $e) {
+            return $this->errorResponse(
+                'Erreur lors de la suppression du professeur',
+                500,
+                $e->getMessage()
+            );
+        }
     }
 
-    /**
-     * Récupérer la liste des banques utilisées
-     */
+    // ───────────────────────── LISTE DES BANQUES
     public function getBanks(): JsonResponse
     {
-        $banks = Professor::whereNotNull('bank')
-            ->where('bank', '!=', '')
-            ->distinct()
-            ->pluck('bank')
-            ->sort()
-            ->values();
+        try {
+            $banks = Professor::whereNotNull('bank')
+                ->where('bank', '!=', '')
+                ->distinct()
+                ->pluck('bank')
+                ->sort()
+                ->values();
 
-        return $this->successResponse(
-            $banks,
-            'Banques récupérées avec succès'
-        );
+            return $this->successResponse(
+                $banks,
+                'Banques récupérées avec succès'
+            );
+        } catch (Exception $e) {
+            return $this->errorResponse(
+                'Erreur lors de la récupération des banques',
+                500,
+                $e->getMessage()
+            );
+        }
+    }
+
+    // ───────────────────────── UPDATE ADDRESS / INFO
+    public function updateAddress(Request $request, Professor $professor): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'nationality'  => 'nullable|string|max:100',
+                'profession'   => 'nullable|string|max:100',
+                'city'         => 'nullable|string|max:100',
+                'district'     => 'nullable|string|max:100',
+                'plot_number'  => 'nullable|string|max:100',
+                'house_number' => 'nullable|string|max:100',
+            ]);
+
+            $professor->update($validated);
+
+            return $this->updatedResponse(
+                new ProfessorResource($professor),
+                'Informations mises à jour avec succès'
+            );
+        } catch (Exception $e) {
+            return $this->errorResponse(
+                'Erreur lors de la mise à jour des informations',
+                500,
+                $e->getMessage()
+            );
+        }
+    }
+
+    // ───────────────────────── CONTRATS
+    public function contrats(Professor $professor): JsonResponse
+    {
+        try {
+            $contrats = $professor->contrats()
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            return $this->successResponse(
+                $contrats,
+                'Contrats récupérés avec succès'
+            );
+        } catch (Exception $e) {
+            return $this->errorResponse(
+                'Erreur lors de la récupération des contrats',
+                500,
+                $e->getMessage()
+            );
+        }
+    }
+
+    // ───────────────────────── STATISTIQUES
+    public function stat(Professor $professor): JsonResponse
+    {
+        try {
+            $stats = [
+                'total_contrats'     => $professor->contrats()->count(),
+                'active_contrats'    => $professor->contrats()->where('statut', 'ongoing')->count(),
+                'completed_contrats' => $professor->contrats()->where('statut', 'completed')->count(),
+                'total_amount'       => $professor->contrats()->sum('amount'),
+            ];
+
+            return $this->successResponse(
+                $stats,
+                'Statistiques récupérées avec succès'
+            );
+        } catch (Exception $e) {
+            return $this->errorResponse(
+                'Erreur lors de la récupération des statistiques',
+                500,
+                $e->getMessage()
+            );
+        }
     }
 }

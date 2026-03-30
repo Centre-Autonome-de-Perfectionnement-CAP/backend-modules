@@ -1,7 +1,7 @@
 # ✅ Résumé Complet - Tests Module EmploiDuTemps
 
 **Date:** 13 Novembre 2025  
-**Statut:** ✅ TESTS CRÉÉS ET PRÊTS
+**status:** ✅ TESTS CRÉÉS ET PRÊTS
 
 ---
 
@@ -24,7 +24,7 @@ J'ai créé une **suite complète de tests** pour le module EmploiDuTemps compre
    - Authentification requise
    - CRUD complet
    - Validation des données
-   - Filtrage par recherche et statut
+   - Filtrage par recherche et status
 
 2. **RoomTest.php** (12 tests)
    - CRUD complet
@@ -330,5 +330,5 @@ Le backend est **100% complet et testé**. Nous sommes maintenant prêts à impl
 
 **Développeur:** Assistant IA  
 **Date:** 13 Novembre 2025  
-**Statut Backend:** ✅ COMPLET ET TESTÉ  
+**status Backend:** ✅ COMPLET ET TESTÉ  
 **Prochaine Phase:** 🎨 FRONTEND

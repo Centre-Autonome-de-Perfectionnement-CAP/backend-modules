@@ -4,23 +4,22 @@ namespace App\Modules\RH\Models;
 
 use App\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
 class Professor extends Authenticatable
 {
-    use HasFactory, Notifiable, HasUuid, HasApiTokens;
+    use HasFactory, Notifiable, HasUuid, HasApiTokens, SoftDeletes;
 
-    /**
-     * Create a new factory instance for the model.
-     */
     protected static function newFactory()
     {
         return \Database\Factories\ProfessorFactory::new();
     }
 
     protected $fillable = [
+        'uuid',
         'last_name',
         'first_name',
         'email',
@@ -32,31 +31,37 @@ class Professor extends Authenticatable
         'ifu_number',
         'ifu',
         'bank',
-        'status',
+        'statut',
         'grade_id',
+        'speciality',
+        'bio',
+
+        'nationality',
+        'profession',
+        'city',
+        'district',
+        'plot_number',
+        'house_number',
     ];
 
     protected $hidden = [
         'password',
     ];
 
-    protected $casts = [
-        'password' => 'hashed',
-    ];
-
     protected $appends = ['full_name'];
 
-    /**
-     * Relation avec le grade
-     */
+    // ───────────────────────── RELATIONS
+
     public function grade()
     {
         return $this->belongsTo(Grade::class);
     }
 
-    /**
-     * Relation many-to-many avec les éléments de cours
-     */
+    public function contrats()
+    {
+        return $this->hasMany(\App\Modules\RH\Models\Contrat::class);
+    }
+
     public function courseElements()
     {
         return $this->belongsToMany(
@@ -67,42 +72,38 @@ class Professor extends Authenticatable
         )->withTimestamps();
     }
 
-    /**
-     * Relation avec les assignations cours-professeur (table pivot avec ID)
-     */
     public function courseElementProfessors()
     {
         return $this->hasMany(\App\Modules\Cours\Models\CourseElementProfessor::class);
     }
 
-    /**
-     * Relation avec les programmes via la table pivot
-     */
-    public function programs()
-    {
-        return $this->hasManyThrough(
-            \App\Modules\Cours\Models\Program::class,
-            \App\Modules\Cours\Models\CourseElementProfessor::class,
-            'professor_id', // Foreign key on course_element_professor table
-            'course_element_professor_id', // Foreign key on programs table
-            'id', // Local key on professors table
-            'id' // Local key on course_element_professor table
-        );
-    }
+    // ───────────────────────── SCOPES
 
-    /**
-     * Scope pour les professeurs actifs
-     */
     public function scopeActive($query)
     {
-        return $query->where('status', 'active');
+        return $query->where('statut', 'actif');
     }
 
-    /**
-     * Obtenir le nom complet
-     */
+    // ───────────────────────── ACCESSORS
+
     public function getFullNameAttribute(): string
     {
         return "{$this->first_name} {$this->last_name}";
     }
+
+    public function getFullAddressAttribute(): string
+    {
+        $parts = array_filter([
+            $this->city,
+            $this->district,
+            $this->plot_number ? "Parcelle {$this->plot_number}" : null,
+            $this->house_number ? "Maison {$this->house_number}" : null,
+        ]);
+
+        return implode(', ', $parts);
+    }
+
+
+
+
 }

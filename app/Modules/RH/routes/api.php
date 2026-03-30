@@ -8,16 +8,22 @@ use App\Modules\RH\Http\Controllers\SignataireController;
 use App\Modules\RH\Http\Controllers\DocumentManagementController;
 use App\Modules\RH\Http\Controllers\ImportantInformationController;
 use App\Modules\RH\Http\Controllers\FileController;
-
 use App\Modules\RH\Http\Controllers\WhatsAppGroupController;
 
-Route::prefix('api/rh')->group(function () {
+Route::prefix('rh')->group(function () {
+
+
+
+
+
     // Routes publiques
     Route::get('important-informations', [ImportantInformationController::class, 'index']);
     Route::get('professors', [ProfessorController::class, 'index']);
     Route::get('grades', [GradeController::class, 'index']);
     Route::get('files/{file}', [FileController::class, 'viewDocument']);
     Route::get('documents', [DocumentManagementController::class, 'index']);
+
+
     
     // Route de debug temporaire
     Route::get('debug/file/{fileId}', function($fileId) {
@@ -55,16 +61,16 @@ Route::prefix('api/rh')->group(function () {
         
         // Gestion des documents
         Route::apiResource('documents', DocumentManagementController::class)->except(['index']);
-        
+
         // Gestion des informations importantes
         Route::get('important-informations/admin', [ImportantInformationController::class, 'indexAdmin']);
         Route::post('important-informations/{important_information}/broadcast', [ImportantInformationController::class, 'broadcast']);
         Route::get('broadcast-status/{broadcastId}', [ImportantInformationController::class, 'getBroadcastStatus']);
         Route::apiResource('important-informations', ImportantInformationController::class)->except(['index']);
-        
+
         // CRUD Professeurs (sauf index qui est public)
         Route::apiResource('professors', ProfessorController::class)->only(['store', 'show', 'update', 'destroy']);
-        
+
         Route::apiResource('admin-users', AdminUserController::class);
         Route::apiResource('signataires', SignataireController::class);
 
@@ -72,7 +78,7 @@ Route::prefix('api/rh')->group(function () {
         Route::post('admin-users/{adminUser}/roles/detach', [AdminUserController::class, 'detachRole']);
         Route::get('admin-users-statistics', [AdminUserController::class, 'statistics']);
         Route::get('banks', [ProfessorController::class, 'getBanks']);
-        
+
         Route::get('roles', function () {
             return response()->json([
                 'success' => true,
@@ -80,5 +86,4 @@ Route::prefix('api/rh')->group(function () {
             ]);
         });
     });
-
-}); 
+});

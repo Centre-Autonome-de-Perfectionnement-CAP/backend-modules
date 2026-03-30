@@ -7,7 +7,7 @@ use App\Modules\EmploiDuTemps\Http\Controllers\RoomController;
 use App\Modules\EmploiDuTemps\Http\Controllers\TimeSlotController;
 use App\Modules\EmploiDuTemps\Http\Controllers\ScheduledCourseController;
 
-Route::prefix('api/emploi-temps')->group(function () {
+Route::prefix('emploi-temps')->group(function () {
     
     // Buildings (Bâtiments)
     Route::apiResource('buildings', BuildingController::class);

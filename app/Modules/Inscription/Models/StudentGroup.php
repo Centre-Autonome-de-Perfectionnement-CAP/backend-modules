@@ -30,4 +30,7 @@ class StudentGroup extends Model
     {
         return $this->belongsTo(Student::class);
     }
+
+
 }
+

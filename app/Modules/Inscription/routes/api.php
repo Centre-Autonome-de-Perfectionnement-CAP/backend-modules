@@ -14,12 +14,13 @@ use App\Modules\Inscription\Http\Controllers\DashboardController;
 use App\Modules\Inscription\Http\Controllers\ClassGroupController;
 use App\Modules\Inscription\Http\Controllers\StudentController;
 use App\Modules\Inscription\Http\Controllers\PendingStudentExportController;
-
-
+use App\Modules\Inscription\Http\Controllers\ResponsableController;
 use App\Modules\Inscription\Http\Controllers\StudentBroadcastController;
 
 
+
 Route::prefix('api/inscription')->group(function () {
+
 
     Route::prefix('pending-students')->group(function () {
         Route::middleware('auth:sanctum')->group(function () {
@@ -28,19 +29,20 @@ Route::prefix('api/inscription')->group(function () {
             Route::put('/{pendingStudent}', [PendingStudentController::class, 'update']);
             Route::delete('/{pendingStudent}', [PendingStudentController::class, 'destroy']);
             Route::get('/{pendingStudent}/documents', [PendingStudentController::class, 'getDocuments']);
-            Route::patch('/{pendingStudent}/financial-status', [PendingStudentController::class, 'updateStatus']);
+            Route::patch('/{pendingStudent}/financial-statut', [PendingStudentController::class, 'updatestatut']);
             Route::patch('/{pendingStudent}/level', [PendingStudentController::class, 'updateLevel']);
             Route::patch('/{pendingStudent}/pieces/rename', [PendingStudentController::class, 'renamePiece']);
         });
         Route::post('/', [PendingStudentController::class, 'store']);
         Route::post('/{pendingStudent}/documents', [PendingStudentController::class, 'submitDocuments']);
+
     });
 
     Route::prefix('submissions')->group(function () {
         Route::get('/active-periods', [SubmissionController::class, 'getActiveSubmissionPeriods']);
         Route::get('/active-reclamation-periods', [SubmissionController::class, 'getActiveReclamationPeriods']);
-        Route::post('/check-status', [SubmissionController::class, 'checkSubmissionStatus']);
-        Route::post('/check-reclamation-status', [SubmissionController::class, 'checkReclamationStatus']);
+        Route::post('/check-statut', [SubmissionController::class, 'checkSubmissionstatut']);
+        Route::post('/check-reclamation-statut', [SubmissionController::class, 'checkReclamationstatut']);
 
         // Admin-only CRUD for submission periods
         Route::middleware('auth:sanctum')->group(function () {
@@ -81,6 +83,8 @@ Route::prefix('api/inscription')->group(function () {
     Route::prefix('students')->group(function () {
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('/', [StudentController::class, 'index']);
+            Route::post('/{id}/assign-class-responsible', [StudentController::class, 'assignClassResponsible']);
+            Route::post('/{id}/remove-class-responsible', [StudentController::class, 'removeClassResponsible']);
             Route::get('/export/fiche-presence', [StudentController::class, 'exportFichePresence']);
             Route::get('/export/fiche-emargement', [StudentController::class, 'exportFicheEmargement']);
             Route::get('/{id}', [StudentController::class, 'show']);
@@ -132,4 +136,38 @@ Route::prefix('api/inscription')->group(function () {
         Route::get('export/validated-students', [PendingStudentExportController::class, 'exportValidatedStudents']);
     });
 
+
+
 }); // Fin du groupe api/inscription
+
+
+Route::prefix('api/inscription')->group(function () {
+    // Routes existantes...
+    
+    // Routes pour le responsable de classe
+    Route::prefix('responsable')->middleware(['auth:sanctum'])->group(function () {
+        Route::get('/dashboard', [ResponsableController::class, 'dashboard']);
+        Route::get('/classes', [ResponsableController::class, 'getClasses']);
+        Route::get('/export/{type}', [ResponsableController::class, 'export']);
+    });
+
+  Route::prefix('responsable')->middleware('auth.multi')->group(function () {
+    // Dashboard principal
+    Route::get('/dashboard',  [ResponsableController::class, 'dashboard']);
+    // Liste des classes du responsable
+    Route::get('/classes',    [ResponsableController::class, 'getClasses']);
+    // Étudiants d'une classe spécifique
+    Route::get('/classes/{classGroupId}/students', [ResponsableController::class, 'getStudentsByClass']);
+    // Exports PDF
+    Route::get('/export/{type}', [ResponsableController::class, 'export']);
+});
+ 
+    
+    // Routes pour les classes
+    Route::prefix('classes')->middleware(['auth:sanctum'])->group(function () {
+        Route::get('/{classId}/students', [ClassGroupController::class, 'getStudents']);
+        Route::get('/{classId}/stats', [ClassGroupController::class, 'getStats']);
+        Route::get('/{classId}/export/{type}', [ClassGroupController::class, 'exportList']);
+    });
+});
+

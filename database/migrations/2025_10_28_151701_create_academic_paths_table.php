@@ -23,7 +23,7 @@ return new class extends Migration
             $table->string('cohort')->nullable();
             $table->timestamps();
             $table->softDeletes();
-            
+
             $table->index('student_pending_student_id');
             $table->index('academic_year_id');
             $table->index('financial_status');

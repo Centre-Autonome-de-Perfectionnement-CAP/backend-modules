@@ -38,7 +38,20 @@ class CreatePaiementRequest extends FormRequest
                 },
             ],
             'montant' => 'nullable|numeric|min:0',
-            'reference' => 'required|string|max:255|unique:payments,reference',
+            'reference' => [
+                'required',
+                'string',
+                'max:255',
+                function ($attribute, $value, $fail) {
+                    $exists = \App\Modules\Finance\Models\Paiement::where('reference', $value)
+                        ->whereIn('status', ['pending', 'approved'])
+                        ->exists();
+
+                    if ($exists) {
+                        $fail('Cette référence existe déjà dans le système.');
+                    }
+                },
+            ],
             'department_id' => 'required|integer|exists:departments,id',
             'numero_compte' => [
                 'required',
@@ -69,37 +82,37 @@ class CreatePaiementRequest extends FormRequest
             'matricule.required' => 'Le matricule est obligatoire.',
             'matricule.string' => 'Le matricule doit être une chaîne de caractères.',
             'matricule.max' => 'Le matricule ne peut pas dépasser 11 caractères.',
-            
+
             'montant.numeric' => 'Le montant doit être un nombre.',
             'montant.min' => 'Le montant doit être supérieur ou égal à 0.',
-            
+
             'reference.required' => 'La référence est obligatoire.',
             'reference.string' => 'La référence doit être une chaîne de caractères.',
             'reference.max' => 'La référence ne peut pas dépasser 255 caractères.',
             'reference.unique' => 'Cette référence existe déjà dans le système.',
-            
+
             'numero_compte.required' => 'Le numéro de compte est obligatoire.',
             'numero_compte.string' => 'Le numéro de compte doit être une chaîne de caractères.',
             'numero_compte.max' => 'Le numéro de compte ne peut pas dépasser 255 caractères.',
-            
+
             'date_versement.date' => 'La date de versement doit être une date valide.',
             'date_versement.before_or_equal' => 'La date de versement ne peut pas être dans le futur.',
-            
+
             'quittance.required' => 'La quittance est obligatoire.',
             'quittance.file' => 'La quittance doit être un fichier.',
             'quittance.mimes' => 'La quittance doit être un fichier de type: pdf, jpg, jpeg ou png.',
             'quittance.max' => 'La quittance ne peut pas dépasser 5 Mo.',
-            
+
             'motif.required' => 'Le motif est obligatoire.',
             'motif.string' => 'Le motif doit être une chaîne de caractères.',
-            
+
             'department_id.required' => 'Le département est obligatoire.',
             'department_id.integer' => 'Le département doit être un identifiant valide.',
             'department_id.exists' => 'Le département sélectionné n\'existe pas.',
-            
+
             'email.email' => 'L\'adresse email doit être valide.',
             'email.max' => 'L\'adresse email ne peut pas dépasser 255 caractères.',
-            
+
             'contact.string' => 'Le contact doit être une chaîne de caractères.',
             'contact.max' => 'Le contact ne peut pas dépasser 255 caractères.',
         ];

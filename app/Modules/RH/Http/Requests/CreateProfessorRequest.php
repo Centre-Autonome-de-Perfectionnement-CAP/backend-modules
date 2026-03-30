@@ -20,12 +20,12 @@ class CreateProfessorRequest extends FormRequest
             'phone' => 'nullable|string|max:20',
             'password' => 'nullable|string|min:8',
             'role_id' => 'nullable|exists:roles,id',
-            'rib_number' => 'nullable|string|max:255',
+            'rib_number' => 'required|string|min:22|max:27',
             'rib' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            'ifu_number' => 'nullable|string|max:255',
+            'ifu_number' => 'required|string|digits:13',
             'ifu' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'bank' => 'nullable|string|max:255',
-            'status' => 'nullable|in:active,inactive,suspended',
+            'statut' => 'nullable|in:active,inactive,suspended',
             'grade_id' => 'nullable|exists:grades,id',
         ];
     }

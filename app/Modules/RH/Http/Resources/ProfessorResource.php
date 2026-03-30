@@ -24,7 +24,7 @@ class ProfessorResource extends JsonResource
             'ifu' => $this->ifu,
             'ifu_url' => $this->ifu ? url("/api/stockage/files/{$this->ifu}/view") : null,
             'bank' => $this->bank,
-            'status' => $this->status,
+            'statut' => $this->statut,
             'grade_id' => $this->grade_id,
             'grade' => $this->whenLoaded('grade', function () {
                 return [

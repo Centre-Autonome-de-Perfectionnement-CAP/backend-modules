@@ -4,7 +4,7 @@ namespace App\Modules\Soutenance\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Soutenance\Http\Requests\CreateDefenseSubmissionRequest;
-use App\Modules\Soutenance\Http\Requests\UpdateDefenseStatusRequest;
+use App\Modules\Soutenance\Http\Requests\UpdateDefensestatusRequest;
 use App\Modules\Soutenance\Http\Requests\ScheduleDefenseRequest;
 use App\Modules\Soutenance\Services\DefenseSubmissionService;
 use App\Traits\ApiResponse;
@@ -24,7 +24,7 @@ class DefenseSubmissionController extends Controller
     {
         $filters = $request->only(['search', 'status', 'defense_type', 'department_id', 'academic_year_id']);
         $perPage = $this->getPerPage($request);
-        
+
         $submissions = $this->defenseSubmissionService->getAll($filters, $perPage);
 
         return $this->successPaginatedResponse(
@@ -75,7 +75,7 @@ class DefenseSubmissionController extends Controller
             return $this->errorResponse('Soumission non trouvée', 404);
         }
 
-        $this->defenseSubmissionService->updateStatus($submission, 'accepted');
+        $this->defenseSubmissionService->updatestatus($submission, 'accepted');
         return $this->successResponse(null, 'Soumission acceptée avec succès');
     }
 
@@ -91,7 +91,7 @@ class DefenseSubmissionController extends Controller
             return $this->errorResponse('Soumission non trouvée', 404);
         }
 
-        $this->defenseSubmissionService->updateStatus($submission, 'rejected', $request->rejection_reason);
+        $this->defenseSubmissionService->updatestatus($submission, 'rejected', $request->rejection_reason);
         return $this->successResponse(null, 'Soumission rejetée avec succès');
     }
 
@@ -184,7 +184,7 @@ class DefenseSubmissionController extends Controller
         return $this->successResponse($submission, 'Soumission récupérée avec succès');
     }
 
-    public function updateStatus(UpdateDefenseStatusRequest $request, int $id): JsonResponse
+    public function updatestatus(UpdateDefensestatusRequest $request, int $id): JsonResponse
     {
         $submission = $this->defenseSubmissionService->getById($id);
 
@@ -193,13 +193,13 @@ class DefenseSubmissionController extends Controller
         }
 
         $validated = $request->validated();
-        $submission = $this->defenseSubmissionService->updateStatus(
+        $submission = $this->defenseSubmissionService->updatestatus(
             $submission,
             $validated['status'],
             $validated['rejection_reason'] ?? null
         );
 
-        return $this->successResponse($submission, 'Statut mis à jour avec succès');
+        return $this->successResponse($submission, 'status mis à jour avec succès');
     }
 
     public function scheduleDefense(ScheduleDefenseRequest $request, int $id): JsonResponse

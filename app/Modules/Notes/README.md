@@ -25,6 +25,6 @@ Notes/
 - Validation des notes
 - Export des relevés de notes
 
-## Status
+## status
 
 🚧 **Module vide** - Prêt pour l'implémentation

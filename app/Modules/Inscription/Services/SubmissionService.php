@@ -125,7 +125,7 @@ class SubmissionService
                 'review_comment' => $comment,
             ]);
 
-            // Mettre à jour le statut du pending student
+            // Mettre à jour le status du pending student
             if ($submission->pendingStudent) {
                 $submission->pendingStudent->update([
                     'status' => 'approved',
@@ -153,7 +153,7 @@ class SubmissionService
                 'review_comment' => $reason,
             ]);
 
-            // Mettre à jour le statut du pending student
+            // Mettre à jour le status du pending student
             if ($submission->pendingStudent) {
                 $submission->pendingStudent->update([
                     'status' => 'rejected',

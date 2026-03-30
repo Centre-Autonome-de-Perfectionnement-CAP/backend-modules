@@ -25,6 +25,7 @@ return [
     'APP_MINIO_URL' => env('APP_MINIO_URL', 'http://127.0.0.1:8012/api'),
     'APP_FRONT_URL' => env('APP_FRONT_URL', 'http://localhost:4200'),
     'APP_AUTH_WEB_URL' => env('APP_AUTH_WEB_URL', 'http://127.0.0.1:8000'),
+    'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
 
 
     /*

@@ -16,7 +16,7 @@ Représente un bâtiment physique contenant des salles.
 - `code`: Code unique du bâtiment
 - `address`: Adresse (optionnel)
 - `description`: Description (optionnel)
-- `is_active`: Statut actif/inactif
+- `is_active`: status actif/inactif
 
 **Relations:**
 - `rooms`: Liste des salles du bâtiment
@@ -69,7 +69,7 @@ Représente un cours planifié avec toutes ses informations.
 - `recurrence_end_date`: Date de fin de récurrence
 - `excluded_dates`: Dates exclues (jours fériés, vacances) - JSON
 - `notes`: Notes additionnelles
-- `is_cancelled`: Statut d'annulation
+- `is_cancelled`: status d'annulation
 
 **Propriétés calculées:**
 - `remaining_hours`: Heures restantes
@@ -133,7 +133,7 @@ DELETE /api/emploi-temps/buildings/{id}         - Supprimer un bâtiment
 
 **Filtres disponibles:**
 - `search`: Recherche par nom, code ou adresse
-- `is_active`: Filtrer par statut actif/inactif
+- `is_active`: Filtrer par status actif/inactif
 - `sort_by`, `sort_order`: Tri personnalisé
 
 ### Rooms (Salles)
