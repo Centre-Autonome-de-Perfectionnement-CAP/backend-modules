@@ -12,9 +12,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('course_element_professor', function (Blueprint $table) {
-        Schema::table('course_element_professor', function (Blueprint $table) {
-    $table->foreignId('academic_year_id')->nullable();
-});
+            $table->foreignId('academic_year_id')
+                  ->nullable()
+                  ->constrained('academic_years')
+                  ->onDelete('set null')
+                  ->index();
         });
     }
 
@@ -24,9 +26,8 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('course_element_professor', function (Blueprint $table) {
-        Schema::table('course_element_professor', function (Blueprint $table) {
-    $table->dropColumn('academic_year_id');
-});
+            $table->dropForeign(['academic_year_id']);
+            $table->dropColumn('academic_year_id');
         });
     }
 };

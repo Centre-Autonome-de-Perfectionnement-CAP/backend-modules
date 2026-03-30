@@ -23,8 +23,10 @@ class Contrat extends Model
         'amount',
         'validation_date',
         'is_validated',
-        'statut',
+        'status',
         'notes',
+        'regroupement',
+        'cycle_id',
     ];
 
     protected $casts = [
@@ -34,41 +36,22 @@ class Contrat extends Model
         'is_validated'    => 'boolean',
         'amount'          => 'decimal:2',
     ];
+     public function professor()
+     {
+         return $this->belongsTo(Professor::class, 'professor_id');
+     }
+public function cycle()
+{
+    return $this->belongsTo(Cycle::class);
+}
+     public function academicYear()
+{
+    return $this->belongsTo(AcademicYear::class, 'academic_year_id');
+}
 
-    // ─────────────────────────────────────────
-    // Relations
-    // ─────────────────────────────────────────
-
-    public function professor()
+    public function getStatusLabelAttribute(): string
     {
-        return $this->belongsTo(Professor::class);
-    }
-
-    // public function academicYear()
-    // {
-    //     return $this->belongsTo(\App\Modules\Academic\Models\AcademicYear::class);
-    // }
-
-    // public function courses()
-    // {
-    //     return $this->hasMany(ContractCourse::class);
-    // }
-
-    // public function payments()
-    // {
-    //     return $this->hasMany(Payment::class);
-    // }
-
-    // ─────────────────────────────────────────
-    // Accesseurs
-    // ─────────────────────────────────────────
-
-    /**
-     * Libellé du statut en français
-     */
-    public function getstatutLabelAttribute(): string
-    {
-        return match($this->statut) {
+        return match($this->status) {
             'pending'   => 'En attente',
             'signed'    => 'Signé',
             'ongoing'   => 'En cours',
