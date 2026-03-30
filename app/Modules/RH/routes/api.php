@@ -9,6 +9,8 @@ use App\Modules\RH\Http\Controllers\DocumentManagementController;
 use App\Modules\RH\Http\Controllers\ImportantInformationController;
 use App\Modules\RH\Http\Controllers\FileController;
 
+use App\Modules\RH\Http\Controllers\WhatsAppGroupController;
+
 Route::prefix('api/rh')->group(function () {
     // Routes publiques
     Route::get('important-informations', [ImportantInformationController::class, 'index']);
@@ -46,6 +48,11 @@ Route::prefix('api/rh')->group(function () {
     });
     
     Route::middleware('auth:sanctum')->group(function () {
+        // Gestion des groupes WhatsApp
+        Route::get('whatsapp-groups', [WhatsAppGroupController::class, 'index']);
+        Route::put('whatsapp-groups/{department}', [WhatsAppGroupController::class, 'update']);
+        Route::delete('whatsapp-groups/{department}', [WhatsAppGroupController::class, 'destroy']);
+        
         // Gestion des documents
         Route::apiResource('documents', DocumentManagementController::class)->except(['index']);
         

@@ -48,13 +48,14 @@ class BroadcastImportantInformationJob implements ShouldQueue
             Log::debug('Processing student in broadcast job', [
                 'broadcast_id' => $this->broadcastId,
                 'student_id' => $student['id'] ?? 'unknown',
-                'has_personal_information' => isset($student['personal_information']),
-                'personal_info_type' => isset($student['personal_information']) ? gettype($student['personal_information']) : 'not set',
+                'has_personal_information' => isset($student['personal_information']) && $student['personal_information'] !== null,
+                'personal_info_type' => isset($student['personal_information']) && $student['personal_information'] !== null ? gettype($student['personal_information']) : 'not set',
             ]);
 
             $personalInfo = $student['personal_information'] ?? null;
             
-            if ($personalInfo) {
+            // Vérifier que personalInfo n'est pas null
+            if ($personalInfo && !empty($personalInfo)) {
                 // Si c'est un tableau, accéder comme un tableau
                 $email = is_array($personalInfo) ? ($personalInfo['email'] ?? null) : ($personalInfo->email ?? null);
                 

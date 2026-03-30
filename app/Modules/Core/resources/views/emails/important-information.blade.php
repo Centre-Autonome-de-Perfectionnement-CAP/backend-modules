@@ -93,7 +93,7 @@
     <div class="footer">
         <p>
             <strong>CAP-EPAC</strong><br>
-            Centre d'Application Pédagogique - École Polytechnique d'Abomey-Calavi<br>
+            Centre Autonome de Perfectionnement - École Polytechnique d'Abomey-Calavi<br>
             Cet email a été envoyé automatiquement, merci de ne pas y répondre.
         </p>
     </div>

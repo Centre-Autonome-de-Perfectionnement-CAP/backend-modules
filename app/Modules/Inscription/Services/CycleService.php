@@ -165,12 +165,15 @@ class CycleService
 
             return [
                 'id' => $dept->id,
+                'name' => $dept->name,
                 'title' => $dept->name . ' (' . ($dept->cycle->name ?? '') . ')',
                 'abbreviation' => $dept->abbreviation ?? '',
                 'cycle' => $cycleName,
+                'cycle_id' => $dept->cycle_id,
                 'dateLimite' => $dateLimite,
                 'image' => '',
                 'badge' => $badge,
+                'whatsapp_link' => $dept->whatsapp_link,
             ];
         })->values();
     }
