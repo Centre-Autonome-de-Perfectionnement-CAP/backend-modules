@@ -12,16 +12,11 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
 
-            $table->string('contrat_number', 100)->unique();
-            $table->string('division', 100)->nullable();
+            $table->string('contrat_number')->nullable();
+            $table->string('division')->nullable();
 
-            $table->foreignId('professor_id')
-                  ->constrained('professors')
-                  ->onDelete('restrict');
-
-            $table->foreignId('academic_year_id')
-                  ->constrained('academic_years')
-                  ->onDelete('restrict');
+            $table->foreignId('professor_id')->constrained()->restrictOnDelete();
+            $table->foreignId('academic_year_id')->constrained()->restrictOnDelete();
 
             $table->date('start_date');
             $table->date('end_date')->nullable();
@@ -31,10 +26,16 @@ return new class extends Migration
             $table->date('validation_date')->nullable();
             $table->boolean('is_validated')->default(false);
 
-            $table->enum('status', ['pending', 'signed', 'ongoing', 'completed', 'cancelled'])
-                  ->default('pending');
+            $table->enum('status', [
+                'pending',
+                'signed',
+                'ongoing',
+                'completed',
+                'cancelled'
+            ])->default('pending');
 
             $table->text('notes')->nullable();
+
             $table->softDeletes();
             $table->timestamps();
         });

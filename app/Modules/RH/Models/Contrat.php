@@ -18,12 +18,14 @@ class Contrat extends Model
         'division',
         'professor_id',
         'academic_year_id',
+        'cycle_id',
+        'regroupement',
         'start_date',
         'end_date',
         'amount',
         'validation_date',
         'is_validated',
-        'statut',
+        'status',
         'notes',
     ];
 
@@ -35,40 +37,41 @@ class Contrat extends Model
         'amount'          => 'decimal:2',
     ];
 
-    // ─────────────────────────────────────────
-    // Relations
-    // ─────────────────────────────────────────
+    // ─── Relations ────────────────────────────────────────────────────────────
 
     public function professor()
     {
-        return $this->belongsTo(Professor::class);
+        return $this->belongsTo(Professor::class, 'professor_id');
     }
 
-    // public function academicYear()
-    // {
-    //     return $this->belongsTo(\App\Modules\Academic\Models\AcademicYear::class);
-    // }
+    public function cycle(){
+        return $this->belongsTo(Cycle::class, 'cycle_id');
+    }
 
-    // public function courses()
-    // {
-    //     return $this->hasMany(ContractCourse::class);
-    // }
-
-    // public function payments()
-    // {
-    //     return $this->hasMany(Payment::class);
-    // }
-
-    // ─────────────────────────────────────────
-    // Accesseurs
-    // ─────────────────────────────────────────
+    public function academicYear()
+    {
+        return $this->belongsTo(AcademicYear::class, 'academic_year_id');
+    }
 
     /**
-     * Libellé du statut en français
+     * Programmes rattachés à ce contrat
+     * (chaque programme = Professeur + Matière ECUE + Classe)
      */
-    public function getstatutLabelAttribute(): string
+    public function courseElementProfessors()
     {
-        return match($this->statut) {
+        return $this->belongsToMany(
+            \App\Modules\Cours\Models\CourseElementProfessor::class,
+            'contrat_programs',
+            'contrat_id',
+            'course_element_professor_id'
+        )->with(['courseElement.teachingUnit', 'classGroup']);
+    }
+
+    // ─── Accessors ────────────────────────────────────────────────────────────
+
+    public function getStatusLabelAttribute(): string
+    {
+        return match ($this->status) {
             'pending'   => 'En attente',
             'signed'    => 'Signé',
             'ongoing'   => 'En cours',

@@ -31,7 +31,7 @@ class Professor extends Authenticatable
         'ifu_number',
         'ifu',
         'bank',
-        'statut',
+        'status',
         'grade_id',
         'speciality',
         'bio',
