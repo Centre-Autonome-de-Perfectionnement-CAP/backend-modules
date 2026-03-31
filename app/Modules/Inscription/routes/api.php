@@ -19,7 +19,7 @@ use App\Modules\Inscription\Http\Controllers\StudentBroadcastController;
 
 
 
-Route::prefix('api/inscription')->group(function () {
+Route::prefix('inscription')->group(function () {
 
 
     Route::prefix('pending-students')->group(function () {
