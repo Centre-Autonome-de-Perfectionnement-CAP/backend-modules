@@ -171,8 +171,8 @@
     @endif
     <br>
     <div style="width: 100%; text-align: center; font-size: 14px;">
-        <p style="margin: 10px 0;">Fait à Abomey-Calavi le {{ now()->format('d') }} {{ ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][now()->format('n')] }} {{ now()->format('Y') }}</p>
-        <p style="margin: 20px 0;">Le Chef CAP</p>
+        <p style="margin: 30px 0;">Fait à Abomey-Calavi le {{ now()->format('d') }} {{ ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][now()->format('n')] }} {{ now()->format('Y') }}</p>
+        <p style="margin: 40px 0;">Le Chef CAP</p>
         <div style="height: 80px;"></div>
         <p style="margin: 5px 0; text-decoration: underline;">{{ $bulletin['signataire']->nomination ?? '' }}</p>
     </div>
@@ -182,7 +182,9 @@
 
 @section('footer-text')
     <div style="text-align: center;">
-        <span style="margin-left: 200px;"><i>*Nombre de composition dans l'UE</i></span><br><br>
+        <!-- <span style="margin-left: 200px;"><i>*Nombre de composition dans l'UE</i></span> -->
+        <!-- <br> -->
+        <br>
         <span style="font-weight: bold; margin-left: 100px;">NB: </span> Ce relevé ne peut en aucun cas tenir lieu d'attestation de diplôme et n'est délivré qu'une seule fois
     </div>
 @endsection
