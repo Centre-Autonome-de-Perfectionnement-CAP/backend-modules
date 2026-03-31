@@ -96,7 +96,7 @@ class ContratController extends Controller
             $programIds = $data['course_element_professor_ids'] ?? [];
             unset($data['course_element_professor_ids']);
 
-            $contrat = Contrat::create(array_merge($data, ['status' => 'pending']));
+            $contrat = Contrat::create(array_merge($data, ['status' => 'pending', 'contrat_number'  =>  1]));
             $contrat->contrat_number = str_pad($contrat->id, 3, '0', STR_PAD_LEFT);
             $contrat->save();
 
