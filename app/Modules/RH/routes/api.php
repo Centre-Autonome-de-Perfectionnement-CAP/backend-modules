@@ -13,50 +13,48 @@ use App\Modules\RH\Http\Controllers\AcademicYearController;
 use App\Modules\RH\Http\Controllers\CycleController;
 
 Route::prefix('rh')->group(function () {
-    // Routes publiques
+
+    Route::get('professors',           [ProfessorController::class, 'index']);
+    Route::get('grades',               [GradeController::class, 'index']);
+    Route::get('files/{file}',         [FileController::class, 'viewDocument']);
+    Route::get('documents',            [DocumentManagementController::class, 'index']);
     Route::get('important-informations', [ImportantInformationController::class, 'index']);
-    Route::get('professors', [ProfessorController::class, 'index']);
-    Route::get('grades', [GradeController::class, 'index']);
-    Route::get('files/{file}', [FileController::class, 'viewDocument']);
-    Route::get('documents', [DocumentManagementController::class, 'index']);
-    Route::get('contrats', [ContratController::class, 'index']);
-    Route::post('contrats', [ContratController::class, 'store']);
-    Route::put('contrats/{id}', [ContratController::class, 'update']);
+    Route::get('academic-years',       [AcademicYearController::class, 'index']);
+    Route::get('cycles',               [CycleController::class, 'index']);
+
+    // ─── Contrats (CRUD complet) ──────────────────────────────────────────────
+    Route::get('contrats',         [ContratController::class, 'index']);
+    Route::post('contrats',        [ContratController::class, 'store']);
+    Route::get('contrats/{id}',    [ContratController::class, 'show']);
+    Route::put('contrats/{id}',    [ContratController::class, 'update']);
     Route::delete('contrats/{id}', [ContratController::class, 'destroy']);
-    Route::get('professors', [ProfessorController::class, 'index']);
-   Route::get('/cycles', [CycleController::class, 'index']);
-    Route::get('academic-years', function () {
-    return response()->json([
-        'data' => \App\Modules\RH\Models\AcademicYear::orderBy('created_at', 'desc')->get()
-    ]);
-});
 
-        // Gestion des documents
-        Route::apiResource('documents', DocumentManagementController::class)->except(['index']);
+    // ─── Programmes d'un professeur (matières + classes assignées) ────────────
+    // Utilisé pour pré-remplir le select "Programmes" dans le formulaire de contrat
+    Route::get('professors/{professorId}/programs', [ContratController::class, 'professorPrograms']);
 
-        // Gestion des informations importantes
-        Route::get('important-informations/admin', [ImportantInformationController::class, 'indexAdmin']);
-        Route::apiResource('important-informations', ImportantInformationController::class)->except(['index']);
+    // ─── Routes protégées ─────────────────────────────────────────────────────
 
-        // CRUD Professeurs (sauf index qui est public)
-        Route::apiResource('professors', ProfessorController::class)->only(['store', 'show', 'update', 'destroy']);
+    Route::apiResource('documents', DocumentManagementController::class)->except(['index']);
 
-        Route::apiResource('admin-users', AdminUserController::class);
-        Route::apiResource('signataires', SignataireController::class);
-        Route::apiResource('contrats', ContratController::class);
+    Route::get('important-informations/admin', [ImportantInformationController::class, 'indexAdmin']);
+    Route::apiResource('important-informations', ImportantInformationController::class)->except(['index']);
 
-        Route::post('admin-users/{adminUser}/roles/attach', [AdminUserController::class, 'attachRole']);
-        Route::post('admin-users/{adminUser}/roles/detach', [AdminUserController::class, 'detachRole']);
-        Route::get('admin-users-statistics', [AdminUserController::class, 'statistics']);
-        // Route::get('grades', [GradeController::class, 'index']);
-        Route::get('banks', [ProfessorController::class, 'getBanks']);
+    Route::apiResource('professors', ProfessorController::class)->only(['store', 'show', 'update', 'destroy']);
 
-        Route::get('roles', function () {
-            return response()->json([
-                'success' => true,
-                'data' => \App\Modules\Stockage\Models\Role::select('id', 'name', 'slug')->get(),
-            ]);
-        });
+    Route::apiResource('admin-users', AdminUserController::class);
+    Route::post('admin-users/{adminUser}/roles/attach', [AdminUserController::class, 'attachRole']);
+    Route::post('admin-users/{adminUser}/roles/detach', [AdminUserController::class, 'detachRole']);
+    Route::get('admin-users-statistics', [AdminUserController::class, 'statistics']);
+
+    Route::apiResource('signataires', SignataireController::class);
+
+    Route::get('banks', [ProfessorController::class, 'getBanks']);
+
+    Route::get('roles', function () {
+        return response()->json([
+            'success' => true,
+            'data'    => \App\Modules\Stockage\Models\Role::select('id', 'name', 'slug')->get(),
+        ]);
     });
-
-
+});

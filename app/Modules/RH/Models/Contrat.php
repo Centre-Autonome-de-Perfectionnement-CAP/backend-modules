@@ -18,6 +18,8 @@ class Contrat extends Model
         'division',
         'professor_id',
         'academic_year_id',
+        'cycle_id',
+        'regroupement',
         'start_date',
         'end_date',
         'amount',
@@ -25,8 +27,6 @@ class Contrat extends Model
         'is_validated',
         'status',
         'notes',
-        'regroupement',
-        'cycle_id',
     ];
 
     protected $casts = [
@@ -36,22 +36,42 @@ class Contrat extends Model
         'is_validated'    => 'boolean',
         'amount'          => 'decimal:2',
     ];
-     public function professor()
-     {
-         return $this->belongsTo(Professor::class, 'professor_id');
-     }
-public function cycle()
-{
-    return $this->belongsTo(Cycle::class);
-}
-     public function academicYear()
-{
-    return $this->belongsTo(AcademicYear::class, 'academic_year_id');
-}
+
+    // ─── Relations ────────────────────────────────────────────────────────────
+
+    public function professor()
+    {
+        return $this->belongsTo(Professor::class, 'professor_id');
+    }
+
+    public function cycle(){
+        return $this->belongsTo(Cycle::class, 'cycle_id');
+    }
+
+    public function academicYear()
+    {
+        return $this->belongsTo(AcademicYear::class, 'academic_year_id');
+    }
+
+    /**
+     * Programmes rattachés à ce contrat
+     * (chaque programme = Professeur + Matière ECUE + Classe)
+     */
+    public function courseElementProfessors()
+    {
+        return $this->belongsToMany(
+            \App\Modules\Cours\Models\CourseElementProfessor::class,
+            'contrat_programs',
+            'contrat_id',
+            'course_element_professor_id'
+        )->with(['courseElement.teachingUnit', 'classGroup']);
+    }
+
+    // ─── Accessors ────────────────────────────────────────────────────────────
 
     public function getStatusLabelAttribute(): string
     {
-        return match($this->status) {
+        return match ($this->status) {
             'pending'   => 'En attente',
             'signed'    => 'Signé',
             'ongoing'   => 'En cours',
