@@ -79,7 +79,7 @@
     </div>
 
     
-    <div style="text-align: center; font-weight: bold; margin-bottom: 7px; font-size: 25px;">BULLETIN DE NOTES</div>
+    <div style="text-align: center; font-weight: bold; margin-bottom: 7px; margin-top: 20px; font-size: 25px;">BULLETIN DE NOTES</div>
     <div style="text-align: center; font-weight: bold; margin-bottom: 20px; font-size: 15px;">Année Académique: {{ $bulletin['annee'] ?? '' }}</div>
     @if(isset($bulletin['qrcode']))
     <div style="position: absolute; top: {{ !$loop->first ? '120px' : '-2px' }}; right: 0;">
@@ -171,9 +171,9 @@
     @endif
     <br>
     <div style="width: 100%; text-align: center; font-size: 14px;">
-        <p style="margin: 5px 0;">Fait à Abomey-Calavi le {{ now()->format('d') }} {{ ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][now()->format('n')] }} {{ now()->format('Y') }}</p>
-        <p style="margin: 5px 0;">Le Chef CAP</p>
-        <div style="height: 60px;"></div>
+        <p style="margin: 10px 0;">Fait à Abomey-Calavi le {{ now()->format('d') }} {{ ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][now()->format('n')] }} {{ now()->format('Y') }}</p>
+        <p style="margin: 20px 0;">Le Chef CAP</p>
+        <div style="height: 80px;"></div>
         <p style="margin: 5px 0; text-decoration: underline;">{{ $bulletin['signataire']->nomination ?? '' }}</p>
     </div>
 </div>
