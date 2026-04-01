@@ -81,10 +81,10 @@
         <thead style="font-weight: bold;">
             <tr>
                 <td>N°</td>
-                <td>Codes</td>
+                <td style="text-align:center; padding: auto;">Codes</td>
                 <td>Unités d'Enseignements</td>
-                <td>Crédits</td>
-                <td>Moyenne /100</td>
+                <td style="text-align:center; padding: auto;">Crédits</td>
+                <td style="text-align:center; padding: auto;">Moyenne /100</td>
            <!--      <td>Freq*</td>
                 <td>Etat UE</td> -->
             </tr>
@@ -100,9 +100,9 @@
             @if(is_array($line))
             <tr>
                 <td>{{ $num }}</td>
-                <td>{{ $line["code"] }}</td>
-                <td style="font-weight: bold;">{{ $line['nom'] }}</td>
-                <td>{{ $line['credit'] }}</td>
+                <td style="text-align:center; padding: auto;">{{ $line["code"] }}</td>
+                <td style=" text-align:center; padding: auto; font-weight: bold;">{{ $line['nom'] }}</td>
+                <td style="text-align:center; padding: auto;">{{ $line['credit'] }}</td>
                 <td>{{ str_replace('.', ',', number_format($line['moyenne'] * 5, 2, '.', '')) }}</td>  
 <!--                 <td>{{ $line['frequence'] }}</td>
                 <td>{{ $line['etat'] }}</td> -->
