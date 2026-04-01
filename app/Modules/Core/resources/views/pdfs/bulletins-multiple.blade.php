@@ -129,7 +129,7 @@
                 <td>{{ $line["code"] ?? '' }}</td>
                 <td style="font-weight: bold;">{{ $line['nom'] ?? '' }}</td>
                 <td>{{ $line['credit'] ?? '' }}</td>
-                <td>{{ ($line['moyenne'] ?? 0) * 5 }}</td>  
+                <td>{{ str_replace('.', ',', number_format(($line['moyenne'] ?? 0) * 5, 2, '.', '')) }}</td>  
       <!--           <td>{{ $line['frequence'] ?? '' }}</td>
                 <td>{{ $line['etat'] ?? '' }}</td> -->
                 @php $num++; @endphp
@@ -154,7 +154,7 @@
             <tr style="text-align:center;">
 <!--                 <td style="border: none;"><span style="font-weight: normal;">Nombre de UE validé : </span><strong> {{ $bulletin['bulletin_data'][0]["nombre_ue_valide"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_ue"] ?? 0 }}</strong></td>
                 <td style="border: none;"><span style="font-weight: normal;">Crédits obtenus : </span> <strong>{{ $bulletin['bulletin_data'][0]["nombre_credit_obtenu"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_credit_total"] ?? 0 }}</strong></td> -->
-                <td style="border: none; text-align:center;"><span style="font-weight: normal;">Moyenne : </span> <strong>{{ $bulletin['bulletin_data'][0]["moyenne"] ?? 0 }}</strong></td>
+                <td style="border: none; text-align:center;"><span style="font-weight: normal;">Moyenne : </span> <strong>{{ str_replace('.', ',', number_format((float)($bulletin['bulletin_data'][0]["moyenne"] ?? 0), 2, '.', '')) }}</strong></td>
             </tr>
             <tr >
 <!--                 <td style="border: none;"><span style="font-weight: normal;">Nombre de UE cumulé : </span> <strong>{{ $bulletin['bulletin_data'][0]["nombre_ue_valide"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_ue"] ?? 0 }}</strong></td>
