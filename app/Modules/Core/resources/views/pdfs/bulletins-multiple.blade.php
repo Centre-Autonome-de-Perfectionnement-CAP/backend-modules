@@ -110,7 +110,7 @@
     <table class="corps">
         <thead style="font-weight: bold;">
             <tr>
-                <td>N°</td>
+                <td style="text-align:center; padding: auto;">N°</td>
                 <td style="text-align:center; padding: auto;">Codes</td>
                 <td>Unités d'Enseignements</td>
                 <td style="text-align:center; padding: auto;">Crédits</td>
@@ -125,7 +125,7 @@
             @foreach($bulletin['bulletin_data'][0] as $line)
             @if(is_array($line))
             <tr>
-                <td>{{ $num }}</td>
+                <td style="text-align:center; padding: auto;">{{ $num }}</td>
                 <td style="text-align:center; padding: auto;">{{ $line["code"] ?? '' }}</td>
                 <td style="font-weight: bold;">{{ $line['nom'] ?? '' }}</td>
                 <td style="text-align:center; padding: auto;">{{ $line['credit'] ?? '' }}</td>
