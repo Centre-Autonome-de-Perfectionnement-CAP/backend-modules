@@ -128,7 +128,7 @@
                 <td>{{ $num }}</td>
                 <td>{{ $line["code"] ?? '' }}</td>
                 <td style="font-weight: bold;">{{ $line['nom'] ?? '' }}</td>
-                <td>{{ $line['credit'] ?? '' }}</td>
+                <td style="text-align:center;">{{ $line['credit'] ?? '' }}</td>
                 <td>{{ str_replace('.', ',', number_format(($line['moyenne'] ?? 0) * 5, 2, '.', '')) }}</td>  
       <!--           <td>{{ $line['frequence'] ?? '' }}</td>
                 <td>{{ $line['etat'] ?? '' }}</td> -->
