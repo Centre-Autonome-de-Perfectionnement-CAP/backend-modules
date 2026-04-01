@@ -125,20 +125,20 @@
 
     <table style="width: 100%; text-align: left; padding-left: 10px; margin-bottom: 10px; font-size: 12px; border: none; border-collapse: collapse;">
         <tbody>
-            <tr>
+            <tr style="text-align:center;">
 <!--                 <td style="border: none;"><span style="font-weight: normal;">Nombre de UE validé : </span><strong> {{ $bulletin_data[0]["nombre_ue_valide"] }}/{{ $bulletin_data[0]["nombre_ue"] }}</strong></td>
                 <td style="border: none;"><span style="font-weight: normal;">Crédits obtenus : </span> <strong>{{ $bulletin_data[0]["nombre_credit_obtenu"] }}/{{ $bulletin_data[0]["nombre_credit_total"] }}</strong></td> -->
-                <td style="border: none;"><span style="font-weight: normal;">Moyenne : </span> <strong>{{ $bulletin_data[0]["moyenne"] }}</strong></td>
+                <td style="border: none; text-align:center;"><span style="font-weight: normal;">Moyenne : </span> <strong>{{ $bulletin_data[0]["moyenne"] }}</strong></td>
             </tr>
-            <tr>
+            <tr style="text-align:center;">
 <!--                 <td style="border: none;"><span style="font-weight: normal;">Nombre de UE cumulé : </span> <strong>{{ $bulletin_data[0]["nombre_ue_valide"] }}/{{ $bulletin_data[0]["nombre_ue"] }}</strong></td>
                 <td style="border: none;"><span style="font-weight: normal;">Total crédits cumulés : </span> <strong>{{ $bulletin_data[0]["nombre_credit_obtenu"] }}/{{ $bulletin_data[0]["nombre_credit_total"] }}</strong></td> -->
-                <td style="border: none;"><span style="font-weight: normal;">Grade ETCS : </span><strong>{{ $bulletin_data[0]["grade"] }}</strong></td> 
+                <td style="border: none; text-align:center;"><span style="font-weight: normal;">Grade ETCS : </span><strong>{{ $bulletin_data[0]["grade"] }}</strong></td> 
             </tr>
-            <tr>
+            <tr style="text-align:center;">
 <!--                 <td style="border: none;"><span style="font-weight: normal;">% Crédits requis : </span><strong> 80%</strong></td>
                 <td style="border: none;"><span style="font-weight: normal;">% Crédits cumulés : </span> <strong>{{ round((float)($bulletin_data[0]["nombre_credit_obtenu"] *100 )/ (float)($bulletin_data[0]["nombre_credit_total"]), 2) }}%</strong></td> -->
-                <td style="border: none;"><span style="font-weight: normal;">Décision du conseil : </span><strong> {{ $bulletin_data[0]["decision"] }}</strong></td>
+                <td style="border: none; text-align:center;"><span style="font-weight: normal;">Décision du conseil : </span><strong> {{ $bulletin_data[0]["decision"] }}</strong></td>
             </tr>
         </tbody>
     </table>
