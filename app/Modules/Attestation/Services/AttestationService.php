@@ -26,28 +26,98 @@ class AttestationService
      */
     private function getStudentPhotoPath($pendingStudent, $personalInfo): ?string
     {
+        \Log::info('🔍 [PHOTO] Début de la récupération de la photo', [
+            'pending_student_id' => $pendingStudent?->id ?? 'null',
+            'personal_info_id' => $personalInfo?->id ?? 'null',
+            'pending_student_photo' => $pendingStudent?->photo ?? 'null',
+            'personal_info_photo' => $personalInfo?->photo ?? 'null',
+        ]);
+
         // Vérifier d'abord dans PendingStudent
         if ($pendingStudent && $pendingStudent->photo) {
+            \Log::info('📸 [PHOTO] Photo trouvée dans PendingStudent', [
+                'photo_id' => $pendingStudent->photo
+            ]);
+            
             $photoFile = \App\Modules\Stockage\Models\File::find($pendingStudent->photo);
+            
             if ($photoFile) {
+                \Log::info('📁 [PHOTO] Fichier trouvé dans la table files', [
+                    'file_id' => $photoFile->id,
+                    'disk' => $photoFile->disk,
+                    'file_path' => $photoFile->file_path,
+                    'file_name' => $photoFile->file_name ?? 'N/A',
+                ]);
+                
                 $fullPath = \Illuminate\Support\Facades\Storage::disk($photoFile->disk)->path($photoFile->file_path);
+                
+                \Log::info('🗂️ [PHOTO] Chemin complet construit', [
+                    'full_path' => $fullPath,
+                    'file_exists' => file_exists($fullPath) ? 'OUI' : 'NON',
+                ]);
+                
                 if (file_exists($fullPath)) {
+                    \Log::info('✅ [PHOTO] Photo trouvée et validée dans PendingStudent', [
+                        'path' => $fullPath
+                    ]);
                     return $fullPath;
+                } else {
+                    \Log::warning('⚠️ [PHOTO] Fichier physique introuvable', [
+                        'expected_path' => $fullPath
+                    ]);
                 }
+            } else {
+                \Log::warning('⚠️ [PHOTO] Enregistrement File introuvable dans la BDD', [
+                    'photo_id' => $pendingStudent->photo
+                ]);
             }
+        } else {
+            \Log::info('ℹ️ [PHOTO] Pas de photo dans PendingStudent');
         }
         
         // Si pas de photo dans PendingStudent, vérifier dans PersonalInformation
         if ($personalInfo && $personalInfo->photo) {
+            \Log::info('📸 [PHOTO] Photo trouvée dans PersonalInformation', [
+                'photo_id' => $personalInfo->photo
+            ]);
+            
             $photoFile = \App\Modules\Stockage\Models\File::find($personalInfo->photo);
+            
             if ($photoFile) {
+                \Log::info('📁 [PHOTO] Fichier trouvé dans la table files (PersonalInfo)', [
+                    'file_id' => $photoFile->id,
+                    'disk' => $photoFile->disk,
+                    'file_path' => $photoFile->file_path,
+                    'file_name' => $photoFile->file_name ?? 'N/A',
+                ]);
+                
                 $fullPath = \Illuminate\Support\Facades\Storage::disk($photoFile->disk)->path($photoFile->file_path);
+                
+                \Log::info('🗂️ [PHOTO] Chemin complet construit (PersonalInfo)', [
+                    'full_path' => $fullPath,
+                    'file_exists' => file_exists($fullPath) ? 'OUI' : 'NON',
+                ]);
+                
                 if (file_exists($fullPath)) {
+                    \Log::info('✅ [PHOTO] Photo trouvée et validée dans PersonalInformation', [
+                        'path' => $fullPath
+                    ]);
                     return $fullPath;
+                } else {
+                    \Log::warning('⚠️ [PHOTO] Fichier physique introuvable (PersonalInfo)', [
+                        'expected_path' => $fullPath
+                    ]);
                 }
+            } else {
+                \Log::warning('⚠️ [PHOTO] Enregistrement File introuvable dans la BDD (PersonalInfo)', [
+                    'photo_id' => $personalInfo->photo
+                ]);
             }
+        } else {
+            \Log::info('ℹ️ [PHOTO] Pas de photo dans PersonalInformation');
         }
         
+        \Log::warning('❌ [PHOTO] Aucune photo trouvée, utilisation de l\'avatar par défaut');
         return null;
     }
 
@@ -358,6 +428,14 @@ class AttestationService
             $department = $academicPath->studentPendingStudent?->pendingStudent?->department;
             $student = $academicPath->studentPendingStudent?->student;
             $pendingStudent = $academicPath->studentPendingStudent?->pendingStudent;
+            
+            \Log::info('👤 [BULLETIN MULTIPLE] Données de l\'étudiant', [
+                'student_id' => $student?->id,
+                'student_number' => $student?->student_id_number,
+                'pending_student_id' => $pendingStudent?->id,
+                'personal_info_id' => $personalInfo?->id,
+                'student_name' => ($personalInfo?->first_names ?? '') . ' ' . ($personalInfo?->last_name ?? ''),
+            ]);
             
             // Récupérer la photo de l'étudiant
             $photoPath = $this->getStudentPhotoPath($pendingStudent, $personalInfo);
