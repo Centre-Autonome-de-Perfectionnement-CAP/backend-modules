@@ -39,37 +39,64 @@ class AttestationService
                 'photo_id' => $pendingStudent->photo
             ]);
             
-            $photoFile = \App\Modules\Stockage\Models\File::find($pendingStudent->photo);
-            
-            if ($photoFile) {
-                \Log::info('📁 [PHOTO] Fichier trouvé dans la table files', [
-                    'file_id' => $photoFile->id,
-                    'disk' => $photoFile->disk,
-                    'file_path' => $photoFile->file_path,
-                    'file_name' => $photoFile->file_name ?? 'N/A',
+            // Vérifier si c'est un chemin direct ou un ID
+            if (str_contains($pendingStudent->photo, '/')) {
+                // C'est un chemin direct (ancien format)
+                \Log::info('📂 [PHOTO] Chemin direct détecté (ancien format)', [
+                    'photo_path' => $pendingStudent->photo
                 ]);
                 
-                $fullPath = \Illuminate\Support\Facades\Storage::disk($photoFile->disk)->path($photoFile->file_path);
+                $fullPath = storage_path('app/public/' . $pendingStudent->photo);
                 
-                \Log::info('🗂️ [PHOTO] Chemin complet construit', [
+                \Log::info('🗂️ [PHOTO] Chemin complet construit depuis chemin direct', [
                     'full_path' => $fullPath,
                     'file_exists' => file_exists($fullPath) ? 'OUI' : 'NON',
                 ]);
                 
                 if (file_exists($fullPath)) {
-                    \Log::info('✅ [PHOTO] Photo trouvée et validée dans PendingStudent', [
+                    \Log::info('✅ [PHOTO] Photo trouvée et validée dans PendingStudent (chemin direct)', [
                         'path' => $fullPath
                     ]);
                     return $fullPath;
                 } else {
-                    \Log::warning('⚠️ [PHOTO] Fichier physique introuvable', [
+                    \Log::warning('⚠️ [PHOTO] Fichier physique introuvable (chemin direct)', [
                         'expected_path' => $fullPath
                     ]);
                 }
             } else {
-                \Log::warning('⚠️ [PHOTO] Enregistrement File introuvable dans la BDD', [
-                    'photo_id' => $pendingStudent->photo
-                ]);
+                // C'est un ID de fichier (nouveau format)
+                $photoFile = \App\Modules\Stockage\Models\File::find($pendingStudent->photo);
+                
+                if ($photoFile) {
+                    \Log::info('📁 [PHOTO] Fichier trouvé dans la table files', [
+                        'file_id' => $photoFile->id,
+                        'disk' => $photoFile->disk,
+                        'file_path' => $photoFile->file_path,
+                        'file_name' => $photoFile->file_name ?? 'N/A',
+                    ]);
+                    
+                    $fullPath = \Illuminate\Support\Facades\Storage::disk($photoFile->disk)->path($photoFile->file_path);
+                    
+                    \Log::info('🗂️ [PHOTO] Chemin complet construit', [
+                        'full_path' => $fullPath,
+                        'file_exists' => file_exists($fullPath) ? 'OUI' : 'NON',
+                    ]);
+                    
+                    if (file_exists($fullPath)) {
+                        \Log::info('✅ [PHOTO] Photo trouvée et validée dans PendingStudent', [
+                            'path' => $fullPath
+                        ]);
+                        return $fullPath;
+                    } else {
+                        \Log::warning('⚠️ [PHOTO] Fichier physique introuvable', [
+                            'expected_path' => $fullPath
+                        ]);
+                    }
+                } else {
+                    \Log::warning('⚠️ [PHOTO] Enregistrement File introuvable dans la BDD', [
+                        'photo_id' => $pendingStudent->photo
+                    ]);
+                }
             }
         } else {
             \Log::info('ℹ️ [PHOTO] Pas de photo dans PendingStudent');
@@ -81,37 +108,64 @@ class AttestationService
                 'photo_id' => $personalInfo->photo
             ]);
             
-            $photoFile = \App\Modules\Stockage\Models\File::find($personalInfo->photo);
-            
-            if ($photoFile) {
-                \Log::info('📁 [PHOTO] Fichier trouvé dans la table files (PersonalInfo)', [
-                    'file_id' => $photoFile->id,
-                    'disk' => $photoFile->disk,
-                    'file_path' => $photoFile->file_path,
-                    'file_name' => $photoFile->file_name ?? 'N/A',
+            // Vérifier si c'est un chemin direct ou un ID
+            if (str_contains($personalInfo->photo, '/')) {
+                // C'est un chemin direct (ancien format)
+                \Log::info('📂 [PHOTO] Chemin direct détecté dans PersonalInfo (ancien format)', [
+                    'photo_path' => $personalInfo->photo
                 ]);
                 
-                $fullPath = \Illuminate\Support\Facades\Storage::disk($photoFile->disk)->path($photoFile->file_path);
+                $fullPath = storage_path('app/public/' . $personalInfo->photo);
                 
-                \Log::info('🗂️ [PHOTO] Chemin complet construit (PersonalInfo)', [
+                \Log::info('🗂️ [PHOTO] Chemin complet construit depuis chemin direct (PersonalInfo)', [
                     'full_path' => $fullPath,
                     'file_exists' => file_exists($fullPath) ? 'OUI' : 'NON',
                 ]);
                 
                 if (file_exists($fullPath)) {
-                    \Log::info('✅ [PHOTO] Photo trouvée et validée dans PersonalInformation', [
+                    \Log::info('✅ [PHOTO] Photo trouvée et validée dans PersonalInformation (chemin direct)', [
                         'path' => $fullPath
                     ]);
                     return $fullPath;
                 } else {
-                    \Log::warning('⚠️ [PHOTO] Fichier physique introuvable (PersonalInfo)', [
+                    \Log::warning('⚠️ [PHOTO] Fichier physique introuvable (chemin direct PersonalInfo)', [
                         'expected_path' => $fullPath
                     ]);
                 }
             } else {
-                \Log::warning('⚠️ [PHOTO] Enregistrement File introuvable dans la BDD (PersonalInfo)', [
-                    'photo_id' => $personalInfo->photo
-                ]);
+                // C'est un ID de fichier (nouveau format)
+                $photoFile = \App\Modules\Stockage\Models\File::find($personalInfo->photo);
+                
+                if ($photoFile) {
+                    \Log::info('📁 [PHOTO] Fichier trouvé dans la table files (PersonalInfo)', [
+                        'file_id' => $photoFile->id,
+                        'disk' => $photoFile->disk,
+                        'file_path' => $photoFile->file_path,
+                        'file_name' => $photoFile->file_name ?? 'N/A',
+                    ]);
+                    
+                    $fullPath = \Illuminate\Support\Facades\Storage::disk($photoFile->disk)->path($photoFile->file_path);
+                    
+                    \Log::info('🗂️ [PHOTO] Chemin complet construit (PersonalInfo)', [
+                        'full_path' => $fullPath,
+                        'file_exists' => file_exists($fullPath) ? 'OUI' : 'NON',
+                    ]);
+                    
+                    if (file_exists($fullPath)) {
+                        \Log::info('✅ [PHOTO] Photo trouvée et validée dans PersonalInformation', [
+                            'path' => $fullPath
+                        ]);
+                        return $fullPath;
+                    } else {
+                        \Log::warning('⚠️ [PHOTO] Fichier physique introuvable (PersonalInfo)', [
+                            'expected_path' => $fullPath
+                        ]);
+                    }
+                } else {
+                    \Log::warning('⚠️ [PHOTO] Enregistrement File introuvable dans la BDD (PersonalInfo)', [
+                        'photo_id' => $personalInfo->photo
+                    ]);
+                }
             }
         } else {
             \Log::info('ℹ️ [PHOTO] Pas de photo dans PersonalInformation');
