@@ -51,6 +51,7 @@ Route::prefix('rh')->group(function () {
 
     Route::get('banks', [ProfessorController::class, 'getBanks']);
 
+    Route::post('contrats/{id}/send-transfer-email', [ContratController::class, 'sendTransferEmail']);
     Route::get('roles', function () {
         return response()->json([
             'success' => true,

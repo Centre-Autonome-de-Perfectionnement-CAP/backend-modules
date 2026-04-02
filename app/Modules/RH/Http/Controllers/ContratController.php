@@ -6,10 +6,25 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Modules\RH\Models\Contrat;
 use App\Modules\Cours\Models\CourseElementProfessor;
+use App\Modules\RH\Http\Resources\ProfessorResource;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Mail;
 
-class ContratController extends Controller
-{
+class ContratController extends Controller{
+
+    /**
+     * Sérialise un contrat en ajoutant le professor via ProfessorResource
+     * pour garantir que tous les champs (nationality, city, rib_number…) sont présents.
+     */
+    private function serializeContrat(Contrat $contrat): array
+    {
+        $data = $contrat->toArray();
+        if ($contrat->relationLoaded('professor') && $contrat->professor) {
+            $data['professor'] = (new ProfessorResource($contrat->professor))->toArray(request());
+        }
+        return $data;
+    }
+
     // ─── LISTE ────────────────────────────────────────────────────────────────
     public function index()  {
         $contrats = Contrat::with([
@@ -24,7 +39,7 @@ class ContratController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $contrats,
+            'data'    => $contrats->map(fn($c) => $this->serializeContrat($c)),
         ]);
     }
 
@@ -107,13 +122,13 @@ class ContratController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Contrat créé avec succès',
-                'data'    => $contrat->load([
+                'data'    => $this->serializeContrat($contrat->load([
                     'professor',
                     'academicYear',
                     'cycle',
                     'courseElementProfessors.courseElement.teachingUnit',
                     'courseElementProfessors.classGroup',
-                ]),
+                ])),
             ], 201);
 
         } catch (\Exception $e) {
@@ -125,6 +140,51 @@ class ContratController extends Controller
         }
     }
 
+    public function sendTransferEmail($id) {
+        $contrat = Contrat::with('professor')->find($id);
+
+        if (!$contrat) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Contrat introuvable',
+            ], 404);
+        }
+
+        if ($contrat->status !== 'transfered') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Le contrat doit être en statut transféré pour envoyer l\'email',
+            ], 400);
+        }
+
+        try {
+            // Envoyer l'email à l'enseignant
+            $professor = $contrat->professor;
+            $details = [
+                'title' => 'Votre contrat a été transféré',
+                'body' => "Bonjour {$professor->full_name},
+
+    Votre contrat n°{$contrat->contrat_number} a été transféré et est maintenant disponible pour signature.
+
+    Cordialement,
+    L'équipe du CAP"
+            ];
+
+            Mail::to($professor->email)->send(new \App\Mail\ContratTransferred($details));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Email de notification envoyé avec succès',
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de l\'envoi de l\'email',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
     // ─── DÉTAIL ───────────────────────────────────────────────────────────────
     public function show($id) {
         $contrat = Contrat::with([
@@ -144,7 +204,7 @@ class ContratController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $contrat,
+            'data'    => $this->serializeContrat($contrat),
         ]);
     }
 
@@ -198,13 +258,13 @@ class ContratController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Contrat modifié avec succès',
-                'data'    => $contrat->load([
+                'data'    => $this->serializeContrat($contrat->load([
                     'professor',
                     'academicYear',
                     'cycle',
                     'courseElementProfessors.courseElement.teachingUnit',
                     'courseElementProfessors.classGroup',
-                ]),
+                ])),
             ]);
 
         } catch (\Exception $e) {

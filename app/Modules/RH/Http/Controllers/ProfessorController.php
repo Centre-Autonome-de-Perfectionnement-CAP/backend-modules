@@ -14,8 +14,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Validator;
 use Exception;
 
 class ProfessorController extends Controller
@@ -61,22 +59,17 @@ class ProfessorController extends Controller
 
     // ───────────────────────── CREATE
     public function store(CreateProfessorRequest $request): JsonResponse
-    {
+{
+
         try {
             $data = $request->validated();
 
-            // Gestion des fichiers
-            if ($request->hasFile('rib')) {
-                $path = $request->file('rib')->store('ribs', 'public');
-                $data['rib_url'] = Storage::url($path);
-            }
+            // ✅ CORRECTION : passer les fichiers au service
+            // Le service s'occupe lui-même du stockage des fichiers
+            $ribFile = $request->file('rib');
+            $ifuFile = $request->file('ifu');
 
-            if ($request->hasFile('ifu')) {
-                $path = $request->file('ifu')->store('ifus', 'public');
-                $data['ifu_url'] = Storage::url($path);
-            }
-
-            $professor = $this->professorService->create($data, Auth::id());
+            $professor = $this->professorService->create($data, Auth::id(), $ribFile, $ifuFile);
 
             return $this->createdResponse(
                 new ProfessorResource($professor),
@@ -84,7 +77,7 @@ class ProfessorController extends Controller
             );
         } catch (Exception $e) {
             return $this->errorResponse(
-                'Erreur lors de la création du professeur'.$e->getMessage(),
+                'Erreur lors de la création du professeur',
                 500,
                 $e->getMessage()
             );

@@ -53,7 +53,7 @@ class ProfessorService
         $sortBy = $filters['sort_by'] ?? 'created_at';
         $sortOrder = $filters['sort_order'] ?? 'desc';
 
-        return $query->orderBy($sortBy, $sortOrder)->paginate($perPage);
+        return $query->with('grade')->orderBy($sortBy, $sortOrder)->paginate($perPage);
     }
 
     // ───────────────────────── CREATE PROFESSOR
