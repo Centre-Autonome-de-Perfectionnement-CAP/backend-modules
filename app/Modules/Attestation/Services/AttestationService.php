@@ -17,6 +17,41 @@ class AttestationService
     }
 
     /**
+     * Récupère le chemin de la photo d'un étudiant
+     * Vérifie d'abord dans PendingStudent, puis dans PersonalInformation
+     * 
+     * @param mixed $pendingStudent
+     * @param mixed $personalInfo
+     * @return string|null Le chemin complet de la photo ou null
+     */
+    private function getStudentPhotoPath($pendingStudent, $personalInfo): ?string
+    {
+        // Vérifier d'abord dans PendingStudent
+        if ($pendingStudent && $pendingStudent->photo) {
+            $photoFile = \App\Modules\Stockage\Models\File::find($pendingStudent->photo);
+            if ($photoFile) {
+                $fullPath = \Illuminate\Support\Facades\Storage::disk($photoFile->disk)->path($photoFile->file_path);
+                if (file_exists($fullPath)) {
+                    return $fullPath;
+                }
+            }
+        }
+        
+        // Si pas de photo dans PendingStudent, vérifier dans PersonalInformation
+        if ($personalInfo && $personalInfo->photo) {
+            $photoFile = \App\Modules\Stockage\Models\File::find($personalInfo->photo);
+            if ($photoFile) {
+                $fullPath = \Illuminate\Support\Facades\Storage::disk($photoFile->disk)->path($photoFile->file_path);
+                if (file_exists($fullPath)) {
+                    return $fullPath;
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    /**
      * Récupère les étudiants éligibles pour une attestation
      */
     public function getEligibleStudents(
@@ -325,14 +360,7 @@ class AttestationService
             $pendingStudent = $academicPath->studentPendingStudent?->pendingStudent;
             
             // Récupérer la photo de l'étudiant
-            $photoPath = null;
-            if ($pendingStudent && $pendingStudent->photo) {
-                // Le champ photo contient l'ID du fichier dans la table files
-                $photoFile = \App\Modules\Stockage\Models\File::find($pendingStudent->photo);
-                if ($photoFile && $photoFile->exists()) {
-                    $photoPath = \Illuminate\Support\Facades\Storage::disk($photoFile->disk)->path($photoFile->file_path);
-                }
-            }
+            $photoPath = $this->getStudentPhotoPath($pendingStudent, $personalInfo);
             
             // Récupérer le class_group_id de l'étudiant
             $classGroupId = DB::table('student_groups')
@@ -618,14 +646,7 @@ class AttestationService
 
         // Récupérer la photo de l'étudiant
         $pendingStudent = $academicPath->studentPendingStudent?->pendingStudent;
-        $photoPath = null;
-        if ($pendingStudent && $pendingStudent->photo) {
-            // Le champ photo contient l'ID du fichier dans la table files
-            $photoFile = \App\Modules\Stockage\Models\File::find($pendingStudent->photo);
-            if ($photoFile && $photoFile->exists()) {
-                $photoPath = \Illuminate\Support\Facades\Storage::disk($photoFile->disk)->path($photoFile->file_path);
-            }
-        }
+        $photoPath = $this->getStudentPhotoPath($pendingStudent, $personalInfo);
         
         $etudiant = (object) [
             'matricule' => $student?->student_id_number ?? '',

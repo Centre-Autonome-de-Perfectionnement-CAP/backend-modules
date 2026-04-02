@@ -90,16 +90,10 @@ class UserSeeder extends Seeder
                 ])
             );
 
-            // Attacher le rôle
             $role = Role::where('slug', $roleName)->first();
             if ($role) {
                 $user->roles()->syncWithoutDetaching([$role->id]);
             }
         }
-
-        $this->command->info('✅ Utilisateurs créés avec succès!');
-        $this->command->warn('📧 Chef CAP: chef@cap.edu | password123');
-        $this->command->warn('📧 Secrétaire: secretaire@cap.edu | password123');
-        $this->command->warn('📧 Comptable: comptable@cap.edu | password123');
     }
 }
