@@ -19,7 +19,7 @@ class AttestationService
     /**
      * Récupère le chemin de la photo d'un étudiant
      * Vérifie d'abord dans PendingStudent, puis dans PersonalInformation
-     * 
+     *
      * @param mixed $pendingStudent
      * @param mixed $personalInfo
      * @return string|null Le chemin complet de la photo ou null
@@ -38,27 +38,48 @@ class AttestationService
             \Log::info('📸 [PHOTO] Photo trouvée dans PendingStudent', [
                 'photo_id' => $pendingStudent->photo
             ]);
-            
+
+
             // Vérifier si c'est un chemin direct ou un ID
             if (str_contains($pendingStudent->photo, '/')) {
                 // C'est un chemin direct (ancien format)
                 \Log::info('📂 [PHOTO] Chemin direct détecté (ancien format)', [
                     'photo_path' => $pendingStudent->photo
                 ]);
-                
+
                 $fullPath = storage_path('app/public/' . $pendingStudent->photo);
-                
+
                 \Log::info('🗂️ [PHOTO] Chemin complet construit depuis chemin direct', [
+
+            $photoFile = \App\Modules\Stockage\Models\File::find($pendingStudent->photo);
+
+            if ($photoFile) {
+                \Log::info('📁 [PHOTO] Fichier trouvé dans la table files', [
+                    'file_id' => $photoFile->id,
+                    'disk' => $photoFile->disk,
+                    'file_path' => $photoFile->file_path,
+                    'file_name' => $photoFile->file_name ?? 'N/A',
+                ]);
+
+                $fullPath = \Illuminate\Support\Facades\Storage::disk($photoFile->disk)->path($photoFile->file_path);
+
+                \Log::info('🗂️ [PHOTO] Chemin complet construit', [
+
                     'full_path' => $fullPath,
                     'file_exists' => file_exists($fullPath) ? 'OUI' : 'NON',
                 ]);
-                
+
                 if (file_exists($fullPath)) {
+
                     \Log::info('✅ [PHOTO] Photo trouvée et validée dans PendingStudent (chemin direct)', [
+
+                    \Log::info('✅ [PHOTO] Photo trouvée et validée dans PendingStudent', [
+
                         'path' => $fullPath
                     ]);
                     return $fullPath;
                 } else {
+
                     \Log::warning('⚠️ [PHOTO] Fichier physique introuvable (chemin direct)', [
                         'expected_path' => $fullPath
                     ]);
@@ -66,7 +87,7 @@ class AttestationService
             } else {
                 // C'est un ID de fichier (nouveau format)
                 $photoFile = \App\Modules\Stockage\Models\File::find($pendingStudent->photo);
-                
+
                 if ($photoFile) {
                     \Log::info('📁 [PHOTO] Fichier trouvé dans la table files', [
                         'file_id' => $photoFile->id,
@@ -74,14 +95,14 @@ class AttestationService
                         'file_path' => $photoFile->file_path,
                         'file_name' => $photoFile->file_name ?? 'N/A',
                     ]);
-                    
+
                     $fullPath = \Illuminate\Support\Facades\Storage::disk($photoFile->disk)->path($photoFile->file_path);
-                    
+
                     \Log::info('🗂️ [PHOTO] Chemin complet construit', [
                         'full_path' => $fullPath,
                         'file_exists' => file_exists($fullPath) ? 'OUI' : 'NON',
                     ]);
-                    
+
                     if (file_exists($fullPath)) {
                         \Log::info('✅ [PHOTO] Photo trouvée et validée dans PendingStudent', [
                             'path' => $fullPath
@@ -96,38 +117,68 @@ class AttestationService
                     \Log::warning('⚠️ [PHOTO] Enregistrement File introuvable dans la BDD', [
                         'photo_id' => $pendingStudent->photo
                     ]);
+
+                    \Log::warning('⚠️ [PHOTO] Fichier physique introuvable', [
+                        'expected_path' => $fullPath
+                    ]);
+
                 }
+            } else {
+                \Log::warning('⚠️ [PHOTO] Enregistrement File introuvable dans la BDD', [
+                    'photo_id' => $pendingStudent->photo
+                ]);
             }
         } else {
             \Log::info('ℹ️ [PHOTO] Pas de photo dans PendingStudent');
         }
-        
+
         // Si pas de photo dans PendingStudent, vérifier dans PersonalInformation
         if ($personalInfo && $personalInfo->photo) {
             \Log::info('📸 [PHOTO] Photo trouvée dans PersonalInformation', [
                 'photo_id' => $personalInfo->photo
             ]);
-            
+
+
             // Vérifier si c'est un chemin direct ou un ID
             if (str_contains($personalInfo->photo, '/')) {
                 // C'est un chemin direct (ancien format)
                 \Log::info('📂 [PHOTO] Chemin direct détecté dans PersonalInfo (ancien format)', [
                     'photo_path' => $personalInfo->photo
                 ]);
-                
+
                 $fullPath = storage_path('app/public/' . $personalInfo->photo);
-                
+
                 \Log::info('🗂️ [PHOTO] Chemin complet construit depuis chemin direct (PersonalInfo)', [
+
+            $photoFile = \App\Modules\Stockage\Models\File::find($personalInfo->photo);
+
+            if ($photoFile) {
+                \Log::info('📁 [PHOTO] Fichier trouvé dans la table files (PersonalInfo)', [
+                    'file_id' => $photoFile->id,
+                    'disk' => $photoFile->disk,
+                    'file_path' => $photoFile->file_path,
+                    'file_name' => $photoFile->file_name ?? 'N/A',
+                ]);
+
+                $fullPath = \Illuminate\Support\Facades\Storage::disk($photoFile->disk)->path($photoFile->file_path);
+
+                \Log::info('🗂️ [PHOTO] Chemin complet construit (PersonalInfo)', [
+
                     'full_path' => $fullPath,
                     'file_exists' => file_exists($fullPath) ? 'OUI' : 'NON',
                 ]);
-                
+
                 if (file_exists($fullPath)) {
+
                     \Log::info('✅ [PHOTO] Photo trouvée et validée dans PersonalInformation (chemin direct)', [
+
+                    \Log::info('✅ [PHOTO] Photo trouvée et validée dans PersonalInformation', [
+
                         'path' => $fullPath
                     ]);
                     return $fullPath;
                 } else {
+ 
                     \Log::warning('⚠️ [PHOTO] Fichier physique introuvable (chemin direct PersonalInfo)', [
                         'expected_path' => $fullPath
                     ]);
@@ -135,7 +186,7 @@ class AttestationService
             } else {
                 // C'est un ID de fichier (nouveau format)
                 $photoFile = \App\Modules\Stockage\Models\File::find($personalInfo->photo);
-                
+
                 if ($photoFile) {
                     \Log::info('📁 [PHOTO] Fichier trouvé dans la table files (PersonalInfo)', [
                         'file_id' => $photoFile->id,
@@ -143,14 +194,14 @@ class AttestationService
                         'file_path' => $photoFile->file_path,
                         'file_name' => $photoFile->file_name ?? 'N/A',
                     ]);
-                    
+
                     $fullPath = \Illuminate\Support\Facades\Storage::disk($photoFile->disk)->path($photoFile->file_path);
-                    
+
                     \Log::info('🗂️ [PHOTO] Chemin complet construit (PersonalInfo)', [
                         'full_path' => $fullPath,
                         'file_exists' => file_exists($fullPath) ? 'OUI' : 'NON',
                     ]);
-                    
+
                     if (file_exists($fullPath)) {
                         \Log::info('✅ [PHOTO] Photo trouvée et validée dans PersonalInformation', [
                             'path' => $fullPath
@@ -165,12 +216,21 @@ class AttestationService
                     \Log::warning('⚠️ [PHOTO] Enregistrement File introuvable dans la BDD (PersonalInfo)', [
                         'photo_id' => $personalInfo->photo
                     ]);
+
+                    \Log::warning('⚠️ [PHOTO] Fichier physique introuvable (PersonalInfo)', [
+                        'expected_path' => $fullPath
+                    ]);
+
                 }
+            } else {
+                \Log::warning('⚠️ [PHOTO] Enregistrement File introuvable dans la BDD (PersonalInfo)', [
+                    'photo_id' => $personalInfo->photo
+                ]);
             }
         } else {
             \Log::info('ℹ️ [PHOTO] Pas de photo dans PersonalInformation');
         }
-        
+
         \Log::warning('❌ [PHOTO] Aucune photo trouvée, utilisation de l\'avatar par défaut');
         return null;
     }
@@ -346,7 +406,7 @@ class AttestationService
         ];
 
         $deliberationDate = $academicPath->deliberation_date ?? now();
-        
+
         $etudiant = (object) [
             'genre' => $personalInfo?->gender ?? 'M',
             'nom' => $personalInfo?->last_name ?? '',
@@ -413,7 +473,7 @@ class AttestationService
             $personalInfo = $academicPath->studentPendingStudent?->pendingStudent?->personalInformation;
             $department = $academicPath->studentPendingStudent?->pendingStudent?->department;
             $deliberationDate = $academicPath->deliberation_date ?? now();
-            
+
             $etudiants[] = (object) [
                 'genre' => $personalInfo?->gender ?? 'M',
                 'nom' => $personalInfo?->last_name ?? '',
@@ -461,11 +521,11 @@ class AttestationService
             5 => 'Mai', 6 => 'Juin', 7 => 'Juillet', 8 => 'Août',
             9 => 'Septembre', 10 => 'Octobre', 11 => 'Novembre', 12 => 'Décembre'
         ];
-        
+
         foreach ($requests as $request) {
             $studentPendingStudentId = $request['student_pending_student_id'];
             $academicYearId = $request['academic_year_id'];
-            
+
             $academicPath = AcademicPath::with([
                 'studentPendingStudent.pendingStudent.personalInformation',
                 'studentPendingStudent.pendingStudent.department',
@@ -475,14 +535,14 @@ class AttestationService
             ->where('student_pending_student_id', $studentPendingStudentId)
             ->where('academic_year_id', $academicYearId)
             ->first();
-            
+
             if (!$academicPath) continue;
-            
+
             $personalInfo = $academicPath->studentPendingStudent?->pendingStudent?->personalInformation;
             $department = $academicPath->studentPendingStudent?->pendingStudent?->department;
             $student = $academicPath->studentPendingStudent?->student;
             $pendingStudent = $academicPath->studentPendingStudent?->pendingStudent;
-            
+
             \Log::info('👤 [BULLETIN MULTIPLE] Données de l\'étudiant', [
                 'student_id' => $student?->id,
                 'student_number' => $student?->student_id_number,
@@ -490,23 +550,23 @@ class AttestationService
                 'personal_info_id' => $personalInfo?->id,
                 'student_name' => ($personalInfo?->first_names ?? '') . ' ' . ($personalInfo?->last_name ?? ''),
             ]);
-            
+
             // Récupérer la photo de l'étudiant
             $photoPath = $this->getStudentPhotoPath($pendingStudent, $personalInfo);
-            
+
             // Récupérer le class_group_id de l'étudiant
             $classGroupId = DB::table('student_groups')
                 ->where('student_id', $student->id)
                 ->value('class_group_id');
-            
+
             // Récupérer la moyenne minimale de validation de la classe
             $classGroup = DB::table('class_groups')
                 ->where('id', $classGroupId)
                 ->where('academic_year_id', $academicYearId)
                 ->first();
-            
+
             $validationAverage = $classGroup->validation_average ?? 10;
-            
+
             // Récupérer les programmes de la classe pour l'année académique
             $programs = DB::table('programs')
                 ->join('course_element_professor', 'programs.course_element_professor_id', '=', 'course_element_professor.id')
@@ -514,7 +574,7 @@ class AttestationService
                 ->where('programs.class_group_id', $classGroupId)
                 ->select('programs.id as program_id', 'course_elements.code', 'course_elements.name', 'course_elements.credits', 'programs.semester')
                 ->get();
-            
+
             // Récupérer les notes de l'étudiant
             $grades = [];
             foreach ($programs as $program) {
@@ -522,7 +582,7 @@ class AttestationService
                     ->where('student_pending_student_id', $studentPendingStudentId)
                     ->where('program_id', $program->program_id)
                     ->first();
-                
+
                 if ($gradeRecord) {
                     $grades[] = (object) [
                         'code' => $program->code,
@@ -534,9 +594,9 @@ class AttestationService
                     ];
                 }
             }
-            
+
             $grades = collect($grades);
-            
+
             // Préparer les données du bulletin
             $bulletinData = [];
             $totalCredits = 0;
@@ -544,7 +604,7 @@ class AttestationService
             $totalAverage = 0;
             $validatedUE = 0;
             $totalUE = $grades->count();
-            
+
             foreach ($grades as $grade) {
                 //$isValidated = $grade->average >= $validationAverage;
                 $isValidated = $grade->average >= 12;
@@ -563,18 +623,18 @@ class AttestationService
                 }
                 $totalAverage += $grade->average;
             }
-            
+
             $moyenne = $totalUE > 0 ? round(($totalAverage / $totalUE) * 5, 2) : 0;
             $grade = $moyenne >= 90 ? 'A (Excellent)' : ($moyenne >= 80 ? 'B (Très Bien)' : ($moyenne >= 70 ? 'C (Bien)' : ($moyenne >= 60 ? 'D (Assez-Bien)' : 'E (Passable)')));
-            
-            $dateNaissance = $personalInfo?->birth_date ? 
-                $personalInfo->birth_date->format('d') . ' ' . 
-                $monthsFr[(int)$personalInfo->birth_date->format('n')] . ' ' . 
+
+            $dateNaissance = $personalInfo?->birth_date ?
+                $personalInfo->birth_date->format('d') . ' ' .
+                $monthsFr[(int)$personalInfo->birth_date->format('n')] . ' ' .
                 $personalInfo->birth_date->format('Y') : '';
-            
+
             $filiereNom = str_replace(['PREPA ', 'Prepa ', 'Prépa ', 'prépa ', 'PREPA', 'Prepa', 'Prépa', 'prépa'], '', $department?->name ?? '');
             $cycle = $department?->cycle;
-            
+
             $etudiant = (object) [
                 'matricule' => $student?->student_id_number ?? '',
                 'genre' => $personalInfo?->gender === 'F' ? 'féminin' : 'masculin',
@@ -588,15 +648,15 @@ class AttestationService
                     'diplome' => (object) ['nom' => $cycle?->name ?? 'LMD']
                 ]
             ];
-            
+
             $signataireBd = Signataire::getByRole('Chef CAP') ?? Signataire::getByRole('Directeur');
             $signataire = (object) [
                 'nomination' => $signataireBd?->nom ?? 'Prof. HOUNKONNOU Mahouton Norbert'
             ];
-            
+
             // Générer le QR code
             $qrData = "Nom: {$etudiant->nom}\nPrénoms: {$etudiant->prenoms}\nMatricule: {$etudiant->matricule}\nFilière: {$filiereNom}\nDate d'impression: " . now()->format('d/m/Y');
-            
+
             $renderer = new \BaconQrCode\Renderer\ImageRenderer(
                 new \BaconQrCode\Renderer\RendererStyle\RendererStyle(200),
                 new \BaconQrCode\Renderer\Image\SvgImageBackEnd()
@@ -604,7 +664,7 @@ class AttestationService
             $writer = new \BaconQrCode\Writer($renderer);
             $qrCodeSvg = $writer->writeString($qrData);
             $qrCodeBase64 = base64_encode($qrCodeSvg);
-            
+
             $bulletins[] = [
                 'annee' => $academicPath->academicYear?->academic_year ?? '',
                 'qrcode' => $qrCodeBase64,
@@ -622,11 +682,11 @@ class AttestationService
                 ]]
             ];
         }
-        
+
         if (empty($bulletins)) {
             throw new \Exception('Aucun bulletin éligible trouvé');
         }
-        
+
         return $this->pdfService->downloadPdf('core::pdfs.bulletins-multiple', [
             'bulletins' => $bulletins
         ], 'bulletins.pdf');
@@ -638,7 +698,7 @@ class AttestationService
     public function generateMultipleAttestationsLicence(array $studentPendingStudentIds)
     {
         $attestations = [];
-        
+
         foreach ($studentPendingStudentIds as $studentPendingStudentId) {
             $academicPath = AcademicPath::with([
                 'studentPendingStudent.pendingStudent.personalInformation',
@@ -649,18 +709,18 @@ class AttestationService
                 $q->where('id', $studentPendingStudentId);
             })->where('study_level', 'L3')
             ->first();
-            
+
             if (!$academicPath) continue;
-            
+
             $attestations[] = [
                 'student' => $academicPath
             ];
         }
-        
+
         if (empty($attestations)) {
             throw new \Exception('Aucune attestation éligible trouvée');
         }
-        
+
         return $this->pdfService->downloadPdf('core::pdfs.attestations-licence-multiple', [
             'attestations' => $attestations
         ], 'attestations-licence.pdf');
@@ -701,7 +761,7 @@ class AttestationService
             ->where('id', $classGroupId)
             ->where('academic_year_id', $academicYearId)
             ->first();
-        
+
         $validationAverage = $classGroup->validation_average ?? 10;
 
         // Récupérer les programmes de la classe pour l'année académique
@@ -765,9 +825,9 @@ class AttestationService
         $grade = $moyenne >= 90 ? 'A (Excellent)' : ($moyenne >= 80 ? 'B (Très Bien)' : ($moyenne >= 70 ? 'C (Bien)' : ($moyenne >= 60 ? 'D (Assez-Bien)' : 'E (Passable)')));
 
         // Formater la date de naissance en français
-        $dateNaissance = $personalInfo?->birth_date ? 
-            $personalInfo->birth_date->format('d') . ' ' . 
-            $monthsFr[(int)$personalInfo->birth_date->format('n')] . ' ' . 
+        $dateNaissance = $personalInfo?->birth_date ?
+            $personalInfo->birth_date->format('d') . ' ' .
+            $monthsFr[(int)$personalInfo->birth_date->format('n')] . ' ' .
             $personalInfo->birth_date->format('Y') : '';
 
         // Nettoyer le nom de la filière (enlever "Prépa" ou "PREPA")
@@ -779,7 +839,7 @@ class AttestationService
         // Récupérer la photo de l'étudiant
         $pendingStudent = $academicPath->studentPendingStudent?->pendingStudent;
         $photoPath = $this->getStudentPhotoPath($pendingStudent, $personalInfo);
-        
+
         $etudiant = (object) [
             'matricule' => $student?->student_id_number ?? '',
             'genre' => $personalInfo?->gender === 'F' ? 'féminin' : 'masculin',
@@ -801,7 +861,7 @@ class AttestationService
 
         // Générer le QR code avec BaconQrCode et GD
         $qrData = "Nom: {$etudiant->nom}\nPrénoms: {$etudiant->prenoms}\nMatricule: {$etudiant->matricule}\nFilière: {$filiereNom}\nDate d'impression: " . now()->format('d/m/Y');
-        
+
         $renderer = new \BaconQrCode\Renderer\ImageRenderer(
             new \BaconQrCode\Renderer\RendererStyle\RendererStyle(200),
             new \BaconQrCode\Renderer\Image\SvgImageBackEnd()
