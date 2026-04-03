@@ -82,8 +82,10 @@ class Contrat extends Model
             'ongoing'   => 'En cours',
             'completed' => 'Terminé',
             'cancelled' => 'Résilié',
-            'rejected'  => 'Rejeté', 
+            'rejected'  => 'Rejeté',
             default     => 'Inconnu',
         };
     }
 }
+
+
