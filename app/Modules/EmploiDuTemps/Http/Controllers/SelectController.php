@@ -99,16 +99,7 @@ class SelectController extends Controller
         if ($request->filled('class_group_id')) {
             $query->where('class_group_id', $request->class_group_id);
         }
-        // Filtre optionnel : par département via classGroup
-        if ($request->filled('department_id')) {
-            $query->whereHas('classGroup', fn($q) =>
-                $q->where('department_id', $request->department_id)
-            );
-        }
-        if ($request->filled('semester')) {
-            $query->where('semester', $request->semester);
-        }
-
+      
         $programs = $query->orderBy('id')->get();
 
         $result = $programs->map(function ($p) {
