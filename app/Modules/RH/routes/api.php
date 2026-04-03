@@ -14,27 +14,36 @@ use App\Modules\RH\Http\Controllers\CycleController;
 
 Route::prefix('rh')->group(function () {
 
-    Route::get('professors',           [ProfessorController::class, 'index']);
-    Route::get('grades',               [GradeController::class, 'index']);
-    Route::get('files/{file}',         [FileController::class, 'viewDocument']);
-    Route::get('documents',            [DocumentManagementController::class, 'index']);
+    Route::get('professors',             [ProfessorController::class, 'index']);
+    Route::get('grades',                 [GradeController::class, 'index']);
+    Route::get('files/{file}',           [FileController::class, 'viewDocument']);
+    Route::get('documents',              [DocumentManagementController::class, 'index']);
     Route::get('important-informations', [ImportantInformationController::class, 'index']);
-    Route::get('academic-years',       [AcademicYearController::class, 'index']);
-    Route::get('cycles',               [CycleController::class, 'index']);
+    Route::get('academic-years',         [AcademicYearController::class, 'index']);
+    Route::get('cycles',                 [CycleController::class, 'index']);
 
-    // ─── Contrats (CRUD complet) ──────────────────────────────────────────────
+    // ─── Contrats (CRUD complet — admin) ──────────────────────────────────────
     Route::get('contrats',         [ContratController::class, 'index']);
     Route::post('contrats',        [ContratController::class, 'store']);
     Route::get('contrats/{id}',    [ContratController::class, 'show']);
     Route::put('contrats/{id}',    [ContratController::class, 'update']);
     Route::delete('contrats/{id}', [ContratController::class, 'destroy']);
 
-    // ─── Programmes d'un professeur (matières + classes assignées) ────────────
-    // Utilisé pour pré-remplir le select "Programmes" dans le formulaire de contrat
+    // ─── Autorisation d'un contrat validé (admin uniquement) ─────────────────
+    Route::post('contrats/{id}/authorize', [ContratController::class, 'authorizee']);
+
+    // ─── Email de transfert ───────────────────────────────────────────────────
+    Route::post('contrats/{id}/send-transfer-email', [ContratController::class, 'sendTransferEmail']);
+
+    // ─── Programmes d'un professeur ───────────────────────────────────────────
     Route::get('professors/{professorId}/programs', [ContratController::class, 'professorPrograms']);
 
-    // ─── Routes protégées ─────────────────────────────────────────────────────
+    // ─── Accès par token (liens email — PUBLIC, sans authentification) ────────
+    Route::get('contrats/by-token/{token}',           [ContratController::class, 'showByToken']);
+    Route::post('contrats/by-token/{token}/validate', [ContratController::class, 'validateByToken']);
+    Route::post('contrats/by-token/{token}/reject',   [ContratController::class, 'rejectByToken']);
 
+    // ─── Routes protégées ─────────────────────────────────────────────────────
     Route::apiResource('documents', DocumentManagementController::class)->except(['index']);
 
     Route::get('important-informations/admin', [ImportantInformationController::class, 'indexAdmin']);
@@ -48,14 +57,18 @@ Route::prefix('rh')->group(function () {
     Route::get('admin-users-statistics', [AdminUserController::class, 'statistics']);
 
     Route::apiResource('signataires', SignataireController::class);
-
     Route::get('banks', [ProfessorController::class, 'getBanks']);
 
-    Route::post('contrats/{id}/send-transfer-email', [ContratController::class, 'sendTransferEmail']);
     Route::get('roles', function () {
         return response()->json([
             'success' => true,
             'data'    => \App\Modules\Stockage\Models\Role::select('id', 'name', 'slug')->get(),
         ]);
+    });
+
+    // ─── Contrats du professeur connecté ─────────────────────────────────────
+    // Protégé par sanctum:professor middleware (à configurer dans votre RouteServiceProvider)
+    Route::middleware(['auth:professor'])->group(function () {
+        Route::get('professor/my-contrats', [ContratController::class, 'myContrats']);
     });
 });

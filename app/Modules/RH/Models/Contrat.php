@@ -25,16 +25,21 @@ class Contrat extends Model
         'amount',
         'validation_date',
         'is_validated',
+        'is_authorized',
+        'authorization_date',
         'status',
         'notes',
+        'rejection_reason',
     ];
 
     protected $casts = [
         'start_date'      => 'date',
         'end_date'        => 'date',
         'validation_date' => 'date',
+        'authorization_date'=> 'datetime',
         'is_validated'    => 'boolean',
         'amount'          => 'decimal:2',
+        'is_authorized'     => 'boolean',
     ];
 
     // ─── Relations ────────────────────────────────────────────────────────────
@@ -77,6 +82,7 @@ class Contrat extends Model
             'ongoing'   => 'En cours',
             'completed' => 'Terminé',
             'cancelled' => 'Résilié',
+            'rejected'  => 'Rejeté', 
             default     => 'Inconnu',
         };
     }
