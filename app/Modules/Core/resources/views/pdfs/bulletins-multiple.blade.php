@@ -40,7 +40,7 @@
 
 @section('content')
 @foreach($bulletins as $bulletin)
-<div class="main" style="margin-bottom: 10px; position: relative; {{ !$loop->last ? 'page-break-after: always;' : '' }}">
+<div class="main" style="margin-bottom: 10px; position: relative; top: 10px; {{ !$loop->last ? 'page-break-after: always;' : '' }}">
     @if(!$loop->first)
     <div class="header" style="margin-bottom: 20px;">
         @php
@@ -144,7 +144,7 @@
     <table style="width: 100%; margin: 7px; text-align: center; font-size: 13px; border: none; border-collapse: collapse;">
         <tbody>
             <tr>
-                <td colspan="3" style="font-weight: bolder; text-align: center; border: none;">BILAN DE L'ANNÉE</td>
+                <td colspan="3" style="font-weight: bolder; text-align: left; border: none;">BILAN DE L'ANNÉE</td>
             </tr>
         </tbody>
     </table>
@@ -171,7 +171,7 @@
     @endif
     <br>
     <div style="width: 100%; text-align: center; font-size: 14px;">
-        <p style="margin: 30px 0;">Fait à Abomey-Calavi le {{ now()->format('d') }} {{ ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][now()->format('n')] }} {{ now()->format('Y') }}</p>
+        <p style="margin: 30px 0;">Fait à Abomey-Calavi le, {{ now()->format('d') }} {{ ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][now()->format('n')] }} {{ now()->format('Y') }}</p>
         <p style="margin: 40px 0;">Le Chef CAP</p>
         <div style="height: 80px;"></div>
         <p style="margin: 5px 0; text-decoration: underline;">{{ $bulletin['signataire']->nomination ?? '' }}</p>

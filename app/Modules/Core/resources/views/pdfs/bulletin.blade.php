@@ -39,7 +39,7 @@
 @endsection
 
 @section('content')
-<div class="main" style="position: relative;">
+<div class="main" style="position: relative; top: 10px;">
     <div style="position: absolute; top: 0px; left: 0; margin-bottom: 10px;">
         @if(isset($etudiant->photo) && $etudiant->photo && file_exists($etudiant->photo))
             <img src="{{ $etudiant->photo }}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 5px;" alt="Photo étudiant">
@@ -118,7 +118,7 @@
     <table style="width: 100%; margin: 7px; text-align: center; font-size: 13px; border: none; border-collapse: collapse;">
         <tbody>
             <tr>
-                <td colspan="3" style="font-weight: bolder; text-align: center; border: none;">BILAN DE L'ANNÉE</td>
+                <td colspan="3" style="font-weight: bolder; text-align: left; border: none;">BILAN DE L'ANNÉE</td>
             </tr>
         </tbody>
     </table>
@@ -144,7 +144,7 @@
     </table>
     
     <div style="width: 100%; text-align: center; font-size: 14px;">
-        <p style="margin: 30px 0;">Fait à Abomey-Calavi le {{ now()->format('d') }} {{ ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][now()->format('n')] }} {{ now()->format('Y') }}</p>
+        <p style="margin: 30px 0;">Fait à Abomey-Calavi le, {{ now()->format('d') }} {{ ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][now()->format('n')] }} {{ now()->format('Y') }}</p>
         <p style="margin: 40px 0;">Le Chef CAP</p>
         <div style="height: 80px;"></div>
         <p style="margin: 5px 0; text-decoration: underline;">{{ $signataire->nomination }}</p>
