@@ -74,7 +74,7 @@
                     @endif
     </div>
 
-    
+
     <div style="text-align: center; font-weight: bold; margin-bottom: 7px; font-size: 25px;">BULLETIN DE NOTES</div>
     <div style="text-align: center; font-weight: bold; margin-bottom: 20px; font-size: 15px;">Année Académique: {{ $bulletin['annee'] ?? '' }}</div>
     @if(isset($bulletin['qrcode']))
@@ -82,7 +82,7 @@
         <img src="data:image/svg+xml;base64,{{ $bulletin['qrcode'] }}" width="100px" height="100px" class="qrcode" alt="Code QR">
     </div>
     @endif
-    
+
     <table style="width: 100%; text-align: left; margin-bottom: 10px; font-size: 11px; border: none; margin-top: 10px; border-collapse: collapse;">
         <tbody>
             <tr>
@@ -102,7 +102,7 @@
             </tr>
         </tbody>
     </table>
-    
+
     <table class="corps">
         <thead style="font-weight: bold;">
             <tr>
@@ -125,7 +125,7 @@
                 <td>{{ $line["code"] ?? '' }}</td>
                 <td style="font-weight: bold;">{{ $line['nom'] ?? '' }}</td>
                 <td>{{ $line['credit'] ?? '' }}</td>
-                <td>{{ ($line['moyenne'] ?? 0) * 5 }}</td>  
+                <td>{{ ($line['moyenne'] ?? 0) * 5 }}</td>
                 <td>{{ $line['frequence'] ?? '' }}</td>
                 <td>{{ $line['etat'] ?? '' }}</td>
                 @php $num++; @endphp
@@ -147,20 +147,20 @@
 
     <table style="width: 100%; text-align: left; padding-left: 10px; margin-bottom: 10px; font-size: 12px; border: none; border-collapse: collapse;">
         <tbody>
-            <tr>
-                <td style="border: none;"><span style="font-weight: normal;">Nombre de UE validé : </span><strong> {{ $bulletin['bulletin_data'][0]["nombre_ue_valide"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_ue"] ?? 0 }}</strong></td>
-                <td style="border: none;"><span style="font-weight: normal;">Crédits obtenus : </span> <strong>{{ $bulletin['bulletin_data'][0]["nombre_credit_obtenu"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_credit_total"] ?? 0 }}</strong></td>
-                <td style="border: none;"><span style="font-weight: normal;">Moyenne : </span> <strong>{{ $bulletin['bulletin_data'][0]["moyenne"] ?? 0 }}</strong></td>
+            <tr style="text-align:center;">
+<!--                 <td style="border: none;"><span style="font-weight: normal;">Nombre de UE validé : </span><strong> {{ $bulletin['bulletin_data'][0]["nombre_ue_valide"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_ue"] ?? 0 }}</strong></td>
+                <td style="border: none;"><span style="font-weight: normal;">Crédits obtenus : </span> <strong>{{ $bulletin['bulletin_data'][0]["nombre_credit_obtenu"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_credit_total"] ?? 0 }}</strong></td> -->
+                <td style="border: none; text-align:center;"><span style="font-weight: normal;">Moyenne : </span> <strong>{{ str_replace('.', ',', number_format((float)($bulletin['bulletin_data'][0]["moyenne"] ?? 0), 2, '.', '')) }}</strong></td>
             </tr>
-            <tr>
-                <td style="border: none;"><span style="font-weight: normal;">Nombre de UE cumulé : </span> <strong>{{ $bulletin['bulletin_data'][0]["nombre_ue_valide"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_ue"] ?? 0 }}</strong></td>
-                <td style="border: none;"><span style="font-weight: normal;">Total crédits cumulés : </span> <strong>{{ $bulletin['bulletin_data'][0]["nombre_credit_obtenu"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_credit_total"] ?? 0 }}</strong></td>
-                <td style="border: none;"><span style="font-weight: normal;">Grade ETCS : </span><strong>{{ $bulletin['bulletin_data'][0]["grade"] ?? '' }}</strong></td> 
+            <tr >
+<!--                 <td style="border: none;"><span style="font-weight: normal;">Nombre de UE cumulé : </span> <strong>{{ $bulletin['bulletin_data'][0]["nombre_ue_valide"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_ue"] ?? 0 }}</strong></td>
+                <td style="border: none;"><span style="font-weight: normal;">Total crédits cumulés : </span> <strong>{{ $bulletin['bulletin_data'][0]["nombre_credit_obtenu"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_credit_total"] ?? 0 }}</strong></td> -->
+                <td style="border: none; text-align:center;"><span style="font-weight: normal;">Grade ETCS : </span><strong>{{ $bulletin['bulletin_data'][0]["grade"] ?? '' }}</strong></td>
             </tr>
-            <tr>
-                <td style="border: none;"><span style="font-weight: normal;">% Crédits requis : </span><strong> 80%</strong></td>
-                <td style="border: none;"><span style="font-weight: normal;">% Crédits cumulés : </span> <strong>{{ isset($bulletin['bulletin_data'][0]) ? round((float)($bulletin['bulletin_data'][0]["nombre_credit_obtenu"] *100 )/ (float)($bulletin['bulletin_data'][0]["nombre_credit_total"]), 2) : 0 }}%</strong></td>
-                <td style="border: none;"><span style="font-weight: normal;">Décision du conseil : </span><strong> {{ $bulletin['bulletin_data'][0]["decision"] ?? '' }}</strong></td>
+            <tr style="text-align:center;">
+<!--                 <td style="border: none;"><span style="font-weight: normal;">% Crédits requis : </span><strong> 80%</strong></td>
+                <td style="border: none;"><span style="font-weight: normal;">% Crédits cumulés : </span> <strong>{{ isset($bulletin['bulletin_data'][0]) ? round((float)($bulletin['bulletin_data'][0]["nombre_credit_obtenu"] *100 )/ (float)($bulletin['bulletin_data'][0]["nombre_credit_total"]), 2) : 0 }}%</strong></td> -->
+                <td style="border: none; text-align:center;"><span style="font-weight: normal;">Décision du conseil : </span><strong> {{ $bulletin['bulletin_data'][0]["decision"] ?? '' }}</strong></td>
             </tr>
         </tbody>
     </table>
