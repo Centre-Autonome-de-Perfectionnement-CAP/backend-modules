@@ -18,7 +18,7 @@ class AdministrationService
     public function getAdminUsers(array $filters = []): \Illuminate\Support\Collection
     {
         $adminRoles = ['chef_cap', 'chef_division', 'chef_division_continue', 'chef_division_distance', 'comptable', 'secretaire'];
-        
+
         $query = User::whereHas('roles', function ($q) use ($adminRoles) {
             $q->whereIn('name', $adminRoles);
         })->with(['roles' => function ($query) {
@@ -83,10 +83,10 @@ class AdministrationService
             ],
             'payments' => [
                 'total' => Paiement::count(),
-                'pending' => Paiement::where('statut', 'attente')->count(),
-                'accepted' => Paiement::where('statut', 'accepte')->count(),
-                'rejected' => Paiement::where('statut', 'rejete')->count(),
-                'total_amount' => Paiement::where('statut', 'accepte')->sum('montant'),
+                'pending' => Paiement::where('status', 'attente')->count(),
+                'accepted' => Paiement::where('status', 'accepte')->count(),
+                'rejected' => Paiement::where('status', 'rejete')->count(),
+                'total_amount' => Paiement::where('status', 'accepte')->sum('montant'),
             ],
         ];
     }
@@ -120,7 +120,7 @@ class AdministrationService
 
         $recentPayments = Paiement::orderBy('created_at', 'desc')
             ->limit(5)
-            ->get(['id', 'matricule', 'montant', 'statut', 'created_at'])
+            ->get(['id', 'matricule', 'montant', 'status', 'created_at'])
             ->map(fn($payment) => [
                 'type' => 'payment_created',
                 'description' => "Nouveau paiement: {$payment->montant} FCFA ({$payment->matricule})",
@@ -200,7 +200,7 @@ class AdministrationService
                 DB::raw('COUNT(*) as count'),
                 DB::raw('SUM(montant) as total_amount')
             )
-                ->where('statut', 'accepte')
+                ->where('status', 'accepte')
                 ->groupBy('period')
                 ->orderBy('period', 'desc')
                 ->limit(12)

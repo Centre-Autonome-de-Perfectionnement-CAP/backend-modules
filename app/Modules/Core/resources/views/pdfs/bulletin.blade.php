@@ -41,11 +41,15 @@
 @section('content')
 <div class="main" style="position: relative;">
     <div style="position: absolute; top: 0px; left: 0;">
-        @if(ucfirst($etudiant->genre) == 'Masculin')
-                        <img src="{{ storage_path('avatars/homme.png') }}" style="width: 80px; height: 80px;" alt="">
-                    @else
-                        <img src="{{ storage_path('avatars/femme.png') }}" style="width: 80px; height: 80px;" alt="">
-                    @endif
+        @if(isset($etudiant->photo) && $etudiant->photo && file_exists($etudiant->photo))
+            <img src="{{ $etudiant->photo }}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 5px;" alt="Photo étudiant">
+        @else
+            @if(ucfirst($etudiant->genre) == 'Masculin')
+                <img src="{{ storage_path('avatars/homme.png') }}" style="width: 80px; height: 80px;" alt="Avatar homme">
+            @else
+                <img src="{{ storage_path('avatars/femme.png') }}" style="width: 80px; height: 80px;" alt="Avatar femme">
+            @endif
+        @endif
     </div>
     <div style="text-align: center; font-weight: bold; margin-bottom: 7px; font-size: 25px;">BULLETIN DE NOTES</div>
     <div style="text-align: center; font-weight: bold; margin-bottom: 20px; font-size: 15px;">Année Académique: {{ $annee }}</div>
@@ -56,17 +60,17 @@
     <table style="width: 100%; text-align: left; margin-bottom: 10px; font-size: 11px; border: none; margin-top: 10px; border-collapse: collapse;">
         <tbody>
             <tr>
-                <td style="border: none;"><span style="font-weight: normal;">Matricule :</span> <span style="font-weight: bolder;"> {{ $etudiant->matricule }} </span></td>
+                <td style="border: none;"><span style="font-weight: normal;">Nom :</span> <span style="font-weight: bolder;"> {{ $etudiant->nom }} </span></td>
                 <td style="border: none;"><span style="font-weight: normal;">Sexe :</span> <span style="font-weight: bolder;"> {{ ucfirst($etudiant->genre) }} </span></td>
                 <td style="border: none;"><span style="font-weight: normal;">Cycle :</span> <span style="font-weight: bolder;"> {{ $etudiant->filiere?->diplome?->nom }} </span></td>
             </tr>
             <tr>
-                <td style="border: none;"><span style="font-weight: normal;">Nom :</span> <span style="font-weight: bolder;"> {{ $etudiant->nom }} </span></td>
+                <td style="border: none;"><span style="font-weight: normal;">Prénoms :</span> <span style="font-weight: bolder;"> {{ $etudiant->prenoms }} </span></td>
                 <td style="border: none;"><span style="font-weight: normal;">Date de naissance :</span> <span style="font-weight: bolder;"> {{ $etudiant->date_naissance }} </span></td>
                 <td style="border: none;"><span style="font-weight: normal;">Filière :</span><span style="font-weight: bolder;"> {{ $etudiant->filiere?->nom }} </span></td>
             </tr>
             <tr>
-                <td style="border: none;"><span style="font-weight: normal;">Prénoms :</span> <span style="font-weight: bolder;"> {{ $etudiant->prenoms }} </span></td>
+                
                 <td style="border: none;"><span style="font-weight: normal;">Lieu de naissance : </span> <span style="font-weight: bolder;"> {{ $etudiant->lieu_de_naissance }}</span></td>
                 <td style="border: none;"><span style="font-weight: normal;">Niveau : </span> <span style="font-weight: bolder;"> Classes Préparatoires </span></td>
             </tr>

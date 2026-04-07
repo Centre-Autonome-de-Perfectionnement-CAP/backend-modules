@@ -21,9 +21,14 @@ class Student extends Authenticatable
         return \Database\Factories\StudentFactory::new();
     }
 
-    protected $fillable = ['student_id_number', 'password','fingerprint_status'];
+    protected $fillable = ['student_id_number', 'password'];
 
     protected $hidden = ['password', 'remember_token'];
+
+    /**
+     * Attributs à ajouter lors de la sérialisation
+     */
+    protected $appends = ['personal_information'];
 
     /**
      * Relations vers les dossiers (pending_students) via la table pivot
@@ -44,9 +49,12 @@ class Student extends Authenticatable
 
     /**
      * Récupérer les informations personnelles via le premier dossier
+     * (Un étudiant peut avoir plusieurs dossiers mais une seule PersonalInformation)
+     * IMPORTANT: Ceci est un accessor, pas une vraie relation Eloquent
      */
     public function getPersonalInformationAttribute()
     {
+        // Charger la personal_information du premier pending_student
         if (!$this->relationLoaded('pendingStudents')) {
             $this->load('pendingStudents.personalInformation');
         }
@@ -69,11 +77,7 @@ class Student extends Authenticatable
         );
     }
 
-    /**
-     *  Relation avec les présences
-     */
-    public function attendances()
-    {
-        return $this->hasMany(\App\Modules\Attendance\Models\Attendance::class);
+    public function personalInformation() {
+        return $this->hasOne(PersonalInformation::class);
     }
 }

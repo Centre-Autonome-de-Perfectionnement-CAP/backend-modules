@@ -7,7 +7,7 @@ use App\Modules\Cours\Http\Controllers\CourseElementResourceController;
 use App\Modules\Cours\Http\Controllers\CourseElementProfessorController;
 use App\Modules\Cours\Http\Controllers\ProgramController;
 
-Route::prefix('api/cours')->group(function () {
+Route::prefix('cours')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         // Teaching Units (Unités d'Enseignement - UE)
         Route::apiResource('teaching-units', TeachingUnitController::class);

@@ -30,7 +30,7 @@ return new class extends Migration
             $table->enum('sponsorise', ['Oui', 'Non'])->default('Non');
             $table->timestamps();
             $table->softDeletes();
-            
+
             $table->index('tracking_code');
             $table->index('status');
             $table->index('academic_year_id');

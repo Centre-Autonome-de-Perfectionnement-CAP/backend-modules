@@ -1,1 +1,9 @@
+<<<<<<< HEAD
 import{r as n,_ as p,R as m,c as u,P as e}from"./index-h0GKeRdP.js";const a=n.forwardRef((s,t)=>{var{children:o,className:c,size:r,vertical:l}=s,i=p(s,["children","className","size","vertical"]);return m.createElement("div",Object.assign({className:u(l?"btn-group-vertical":"btn-group",{[`btn-group-${r}`]:r},c)},i,{ref:t}),o)});a.propTypes={children:e.node,className:e.string,size:e.oneOf(["sm","lg"]),vertical:e.bool};a.displayName="CButtonGroup";export{a as C};
+=======
+<<<<<<<< HEAD:public/services/app-cap-frontend/assets/CButtonGroup--wYhEO78.js
+import{r as n,_ as p,R as m,c as u,P as e}from"./index-h0GKeRdP.js";const a=n.forwardRef((s,t)=>{var{children:o,className:c,size:r,vertical:l}=s,i=p(s,["children","className","size","vertical"]);return m.createElement("div",Object.assign({className:u(l?"btn-group-vertical":"btn-group",{[`btn-group-${r}`]:r},c)},i,{ref:t}),o)});a.propTypes={children:e.node,className:e.string,size:e.oneOf(["sm","lg"]),vertical:e.bool};a.displayName="CButtonGroup";export{a as C};
+========
+import{r as n,_ as p,R as m,c as u,P as e}from"./index-CbALTDLj.js";const a=n.forwardRef((s,t)=>{var{children:o,className:c,size:r,vertical:l}=s,i=p(s,["children","className","size","vertical"]);return m.createElement("div",Object.assign({className:u(l?"btn-group-vertical":"btn-group",{[`btn-group-${r}`]:r},c)},i,{ref:t}),o)});a.propTypes={children:e.node,className:e.string,size:e.oneOf(["sm","lg"]),vertical:e.bool};a.displayName="CButtonGroup";export{a as C};
+>>>>>>>> be0384f0d56cb4491eb015c3bc1466c68a041a8f:public/services/app-cap-frontend/assets/CButtonGroup-CltyXwNF.js
+>>>>>>> origin/laurie

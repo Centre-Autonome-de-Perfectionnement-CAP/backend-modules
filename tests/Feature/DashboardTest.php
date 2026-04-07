@@ -20,23 +20,23 @@ class DashboardTest extends TestCase
     {
         // Arrange - Créer des données de test
         $this->authenticatedUser();
-        
+
         // Créer une année académique courante
         $currentYear = AcademicYear::factory()->create([
             'is_current' => true,
             'libelle' => '2024-2025'
         ]);
-        
+
         // Créer des cycles d'abord
         $cycle1 = Cycle::factory()->create();
         $cycle2 = Cycle::factory()->create();
-        
+
         // Créer des filières en utilisant les cycles existants
         $dept1 = Department::factory()->create(['cycle_id' => $cycle1->id]);
         $dept2 = Department::factory()->create(['cycle_id' => $cycle1->id]);
         $dept3 = Department::factory()->create(['cycle_id' => $cycle2->id]);
-        
-        // Créer des étudiants avec différents statuts en utilisant les départements existants
+
+        // Créer des étudiants avec différents statuss en utilisant les départements existants
         PendingStudent::factory()->count(5)->create([
             'status' => 'approved',
             'department_id' => $dept1->id,
@@ -57,7 +57,7 @@ class DashboardTest extends TestCase
         $response = $this->getJson('/api/inscription/dashboard/stats');
 
         // Assert
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -89,7 +89,7 @@ class DashboardTest extends TestCase
     {
         // Arrange
         $this->authenticatedUser();
-        
+
         // Ne pas créer d'année académique courante
         Department::factory()->count(2)->create();
         Cycle::factory()->count(1)->create();
@@ -98,11 +98,11 @@ class DashboardTest extends TestCase
         $response = $this->getJson('/api/inscription/dashboard/stats');
 
         // Assert
-        $response->assertStatus(200);
-        
+        $response->assertstatus(200);
+
         $currentYear = date('Y');
         $expectedYear = $currentYear . '-' . ($currentYear + 1);
-        
+
         $this->assertEquals($expectedYear, $response->json('data.anneeAcademique'));
     }
 
@@ -113,16 +113,16 @@ class DashboardTest extends TestCase
     {
         // Arrange
         $this->authenticatedUser();
-        
+
         $academicYear = AcademicYear::factory()->create([
             'is_current' => true,
             'libelle' => '2024-2025'
         ]);
-        
+
         $filieres = Department::factory()->count(2)->create();
         $cycles = Cycle::factory()->count(2)->create();
-        
-        // Créer des étudiants avec différents statuts
+
+        // Créer des étudiants avec différents statuss
         PendingStudent::factory()->count(4)->create(['status' => 'approved']);
         PendingStudent::factory()->count(2)->create(['status' => 'pending']);
         PendingStudent::factory()->count(1)->create(['status' => 'rejected']);
@@ -131,7 +131,7 @@ class DashboardTest extends TestCase
         $response = $this->getJson('/api/inscription/dashboard/graphes');
 
         // Assert
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -148,9 +148,9 @@ class DashboardTest extends TestCase
                             'nombre',
                         ],
                     ],
-                    'dossiersParStatut' => [
+                    'dossiersParstatus' => [
                         '*' => [
-                            'statut',
+                            'status',
                             'nombre',
                         ],
                     ],
@@ -165,12 +165,12 @@ class DashboardTest extends TestCase
                 ]
             ]);
 
-        // Vérifier la structure des données de statut
-        $statusData = $response->json('data.dossiersParStatut');
+        // Vérifier la structure des données de status
+        $statusData = $response->json('data.dossiersParstatus');
         $this->assertIsArray($statusData);
-        
-        // Vérifier que les statuts sont bien traduits
-        $statusLabels = array_column($statusData, 'statut');
+
+        // Vérifier que les statuss sont bien traduits
+        $statusLabels = array_column($statusData, 'status');
         $this->assertContains('Approuvé', $statusLabels);
         $this->assertContains('En attente', $statusLabels);
         $this->assertContains('Rejeté', $statusLabels);
@@ -183,7 +183,7 @@ class DashboardTest extends TestCase
     {
         // Arrange
         $this->authenticatedUser();
-        
+
         Department::factory()->count(2)->create();
         Cycle::factory()->count(1)->create();
         PendingStudent::factory()->count(3)->create(['status' => 'approved']);
@@ -192,7 +192,7 @@ class DashboardTest extends TestCase
         $response = $this->getJson('/api/inscription/dashboard/graphes?year=2023-2024');
 
         // Assert
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson([
                 'success' => true,
                 'data' => [
@@ -213,15 +213,15 @@ class DashboardTest extends TestCase
         $response = $this->getJson('/api/inscription/dashboard/graphes');
 
         // Assert
-        $response->assertStatus(200);
-        
+        $response->assertstatus(200);
+
         $data = $response->json('data');
-        
+
         // Vérifier que les tableaux existent même sans données
         $this->assertIsArray($data['inscritsParFiliere']);
         $this->assertIsArray($data['inscritsParCycle']);
-        $this->assertIsArray($data['dossiersParStatut']);
-        
+        $this->assertIsArray($data['dossiersParstatus']);
+
         // Sans filières, devrait retourner le message par défaut
         $firstFiliere = $data['inscritsParFiliere'][0] ?? null;
         if ($firstFiliere) {
@@ -240,8 +240,8 @@ class DashboardTest extends TestCase
         $responseGraphs = $this->getJson('/api/inscription/dashboard/graphes');
 
         // Doit retourner 401 Unauthorized
-        $responseStats->assertStatus(401);
-        $responseGraphs->assertStatus(401);
+        $responseStats->assertstatus(401);
+        $responseGraphs->assertstatus(401);
     }
 
     /**
@@ -256,7 +256,7 @@ class DashboardTest extends TestCase
         $response = $this->getJson('/api/inscription/dashboard/graphes?year=2024');
 
         // Assert - Doit quand même fonctionner (le service gère les formats)
-        $response->assertStatus(200);
+        $response->assertstatus(200);
     }
 
     /**
@@ -266,7 +266,7 @@ class DashboardTest extends TestCase
     {
         // Arrange - Créer beaucoup de données
         $this->authenticatedUser();
-        
+
         AcademicYear::factory()->create(['is_current' => true]);
         Department::factory()->count(10)->create();
         Cycle::factory()->count(5)->create();
@@ -274,14 +274,14 @@ class DashboardTest extends TestCase
 
         // Act & Assert - Vérifier que les endpoints répondent rapidement
         $startTime = microtime(true);
-        
+
         $response = $this->getJson('/api/inscription/dashboard/stats');
-        
+
         $endTime = microtime(true);
         $responseTime = $endTime - $startTime;
 
-        $response->assertStatus(200);
-        
+        $response->assertstatus(200);
+
         // Le temps de réponse devrait être raisonnable (moins de 2 secondes)
         $this->assertLessThan(2, $responseTime, "L'endpoint stats est trop lent");
     }

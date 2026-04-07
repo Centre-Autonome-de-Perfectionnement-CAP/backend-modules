@@ -13,5 +13,5 @@ return [
     App\Modules\Notes\Providers\NotesServiceProvider::class,
     App\Modules\Soutenance\Providers\SoutenanceServiceProvider::class,
     App\Modules\Attestation\Providers\AttestationServiceProvider::class,
-    App\Modules\Attendance\Providers\AttendanceServiceProvider::class, // ← ajouter
+    App\Modules\CahierTexte\Providers\CahierTexteServiceProvider::class,
 ];

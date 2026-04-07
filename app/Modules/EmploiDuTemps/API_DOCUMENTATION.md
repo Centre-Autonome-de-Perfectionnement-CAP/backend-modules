@@ -18,7 +18,7 @@ GET /api/emploi-temps/buildings
 
 **Paramètres de requête:**
 - `search` (string, optional): Recherche par nom, code ou adresse
-- `is_active` (boolean, optional): Filtrer par statut
+- `is_active` (boolean, optional): Filtrer par status
 - `per_page` (int, optional): Nombre d'éléments par page (défaut: 15)
 - `sort_by` (string, optional): Champ de tri (défaut: created_at)
 - `sort_order` (string, optional): asc/desc (défaut: desc)

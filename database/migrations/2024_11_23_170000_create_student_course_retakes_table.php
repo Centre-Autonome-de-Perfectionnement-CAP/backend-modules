@@ -21,9 +21,8 @@ return new class extends Migration
             $table->decimal('final_grade', 5, 2)->nullable();
             $table->timestamps();
             $table->softDeletes();
-            
+
             $table->unique(['student_pending_student_id', 'program_id', 'retake_academic_year_id'], 'unique_student_program_retake');
-            
         });
     }
 

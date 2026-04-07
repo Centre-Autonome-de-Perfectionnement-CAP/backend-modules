@@ -66,16 +66,57 @@ class DocumentManagementService
         });
     }
 
-    public function update(File $file, array $data): File
+    public function update(File $file, array $data, $newFile = null): File
     {
-        $file->update([
-            'original_name' => $data['titre'] ?? $file->original_name,
-            'description' => $data['description'] ?? $file->description,
-            'date_publication' => $data['datePublication'] ?? $file->date_publication,
-            'document_categorie' => $data['categorie'] ?? $file->document_categorie,
-        ]);
+        return DB::transaction(function () use ($file, $data, $newFile) {
+            // Si un nouveau fichier est fourni, remplacer l'ancien
+            if ($newFile) {
+                // Supprimer l'ancien fichier physique si ce n'est pas un lien externe
+                if ($file->disk !== 'external' && \Storage::disk($file->disk)->exists($file->file_path)) {
+                    \Storage::disk($file->disk)->delete($file->file_path);
+                }
+                
+                // Uploader le nouveau fichier
+                $newUploadedFile = $this->fileStorageService->uploadFile(
+                    uploadedFile: $newFile,
+                    userId: auth()->id(),
+                    visibility: 'public',
+                    collection: 'official_documents',
+                    moduleName: 'Stockage',
+                    moduleResourceType: 'Document'
+                );
+                
+                // Mettre à jour les informations du fichier
+                $file->update([
+                    'stored_name' => $newUploadedFile->stored_name,
+                    'file_path' => $newUploadedFile->file_path,
+                    'mime_type' => $newUploadedFile->mime_type,
+                    'extension' => $newUploadedFile->extension,
+                    'size' => $newUploadedFile->size,
+                    'disk' => $newUploadedFile->disk,
+                ]);
+                
+                // Supprimer l'enregistrement temporaire du nouveau fichier
+                $newUploadedFile->delete();
+            }
+            
+            // Mettre à jour les métadonnées
+            $file->update([
+                'original_name' => $data['titre'] ?? $file->original_name,
+                'description' => $data['description'] ?? $file->description,
+                'date_publication' => $data['datePublication'] ?? $file->date_publication,
+                'document_categorie' => $data['categorie'] ?? $file->document_categorie,
+            ]);
+            
+            // Si un nouveau lien est fourni (pour les liens externes)
+            if (isset($data['lien']) && $file->disk === 'external') {
+                $file->update([
+                    'file_path' => $data['lien'],
+                ]);
+            }
 
-        return $file->fresh();
+            return $file->fresh();
+        });
     }
 
     public function delete(File $file, int $userId): void

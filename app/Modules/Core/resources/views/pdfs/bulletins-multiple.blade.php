@@ -67,11 +67,15 @@
 
 
       <div style="position: absolute; top: {{ !$loop->first ? '120px' : '0px' }}; left: 0;">
-        @if(ucfirst($bulletin['etudiant']->genre) == 'Masculin')
-                        <img src="{{ storage_path('avatars/homme.png') }}" style="width: 80px; height: 80px;" alt="">
-                    @else
-                        <img src="{{ storage_path('avatars/femme.png') }}" style="width: 80px; height: 80px;" alt="">
-                    @endif
+        @if(isset($bulletin['etudiant']->photo) && $bulletin['etudiant']->photo && file_exists($bulletin['etudiant']->photo))
+            <img src="{{ $bulletin['etudiant']->photo }}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 5px;" alt="Photo étudiant">
+        @else
+            @if(ucfirst($bulletin['etudiant']->genre) == 'Masculin')
+                <img src="{{ storage_path('avatars/homme.png') }}" style="width: 80px; height: 80px;" alt="Avatar homme">
+            @else
+                <img src="{{ storage_path('avatars/femme.png') }}" style="width: 80px; height: 80px;" alt="Avatar femme">
+            @endif
+        @endif
     </div>
 
     
@@ -86,17 +90,17 @@
     <table style="width: 100%; text-align: left; margin-bottom: 10px; font-size: 11px; border: none; margin-top: 10px; border-collapse: collapse;">
         <tbody>
             <tr>
-                <td style="border: none;"><span style="font-weight: normal;">Matricule :</span> <span style="font-weight: bolder;"> {{ $bulletin['etudiant']->matricule ?? '' }} </span></td>
+                <td style="border: none;"><span style="font-weight: normal;">Nom :</span> <span style="font-weight: bolder;"> {{ $bulletin['etudiant']->nom ?? '' }} </span></td>
                 <td style="border: none;"><span style="font-weight: normal;">Sexe :</span> <span style="font-weight: bolder;"> {{ ucfirst($bulletin['etudiant']->genre ?? '') }} </span></td>
                 <td style="border: none;"><span style="font-weight: normal;">Cycle :</span> <span style="font-weight: bolder;"> {{ $bulletin['etudiant']->filiere?->diplome?->nom ?? '' }} </span></td>
             </tr>
             <tr>
-                <td style="border: none;"><span style="font-weight: normal;">Nom :</span> <span style="font-weight: bolder;"> {{ $bulletin['etudiant']->nom ?? '' }} </span></td>
+                <td style="border: none;"><span style="font-weight: normal;">Prénoms :</span> <span style="font-weight: bolder;"> {{ $bulletin['etudiant']->prenoms ?? '' }} </span></td>
                 <td style="border: none;"><span style="font-weight: normal;">Date de naissance :</span> <span style="font-weight: bolder;"> {{ $bulletin['etudiant']->date_naissance ?? '' }} </span></td>
                 <td style="border: none;"><span style="font-weight: normal;">Filière :</span><span style="font-weight: bolder;"> {{ $bulletin['etudiant']->filiere?->nom ?? '' }} </span></td>
             </tr>
             <tr>
-                <td style="border: none;"><span style="font-weight: normal;">Prénoms :</span> <span style="font-weight: bolder;"> {{ $bulletin['etudiant']->prenoms ?? '' }} </span></td>
+                
                 <td style="border: none;"><span style="font-weight: normal;">Lieu de naissance : </span> <span style="font-weight: bolder;"> {{ $bulletin['etudiant']->lieu_de_naissance ?? '' }}</span></td>
                 <td style="border: none;"><span style="font-weight: normal;">Niveau : </span> <span style="font-weight: bolder;"> Classes Préparatoires </span></td>
             </tr>

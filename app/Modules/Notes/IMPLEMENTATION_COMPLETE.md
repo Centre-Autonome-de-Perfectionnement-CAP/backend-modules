@@ -182,7 +182,7 @@ Content-Type: application/json
    - Ajoute la note dans le tableau `grades[]`
 2. Met à jour la pondération automatiquement (équitable)
 3. Recalcule les moyennes si toutes les notes présentes
-4. Met à jour les statuts (validated, must_retake)
+4. Met à jour les statuss (validated, must_retake)
 
 ### Pondération Automatique
 ```php
@@ -199,7 +199,7 @@ weighting: [40, 30, 30]
 → moyenne = (12×0.4) + (14×0.3) + (16×0.3) = 13.8
 ```
 
-### Statuts
+### statuss
 - `validated = true` si moyenne >= 10
 - `must_retake = true` si moyenne < 7
 - `can_retake = true` si 7 <= moyenne < 10

@@ -17,6 +17,7 @@ class Department extends Model
         'next_level_id',
         'description',
         'is_active',
+        'whatsapp_link',
     ];
 
     /**

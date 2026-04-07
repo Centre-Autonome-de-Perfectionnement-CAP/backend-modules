@@ -19,16 +19,16 @@ class ValidationService
     }
 
     /**
-     * Récupère les paiements selon le statut
+     * Récupère les paiements selon le status
      */
     public function getPendingPayments($filters = [])
     {
         $query = Paiement::with([
-            'student', 
+            'student',
             'studentPendingStudent.pendingStudent.personalInformation'
         ]);
-        
-        // Filtrer par statut
+
+        // Filtrer par status
         $status = $filters['status'] ?? 'pending';
         if ($status === 'pending') {
             $query->pending();
@@ -37,7 +37,7 @@ class ValidationService
         } elseif ($status === 'rejected') {
             $query->where('status', 'rejected');
         }
-        
+
         if (isset($filters['search']) && !empty($filters['search'])) {
             $search = $filters['search'];
             $query->where(function($q) use ($search) {
@@ -49,9 +49,9 @@ class ValidationService
                   });
             });
         }
-        
+
         $perPage = $filters['per_page'] ?? 15;
-        
+
         return $query->orderBy('updated_at', 'desc')->paginate($perPage);
     }
 
@@ -61,17 +61,17 @@ class ValidationService
     public function validatePayment($paymentId, $data)
     {
         DB::beginTransaction();
-        
+
         try {
             $payment = Paiement::findOrFail($paymentId);
-            
+
             $payment->update([
                 'status' => 'approved',
                 'observation' => $data['observation'] ?? null,
                 'validated_at' => now(),
                 'validated_by' => auth()->id()
             ]);
-            
+
             // Envoyer notification par email
             if ($payment->email) {
                 SendPaymentNotificationJob::dispatch(
@@ -80,7 +80,7 @@ class ValidationService
                     $payment->toArray()
                 );
             }
-            
+
             DB::commit();
             return $payment;
         } catch (\Exception $e) {
@@ -95,17 +95,17 @@ class ValidationService
     public function rejectPayment($paymentId, $data)
     {
         DB::beginTransaction();
-        
+
         try {
             $payment = Paiement::findOrFail($paymentId);
-            
+
             $payment->update([
                 'status' => 'rejected',
                 'observation' => $data['motif'],
                 'rejected_at' => now(),
                 'rejected_by' => auth()->id()
             ]);
-            
+
             // Envoyer notification par email avec motif de rejet
             if ($payment->email) {
                 SendPaymentNotificationJob::dispatch(
@@ -114,7 +114,7 @@ class ValidationService
                     array_merge($payment->toArray(), ['rejection_reason' => $data['motif']])
                 );
             }
-            
+
             DB::commit();
             return $payment;
         } catch (\Exception $e) {
@@ -129,14 +129,14 @@ class ValidationService
     public function getReceiptFile($paymentId)
     {
         $payment = Paiement::findOrFail($paymentId);
-        
+
         if (!$payment->receipt_path || !Storage::exists($payment->receipt_path)) {
             throw new \Exception('Quittance non trouvée');
         }
-        
+
         // Nettoyer le nom du fichier en remplaçant les caractères interdits
         $cleanReference = str_replace(['/', '\\'], '_', $payment->reference);
-        
+
         return [
             'path' => Storage::path($payment->receipt_path),
             'filename' => 'quittance_' . $cleanReference . '.' . pathinfo($payment->receipt_path, PATHINFO_EXTENSION)

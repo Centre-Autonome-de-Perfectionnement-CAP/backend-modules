@@ -20,7 +20,7 @@ class ClassGroupTest extends TestCase
         // Test que l'endpoint accepte les requêtes authentifiées (doit retourner 422 et non 401)
         $response = $this->postJson('/api/inscription/class-groups', []);
 
-        $response->assertStatus(422)
+        $response->assertstatus(422)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -55,7 +55,7 @@ class ClassGroupTest extends TestCase
     {
         $response = $this->getJson('/api/inscription/class-groups');
 
-        $response->assertStatus(401);
+        $response->assertstatus(401);
     }
 
     /**
@@ -124,7 +124,7 @@ class ClassGroupTest extends TestCase
 
         $response = $this->getJson('/api/inscription/class-groups?academic_year_id=' . $academicYear1->id);
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -204,7 +204,7 @@ class ClassGroupTest extends TestCase
 
         $response = $this->deleteJson("/api/inscription/class-groups/{$classGroup->id}");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -243,7 +243,7 @@ class ClassGroupTest extends TestCase
 
         $response = $this->postJson('/api/inscription/class-groups/delete-all', $data);
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -262,7 +262,7 @@ class ClassGroupTest extends TestCase
             'name' => 'Test Group',
         ]);
 
-        $response->assertStatus(401);
+        $response->assertstatus(401);
     }
 
     /**
@@ -272,7 +272,7 @@ class ClassGroupTest extends TestCase
     {
         $response = $this->getJson('/api/inscription/class-groups');
 
-        $response->assertStatus(401);
+        $response->assertstatus(401);
     }
 
     /**
@@ -284,7 +284,7 @@ class ClassGroupTest extends TestCase
 
         $response = $this->getJson('/api/inscription/class-groups');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -308,7 +308,7 @@ class ClassGroupTest extends TestCase
 
         // Peut retourner 404 (not found) ou 500 (erreur serveur)
         $this->assertContains($response->status(), [404, 500]);
-        
+
         if ($response->status() === 404) {
             $response->assertJsonStructure([
                 'message',
@@ -335,7 +335,7 @@ class ClassGroupTest extends TestCase
 
         // Peut retourner 404 (not found) ou 500 (erreur serveur)
         $this->assertContains($response->status(), [404, 500]);
-        
+
         if ($response->status() === 404) {
             $response->assertJsonStructure([
                 'message',
@@ -379,7 +379,7 @@ class ClassGroupTest extends TestCase
 
         $response = $this->getJson("/api/inscription/class-groups/{$classGroup->id}");
 
-        $response->assertStatus(401);
+        $response->assertstatus(401);
     }
 
     /**
@@ -397,7 +397,7 @@ class ClassGroupTest extends TestCase
 
         $response = $this->deleteJson("/api/inscription/class-groups/{$classGroup->id}");
 
-        $response->assertStatus(401);
+        $response->assertstatus(401);
     }
 
     /**
@@ -411,6 +411,6 @@ class ClassGroupTest extends TestCase
             'study_level' => 'L1',
         ]);
 
-        $response->assertStatus(401);
+        $response->assertstatus(401);
     }
 }

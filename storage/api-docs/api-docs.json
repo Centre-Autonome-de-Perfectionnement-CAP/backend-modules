@@ -1177,7 +1177,7 @@
                     {
                         "name": "status",
                         "in": "query",
-                        "description": "Filtrer par statut",
+                        "description": "Filtrer par status",
                         "required": false,
                         "schema": {
                             "type": "string",
@@ -1919,9 +1919,9 @@
                 "tags": [
                     "Submission Management"
                 ],
-                "summary": "Vérifier le statut de soumission",
+                "summary": "Vérifier le status de soumission",
                 "description": "Vérifie si la soumission est ouverte pour une année académique donnée",
-                "operationId": "checkSubmissionStatus",
+                "operationId": "checkSubmissionstatus",
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -1943,7 +1943,7 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Statut vérifié avec succès",
+                        "description": "status vérifié avec succès",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1996,9 +1996,9 @@
                 "tags": [
                     "Submission Management"
                 ],
-                "summary": "Vérifier le statut de réclamation",
+                "summary": "Vérifier le status de réclamation",
                 "description": "Vérifie si la réclamation est ouverte pour une année académique donnée",
-                "operationId": "checkReclamationStatus",
+                "operationId": "checkReclamationstatus",
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -2020,7 +2020,7 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Statut vérifié avec succès",
+                        "description": "status vérifié avec succès",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -4513,7 +4513,7 @@
                         "type": "integer"
                     },
                     "status": {
-                        "description": "Statut de l'inscription",
+                        "description": "status de l'inscription",
                         "type": "string",
                         "enum": [
                             "pending",

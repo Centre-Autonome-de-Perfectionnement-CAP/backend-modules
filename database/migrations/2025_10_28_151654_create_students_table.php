@@ -21,16 +21,7 @@ return new class extends Migration
             $table->softDeletes();
             
             $table->index('student_id_number');
-            $table->string('first_name')->nullable();
-            $table->string('last_name')->nullable();
-            $table->string('matricule')->unique()->nullable();
-            $table->string('niveau')->nullable();
-            $table->boolean('fingerprint_status')->default(false);
-
-           $table->unsignedBigInteger('academic_year_id')->nullable();
-            $table->unsignedBigInteger('filiere_id')->nullable();
-});
-        
+        });
     }
 
     /**

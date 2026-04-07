@@ -40,13 +40,15 @@ class DocumentManagementController extends Controller
         );
     }
 
-    public function update(UpdateDocumentRequest $request, File $file): JsonResponse
+    public function update(UpdateDocumentRequest $request, $id): JsonResponse
     {
-        if (!$file->is_official_document) {
-            return $this->errorResponse('Ce fichier n\'est pas un document officiel', 404);
+        $file = File::find($id);
+        
+        if (!$file || !$file->is_official_document) {
+            return $this->errorResponse('Document non trouvé', 404);
         }
 
-        $updatedFile = $this->documentService->update($file, $request->validated());
+        $updatedFile = $this->documentService->update($file, $request->validated(), $request->file('file'));
 
         return $this->successResponse(
             $this->documentService->formatDocument($updatedFile),
@@ -54,10 +56,12 @@ class DocumentManagementController extends Controller
         );
     }
 
-    public function destroy(File $file): JsonResponse
+    public function destroy($id): JsonResponse
     {
-        if (!$file->is_official_document) {
-            return $this->errorResponse('Ce fichier n\'est pas un document officiel', 404);
+        $file = File::find($id);
+        
+        if (!$file || !$file->is_official_document) {
+            return $this->errorResponse('Document non trouvé', 404);
         }
 
         $this->documentService->delete($file, auth()->id());

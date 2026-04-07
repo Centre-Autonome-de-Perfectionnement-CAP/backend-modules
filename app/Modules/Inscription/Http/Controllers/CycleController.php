@@ -172,27 +172,27 @@ class CycleController extends Controller
     {
         $academicYearId = $request->get('academic_year_id');
         $departmentId = $request->get('department_id');
-        
+
         if (!$academicYearId) {
             return $this->successResponse([], 'Aucune année académique spécifiée');
         }
-        
+
         // Récupérer les périodes distinctes et compter
         $query = \DB::table('submission_periods')
             ->where('academic_year_id', $academicYearId);
-        
+
         // Filtrer par filière si spécifiée
         if ($departmentId) {
             $query->where('department_id', $departmentId);
         }
-        
+
         $periods = $query->select('start_date', 'end_date')
             ->distinct()
             ->orderBy('start_date')
             ->get();
-        
+
         $periodsCount = $periods->count();
-        
+
         // Générer les cohortes basées sur le nombre de périodes
         $cohorts = [];
         for ($i = 1; $i <= $periodsCount; $i++) {
@@ -201,7 +201,7 @@ class CycleController extends Controller
                 'label' => "Cohorte {$i}"
             ];
         }
-        
+
         return $this->successResponse(
             $cohorts,
             'Cohortes récupérées avec succès'

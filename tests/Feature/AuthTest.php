@@ -23,7 +23,7 @@ class AuthTest extends TestCase
             'password' => 'password123',
         ]);
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -65,7 +65,7 @@ class AuthTest extends TestCase
             'password' => 'wrongpassword',
         ]);
 
-        $response->assertStatus(422)
+        $response->assertstatus(422)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -88,7 +88,7 @@ class AuthTest extends TestCase
             'password' => 'password123',
         ]);
 
-        $response->assertStatus(422)
+        $response->assertstatus(422)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -110,7 +110,7 @@ class AuthTest extends TestCase
             'password' => 'password123',
         ]);
 
-        $response->assertStatus(422)
+        $response->assertstatus(422)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -132,7 +132,7 @@ class AuthTest extends TestCase
             'email' => 'test@example.com',
         ]);
 
-        $response->assertStatus(422)
+        $response->assertstatus(422)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -158,7 +158,7 @@ class AuthTest extends TestCase
 
         $response = $this->getJson('/api/auth/me');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -190,7 +190,7 @@ class AuthTest extends TestCase
     {
         $response = $this->getJson('/api/auth/me');
 
-        $response->assertStatus(401)
+        $response->assertstatus(401)
             ->assertJsonStructure([
                 'message',
             ]);
@@ -205,7 +205,7 @@ class AuthTest extends TestCase
 
         $response = $this->postJson('/api/auth/logout');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -213,7 +213,7 @@ class AuthTest extends TestCase
             ->assertJson([
                 'success' => true,
             ]);
-        
+
         // Vérifier que le token a été révoqué
         $this->assertCount(0, $user->tokens);
     }
@@ -225,7 +225,7 @@ class AuthTest extends TestCase
     {
         $response = $this->postJson('/api/auth/logout');
 
-        $response->assertStatus(401)
+        $response->assertstatus(401)
             ->assertJsonStructure([
                 'message',
                 'success',
@@ -244,7 +244,7 @@ class AuthTest extends TestCase
     {
         $response = $this->getJson('/api/auth/administration');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -279,7 +279,7 @@ class AuthTest extends TestCase
     {
         $response = $this->getJson('/api/auth/soutien-informatique');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',

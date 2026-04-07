@@ -16,7 +16,7 @@ class FixCohorts2025 extends Command
         $targetCohort = $this->argument('cohort');
         $academicYear = '2025-2026';
 
-        $this->info(" Vérification de l'état actuel...");
+        $this->info("🔍 Vérification de l'état actuel...");
         
         // État avant
         $before = DB::table('pending_students')
@@ -33,12 +33,12 @@ class FixCohorts2025 extends Command
         $total = $before->sum('count');
         
         if ($total === 0) {
-            $this->error(" Aucun étudiant trouvé pour l'année $academicYear");
+            $this->error("❌ Aucun étudiant trouvé pour l'année $academicYear");
             return 1;
         }
 
         // Confirmation
-        if (!$this->confirm(" Voulez-vous mettre les $total étudiants en cohorte $targetCohort ?", true)) {
+        if (!$this->confirm("⚠️  Voulez-vous mettre les $total étudiants en cohorte $targetCohort ?", true)) {
             $this->info('Opération annulée.');
             return 0;
         }
@@ -50,7 +50,7 @@ class FixCohorts2025 extends Command
             ->where('academic_year', $academicYear)
             ->update(['cohort' => $targetCohort]);
 
-        $this->info("$updated étudiants mis à jour !");
+        $this->info("✅ $updated étudiants mis à jour !");
 
         // État après
         $this->info("\n📊 État après correction :");
@@ -65,7 +65,7 @@ class FixCohorts2025 extends Command
             $after->map(fn($row) => [$row->cohort, $row->count])->toArray()
         );
 
-        $this->info("\n Terminé !");
+        $this->info("\n🎉 Terminé !");
         
         return 0;
     }
