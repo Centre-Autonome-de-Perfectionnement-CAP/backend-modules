@@ -96,7 +96,7 @@
                     <td>{{ $line["code"] }}</td>
                     <td style="font-weight: bold;">{{ $line['nom'] }}</td>
                     <td>{{ $line['credit'] }}</td>
-                    <td>{{ str_replace('.', ',', number_format($line['moyenne'] * 5, 2, '.', '')) }}</td>  
+                    <td>{{ $line['moyenne'] * 5 }}</td>  
                     <td>{{ $line['frequence'] }}</td>
                     <td>{{ $line['etat'] }}</td>
                     @php $num++; @endphp
@@ -119,7 +119,7 @@
                 <tr>
                     <td style="border: none;"><span style="font-weight: normal;">Nombre de UE validé : </span><span style="font-weight: bold;">{{ $bulletin_data[0]["nombre_ue_valide"] }}/{{ $bulletin_data[0]["nombre_ue"] }}</span></td>
                     <td style="border: none;"><span style="font-weight: normal;">Crédits obtenus : </span><span style="font-weight: bold;">{{ $bulletin_data[0]["nombre_credit_obtenu"] }}/{{ $bulletin_data[0]["nombre_credit_total"] }}</span></td>
-                    <td style="border: none;"><span style="font-weight: normal;">Moyenne : </span><span style="font-weight: bold;">{{ str_replace('.', ',', number_format((float)$bulletin_data[0]["moyenne"], 2, '.', '')) }}</span></td>
+                    <td style="border: none;"><span style="font-weight: normal;">Moyenne : </span><span style="font-weight: bold;">{{ $bulletin_data[0]["moyenne"] }}</span></td>
                 </tr>
                 <tr>
                     <td style="border: none;"><span style="font-weight: normal;">Nombre de UE cumulé : </span><span style="font-weight: bold;">{{ $bulletin_data[0]["nombre_ue_valide"] }}/{{ $bulletin_data[0]["nombre_ue"] }}</span></td>
@@ -128,7 +128,7 @@
                 </tr>
                 <tr>
                     <td style="border: none;"><span style="font-weight: normal;">% Crédits requis : </span><span style="font-weight: bold;">80%</span></td>
-                    <td style="border: none;"><span style="font-weight: normal;">% Crédits cumulés : </span><span style="font-weight: bold;">{{ str_replace('.', ',', number_format(round((float)($bulletin_data[0]["nombre_credit_obtenu"] *100 )/ (float)($bulletin_data[0]["nombre_credit_total"]), 2), 2, '.', '')) }}%</span></td>
+                    <td style="border: none;"><span style="font-weight: normal;">% Crédits cumulés : </span><span style="font-weight: bold;">{{ round((float)($bulletin_data[0]["nombre_credit_obtenu"] *100 )/ (float)($bulletin_data[0]["nombre_credit_total"]), 2) }}%</span></td>
                     <td style="border: none;"><span style="font-weight: normal;">Décision du conseil : </span><span style="font-weight: bold;">{{ $bulletin_data[0]["decision"] }}</span></td>
                 </tr>
             </tbody>

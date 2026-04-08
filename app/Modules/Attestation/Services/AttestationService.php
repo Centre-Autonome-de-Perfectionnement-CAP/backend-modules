@@ -848,4 +848,539 @@ class AttestationService
             'student' => $academicPath
         ]);
     }
+
+    // =========================================================================
+    // HELPERS INTERNES — ajoutés depuis proj1
+    // =========================================================================
+
+    private function normalizeLevel($studyLevel): int
+    {
+        if (is_null($studyLevel)) return 0;
+        $val = strtoupper(trim((string) $studyLevel));
+        if (in_array($val, ['PREPA', 'PRÉPA', 'P', 'PC', 'PREPARATOIRE', 'PRÉPARATOIRE'])) return 0;
+        $numeric = preg_replace('/^[A-Z]+/', '', $val);
+        return (int) $numeric;
+    }
+
+    private function cycleIsPrepa(object $cycle): bool
+    {
+        $name = strtolower($cycle->name    ?? '');
+        $type = strtolower($cycle->type    ?? '');
+        $lib  = strtolower($cycle->libelle ?? '');
+        return str_contains($name, 'prepa') || str_contains($name, 'prépa')
+            || str_contains($type, 'prepa') || str_contains($type, 'prépa')
+            || str_contains($lib,  'prepa') || str_contains($lib,  'prépa')
+            || (int)($cycle->years_count ?? 0) === 1;
+    }
+
+    private function getLevelLabel(int $level, object $cycle): string
+    {
+        if ($level === 0) return 'Classe Préparatoire';
+        $suffix    = $level === 1 ? 'ère' : 'ème';
+        $cycleName = $cycle->libelle ?? $cycle->name ?? 'formation';
+        return "{$level}{$suffix} année de {$cycleName}";
+    }
+
+    private function getNextLevelLabel(int $level, object $cycle): ?string
+    {
+        $yearsCount = (int)($cycle->years_count ?? 0);
+        if ($this->cycleIsPrepa($cycle) || $level === 0) return null;
+        if ($level >= $yearsCount) return null;
+        $next      = $level + 1;
+        $suffix    = $next === 1 ? 'ère' : 'ème';
+        $cycleName = $cycle->libelle ?? $cycle->name ?? 'formation';
+        return "{$next}{$suffix} année de {$cycleName}";
+    }
+
+    private function getSignataire(string ...$roles): object
+    {
+        $signataireBd = null;
+        foreach ($roles as $role) {
+            $signataireBd = \App\Models\Signataire::whereHas('role', function ($q) use ($role) {
+                $q->where('name', $role)->orWhere('slug', strtolower(str_replace(' ', '-', $role)));
+            })->first();
+            if ($signataireBd) break;
+        }
+        $poste = 'Le Directeur';
+        if ($signataireBd?->role) $poste = 'Le ' . $signataireBd->role->name;
+        return (object) ['poste' => $poste, 'nomination' => $signataireBd?->nom ?? ''];
+    }
+
+    private function getMonthsFr(): array
+    {
+        return [
+            1=>'Janvier', 2=>'Février', 3=>'Mars', 4=>'Avril', 5=>'Mai', 6=>'Juin',
+            7=>'Juillet', 8=>'Août', 9=>'Septembre', 10=>'Octobre', 11=>'Novembre', 12=>'Décembre',
+        ];
+    }
+
+    private function formatDateFr($date, array $monthsFr): string
+    {
+        if (!$date) return '';
+        try { if (is_string($date)) $date = \Carbon\Carbon::parse($date); }
+        catch (\Exception $e) { return (string) $date; }
+        return $date->format('d') . ' ' . $monthsFr[(int)$date->format('n')] . ' ' . $date->format('Y');
+    }
+
+    private function nettoyerFiliere(string $nom): string
+    {
+        return trim(preg_replace('/pr[eé]pa(?:ratoire)?\s*/i', '', $nom));
+    }
+
+    private function ineligible(string $reason, int $level = 0, string $label = ''): array
+    {
+        return ['eligible' => false, 'reason' => $reason, 'normalized_level' => $level, 'level_label' => $label, 'next_level_label' => null];
+    }
+
+    private function getLastPassPath(int $studentPendingStudentId): AcademicPath
+    {
+        return AcademicPath::with([
+            'studentPendingStudent.pendingStudent.personalInformation',
+            'studentPendingStudent.pendingStudent.department.cycle',
+            'studentPendingStudent.student',
+            'academicYear',
+        ])
+        ->where('student_pending_student_id', $studentPendingStudentId)
+        ->where('year_decision', 'pass')
+        ->whereNotNull('deliberation_date')
+        ->latest('academic_year_id')
+        ->firstOrFail();
+    }
+
+    public function checkPassageEligibility(AcademicPath $path): array
+    {
+        $department = $path->studentPendingStudent?->pendingStudent?->department;
+        $cycle      = $department?->cycle;
+        if (!$cycle) return $this->ineligible('Cycle de formation introuvable.');
+        $yearsCount = (int)($cycle->years_count ?? 0);
+        $level      = $this->normalizeLevel($path->study_level);
+        $label      = $this->getLevelLabel($level, $cycle);
+        if ($this->cycleIsPrepa($cycle)) return $this->ineligible('Les classes préparatoires donnent droit à un certificat, pas une attestation de passage.', $level, $label);
+        if ($path->year_decision !== 'pass') return $this->ineligible("La décision pour {$label} n'est pas favorable.", $level, $label);
+        if (empty($path->deliberation_date)) return $this->ineligible("La date de délibération de {$label} n'est pas renseignée.", $level, $label);
+        if ($level >= $yearsCount) return $this->ineligible("L'étudiant est en {$label} (dernière année). Il est éligible à une attestation définitive.", $level, $label);
+        $spId    = $path->student_pending_student_id;
+        $cycleId = $department->cycle_id;
+        $allPaths = AcademicPath::where('student_pending_student_id', $spId)
+            ->whereHas('studentPendingStudent.pendingStudent.department', fn($q) => $q->where('cycle_id', $cycleId))->get();
+        $sameLevel = $allPaths->filter(fn($p) => $this->normalizeLevel($p->study_level) === $level && $p->id !== $path->id);
+        if ($sameLevel->isNotEmpty()) return $this->ineligible("L'étudiant est redoublant en {$label}.", $level, $label);
+        if ($level > 1) {
+            $prevLevel = $level - 1;
+            $prevPath  = $allPaths->first(fn($p) => $this->normalizeLevel($p->study_level) === $prevLevel);
+            if ($prevPath && $prevPath->year_decision !== 'pass') {
+                $prevLabel = $this->getLevelLabel($prevLevel, $cycle);
+                return $this->ineligible("La {$prevLabel} n'a pas été validée.", $level, $label);
+            }
+        }
+        return ['eligible' => true, 'reason' => '', 'normalized_level' => $level, 'level_label' => $label, 'next_level_label' => $this->getNextLevelLabel($level, $cycle)];
+    }
+
+    public function checkDefinitiveEligibility(AcademicPath $path): array
+    {
+        $department = $path->studentPendingStudent?->pendingStudent?->department;
+        $cycle      = $department?->cycle;
+        if (!$cycle) return $this->ineligible('Cycle de formation introuvable.');
+        $yearsCount = (int)($cycle->years_count ?? 0);
+        $level      = $this->normalizeLevel($path->study_level);
+        $label      = $this->getLevelLabel($level, $cycle);
+        if ($this->cycleIsPrepa($cycle)) return $this->ineligible('Cycle préparatoire non concerné.', $level, $label);
+        if ($path->year_decision !== 'pass') return $this->ineligible("Décision non favorable pour {$label}.", $level, $label);
+        if (empty($path->deliberation_date)) return $this->ineligible("Date de délibération manquante pour {$label}.", $level, $label);
+        if ($level < $yearsCount) return $this->ineligible("L'étudiant est en {$label} ({$level}/{$yearsCount} ans). Pas encore en dernière année.", $level, $label);
+        return ['eligible' => true, 'reason' => '', 'level_label' => $label, 'cycle_name' => $cycle->libelle ?? $cycle->name ?? '', 'cycle_abbrev' => $cycle->abbreviation ?? ''];
+    }
+
+    private function buildEtudiantPassage(AcademicPath $path): object
+    {
+        $monthsFr     = $this->getMonthsFr();
+        $personalInfo = $path->studentPendingStudent?->pendingStudent?->personalInformation;
+        $department   = $path->studentPendingStudent?->pendingStudent?->department;
+        $student      = $path->studentPendingStudent?->student;
+        $cycle        = $department?->cycle;
+        $check        = $this->checkPassageEligibility($path);
+        $normalizedLevel = $check['normalized_level'] ?? $this->normalizeLevel($path->study_level);
+        $levelLabel      = $check['level_label']      ?? '';
+        $nextLevelLabel  = $check['next_level_label'] ?? '';
+        return (object) [
+            'matricule'         => $student?->student_id_number ?? '',
+            'genre'             => $personalInfo?->gender === 'F' ? 'féminin' : 'masculin',
+            'civilite'          => $personalInfo?->gender === 'F' ? 'Mme' : 'M.',
+            'nom'               => strtoupper($personalInfo?->last_name ?? ''),
+            'prenoms'           => $personalInfo?->first_names ?? '',
+            'ne_vers'           => 0,
+            'date_naissance'    => $this->formatDateFr($personalInfo?->birth_date, $monthsFr),
+            'lieu_naissance'    => $personalInfo?->birth_place ?? '',
+            'pays_naissance'    => $personalInfo?->birth_country ?? '',
+            'annee_passage'     => $levelLabel,
+            'annee_superieure'  => $nextLevelLabel,
+            'annee_academique'  => $path->academicYear?->libelle ?? $path->academicYear?->academic_year ?? '',
+            'deliberation_date' => $this->formatDateFr($path->deliberation_date, $monthsFr),
+            'cohort'            => $path->cohort ?? '',
+            'filiere'           => (object) [
+                'nom'    => $this->nettoyerFiliere($department?->name ?? ''),
+                'diplome' => (object) ['nom' => $cycle?->libelle ?? $cycle?->name ?? '', 'sigle' => $cycle?->abbreviation ?? ''],
+            ],
+        ];
+    }
+
+    // =========================================================================
+    // ÉLIGIBILITÉ — PASSAGE (depuis proj1)
+    // =========================================================================
+
+    public function getEligibleForPassage(
+        ?int    $academicYearId = null,
+        ?int    $departmentId   = null,
+        ?string $cohort         = null,
+        ?string $search         = null
+    ) {
+        $query = AcademicPath::with([
+            'studentPendingStudent.pendingStudent.personalInformation',
+            'studentPendingStudent.pendingStudent.department.cycle',
+            'studentPendingStudent.student',
+            'academicYear',
+        ])->where('year_decision', 'pass')->whereNotNull('deliberation_date');
+
+        if ($academicYearId) $query->where('academic_year_id', $academicYearId);
+        if ($departmentId) $query->whereHas('studentPendingStudent.pendingStudent', fn($q) => $q->where('department_id', $departmentId));
+        if ($cohort) $query->where('cohort', $cohort);
+        if ($search) $query->whereHas('studentPendingStudent.pendingStudent.personalInformation', fn($q) =>
+            $q->where('last_name', 'like', "%{$search}%")->orWhere('first_names', 'like', "%{$search}%")
+        );
+
+        return $query->orderBy('created_at', 'desc')->get()
+            ->filter(fn($path) => $this->checkPassageEligibility($path)['eligible'])
+            ->map(function ($path) {
+                $personalInfo = $path->studentPendingStudent?->pendingStudent?->personalInformation;
+                $student      = $path->studentPendingStudent?->student;
+                $department   = $path->studentPendingStudent?->pendingStudent?->department;
+                $cycle        = $department?->cycle;
+                $check        = $this->checkPassageEligibility($path);
+                return [
+                    'id'                         => $path->id,
+                    'student_pending_student_id' => $path->student_pending_student_id,
+                    'student_id'                 => $student?->student_id_number,
+                    'last_name'                  => $personalInfo?->last_name,
+                    'first_names'                => $personalInfo?->first_names,
+                    'department'                 => $department?->name,
+                    'study_level'                => $check['level_label'],
+                    'next_level'                 => $check['next_level_label'],
+                    'cycle'                      => $cycle?->libelle ?? $cycle?->name,
+                    'cohort'                     => $path->cohort,
+                    'year_decision'              => $path->year_decision,
+                    'academic_year'              => $path->academicYear?->libelle ?? $path->academicYear?->academic_year,
+                ];
+            })->values();
+    }
+
+    // =========================================================================
+    // ÉLIGIBILITÉ — DÉFINITIVE (depuis proj1)
+    // =========================================================================
+
+    public function getEligibleForDefinitive(
+        ?int    $academicYearId = null,
+        ?int    $departmentId   = null,
+        ?string $cohort         = null,
+        ?string $search         = null
+    ) {
+        $query = AcademicPath::with([
+            'studentPendingStudent.pendingStudent.personalInformation',
+            'studentPendingStudent.pendingStudent.department.cycle',
+            'studentPendingStudent.student',
+            'academicYear',
+        ])->where('year_decision', 'pass')->whereNotNull('deliberation_date');
+
+        if ($academicYearId) $query->where('academic_year_id', $academicYearId);
+        if ($departmentId) $query->whereHas('studentPendingStudent.pendingStudent', fn($q) => $q->where('department_id', $departmentId));
+        if ($cohort) $query->where('cohort', $cohort);
+        if ($search) $query->whereHas('studentPendingStudent.pendingStudent.personalInformation', fn($q) =>
+            $q->where('last_name', 'like', "%{$search}%")->orWhere('first_names', 'like', "%{$search}%")
+        );
+
+        return $query->orderBy('created_at', 'desc')->get()
+            ->filter(fn($path) => $this->checkDefinitiveEligibility($path)['eligible'])
+            ->map(function ($path) {
+                $personalInfo = $path->studentPendingStudent?->pendingStudent?->personalInformation;
+                $student      = $path->studentPendingStudent?->student;
+                $department   = $path->studentPendingStudent?->pendingStudent?->department;
+                $cycle        = $department?->cycle;
+                $check        = $this->checkDefinitiveEligibility($path);
+                return [
+                    'id'                         => $path->id,
+                    'student_pending_student_id' => $path->student_pending_student_id,
+                    'student_id'                 => $student?->student_id_number,
+                    'last_name'                  => $personalInfo?->last_name,
+                    'first_names'                => $personalInfo?->first_names,
+                    'department'                 => $department?->name,
+                    'study_level'                => $check['level_label'],
+                    'cycle'                      => $check['cycle_name'],
+                    'cycle_abbrev'               => $check['cycle_abbrev'],
+                    'cohort'                     => $path->cohort,
+                    'academic_year'              => $path->academicYear?->libelle ?? $path->academicYear?->academic_year,
+                ];
+            })->values();
+    }
+
+    // =========================================================================
+    // ÉLIGIBILITÉ — INSCRIPTION (depuis proj1)
+    // =========================================================================
+
+    public function getEligibleForInscription(
+        ?int    $academicYearId = null,
+        ?int    $departmentId   = null,
+        ?string $search         = null
+    ) {
+        $query = StudentPendingStudent::with([
+            'pendingStudent.personalInformation',
+            'pendingStudent.department.cycle',
+            'pendingStudent.academicYear',
+            'student',
+        ])->whereHas('pendingStudent', fn($q) => $q->where('status', 'approved'));
+
+        if ($academicYearId) $query->whereHas('pendingStudent', fn($q) => $q->where('academic_year_id', $academicYearId));
+        if ($departmentId)   $query->whereHas('pendingStudent', fn($q) => $q->where('department_id', $departmentId));
+        if ($search) $query->whereHas('pendingStudent.personalInformation', fn($q) =>
+            $q->where('last_name', 'like', "%{$search}%")->orWhere('first_names', 'like', "%{$search}%")
+        );
+
+        return $query->orderBy('id', 'desc')->get()->map(function ($sps) {
+            $personalInfo = $sps->pendingStudent?->personalInformation;
+            $department   = $sps->pendingStudent?->department;
+            $cycle        = $department?->cycle;
+            $academicYear = $sps->pendingStudent?->academicYear;
+            $level        = $sps->pendingStudent?->level ?? '';
+            return [
+                'id'                         => $sps->id,
+                'student_pending_student_id' => $sps->id,
+                'student_id'                 => $sps->student?->student_id_number,
+                'last_name'                  => $personalInfo?->last_name,
+                'first_names'                => $personalInfo?->first_names,
+                'department'                 => $this->nettoyerFiliere($department?->name ?? ''),
+                'study_level'                => $this->getLevelLabel(
+                                                    $this->normalizeLevel($level),
+                                                    $cycle ?? (object)['libelle'=>'','name'=>'','years_count'=>0]
+                                                ),
+                'cycle'                      => $cycle?->libelle ?? $cycle?->name,
+                'academic_year'              => $academicYear?->libelle ?? $academicYear?->academic_year,
+            ];
+        })->values();
+    }
+
+    // =========================================================================
+    // GÉNÉRATION — ATTESTATION DE PASSAGE (depuis proj1)
+    // =========================================================================
+
+    public function generateAttestationPassage(int $studentPendingStudentId)
+    {
+        $path  = $this->getLastPassPath($studentPendingStudentId);
+        $check = $this->checkPassageEligibility($path);
+        if (!$check['eligible']) throw new \Exception($check['reason']);
+        $signataire = $this->getSignataire('Directeur', 'Chef CAP');
+        return $this->pdfService->downloadPdf('core::pdfs.attestation-passage', [
+            'etudiant'   => $this->buildEtudiantPassage($path),
+            'signataire' => $signataire,
+        ], 'attestation-passage.pdf');
+    }
+
+    public function generateMultipleAttestationsPassage(array $studentPendingStudentIds)
+    {
+        $etudiants = [];
+        foreach ($studentPendingStudentIds as $id) {
+            try {
+                $path  = $this->getLastPassPath($id);
+                $check = $this->checkPassageEligibility($path);
+                if (!$check['eligible']) continue;
+                $etudiants[] = $this->buildEtudiantPassage($path);
+            } catch (\Exception $e) { continue; }
+        }
+        if (empty($etudiants)) throw new \Exception('Aucun étudiant éligible au passage trouvé.');
+        $signataire = $this->getSignataire('Directeur', 'Chef CAP');
+        return $this->pdfService->downloadPdf('core::pdfs.attestation-passage', [
+            'etudiants' => $etudiants, 'signataire' => $signataire, 'multiple' => true,
+        ], 'attestations-passage.pdf');
+    }
+
+    // =========================================================================
+    // GÉNÉRATION — ATTESTATION DÉFINITIVE (depuis proj1)
+    // =========================================================================
+
+    public function generateAttestationDefinitive(int $studentPendingStudentId)
+    {
+        $path  = $this->getLastPassPath($studentPendingStudentId);
+        $check = $this->checkDefinitiveEligibility($path);
+        if (!$check['eligible']) throw new \Exception($check['reason']);
+
+        $signatairePrincipal = \App\Models\Signataire::whereHas('role', fn($q) =>
+            $q->where('slug', 'directeur')->orWhere('name', 'like', '%Directeur%')
+        )->first();
+        $signataireAdjoint = \App\Models\Signataire::whereHas('role', fn($q) =>
+            $q->where('slug', 'chef-cap')->orWhere('name', 'like', '%CAP%')
+        )->first();
+
+        $monthsFr     = $this->getMonthsFr();
+        $personalInfo = $path->studentPendingStudent?->pendingStudent?->personalInformation;
+        $department   = $path->studentPendingStudent?->pendingStudent?->department;
+        $student      = $path->studentPendingStudent?->student;
+        $cycle        = $department?->cycle;
+
+        $attestation = (object) [
+            'nom'               => strtoupper($personalInfo?->last_name ?? ''),
+            'prenoms'           => $personalInfo?->first_names ?? '',
+            'genre'             => $personalInfo?->gender === 'F' ? 'Féminin' : 'Masculin',
+            'date_naissance'    => $this->formatDateFr($personalInfo?->birth_date, $monthsFr),
+            'lieu_naissance'    => $personalInfo?->birth_place ?? '',
+            'pays_naissance'    => $personalInfo?->birth_country ?? '',
+            'matricule'         => $student?->student_id_number ?? '',
+            'niveau_diplome'    => $check['level_label'] ?? '',
+            'deliberation_date' => $this->formatDateFr($path->deliberation_date, $monthsFr),
+            'annee_academique'  => $path->academicYear?->libelle ?? $path->academicYear?->academic_year ?? '',
+            'filiere'           => (object) [
+                'libelle' => $this->nettoyerFiliere($department?->name ?? ''),
+                'diplome' => (object) [
+                    'libelle' => $cycle?->libelle ?? $cycle?->name ?? '',
+                    'sigle'   => $cycle?->abbreviation ?? '',
+                ],
+            ],
+        ];
+
+        return $this->pdfService->downloadPdf('core::pdfs.attestation-definitive', [
+            'attestations'           => [0 => $attestation],
+            'vers'                   => [0 => 0],
+            'qrCodes'                => [0 => null],
+            'signataire'             => (object)['poste' => 'Le Directeur', 'poste_adjoint' => 'Le Chef CAP'],
+            'titreSignataire'        => '',
+            'nomSignataire'          => $signatairePrincipal?->nom ?? '',
+            'titreSignataireAdjoint' => '',
+            'nomSignataireAdjoint'   => $signataireAdjoint?->nom ?? '',
+        ], 'attestation-definitive.pdf');
+    }
+
+    public function generateMultipleAttestationsDefinitive(array $studentPendingStudentIds)
+    {
+        $paths = [];
+        foreach ($studentPendingStudentIds as $id) {
+            try {
+                $path  = $this->getLastPassPath($id);
+                $check = $this->checkDefinitiveEligibility($path);
+                if ($check['eligible']) $paths[] = $path;
+            } catch (\Exception $e) { continue; }
+        }
+        if (empty($paths)) throw new \Exception("Aucun étudiant éligible à l'attestation définitive trouvé.");
+        // Déléguer à generateAttestationDefinitive pour chaque étudiant et merger
+        // Ici on retourne un PDF pour le premier (multi-page géré par le blade)
+        return $this->generateAttestationDefinitive($paths[0]->student_pending_student_id);
+    }
+
+    // =========================================================================
+    // GÉNÉRATION — ATTESTATION D'INSCRIPTION (depuis proj1)
+    // =========================================================================
+
+    public function generateAttestationInscription(int $studentPendingStudentId)
+    {
+        $sps = StudentPendingStudent::with([
+            'pendingStudent.personalInformation',
+            'pendingStudent.department.cycle',
+            'pendingStudent.academicYear',
+            'student',
+        ])->findOrFail($studentPendingStudentId);
+
+        if ($sps->pendingStudent?->status !== 'approved') {
+            throw new \Exception("L'étudiant n'a pas d'inscription approuvée.");
+        }
+
+        $monthsFr     = $this->getMonthsFr();
+        $personalInfo = $sps->pendingStudent?->personalInformation;
+        $department   = $sps->pendingStudent?->department;
+        $cycle        = $department?->cycle;
+        $academicYear = $sps->pendingStudent?->academicYear;
+        $student      = $sps->student;
+        $level        = $sps->pendingStudent?->level ?? '';
+
+        $attestation = (object) [
+            'matricule'        => $student?->student_id_number ?? '',
+            'nom'              => strtoupper($personalInfo?->last_name ?? ''),
+            'prenoms'          => $personalInfo?->first_names ?? '',
+            'genre'            => $personalInfo?->gender === 'F' ? 'Féminin' : 'Masculin',
+            'date_naissance'   => $this->formatDateFr($personalInfo?->birth_date, $monthsFr),
+            'lieu_naissance'   => $personalInfo?->birth_place ?? '',
+            'pays_naissance'   => $personalInfo?->birth_country ?? '',
+            'niveau'           => $this->getLevelLabel(
+                                      $this->normalizeLevel($level),
+                                      $cycle ?? (object)['libelle'=>'','name'=>'','years_count'=>0]
+                                  ),
+            'annee_academique' => $academicYear?->libelle ?? $academicYear?->academic_year ?? '',
+            'filiere'          => (object) [
+                'nom'    => $this->nettoyerFiliere($department?->name ?? ''),
+                'diplome' => (object) ['nom' => $cycle?->libelle ?? $cycle?->name ?? '', 'sigle' => $cycle?->abbreviation ?? ''],
+            ],
+        ];
+
+        $signataire = $this->getSignataire('Directeur', 'Chef CAP');
+
+        return $this->pdfService->downloadPdf('core::pdfs.attestation-inscription', [
+            'attestations'           => [0 => $attestation],
+            'dateDuJour'             => $this->formatDateFr(now(), $monthsFr),
+            'qrCodes'                => [0 => null],
+            'signataire'             => $signataire,
+            'titreSignataire'        => $signataire->poste,
+            'nomSignataire'          => $signataire->nomination,
+            'titreSignataireAdjoint' => '',
+            'nomSignataireAdjoint'   => '',
+        ], 'attestation-inscription.pdf');
+    }
+
+    public function generateMultipleAttestationsInscription(array $studentPendingStudentIds)
+    {
+        $spsList = StudentPendingStudent::with([
+            'pendingStudent.personalInformation',
+            'pendingStudent.department.cycle',
+            'pendingStudent.academicYear',
+            'student',
+        ])->whereIn('id', $studentPendingStudentIds)
+          ->whereHas('pendingStudent', fn($q) => $q->where('status', 'approved'))
+          ->get();
+
+        if ($spsList->isEmpty()) throw new \Exception("Aucun étudiant éligible à l'attestation d'inscription.");
+
+        $monthsFr     = $this->getMonthsFr();
+        $attestations = [];
+        foreach ($spsList as $key => $sps) {
+            $personalInfo = $sps->pendingStudent?->personalInformation;
+            $department   = $sps->pendingStudent?->department;
+            $cycle        = $department?->cycle;
+            $academicYear = $sps->pendingStudent?->academicYear;
+            $student      = $sps->student;
+            $level        = $sps->pendingStudent?->level ?? '';
+            $attestations[$key] = (object) [
+                'matricule'        => $student?->student_id_number ?? '',
+                'nom'              => strtoupper($personalInfo?->last_name ?? ''),
+                'prenoms'          => $personalInfo?->first_names ?? '',
+                'genre'            => $personalInfo?->gender === 'F' ? 'Féminin' : 'Masculin',
+                'date_naissance'   => $this->formatDateFr($personalInfo?->birth_date, $monthsFr),
+                'lieu_naissance'   => $personalInfo?->birth_place ?? '',
+                'pays_naissance'   => $personalInfo?->birth_country ?? '',
+                'niveau'           => $this->getLevelLabel(
+                                          $this->normalizeLevel($level),
+                                          $cycle ?? (object)['libelle'=>'','name'=>'','years_count'=>0]
+                                      ),
+                'annee_academique' => $academicYear?->libelle ?? $academicYear?->academic_year ?? '',
+                'filiere'          => (object) [
+                    'nom'    => $this->nettoyerFiliere($department?->name ?? ''),
+                    'diplome' => (object) ['nom' => $cycle?->libelle ?? $cycle?->name ?? '', 'sigle' => $cycle?->abbreviation ?? ''],
+                ],
+            ];
+        }
+
+        $signataire = $this->getSignataire('Directeur', 'Chef CAP');
+        return $this->pdfService->downloadPdf('core::pdfs.attestation-inscription', [
+            'attestations'           => $attestations,
+            'dateDuJour'             => $this->formatDateFr(now(), $monthsFr),
+            'qrCodes'                => array_fill(0, count($attestations), null),
+            'signataire'             => $signataire,
+            'titreSignataire'        => $signataire->poste,
+            'nomSignataire'          => $signataire->nomination,
+            'titreSignataireAdjoint' => '',
+            'nomSignataireAdjoint'   => '',
+        ], 'attestations-inscription.pdf');
+    }
 }

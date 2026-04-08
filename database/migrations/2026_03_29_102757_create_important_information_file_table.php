@@ -15,7 +15,7 @@ return new class extends Migration
             $table->integer('order')->default(0);
             $table->timestamps();
             
-            $table->unique(['important_information_id', 'file_id']);
+            $table->unique(['important_information_id', 'file_id'], 'uq_info_file');
             $table->index('order');
         });
     }
