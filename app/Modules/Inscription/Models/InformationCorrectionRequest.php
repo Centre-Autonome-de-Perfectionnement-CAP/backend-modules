@@ -3,13 +3,13 @@
 namespace App\Modules\Inscription\Models;
 
 use App\Models\User;
-use App\Traits\HasUuid;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class InformationCorrectionRequest extends Model
 {
-    use HasFactory, HasUuid;
+    use HasFactory, HasUuids;
 
     protected $table = 'information_correction_requests';
 
