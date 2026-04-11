@@ -12,52 +12,78 @@ use Illuminate\Support\Facades\DB;
 class AttendanceController extends Controller
 {
     public function __construct(
-        protected AttendanceService $service,
+        protected AttendanceService       $service,
         protected AttendanceExportService $exportService,
     ) {
         // $this->middleware('auth:sanctum');
     }
 
-    // =============================================
-    // FILTERS — incluant les créneaux horaires
-    // =============================================
+    // =========================================================
+    // FILTERS
+    // Retourne : filières, années, niveaux, matières, heures
+    // Heures : depuis emploi_du_temps → "Lundi 08:00 - 12:00"
+    // =========================================================
     public function getFilters(): JsonResponse
     {
-        $filieres = DB::table('filieres')->orderBy('name')->pluck('name');
-        $annees   = DB::table('academic_years')->orderBy('year_start', 'desc')->pluck('academic_year');
-        $salles   = DB::table('rooms')->where('is_available', true)->orderBy('name')->pluck('name');
-        $matieres = DB::table('course_elements')->orderBy('name')->pluck('name')->unique()->values();
+        $filieres = DB::table('departments')
+            ->where('is_active', 1)
+            ->orderBy('name')
+            ->pluck('name');
 
-        // ✅ Créneaux horaires depuis le module EmploiDuTemps
-        $timeSlots = DB::table('time_slots')
+        $annees = DB::table('academic_years')
+            ->orderByDesc('year_start')
+            ->pluck('academic_year');
+
+        $niveaux = DB::table('class_groups')
+            ->distinct()
+            ->orderBy('study_level')
+            ->pluck('study_level');
+
+        $matieres = DB::table('course_elements')
+            ->orderBy('name')
+            ->pluck('name')
+            ->unique()
+            ->values();
+
+        $dayLabels = [
+            'monday'    => 'Lundi',   'tuesday'  => 'Mardi',
+            'wednesday' => 'Mercredi','thursday' => 'Jeudi',
+            'friday'    => 'Vendredi','saturday' => 'Samedi',
+            'sunday'    => 'Dimanche',
+        ];
+
+        $emplois = DB::table('emploi_du_temps')
+            ->where('is_cancelled', 0)
+            ->where('is_active', 1)
+            ->select('day_of_week', 'start_time', 'end_time')
+            ->distinct()
+            ->orderByRaw("FIELD(day_of_week,'monday','tuesday','wednesday','thursday','friday','saturday','sunday')")
             ->orderBy('start_time')
-            ->get(['id', 'name', 'start_time', 'end_time']);
+            ->get();
 
-        $heures = $timeSlots->map(function ($slot) {
-            $start = substr($slot->start_time ?? '', 0, 5);
-            $end   = substr($slot->end_time   ?? '', 0, 5);
-            $label = $slot->name
-                ? "{$slot->name} ({$start} - {$end})"
-                : "{$start} - {$end}";
-            return $label;
-        })->filter()->values();
+        $heures = $emplois->map(function ($row) use ($dayLabels) {
+            $day   = $dayLabels[$row->day_of_week] ?? ucfirst($row->day_of_week);
+            $start = substr($row->start_time ?? '', 0, 5);
+            $end   = substr($row->end_time   ?? '', 0, 5);
+            return "{$day} {$start} - {$end}";
+        })->unique()->values();
 
         return response()->json([
             'success' => true,
             'data'    => [
                 'filieres' => $filieres,
                 'annees'   => $annees,
-                'niveaux'  => ['L1', 'L2', 'L3'],
-                'salles'   => $salles,
+                'niveaux'  => $niveaux->isEmpty() ? collect(['L1', 'L2', 'L3']) : $niveaux,
                 'matieres' => $matieres,
-                'heures'   => $heures, // ✅ créneaux horaires
+                'heures'   => $heures,
             ],
         ]);
     }
 
-    // =============================================
-    // DASHBOARD
-    // =============================================
+    // =========================================================
+    // DASHBOARD — stats globales + taux par mois (Jan→Déc)
+    // Paramètres : annee, filiere, niveau
+    // =========================================================
     public function dashboard(Request $request): JsonResponse
     {
         return response()->json([
@@ -66,9 +92,10 @@ class AttendanceController extends Controller
         ]);
     }
 
-    // =============================================
-    // MANAGEMENT
-    // =============================================
+    // =========================================================
+    // MANAGEMENT — liste présences filtrées
+    // Paramètres : year, filiere, niveau, matiere, heure
+    // =========================================================
     public function management(Request $request): JsonResponse
     {
         return response()->json([
@@ -77,13 +104,13 @@ class AttendanceController extends Controller
         ]);
     }
 
-    // =============================================
-    // EXPORT MANAGEMENT
-    // =============================================
+    // =========================================================
+    // EXPORT MANAGEMENT — ?format=pdf|excel|word
+    // =========================================================
     public function export(Request $request)
     {
         $format  = $request->get('format', 'pdf');
-        $filters = $request->only(['year', 'filiere', 'niveau', 'matiere', 'salle', 'heure']);
+        $filters = $request->only(['year', 'filiere', 'niveau', 'matiere', 'heure']);
 
         return match ($format) {
             'excel' => $this->exportService->exportExcel($filters),
@@ -92,9 +119,10 @@ class AttendanceController extends Controller
         };
     }
 
-    // =============================================
-    // FINGERPRINT LIST
-    // =============================================
+    // =========================================================
+    // FINGERPRINT — liste étudiants + statut empreinte
+    // Paramètres : annee, filiere, niveau
+    // =========================================================
     public function fingerprint(Request $request): JsonResponse
     {
         return response()->json([
@@ -103,9 +131,10 @@ class AttendanceController extends Controller
         ]);
     }
 
-    // =============================================
-    // EXPORT FINGERPRINT
-    // =============================================
+    // =========================================================
+    // EXPORT FINGERPRINT — ?format=pdf|excel|word
+    // ⚠️ Déclarée AVANT /fingerprint/{id} dans api.php
+    // =========================================================
     public function exportFingerprint(Request $request)
     {
         $format  = $request->get('format', 'pdf');
@@ -118,9 +147,9 @@ class AttendanceController extends Controller
         };
     }
 
-    // =============================================
+    // =========================================================
     // STORE FINGERPRINT
-    // =============================================
+    // =========================================================
     public function storeFingerprint(Request $request): JsonResponse
     {
         $request->validate([
@@ -128,48 +157,42 @@ class AttendanceController extends Controller
             'fingerprint' => 'required|boolean',
         ]);
 
-        $result = $this->service->storeFingerprint($request->all());
-
-        if (!$result) {
+        if (!$this->service->storeFingerprint($request->all())) {
             return response()->json(['success' => false, 'message' => 'Étudiant introuvable'], 404);
         }
 
         return response()->json(['success' => true, 'message' => 'Empreinte enregistrée']);
     }
 
-    // =============================================
+    // =========================================================
     // UPDATE FINGERPRINT
-    // =============================================
+    // =========================================================
     public function updateFingerprint(Request $request, int $id): JsonResponse
     {
         $request->validate(['fingerprint' => 'required|boolean']);
 
-        $result = $this->service->updateFingerprint($id, $request->input('fingerprint'));
-
-        if (!$result) {
+        if (!$this->service->updateFingerprint($id, $request->input('fingerprint'))) {
             return response()->json(['success' => false, 'message' => 'Étudiant introuvable'], 404);
         }
 
         return response()->json(['success' => true, 'message' => 'Empreinte mise à jour']);
     }
 
-    // =============================================
+    // =========================================================
     // DELETE FINGERPRINT
-    // =============================================
+    // =========================================================
     public function deleteFingerprint(int $id): JsonResponse
     {
-        $result = $this->service->deleteFingerprint($id);
-
-        if (!$result) {
+        if (!$this->service->deleteFingerprint($id)) {
             return response()->json(['success' => false, 'message' => 'Étudiant introuvable'], 404);
         }
 
         return response()->json(['success' => true, 'message' => 'Empreinte réinitialisée']);
     }
 
-    // =============================================
-    // SCAN
-    // =============================================
+    // =========================================================
+    // SCAN — enregistrer une présence
+    // =========================================================
     public function scan(Request $request): JsonResponse
     {
         $request->validate([
@@ -179,8 +202,9 @@ class AttendanceController extends Controller
             'date'              => 'required|date',
         ]);
 
-        $attendance = $this->service->recordAttendance($request->all());
-
-        return response()->json(['success' => true, 'data' => $attendance]);
+        return response()->json([
+            'success' => true,
+            'data'    => $this->service->recordAttendance($request->all()),
+        ]);
     }
 }

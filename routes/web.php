@@ -2,35 +2,37 @@
 
 use Illuminate\Support\Facades\Route;
 
-function returnIndexHtml($path = 'index.html') {
-    $file = public_path($path);
-    if (file_exists($file)) {
-        return response()->file($file, [
-            'Content-Type' => 'text/html'
-        ]);
-    }
-    abort(404, 'Fichier introuvable : '.$path);
-}
+/**
+ * 1. ROUTES API
+ * Elles sont gérées dans routes/api.php, donc rien à faire ici.
+ */
 
-
-// Route principale
-Route::get('/', fn() => returnIndexHtml());
-
-// Route services SPA
-Route::get('/services/{any?}', fn() => returnIndexHtml('services/index.html'))
-    ->where('any', '^(?!.*\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot|map)).*');
-
-// Catch-all pour app-cap, excluant API et services
-Route::get('/{any}', fn() => returnIndexHtml())
-    ->where('any', '^(?!api/)(?!services/)(?!.*\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot|map)).*');
-
-// Route pour app-cap-frontend - exclure les fichiers statiques
+/**
+ * 2. ROUTES DES SERVICES (app-cap-frontend)
+ * Si l'URL commence par /services, on renvoie vers le frontend spécifique.
+ */
 Route::get('/services/{any?}', function () {
-    return file_get_contents(public_path('app-cap-frontend/index.html'));
-})->where('any', '^(?!.*\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot|map)).*');
+    // Vérifiez si vous avez un fichier index.html dans public/services/
+    $path = public_path('services/index.html');
+    if (file_exists($path)) {
+        return response()->file($path);
+    }
+    abort(404, "Le frontend 'services' n'est pas compilé.");
+})->where('any', '.*');
 
-// Route catch-all pour app-cap (doit être en dernier) - exclure les fichiers statiques et les routes API
-Route::get('/{any}', function () {
-    return file_get_contents(public_path('app-cap/index.html'));
-})->where('any', '^(?!api/)(?!services/)(?!.*\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot|map)).*');
-
+/**
+ * 3. ROUTE PRINCIPALE / CATCH-ALL (app-cap)
+ * Pour toutes les autres routes (ex: /dashboard, /login), 
+ * on renvoie vers l'application principale.
+ */
+Route::get('/{any?}', function () {
+    // Si vous utilisez Vite, il est préférable de retourner une vue Blade :
+    // return view('app'); 
+    
+    // Si vous insistez pour charger le HTML statique directement :
+    $path = public_path('index.html');
+    if (file_exists($path)) {
+        return response()->file($path);
+    }
+    abort(404, "L'application principale n'est pas compilée.");
+})->where('any', '^(?!api).*'); // On exclut juste l'API

@@ -10,21 +10,71 @@ use PhpOffice\PhpWord\IOFactory;
 
 class AttendanceExportService
 {
-    public function __construct(
-        protected PdfService $pdfService
-    ) {}
+    public function __construct(protected PdfService $pdfService) {}
 
-    // =============================================
-    // DONNÉES MANAGEMENT
-    // =============================================
+    // =========================================================
+    // PARSING HEURE
+    // Format : "Lundi 08:00 - 12:00"
+    // =========================================================
+    private function parseHeure(string $heure): ?array
+    {
+        $dayMap = [
+            'lundi'    => 'monday',  'mardi'    => 'tuesday',
+            'mercredi' => 'wednesday','jeudi'   => 'thursday',
+            'vendredi' => 'friday',  'samedi'   => 'saturday',
+            'dimanche' => 'sunday',
+        ];
+        if (!preg_match('/^(\w+)\s+(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})$/iu', trim($heure), $m)) {
+            return null;
+        }
+        $dayEn = $dayMap[mb_strtolower(trim($m[1]))] ?? null;
+        if (!$dayEn) return null;
+        return ['day_of_week' => $dayEn, 'start_time' => $m[2], 'end_time' => $m[3]];
+    }
+
+    // =========================================================
+    // NORMALISER LES FILTRES
+    // Le frontend peut envoyer 'year' ou 'annee' selon le contexte.
+    // On normalise pour que getData() et le PDF utilisent
+    // toujours la meme cle.
+    // =========================================================
+    private function normalizeFilters(array $filters): array
+    {
+        // 'year' et 'annee' sont synonymes -> on garde les deux
+        if (!empty($filters['year']) && empty($filters['annee'])) {
+            $filters['annee'] = $filters['year'];
+        }
+        if (!empty($filters['annee']) && empty($filters['year'])) {
+            $filters['year'] = $filters['annee'];
+        }
+        return $filters;
+    }
+
+    // =========================================================
+    // DONNEES MANAGEMENT
+    // =========================================================
     public function getData(array $filters): array
     {
+        $filters   = $this->normalizeFilters($filters);
+        $dayLabels = [
+            'monday'    => 'Lundi',    'tuesday'  => 'Mardi',
+            'wednesday' => 'Mercredi', 'thursday' => 'Jeudi',
+            'friday'    => 'Vendredi', 'saturday' => 'Samedi',
+            'sunday'    => 'Dimanche',
+        ];
+
         $query = DB::table('attendances')
             ->join('students', 'attendances.student_id', '=', 'students.id')
-            ->join('filieres', 'students.filiere_id', '=', 'filieres.id')
+            ->join('departments', 'students.filiere_id', '=', 'departments.id')
             ->join('academic_years', 'students.academic_year_id', '=', 'academic_years.id')
             ->join('course_elements', 'attendances.course_element_id', '=', 'course_elements.id')
             ->leftJoin('rooms', 'attendances.room_id', '=', 'rooms.id')
+            ->leftJoin('emploi_du_temps', function ($join) {
+                $join->on('emploi_du_temps.room_id', '=', 'attendances.room_id')
+                     ->whereRaw("emploi_du_temps.day_of_week = LOWER(DAYNAME(attendances.date))")
+                     ->where('emploi_du_temps.is_cancelled', 0)
+                     ->where('emploi_du_temps.is_active', 1);
+            })
             ->select(
                 'students.id',
                 DB::raw("CONCAT(students.first_name, ' ', students.last_name) as name"),
@@ -34,43 +84,76 @@ class AttendanceExportService
                 'attendances.date',
                 'course_elements.name as matiere',
                 'students.niveau',
-                'filieres.name as filiere',
+                'departments.name as filiere',
                 'academic_years.academic_year as annee',
                 'rooms.name as salle',
+                'emploi_du_temps.day_of_week as edt_day',
+                'emploi_du_temps.start_time as edt_start',
+                'emploi_du_temps.end_time as edt_end',
             );
 
-        if (!empty($filters['year']))    $query->where('academic_years.academic_year', $filters['year']);
-        if (!empty($filters['filiere'])) $query->where('filieres.name', $filters['filiere']);
-        if (!empty($filters['niveau']))  $query->where('students.niveau', $filters['niveau']);
-        if (!empty($filters['matiere'])) $query->where('course_elements.name', 'like', '%' . $filters['matiere'] . '%');
-        if (!empty($filters['salle']))   $query->where('rooms.name', $filters['salle']);
+        // ✅ Filtre annee : accepte 'year' ET 'annee'
+        $annee = $filters['year'] ?? $filters['annee'] ?? null;
+        if (!empty($annee)) {
+            $query->where('academic_years.academic_year', $annee);
+        }
+        if (!empty($filters['filiere'])) {
+            $query->where('departments.name', $filters['filiere']);
+        }
+        if (!empty($filters['niveau'])) {
+            $query->where('students.niveau', $filters['niveau']);
+        }
+        if (!empty($filters['matiere'])) {
+            $query->where('course_elements.name', 'like', '%' . $filters['matiere'] . '%');
+        }
+        if (!empty($filters['heure'])) {
+            $p = $this->parseHeure($filters['heure']);
+            if ($p) {
+                $query->where('emploi_du_temps.day_of_week', $p['day_of_week'])
+                      ->whereRaw("TIME_FORMAT(emploi_du_temps.start_time,'%H:%i') = ?", [$p['start_time']])
+                      ->whereRaw("TIME_FORMAT(emploi_du_temps.end_time,'%H:%i') = ?",   [$p['end_time']]);
+            }
+        }
 
         return $query
+            ->orderBy('attendances.date', 'desc')
             ->orderBy('students.last_name')
             ->limit(500)
             ->get()
-            ->map(fn($row) => (object)[
-                'name'      => $row->name      ?? 'N/A',
-                'matricule' => $row->matricule  ?? 'N/A',
-                'phone'     => $row->phone      ?? null,
-                'status'    => $row->status     ?? 'absent',
-                'date'      => $row->date       ?? '',
-                'matiere'   => $row->matiere    ?? 'N/A',
-                'niveau'    => $row->niveau     ?? 'N/A',
-                'filiere'   => $row->filiere    ?? 'N/A',
-                'annee'     => $row->annee      ?? 'N/A',
-                'salle'     => $row->salle      ?? 'N/A',
-            ])
+            ->map(function ($row) use ($dayLabels) {
+                $heure = null;
+                if (!empty($row->edt_day)) {
+                    $day   = $dayLabels[$row->edt_day] ?? ucfirst($row->edt_day);
+                    $start = substr($row->edt_start ?? '', 0, 5);
+                    $end   = substr($row->edt_end   ?? '', 0, 5);
+                    $heure = "{$day} {$start} - {$end}";
+                }
+                return (object)[
+                    'name'      => $row->name      ?? 'N/A',
+                    'matricule' => $row->matricule  ?? 'N/A',
+                    'phone'     => $row->phone      ?? null,
+                    'status'    => $row->status     ?? 'absent',
+                    'date'      => $row->date       ?? '',
+                    'matiere'   => $row->matiere    ?? 'N/A',
+                    'niveau'    => $row->niveau     ?? 'N/A',
+                    'filiere'   => $row->filiere    ?? 'N/A',
+                    'annee'     => $row->annee      ?? 'N/A',
+                    'salle'     => $row->salle      ?? 'N/A',
+                    'heure'     => $heure,
+                ];
+            })
             ->toArray();
     }
 
-    // =============================================
-    // DONNÉES FINGERPRINT
-    // =============================================
+    // =========================================================
+    // DONNEES FINGERPRINT
+    // =========================================================
     public function getFingerprintData(array $filters): array
     {
+        $filters = $this->normalizeFilters($filters);
+
         $query = DB::table('students')
-            ->join('filieres', 'students.filiere_id', '=', 'filieres.id')
+            ->join('departments', 'students.filiere_id', '=', 'departments.id')
             ->join('academic_years', 'students.academic_year_id', '=', 'academic_years.id')
             ->select(
                 'students.id',
@@ -79,12 +162,13 @@ class AttendanceExportService
                 'students.phone',
                 'students.fingerprint_status as fingerprint',
                 'students.niveau',
-                'filieres.name as filiere',
+                'departments.name as filiere',
                 'academic_years.academic_year as annee'
             );
 
-        if (!empty($filters['annee']))   $query->where('academic_years.academic_year', $filters['annee']);
-        if (!empty($filters['filiere'])) $query->where('filieres.name', $filters['filiere']);
+        $annee = $filters['annee'] ?? $filters['year'] ?? null;
+        if (!empty($annee))          $query->where('academic_years.academic_year', $annee);
+        if (!empty($filters['filiere'])) $query->where('departments.name', $filters['filiere']);
         if (!empty($filters['niveau']))  $query->where('students.niveau', $filters['niveau']);
 
         return $query->orderBy('students.last_name')->get()
@@ -96,37 +180,44 @@ class AttendanceExportService
                 'niveau'      => $row->niveau     ?? 'N/A',
                 'filiere'     => $row->filiere    ?? 'N/A',
                 'annee'       => $row->annee      ?? 'N/A',
-            ])
-            ->toArray();
+            ])->toArray();
     }
 
-    // =============================================
+    // =========================================================
     // EXPORT PDF MANAGEMENT
-    // Via PdfService qui utilise loadView('attendance::exports.pdf')
-    // =============================================
-    public function exportPdf(array $filters)
-    {
-        $students = $this->getData($filters);
+    // =========================================================
+// EXPORT PDF MANAGEMENT
+// =========================================================
+public function exportPdf(array $filters)
+{
+    $filters  = $this->normalizeFilters($filters);
+    $students = $this->getData($filters);
 
-        // ✅ Utilise le namespace 'attendance::' enregistré dans AttendanceServiceProvider
-        return $this->pdfService->downloadPdf(
-            'attendance::exports.pdf',
-            [
-                'students' => $students,
-                'filters'  => $filters,
-                'date'     => now()->format('d/m/Y H:i'),
-                'total'    => count($students),
-            ],
-            'liste_presence_' . now()->format('Ymd_His') . '.pdf',
-            ['orientation' => 'landscape']
-        );
-    }
+    // Pagination pour optimiser Dompdf
+    $perPage = 20;
+    $pages = array_chunk($students, $perPage);
 
-    // =============================================
+    return $this->pdfService->downloadPdf(
+        'attendance::exports.pdf',
+        [
+            'pages'   => $pages,
+            'filters' => $filters,
+            'date'    => now()->format('d/m/Y H:i'),
+            'total'   => count($students),
+        ],
+        'liste_presence_' . now()->format('Ymd_His') . '.pdf',
+        [
+            'orientation' => 'landscape',
+            'paper' => 'a4'
+        ]
+    );
+}
+    // =========================================================
     // EXPORT PDF FINGERPRINT
-    // =============================================
+    // =========================================================
     public function exportFingerprintPdf(array $filters)
     {
+        $filters  = $this->normalizeFilters($filters);
         $students = $this->getFingerprintData($filters);
 
         return $this->pdfService->downloadPdf(
@@ -142,147 +233,339 @@ class AttendanceExportService
         );
     }
 
-    // =============================================
+    // =========================================================
     // EXPORT EXCEL MANAGEMENT
-    // =============================================
+    // =========================================================
     public function exportExcel(array $filters)
     {
+        $filters  = $this->normalizeFilters($filters);
         $students = $this->getData($filters);
-
         return Excel::download(
-            new \App\Modules\Attendance\Exports\AttendanceExport($students, 'management'),
+            new \App\Modules\Attendance\Exports\AttendanceExport($students, 'management', $filters),
             'liste_presence_' . now()->format('Ymd_His') . '.xlsx'
         );
     }
 
-    // =============================================
+    // =========================================================
     // EXPORT EXCEL FINGERPRINT
-    // =============================================
+    // =========================================================
     public function exportFingerprintExcel(array $filters)
     {
+        $filters  = $this->normalizeFilters($filters);
         $students = $this->getFingerprintData($filters);
-
         return Excel::download(
-            new \App\Modules\Attendance\Exports\AttendanceExport($students, 'fingerprint'),
+            new \App\Modules\Attendance\Exports\AttendanceExport($students, 'fingerprint', $filters),
             'empreintes_' . now()->format('Ymd_His') . '.xlsx'
         );
     }
 
-    // =============================================
-    // EXPORT WORD (management + fingerprint)
-    // =============================================
+    // =========================================================
+    // EXPORT WORD MANAGEMENT
+    // =========================================================
     public function exportWord(array $filters)
     {
-        return $this->generateWord($this->getData($filters), $filters, 'management');
+        $filters = $this->normalizeFilters($filters);
+        return $this->buildWord($this->getData($filters), $filters, 'management');
     }
 
+    // =========================================================
+    // EXPORT WORD FINGERPRINT
+    // =========================================================
     public function exportFingerprintWord(array $filters)
     {
-        return $this->generateWord($this->getFingerprintData($filters), $filters, 'fingerprint');
+        $filters = $this->normalizeFilters($filters);
+        return $this->buildWord($this->getFingerprintData($filters), $filters, 'fingerprint');
     }
 
-    private function generateWord(array $students, array $filters, string $type)
+    // =========================================================
+    // BUILD WORD
+    // Format A4 propre, sans addShape (cause du trait deplace),
+    // logos alignes, marges reduites pour management
+    // =========================================================
+    private function buildWord(array $students, array $filters, string $type): mixed
     {
+        $isManagement = ($type === 'management');
+
         $phpWord = new PhpWord();
         $phpWord->setDefaultFontName('Arial');
-        $phpWord->setDefaultFontSize(10);
+        $phpWord->setDefaultFontSize(9);
 
-        $isManagement = $type === 'management';
+        // ── Dimensions A4 en twips (1 cm = 567 twips) ─────────────
+        // A4 portrait  : 11906 x 16838
+        // A4 landscape : 16838 x 11906
+        // Marges : 1 cm = 567 twips
+        $margin = 720; // ~1.27 cm
 
         $section = $phpWord->addSection([
+            'paperSize'    => 'A4',
             'orientation'  => $isManagement ? 'landscape' : 'portrait',
-            'marginTop'    => 800, 'marginBottom' => 800,
-            'marginLeft'   => 800, 'marginRight'  => 800,
+            'marginTop'    => $margin,
+            'marginBottom' => $margin,
+            'marginLeft'   => $margin,
+            'marginRight'  => $margin,
         ]);
 
-        // En-tête EPAC/CAP
-        $section->addText(
-            'Université d\'Abomey-Calavi — ECOLE POLYTECHNIQUE D\'ABOMEY-CALAVI — CENTRE AUTONOME DE PERFECTIONNEMENT',
+        // Largeur utile en twips
+        // A4 portrait  : 11906 - 2*720 = 10466
+        // A4 landscape : 16838 - 2*720 = 15398
+        $pageWidth = $isManagement ? 15398 : 10466;
+
+        // ── EN-TETE EPAC/CAP ──────────────────────────────────────
+        // Tableau 3 colonnes sans bordure : EPAC | texte | CAP
+        // IMPORTANT : on n'utilise PAS addShape (cause le trait deplace)
+        $logoW   = (int)($pageWidth * 0.13);
+        $centerW = $pageWidth - 2 * $logoW;
+
+        $tblStyle = [
+            'width'       => $pageWidth,
+            'borderSize'  => 0,
+            'borderColor' => 'FFFFFF',
+            'cellMargin'  => 60,
+        ];
+
+        $hTbl = $section->addTable($tblStyle);
+        $hTbl->addRow(900);
+
+        // Col gauche
+        $cL = $hTbl->addCell($logoW, ['borderSize' => 0, 'borderColor' => 'FFFFFF', 'valign' => 'center']);
+        $cL->addText('EPAC', ['bold' => true, 'size' => 9, 'color' => '003087'], ['alignment' => 'center']);
+
+        // Col centre
+        $cC = $hTbl->addCell($centerW, ['borderSize' => 0, 'borderColor' => 'FFFFFF', 'valign' => 'center']);
+        $cC->addText("Universite d'Abomey-Calavi",
+            ['bold' => true, 'size' => 9],
+            ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0]);
+        $cC->addText('-=-=-=-=-=-=-',
+            ['size' => 7, 'color' => '666666'],
+            ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0]);
+        $cC->addText("ECOLE POLYTECHNIQUE D'ABOMEY-CALAVI",
             ['bold' => true, 'size' => 11],
-            ['alignment' => 'center']
-        );
-        $section->addText(
-            '01 BP 2009 COTONOU - TÉL. 21 36 14 32/21 36 09 93',
-            ['size' => 9, 'color' => '555555'],
-            ['alignment' => 'center', 'spaceAfter' => 200]
-        );
+            ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0]);
+        $cC->addText('-=-=-=-=-=-=-',
+            ['size' => 7, 'color' => '666666'],
+            ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0]);
+        $cC->addText('CENTRE AUTONOME DE PERFECTIONNEMENT',
+            ['bold' => true, 'size' => 10],
+            ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0]);
+        $cC->addText('01 BP 2009 COTONOU - TEL. 21 36 14 32/21 36 09 93 - Email: epac.uac@epac.uac.bj',
+            ['size' => 7, 'color' => '555555'],
+            ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0]);
 
-        // Titre
+        // Col droite
+        $cR = $hTbl->addCell($logoW, ['borderSize' => 0, 'borderColor' => 'FFFFFF', 'valign' => 'center']);
+        $cR->addText('CAP', ['bold' => true, 'size' => 9, 'color' => '003087'], ['alignment' => 'center']);
+
+        // ── SEPARATEUR HORIZONTAL ──────────────────────────────────
+        // On utilise une bordure basse sur un paragraphe dans un tableau
+        // d'une seule cellule. C'est la methode correcte dans PhpWord
+        // pour eviter le trait qui se deplace avec addShape.
+        $sepTbl = $section->addTable([
+            
+            'width'       => $pageWidth,
+            'borderSize'  => 0,
+            'borderColor' => 'FFFFFF',
+            'cellMargin'  => 60,
+        ]);
+        $sepTbl->addRow(1);
+        $sepTbl->addCell($pageWidth, [
+            'borderSize'        => 0,
+            'borderColor'       => 'FFFFFF',
+            'borderBottomSize'  => 12,
+            'borderBottomColor' => '000000',
+        ])->addText('');
+
+        // ── TITRE ─────────────────────────────────────────────────
         $annee    = $filters['year'] ?? $filters['annee'] ?? '';
-        $docTitle = $isManagement ? 'LISTE DE PRÉSENCE' : 'LISTE DES EMPREINTES DIGITALES';
+        $docTitle = $isManagement ? 'FICHE DE PRESENCE' : 'LISTE DES EMPREINTES DIGITALES';
+
+        $section->addText('', [], ['spaceAfter' => 80]);
+
         if ($annee) {
-            $section->addText("Année académique : $annee", ['bold' => true, 'size' => 11], ['alignment' => 'center']);
+            $section->addText("Annee academique : $annee",
+                ['bold' => true, 'size' => 10],
+                ['alignment' => 'center', 'spaceAfter' => 40, 'spaceBefore' => 0]);
         }
-        $section->addText($docTitle, ['bold' => true, 'size' => 14], ['alignment' => 'center', 'spaceAfter' => 200]);
+        $section->addText($docTitle,
+            ['bold' => true, 'size' => 13],
+            ['alignment' => 'center', 'spaceAfter' => 100, 'spaceBefore' => 0]);
 
-        // Infos
-        if (!empty($filters['filiere'])) {
-            $section->addText('Filière : ' . $filters['filiere'], ['size' => 10, 'bold' => true]);
-        }
-        if (!empty($filters['niveau'])) {
-            $section->addText('Niveau : ' . $filters['niveau'], ['size' => 10, 'bold' => true]);
-        }
-        if ($isManagement && !empty($filters['matiere'])) {
-            $section->addText('Matière : ' . $filters['matiere'], ['size' => 10, 'bold' => true]);
-        }
-        $section->addText('Total : ' . count($students) . ' enregistrement(s)', ['size' => 10], ['spaceAfter' => 200]);
+        // ── INFOS DOCUMENT ────────────────────────────────────────
+        $filiere = !empty($filters['filiere']) ? $filters['filiere'] : '..........................................';
+        $matiere = !empty($filters['matiere']) ? $filters['matiere'] : '..........................................';
+        $niveau  = !empty($filters['niveau'])  ? $filters['niveau']  : '....................';
+        $heure   = !empty($filters['heure'])   ? $filters['heure']   : '....................';
 
-        // Colonnes
+        $halfW = (int)($pageWidth / 2);
+
+        $iTbl = $section->addTable([
+            'width' => $pageWidth,
+            'borderSize' => 0, 'borderColor' => 'FFFFFF', 'cellMargin' => 50,
+        ]);
+
+        $iTbl->addRow(300);
+        $iTbl->addCell($halfW, ['borderSize' => 0, 'borderColor' => 'FFFFFF'])
+             ->addText('Filiere : ' . $filiere, ['size' => 9]);
+        $iTbl->addCell($halfW, ['borderSize' => 0, 'borderColor' => 'FFFFFF'])
+             ->addText('Classe : .....................     Date : .......................', ['size' => 9]);
+
         if ($isManagement) {
-            $headers = ['N°', 'Matricule', 'Noms et Prénoms', 'Contact', 'Matière', 'Date', 'Statut'];
-            $widths  = [400, 1400, 2500, 1600, 1800, 1200, 1000];
+            $iTbl->addRow(300);
+            $iTbl->addCell($halfW, ['borderSize' => 0, 'borderColor' => 'FFFFFF'])
+                 ->addText('Matiere : ' . $matiere, ['size' => 9]);
+            $iTbl->addCell($halfW, ['borderSize' => 0, 'borderColor' => 'FFFFFF'])
+                 ->addText('Duree : ....................    Heure : ' . $heure, ['size' => 9]);
         } else {
-            $headers = ['N°', 'Matricule', 'Noms et Prénoms', 'Contact', 'Niveau', 'Empreinte'];
-            $widths  = [400, 1400, 2800, 1800, 900, 1600];
+            $iTbl->addRow(300);
+            $iTbl->addCell($halfW, ['borderSize' => 0, 'borderColor' => 'FFFFFF'])
+                 ->addText('Niveau : ' . $niveau, ['size' => 9]);
+            $iTbl->addCell($halfW, ['borderSize' => 0, 'borderColor' => 'FFFFFF'])
+                 ->addText('Date : ' . now()->format('d/m/Y'), ['size' => 9]);
         }
 
-        $table = $section->addTable(['borderSize' => 6, 'borderColor' => '000000', 'cellMargin' => 80]);
+        $section->addText(
+            'Enseignant : ...............................................................................................',
+            ['size' => 9],
+            ['spaceAfter' => 80, 'spaceBefore' => 60]
+        );
 
-        // En-têtes tableau
-        $table->addRow(400);
+        // ── TABLEAU DES DONNEES ────────────────────────────────────
+        if ($isManagement) {
+            $headers = ['N', 'Matricule', 'Noms et Prenoms', 'Contact', 'Matiere', 'Date', 'Creneau', 'Statut'];
+            // Largeurs proportionnelles sur pageWidth
+            $widths  = [
+                (int)($pageWidth * 0.04),
+                (int)($pageWidth * 0.09),
+                (int)($pageWidth * 0.18),
+                (int)($pageWidth * 0.12),
+                (int)($pageWidth * 0.16),
+                (int)($pageWidth * 0.09),
+                (int)($pageWidth * 0.17),
+                (int)($pageWidth * 0.10),
+            ];
+        } else {
+            $headers = ['N', 'Matricule', 'Noms et Prenoms', 'Contact', 'Niveau', 'Empreinte digitale'];
+            $widths  = [
+                (int)($pageWidth * 0.05),
+                (int)($pageWidth * 0.13),
+                (int)($pageWidth * 0.30),
+                (int)($pageWidth * 0.20),
+                (int)($pageWidth * 0.10),
+                (int)($pageWidth * 0.22),
+            ];
+        }
+
+        $dataTable = $section->addTable([
+            'width'       => $pageWidth,
+            'borderSize'  => 6,
+            'borderColor' => '000000',
+            'cellMargin'  => 60,
+        ]);
+
+        // En-tetes
+        $dataTable->addRow(380);
         foreach ($headers as $i => $h) {
-            $table->addCell($widths[$i], ['bgColor' => 'E8E8E8'])
-                  ->addText($h, ['bold' => true, 'size' => 9], ['alignment' => 'center']);
+            $dataTable->addCell($widths[$i], ['bgColor' => 'E0E0E0'])
+                      ->addText($h, ['bold' => true, 'size' => 8],
+                                ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0]);
         }
 
-        // Lignes
+        // Lignes de donnees
         foreach ($students as $idx => $s) {
-            $bg        = $idx % 2 === 0 ? 'FFFFFF' : 'F5F5F5';
-            $cellStyle = ['bgColor' => $bg];
+            $bg = ($idx % 2 === 0) ? 'FFFFFF' : 'F5F5F5';
+            $cs = ['bgColor' => $bg];
 
-            $table->addRow(350);
-            $table->addCell($widths[0], $cellStyle)->addText($idx + 1,     ['size' => 9], ['alignment' => 'center']);
-            $table->addCell($widths[1], $cellStyle)->addText($s->matricule ?? 'N/A', ['size' => 9]);
-            $table->addCell($widths[2], $cellStyle)->addText($s->name      ?? 'N/A', ['size' => 9]);
-            $table->addCell($widths[3], $cellStyle)->addText($s->phone     ?? '—',   ['size' => 9]);
+            $dataTable->addRow(320);
+            $dataTable->addCell($widths[0], $cs)
+                ->addText((string)($idx + 1), ['size' => 8], ['alignment' => 'center', 'spaceAfter' => 0]);
+            $dataTable->addCell($widths[1], $cs)
+                ->addText($s->matricule ?? 'N/A', ['size' => 8, 'bold' => true], ['spaceAfter' => 0]);
+            $dataTable->addCell($widths[2], $cs)
+                ->addText($s->name ?? 'N/A', ['size' => 8], ['spaceAfter' => 0]);
+            $dataTable->addCell($widths[3], $cs)
+                ->addText($s->phone ?? '-', ['size' => 8], ['spaceAfter' => 0]);
 
             if ($isManagement) {
-                $statusColor = ($s->status ?? '') === 'present' ? '008000' : 'CC0000';
-                $statusText  = ($s->status ?? '') === 'present' ? 'Présent' : 'Absent';
-                $table->addCell($widths[4], $cellStyle)->addText($s->matiere ?? 'N/A', ['size' => 9]);
-                $table->addCell($widths[5], $cellStyle)->addText($s->date    ?? '',    ['size' => 9], ['alignment' => 'center']);
-                $table->addCell($widths[6], $cellStyle)->addText($statusText, ['size' => 9, 'bold' => true, 'color' => $statusColor], ['alignment' => 'center']);
+                $isPresent   = ($s->status ?? '') === 'present';
+                $statusText  = $isPresent ? 'Present' : 'Absent';
+                $statusColor = $isPresent ? '008000' : 'CC0000';
+
+                $dataTable->addCell($widths[4], $cs)
+                    ->addText($s->matiere ?? 'N/A', ['size' => 8], ['spaceAfter' => 0]);
+                $dataTable->addCell($widths[5], $cs)
+                    ->addText($s->date ?? '', ['size' => 8], ['alignment' => 'center', 'spaceAfter' => 0]);
+                $dataTable->addCell($widths[6], $cs)
+                    ->addText($s->heure ?? '-', ['size' => 8], ['alignment' => 'center', 'spaceAfter' => 0]);
+                $dataTable->addCell($widths[7], $cs)
+                    ->addText($statusText, ['size' => 8, 'bold' => true, 'color' => $statusColor],
+                              ['alignment' => 'center', 'spaceAfter' => 0]);
             } else {
-                $fpColor = ($s->fingerprint ?? false) ? '008000' : 'CC0000';
-                $fpText  = ($s->fingerprint ?? false) ? 'Enregistrée' : 'Non enregistrée';
-                $table->addCell($widths[4], $cellStyle)->addText($s->niveau ?? 'N/A', ['size' => 9], ['alignment' => 'center']);
-                $table->addCell($widths[5], $cellStyle)->addText($fpText, ['size' => 9, 'bold' => true, 'color' => $fpColor], ['alignment' => 'center']);
+                $hasFp   = ($s->fingerprint ?? false);
+                $fpText  = $hasFp ? 'Enregistree' : 'Non enregistree';
+                $fpColor = $hasFp ? '008000' : 'CC0000';
+
+                $dataTable->addCell($widths[4], $cs)
+                    ->addText($s->niveau ?? 'N/A', ['size' => 8], ['alignment' => 'center', 'spaceAfter' => 0]);
+                $dataTable->addCell($widths[5], $cs)
+                    ->addText($fpText, ['size' => 8, 'bold' => true, 'color' => $fpColor],
+                              ['alignment' => 'center', 'spaceAfter' => 0]);
             }
         }
 
-        // Footer
-        $section->addTextBreak(1);
+        // ── PIED DE PAGE ──────────────────────────────────────────
+        $section->addText('', [], ['spaceAfter' => 160]);
+
+        $presents = count(array_filter($students, fn($s) => ($s->status ?? '') === 'present'));
+        $absents  = count($students) - $presents;
+
+        if ($isManagement) {
+            $third = (int)($pageWidth / 3);
+            $sTbl  = $section->addTable([
+                
+                'width' => $pageWidth,
+                'borderSize' => 0, 'borderColor' => 'FFFFFF', 'cellMargin' => 50,
+            ]);
+            $sTbl->addRow(320);
+            $sTbl->addCell($third, ['borderSize' => 0, 'borderColor' => 'FFFFFF'])
+                 ->addText('Effectif de la classe : ' . count($students), ['size' => 9, 'bold' => true]);
+            $sTbl->addCell($third, ['borderSize' => 0, 'borderColor' => 'FFFFFF'])
+                 ->addText('Nombre de present : ' . $presents, ['size' => 9]);
+            $sTbl->addCell($third, ['borderSize' => 0, 'borderColor' => 'FFFFFF'])
+                 ->addText("Nombre d'absent : " . $absents, ['size' => 9]);
+        }
+
+        // Espace avant signatures
+        $section->addText('', [], ['spaceAfter' => 600]);
+
+        // Tableau signatures
+        $half   = (int)($pageWidth / 2);
+        $sigTbl = $section->addTable([
+            
+            'width' => $pageWidth,
+            'borderSize' => 0, 'borderColor' => 'FFFFFF', 'cellMargin' => 50,
+        ]);
+        $sigTbl->addRow(320);
+        $sigTbl->addCell($half, ['borderSize' => 0, 'borderColor' => 'FFFFFF'])
+               ->addText('Signature et Nom des surveillants :', ['bold' => true, 'size' => 9]);
+        $sigTbl->addCell($half, ['borderSize' => 0, 'borderColor' => 'FFFFFF'])
+               ->addText("Signature et Nom de l'Enseignant :", ['bold' => true, 'size' => 9],
+                         ['alignment' => 'right']);
+
+        // Ligne imprime
+        $section->addText('', [], ['spaceAfter' => 400]);
         $section->addText(
-            'Imprimé le ' . now()->format('d/m/Y à H:i') . ' par le système',
-            ['size' => 8, 'color' => '888888'],
+            'Imprime le ' . now()->format('d/m/Y a H:i') . ' par le systeme',
+            ['size' => 7, 'color' => '888888'],
             ['alignment' => 'right']
         );
 
-        $filename = ($isManagement ? 'liste_presence' : 'empreintes') . '_' . now()->format('Ymd_His') . '.docx';
+        // ── ECRITURE DU FICHIER ───────────────────────────────────
+        $filename = ($isManagement ? 'fiche_presence' : 'empreintes') . '_' . now()->format('Ymd_His') . '.docx';
         $tempDir  = storage_path('app/temp');
-        $tempPath = $tempDir . '/' . $filename;
+        $tempPath = $tempDir . DIRECTORY_SEPARATOR . $filename;
 
-        if (!file_exists($tempDir)) mkdir($tempDir, 0755, true);
+        if (!file_exists($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
 
         $writer = IOFactory::createWriter($phpWord, 'Word2007');
         $writer->save($tempPath);
