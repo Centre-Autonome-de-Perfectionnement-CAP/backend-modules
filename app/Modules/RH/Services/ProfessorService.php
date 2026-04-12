@@ -26,8 +26,8 @@ class ProfessorService
             });
         }
 
-        if (!empty($filters['statut'])) {
-            $query->where('statut', $filters['statut']);
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
         }
 
         if (!empty($filters['grade_id'])) {

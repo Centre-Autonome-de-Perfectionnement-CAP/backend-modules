@@ -13,8 +13,7 @@ use Illuminate\Support\Facades\Mail;
 class ContratController extends Controller
 {
     /**
-     * Sérialise un contrat en ajoutant le professor via ProfessorResource
-     * pour garantir que tous les champs (nationality, city, rib_number…) sont présents.
+     * Sérialise un contrat en ajoutant le professor via ProfessorResource.
      */
     private function serializeContrat(Contrat $contrat): array
     {
@@ -44,10 +43,19 @@ class ContratController extends Controller
         ]);
     }
 
-    // ─── LISTE DES CONTRATS D'UN PROFESSEUR (authentifié) ────────────────────
+    // ─── LISTE DES CONTRATS DU PROFESSEUR CONNECTÉ ───────────────────────────
     public function myContrats(Request $request)
     {
-        $professor = $request->user();
+        $user = $request->user();
+
+        // Sanctum peut authentifier plusieurs modèles (User, Professor, PersonalInformation).
+        // On s'assure que c'est bien un Professor qui appelle cette route.
+        if (!($user instanceof \App\Modules\RH\Models\Professor)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès réservé aux professeurs.',
+            ], 403);
+        }
 
         $contrats = Contrat::with([
             'academicYear',
@@ -55,7 +63,7 @@ class ContratController extends Controller
             'courseElementProfessors.courseElement.teachingUnit',
             'courseElementProfessors.classGroup',
         ])
-            ->where('professor_id', $professor->id)
+            ->where('professor_id', $user->id)
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -166,7 +174,7 @@ class ContratController extends Controller
         }
     }
 
-    // ─── ACCÈS PAR TOKEN (lien email) ─────────────────────────────────────────
+    // ─── ACCÈS PAR TOKEN (lien email — PUBLIC) ────────────────────────────────
     public function showByToken(string $token)
     {
         $contrat = Contrat::with([
@@ -197,7 +205,7 @@ class ContratController extends Controller
             return response()->json(['success' => false, 'message' => 'Lien invalide.'], 404);
         }
 
-        if (!in_array($contrat->status, ['transfered', 'pending'])) {
+        if (!in_array($contrat->status, ['transfered', 'pending', 'signed'])) {
             return response()->json([
                 'success' => false,
                 'message' => 'Ce contrat ne peut plus être modifié.',
@@ -237,7 +245,7 @@ class ContratController extends Controller
             return response()->json(['success' => false, 'message' => 'Lien invalide.'], 404);
         }
 
-        if (!in_array($contrat->status, ['transfered', 'pending'])) {
+        if (!in_array($contrat->status, ['transfered', 'pending', 'signed'])) {
             return response()->json([
                 'success' => false,
                 'message' => 'Ce contrat ne peut plus être modifié.',
@@ -251,20 +259,69 @@ class ContratController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Contrat rejeté. Votre motif a été transmis au CAP.',
+            'message' => 'Contrat rejeté. Votre motif a été transmis au service RH du CAP.',
         ]);
     }
 
-    // ─── AUTORISER UN CONTRAT (admin, après validation professeur) ────────────
-    public function authorizee($id)
+    // ─── TÉLÉCHARGEMENT PDF PAR TOKEN ─────────────────────────────────────────
+    public function downloadByToken(string $token)
+    {
+        $contrat = Contrat::with([
+            'professor', 'academicYear', 'cycle',
+            'courseElementProfessors.courseElement.teachingUnit',
+            'courseElementProfessors.classGroup',
+        ])->where('uuid', $token)->first();
+
+        if (!$contrat) {
+            return response()->json(['success' => false, 'message' => 'Lien invalide ou expiré.'], 404);
+        }
+
+        if (!$contrat->is_validated || !$contrat->is_authorized) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Le contrat doit être validé et autorisé avant de pouvoir être téléchargé.',
+            ], 403);
+        }
+
+        // Générer ou retourner le PDF du contrat
+        // Adaptez selon votre système de génération PDF (DomPDF, Snappy, fichier stocké, etc.)
+        try {
+            // Option 1 : Fichier PDF déjà généré et stocké
+            if ($contrat->pdf_path && \Storage::exists($contrat->pdf_path)) {
+                return \Storage::download(
+                    $contrat->pdf_path,
+                    "contrat-{$contrat->contrat_number}.pdf",
+                    ['Content-Type' => 'application/pdf']
+                );
+            }
+
+            // Option 2 : Génération à la volée avec DomPDF (si installé)
+            if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+                $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.contrat', ['contrat' => $contrat]);
+                return $pdf->download("contrat-{$contrat->contrat_number}.pdf");
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Génération PDF non configurée. Contactez le service RH.',
+            ], 501);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la génération du PDF.',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    // ─── AUTORISER UN CONTRAT (admin) ─────────────────────────────────────────
+    public function authorizeContrat($id)
     {
         $contrat = Contrat::find($id);
 
         if (!$contrat) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Contrat introuvable.',
-            ], 404);
+            return response()->json(['success' => false, 'message' => 'Contrat introuvable.'], 404);
         }
 
         if (!$contrat->is_validated || $contrat->status !== 'signed') {
@@ -275,10 +332,7 @@ class ContratController extends Controller
         }
 
         if ($contrat->is_authorized) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ce contrat est déjà autorisé.',
-            ], 400);
+            return response()->json(['success' => false, 'message' => 'Ce contrat est déjà autorisé.'], 400);
         }
 
         $contrat->update([
@@ -299,6 +353,18 @@ class ContratController extends Controller
     }
 
     // ─── EMAIL DE TRANSFERT ───────────────────────────────────────────────────
+    /**
+     * Le lien envoyé par email pointe vers le FRONTEND React :
+     *   http://localhost:3000/services/notes/professor/contrats/{uuid}
+     *
+     * L'app React a basename="/services", donc la route complète dans React est :
+     *   /notes/professor/contrats/{uuid}  (montée dans NoteRoutes)
+     *
+     * Quand le professeur clique :
+     *   1. Si connecté → ProfessorContratDetail charge directement le contrat
+     *   2. Si non connecté → NoteRoutes redirige vers /login?redirectTo=<url encodée>
+     *   3. Après login → la page Login lit redirectTo et renvoie vers le contrat
+     */
     public function sendTransferEmail($id)
     {
         $contrat = Contrat::with(['professor', 'academicYear', 'cycle'])->find($id);
@@ -314,10 +380,23 @@ class ContratController extends Controller
             ], 400);
         }
 
+        if (empty($contrat->uuid)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce contrat ne possède pas de token UUID. Veuillez le régénérer.',
+            ], 400);
+        }
+
         try {
             $professor = $contrat->professor;
-            $baseUrl   = rtrim(config('app.frontend_url', config('app.url')), '/');
-            $token     = $contrat->uuid;
+
+            // basename React = /services
+            // Route React = /notes/professor/contrats/:token  (montée sous NoteRoutes)
+            // → Lien complet = http://localhost:3000/services/notes/professor/contrats/{uuid}
+            // Si non connecté : NoteRoutes redirige vers /login?redirectTo=<url>
+            // Après login : la page Login lit redirectTo et renvoie vers la bonne URL
+            $frontendBase = rtrim(config('app.frontend_url', 'http://localhost:3000'), '/');
+            $contratUrl   = "{$frontendBase}/services/notes/professor/contrats/{$contrat->uuid}";
 
             $details = [
                 'title'             => "Contrat N°{$contrat->contrat_number} — Action requise",
@@ -329,16 +408,12 @@ class ContratController extends Controller
                 'division'          => $contrat->division ?? '—',
                 'cycle'             => $contrat->cycle?->name ?? '—',
                 'regroupement'      => $contrat->regroupement === '1' ? 'I' : ($contrat->regroupement === '2' ? 'II' : '—'),
-                'contrat_url'       => "{$baseUrl}/professor/contrats/{$token}",
-                'my_contrats_url'   => "{$baseUrl}/professor/contrats",
-                'dashboard_url'     => "{$baseUrl}/professor/dashboard",
+                // Lien unique vers la page du contrat (avec redirection login si non connecté)
+                'contrat_url'       => $contratUrl,
                 'link_expiry_hours' => 72,
             ];
 
             Mail::to($professor->email)->send(new \App\Mail\ContratTransferred($details));
-
-            // Mise à jour du statut si envoi réussi
-            $contrat->update(['status' => 'transfered']);
 
             return response()->json([
                 'success' => true,
@@ -365,10 +440,7 @@ class ContratController extends Controller
         ])->find($id);
 
         if (!$contrat) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Contrat introuvable',
-            ], 404);
+            return response()->json(['success' => false, 'message' => 'Contrat introuvable'], 404);
         }
 
         return response()->json([
@@ -383,10 +455,7 @@ class ContratController extends Controller
         $contrat = Contrat::find($id);
 
         if (!$contrat) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Contrat introuvable',
-            ], 404);
+            return response()->json(['success' => false, 'message' => 'Contrat introuvable'], 404);
         }
 
         $validator = Validator::make($request->all(), [
@@ -449,10 +518,7 @@ class ContratController extends Controller
         $contrat = Contrat::find($id);
 
         if (!$contrat) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Contrat introuvable',
-            ], 404);
+            return response()->json(['success' => false, 'message' => 'Contrat introuvable'], 404);
         }
 
         try {

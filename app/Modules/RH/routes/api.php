@@ -22,6 +22,17 @@ Route::prefix('rh')->group(function () {
     Route::get('academic-years',         [AcademicYearController::class, 'index']);
     Route::get('cycles',                 [CycleController::class, 'index']);
 
+    // ─── Programmes d'un professeur ───────────────────────────────────────────
+    Route::get('professors/{professorId}/programs', [ContratController::class, 'professorPrograms']);
+
+    // ─── Accès par token (liens email — PUBLIC, sans authentification) ─────────
+    // IMPORTANT : ces routes doivent être déclarées AVANT contrats/{id}
+    // sinon Laravel capture "by-token" comme valeur de {id}
+    Route::get('contrats/by-token/{token}',           [ContratController::class, 'showByToken']);
+    Route::post('contrats/by-token/{token}/validate', [ContratController::class, 'validateByToken']);
+    Route::post('contrats/by-token/{token}/reject',   [ContratController::class, 'rejectByToken']);
+    Route::get('contrats/by-token/{token}/download',  [ContratController::class, 'downloadByToken']);
+
     // ─── Contrats (CRUD complet — admin) ──────────────────────────────────────
     Route::get('contrats',         [ContratController::class, 'index']);
     Route::post('contrats',        [ContratController::class, 'store']);
@@ -30,18 +41,10 @@ Route::prefix('rh')->group(function () {
     Route::delete('contrats/{id}', [ContratController::class, 'destroy']);
 
     // ─── Autorisation d'un contrat validé (admin uniquement) ─────────────────
-    Route::post('contrats/{id}/authorize', [ContratController::class, 'authorizee']);
+    Route::post('contrats/{id}/authorize',            [ContratController::class, 'authorizeContrat']);
 
     // ─── Email de transfert ───────────────────────────────────────────────────
-    Route::post('contrats/{id}/send-transfer-email', [ContratController::class, 'sendTransferEmail']);
-
-    // ─── Programmes d'un professeur ───────────────────────────────────────────
-    Route::get('professors/{professorId}/programs', [ContratController::class, 'professorPrograms']);
-
-    // ─── Accès par token (liens email — PUBLIC, sans authentification) ────────
-    Route::get('contrats/by-token/{token}',           [ContratController::class, 'showByToken']);
-    Route::post('contrats/by-token/{token}/validate', [ContratController::class, 'validateByToken']);
-    Route::post('contrats/by-token/{token}/reject',   [ContratController::class, 'rejectByToken']);
+    Route::post('contrats/{id}/send-transfer-email',  [ContratController::class, 'sendTransferEmail']);
 
     // ─── Routes protégées ─────────────────────────────────────────────────────
     Route::apiResource('documents', DocumentManagementController::class)->except(['index']);
@@ -67,8 +70,8 @@ Route::prefix('rh')->group(function () {
     });
 
     // ─── Contrats du professeur connecté ─────────────────────────────────────
-    // Protégé par sanctum:professor middleware (à configurer dans votre RouteServiceProvider)
-    Route::middleware(['auth:professor'])->group(function () {
+    // Protégé par Sanctum — accepte tout utilisateur authentifié (User ou Professor)
+    Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('professor/my-contrats', [ContratController::class, 'myContrats']);
     });
 });

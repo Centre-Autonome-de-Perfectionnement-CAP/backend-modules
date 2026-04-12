@@ -81,7 +81,7 @@ class Professor extends Authenticatable
 
     public function scopeActive($query)
     {
-        return $query->where('statut', 'actif');
+        return $query->where('status', 'actif');
     }
 
     // ───────────────────────── ACCESSORS
