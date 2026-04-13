@@ -519,13 +519,18 @@ class DocumentRequestController extends Controller
         // via une table pivot `role_user` (ou `model_has_roles` si Spatie).
         // Adapter la jointure selon votre implémentation.
         $query = DB::table('users as u')
-            ->join('role_user as mhr', function ($join) {
-                $join->on('mhr.user_id', '=', 'u.id');
-        })
-        ->join('roles as r', 'mhr.role_id', '=', 'r.id')
-        ->where('r.slug', $targetRoleSlug)
-        ->whereNotNull('u.email')
-        ->select('u.id', 'u.name', 'u.email', 'u.chef_division_type');
+    ->join('role_user as mhr', function ($join) {
+        $join->on('mhr.user_id', '=', 'u.id');
+    })
+    ->join('roles as r', 'mhr.role_id', '=', 'r.id')
+    ->where('r.slug', $targetRoleSlug)
+    ->whereNotNull('u.email')
+    ->select(
+        'u.id',
+        DB::raw("CONCAT(u.first_name, ' ', u.last_name) as name"),
+        'u.email',
+        'u.chef_division_type'
+    );
         // Pour chef-division, filtrer par le bon type
         if ($targetRoleSlug === 'chef-division' && $chefDivisionType) {
             $query->where('u.chef_division_type', $chefDivisionType);
