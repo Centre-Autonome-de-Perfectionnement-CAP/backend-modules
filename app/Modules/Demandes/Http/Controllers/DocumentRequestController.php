@@ -18,8 +18,7 @@ use Illuminate\Support\Facades\Auth;
  *
  * FLUX :
  *   pending
- *     → secretaire_review             (Secrétaire accepte)
- *     → comptable_review              (Secrétaire envoie)
+ *     → comptable_review              (Secrétaire agit directement — plus d'étape secretaire_review)
  *     → chef_division_review          (Comptable valide)
  *     → chef_cap_review               (Chef Division valide)
  *     → sec_dir_adjointe_review       (Chef CAP paraphe → Sec. Dir. Adjointe)
@@ -205,14 +204,10 @@ class DocumentRequestController extends Controller
  
         switch ($action) {
  
-            case 'secretaire_accept':
-                $update['status']                     = 'secretaire_review';
-                $update['processed_by_secretaire_id'] = $user->id;
-                break;
- 
             case 'secretaire_send_comptable':
-                // Secrétaire → Comptable (premier maillon du circuit)
-                $update['status'] = 'comptable_review';
+                // Secrétaire agit directement depuis pending → Comptable
+                $update['status']                     = 'comptable_review';
+                $update['processed_by_secretaire_id'] = $user->id;
                 break;
  
             case 'secretaire_reject':
@@ -254,7 +249,7 @@ class DocumentRequestController extends Controller
                 $update['status']          = $newStatus;
                 $update['rejected_by']     = null;
                 $update['rejected_reason'] = null;
-                if ($request->resend_to === 'chef_division' && $request->chef_division_type) {
+                if ($request->resend_to === 'chef_division' && $request->filled('chef_division_type')) {
                     $update['chef_division_type'] = $request->chef_division_type;
                 }
                 break;
@@ -296,7 +291,12 @@ class DocumentRequestController extends Controller
                 break;
  
             case 'comptable_validate':
+                // Le comptable doit choisir le type de Responsable Division
+                if (!$request->filled('chef_division_type')) {
+                    return response()->json(['message' => 'Vous devez sélectionner le Responsable Division (formation distance ou continue).'], 422);
+                }
                 $update['status']                    = 'chef_division_review';
+                $update['chef_division_type']        = $request->chef_division_type;
                 $update['comptable_reviewed_at']     = now();
                 $update['processed_by_comptable_id'] = $user->id;
                 break;
@@ -453,9 +453,8 @@ class DocumentRequestController extends Controller
  
         $matrix = [
             'secretaire' => [
-                'secretaire_accept'        => ['pending'],
-                'secretaire_send_comptable' => ['secretaire_review'],
-                'secretaire_reject'        => ['pending', 'secretaire_review'],
+                'secretaire_send_comptable' => ['pending'],
+                'secretaire_reject'        => ['pending'],
                 'secretaire_resend'        => ['secretaire_correction'],
                 'secretaire_reject_final'  => ['secretaire_correction'],
                 'secretaire_deliver'       => ['ready'],
