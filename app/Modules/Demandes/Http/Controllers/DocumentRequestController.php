@@ -10,26 +10,22 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 /**
-
- * Lecture : liste et détail d'une demande.
-
  * Workflow des demandes de documents — Module Demandes
  *
  * FLUX :
  *   pending
- *     → comptable_review              (Secrétaire valide directement)
- *     → chef_division_review          (Comptable valide + choisit le type division)
+ *     → comptable_review              (Secrétaire valide)
+ *     → chef_division_review          (Comptable valide)
  *     → chef_cap_review               (Chef Division valide)
  *     → sec_dir_adjointe_review       (Chef CAP paraphe)
  *     → directrice_adjointe_review    (Sec. DA transmet)
  *     → sec_directeur_review          (Directrice Adjointe signe)
  *     → directeur_review              (Sec. Dir. transmet)
- *     → ready                         (Directeur signe → retour Secrétaire)
- *     → delivered                     (Secrétaire remet — clôture)
+ *     → ready                         (Directeur signe)
+ *     → delivered                     (Secrétaire remet)
  *
  *   Tout rejet intermédiaire → secretaire_correction
  *   Rejet définitif          → rejected
-
  */
 class DocumentRequestController extends Controller
 {
@@ -51,6 +47,21 @@ class DocumentRequestController extends Controller
         'attestation_definitive'  => 'Attestation Définitive',
         'attestation_inscription' => "Attestation d'Inscription",
         'bulletin_notes'          => 'Bulletin de Notes',
+    ];
+
+    /**
+     * Mapping : nouveau statut → slug du rôle destinataire
+     * Utilisé pour retrouver l'email du prochain acteur dans `users`.
+     */
+    private const STATUS_TO_ROLE = [
+        'comptable_review'            => 'comptable',
+        'chef_division_review'        => 'chef-division',
+        'chef_cap_review'             => 'chef-cap',
+        'sec_dir_adjointe_review'     => 'sec-da',
+        'directrice_adjointe_review'  => 'directrice-adjointe',
+        'sec_directeur_review'        => 'sec-dir',
+        'directeur_review'            => 'directeur',
+        'secretaire_correction'       => 'secretaire',   // retour vers secrétaire
     ];
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -200,15 +211,16 @@ class DocumentRequestController extends Controller
         }
 
         $update   = ['updated_at' => now()];
-        $mailData = null;
+        $mailData = null;       // mail vers l'étudiant
+        $newStatus = null;      // pour déduire le destinataire acteur
 
         switch ($action) {
 
             // ── SECRÉTAIRE ────────────────────────────────────────────────────
 
-            // Action unique de validation : ouvre le dossier ET l'envoie au comptable
             case 'secretaire_validate':
-                $update['status']                     = 'comptable_review';
+                $newStatus                            = 'comptable_review';
+                $update['status']                     = $newStatus;
                 $update['processed_by_secretaire_id'] = $user->id;
                 break;
 
@@ -269,7 +281,8 @@ class DocumentRequestController extends Controller
                 if (empty($motif)) {
                     return response()->json(['message' => 'Un commentaire est obligatoire.'], 422);
                 }
-                $update['status']                    = 'secretaire_correction';
+                $newStatus                           = 'secretaire_correction';
+                $update['status']                    = $newStatus;
                 $update['comptable_comment']         = $motif;
                 $update['rejected_reason']           = $motif;
                 $update['rejected_by']               = self::ROLE_LABELS[$role] ?? $role;
@@ -281,7 +294,8 @@ class DocumentRequestController extends Controller
                 if (!$request->filled('chef_division_type')) {
                     return response()->json(['message' => 'Vous devez sélectionner le Responsable Division.'], 422);
                 }
-                $update['status']                    = 'chef_division_review';
+                $newStatus                           = 'chef_division_review';
+                $update['status']                    = $newStatus;
                 $update['chef_division_type']        = $request->chef_division_type;
                 $update['comptable_reviewed_at']     = now();
                 $update['processed_by_comptable_id'] = $user->id;
@@ -293,7 +307,8 @@ class DocumentRequestController extends Controller
                 if (empty($motif)) {
                     return response()->json(['message' => 'Un commentaire est obligatoire.'], 422);
                 }
-                $update['status']                        = 'secretaire_correction';
+                $newStatus                               = 'secretaire_correction';
+                $update['status']                        = $newStatus;
                 $update['chef_division_comment']         = $motif;
                 $update['rejected_reason']               = $motif;
                 $update['rejected_by']                   = self::ROLE_LABELS[$role] ?? $role;
@@ -302,7 +317,8 @@ class DocumentRequestController extends Controller
                 break;
 
             case 'chef_division_validate':
-                $update['status']                        = 'chef_cap_review';
+                $newStatus                               = 'chef_cap_review';
+                $update['status']                        = $newStatus;
                 $update['chef_division_reviewed_at']     = now();
                 $update['processed_by_chef_division_id'] = $user->id;
                 break;
@@ -313,7 +329,8 @@ class DocumentRequestController extends Controller
                 if (empty($motif)) {
                     return response()->json(['message' => 'Un motif est obligatoire.'], 422);
                 }
-                $update['status']                   = 'secretaire_correction';
+                $newStatus                          = 'secretaire_correction';
+                $update['status']                   = $newStatus;
                 $update['rejected_reason']          = $motif;
                 $update['rejected_by']              = self::ROLE_LABELS[$role] ?? $role;
                 $update['chef_cap_reviewed_at']     = now();
@@ -326,7 +343,8 @@ class DocumentRequestController extends Controller
                 $update['chef_cap_reviewed_at']     = now();
                 $update['processed_by_chef_cap_id'] = $user->id;
                 if ($sigType === 'paraphe') {
-                    $update['status'] = 'sec_dir_adjointe_review';
+                    $newStatus        = 'sec_dir_adjointe_review';
+                    $update['status'] = $newStatus;
                 } else {
                     $update['status'] = 'ready';
                     $mailData = $this->readyMail($demande);
@@ -339,14 +357,16 @@ class DocumentRequestController extends Controller
                 if (empty($motif)) {
                     return response()->json(['message' => 'Un motif est obligatoire.'], 422);
                 }
-                $update['status']             = 'secretaire_correction';
+                $newStatus                    = 'secretaire_correction';
+                $update['status']             = $newStatus;
                 $update['rejected_reason']    = $motif;
                 $update['rejected_by']        = self::ROLE_LABELS[$role] ?? $role;
                 $update['sec_da_reviewed_at'] = now();
                 break;
 
             case 'sec_da_transmit':
-                $update['status']             = 'directrice_adjointe_review';
+                $newStatus                    = 'directrice_adjointe_review';
+                $update['status']             = $newStatus;
                 $update['sec_da_reviewed_at'] = now();
                 break;
 
@@ -356,14 +376,16 @@ class DocumentRequestController extends Controller
                 if (empty($motif)) {
                     return response()->json(['message' => 'Un motif est obligatoire.'], 422);
                 }
-                $update['status']                          = 'secretaire_correction';
+                $newStatus                                 = 'secretaire_correction';
+                $update['status']                          = $newStatus;
                 $update['rejected_reason']                 = $motif;
                 $update['rejected_by']                     = self::ROLE_LABELS[$role] ?? $role;
                 $update['directrice_adjointe_reviewed_at'] = now();
                 break;
 
             case 'directrice_adjointe_sign':
-                $update['status']                          = 'sec_directeur_review';
+                $newStatus                                 = 'sec_directeur_review';
+                $update['status']                          = $newStatus;
                 $update['directrice_adjointe_reviewed_at'] = now();
                 break;
 
@@ -373,14 +395,16 @@ class DocumentRequestController extends Controller
                 if (empty($motif)) {
                     return response()->json(['message' => 'Un motif est obligatoire.'], 422);
                 }
-                $update['status']                    = 'secretaire_correction';
+                $newStatus                           = 'secretaire_correction';
+                $update['status']                    = $newStatus;
                 $update['rejected_reason']           = $motif;
                 $update['rejected_by']               = self::ROLE_LABELS[$role] ?? $role;
                 $update['sec_directeur_reviewed_at'] = now();
                 break;
 
             case 'sec_directeur_transmit':
-                $update['status']                    = 'directeur_review';
+                $newStatus                           = 'directeur_review';
+                $update['status']                    = $newStatus;
                 $update['sec_directeur_reviewed_at'] = now();
                 break;
 
@@ -390,7 +414,8 @@ class DocumentRequestController extends Controller
                 if (empty($motif)) {
                     return response()->json(['message' => 'Un motif est obligatoire.'], 422);
                 }
-                $update['status']          = 'secretaire_correction';
+                $newStatus                 = 'secretaire_correction';
+                $update['status']          = $newStatus;
                 $update['rejected_reason'] = $motif;
                 $update['rejected_by']     = self::ROLE_LABELS[$role] ?? $role;
                 break;
@@ -407,6 +432,7 @@ class DocumentRequestController extends Controller
                 return response()->json(['message' => "Action inconnue : {$action}"], 422);
         }
 
+        // ── MAIL ÉTUDIANT (rejet, prêt, remis) ───────────────────────────────
         if ($mailData && $demande->email) {
             try {
                 Mail::send(
@@ -415,11 +441,24 @@ class DocumentRequestController extends Controller
                     fn($m) => $m->to($demande->email)->subject($mailData['subject'])
                 );
             } catch (\Exception $e) {
-                Log::error('Erreur envoi mail workflow', [
+                Log::error('Erreur envoi mail étudiant', [
                     'error' => $e->getMessage(),
                     'ref'   => $demande->reference,
                 ]);
             }
+        }
+
+        // ── MAIL ACTEUR INTERNE (notification inter-acteurs) ──────────────────
+        // On notifie le prochain maillon dès qu'un nouveau statut est défini
+        if ($newStatus) {
+            $this->notifyNextActor(
+                demande:          $demande,
+                newStatus:        $newStatus,
+                expediteurUser:   $user,
+                expediteurRole:   $role,
+                chefDivisionType: $update['chef_division_type'] ?? ($demande->chef_division_type ?? null),
+                commentaire:      $motif ?? null,
+            );
         }
 
         DB::table('document_requests')->where('id', $id)->update($update);
@@ -434,14 +473,134 @@ class DocumentRequestController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // HELPERS PRIVÉS
+    // NOTIFICATION INTER-ACTEURS  ← NOUVEAU
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Envoie un mail d'alerte à l'acteur suivant dans le workflow.
+     *
+     * La logique :
+     *  1. On déduit le slug du rôle destinataire depuis le nouveau statut (STATUS_TO_ROLE).
+     *  2. On cherche dans `users` (via la table pivot rôles) l'email du ou des utilisateurs
+     *     qui ont ce rôle. Pour chef-division, on filtre en plus par chef_division_type.
+     *  3. On envoie le mail "dossier-transmis" à chaque destinataire trouvé.
+     *
+     * @param object      $demande          La demande courante
+     * @param string      $newStatus        Le nouveau statut après transition
+     * @param object      $expediteurUser   L'utilisateur Auth connecté
+     * @param string|null $expediteurRole   Son slug de rôle
+     * @param string|null $chefDivisionType Filtre pour chef-division si applicable
+     * @param string|null $commentaire      Motif / commentaire optionnel
+     */
+    private function notifyNextActor(
+        object  $demande,
+        string  $newStatus,
+        object  $expediteurUser,
+        ?string $expediteurRole,
+        ?string $chefDivisionType = null,
+        ?string $commentaire      = null,
+    ): void {
+        // Quel rôle doit recevoir la notification ?
+        $targetRoleSlug = self::STATUS_TO_ROLE[$newStatus] ?? null;
+        if (!$targetRoleSlug) {
+            return; // statut sans destinataire interne connu (ex: ready, delivered, rejected)
+        }
+
+        // Récupérer le(s) utilisateur(s) avec ce rôle
+        // On suppose que les rôles sont dans une table `roles` reliée à `users`
+        // via une table pivot `role_user` (ou `model_has_roles` si Spatie).
+        // Adapter la jointure selon votre implémentation.
+        $query = DB::table('users as u')
+            ->join('role_user as mhr', function ($join) {
+                $join->on('mhr.user_id', '=', 'u.id');
+        })
+        ->join('roles as r', 'mhr.role_id', '=', 'r.id')
+        ->where('r.slug', $targetRoleSlug)
+        ->whereNotNull('u.email')
+        ->select('u.id', 'u.name', 'u.email', 'u.chef_division_type');
+        // Pour chef-division, filtrer par le bon type
+        if ($targetRoleSlug === 'chef-division' && $chefDivisionType) {
+            $query->where('u.chef_division_type', $chefDivisionType);
+        }
+
+        $destinataires = $query->get();
+
+        if ($destinataires->isEmpty()) {
+            Log::warning("notifyNextActor : aucun utilisateur trouvé pour le rôle [{$targetRoleSlug}] / statut [{$newStatus}]", [
+                'demande_ref' => $demande->reference,
+            ]);
+            return;
+        }
+
+        // Infos sur l'expéditeur (acteur connecté)
+        $expediteurNom  = $expediteurUser->name ?? 'Un acteur';
+        $expediteurRole = self::ROLE_LABELS[$expediteurRole] ?? ($expediteurRole ?? 'Acteur');
+
+        // Infos sur le dossier / l'étudiant
+        $etudiantInfo = DB::table('document_requests as dr')
+            ->join('student_pending_student as sps', 'dr.student_pending_student_id', '=', 'sps.id')
+            ->join('pending_students as ps', 'sps.pending_student_id', '=', 'ps.id')
+            ->join('personal_information as pi', 'ps.personal_information_id', '=', 'pi.id')
+            ->where('dr.id', $demande->id)
+            ->select(
+                'pi.last_name',
+                'pi.first_names',
+                DB::raw("(SELECT student_id_number FROM students s
+                          JOIN student_pending_student sps2 ON sps2.student_id = s.id
+                          WHERE sps2.id = dr.student_pending_student_id LIMIT 1) as matricule")
+            )
+            ->first();
+
+        $etudiantNom      = trim(($etudiantInfo->first_names ?? '') . ' ' . ($etudiantInfo->last_name ?? '')) ?: 'Étudiant(e)';
+        $etudiantMatricule = $etudiantInfo->matricule ?? null;
+
+        foreach ($destinataires as $destinataire) {
+            try {
+                Mail::send(
+                    'core::emails.dossier-transmis',
+                    [
+                        'destinataireNom'  => $destinataire->name,
+                        'destinataireRole' => self::ROLE_LABELS[$targetRoleSlug] ?? $targetRoleSlug,
+                        'expediteurNom'    => $expediteurNom,
+                        'expediteurRole'   => $expediteurRole,
+                        'reference'        => $demande->reference,
+                        'typeDocument'     => self::TYPE_LABELS[$demande->type] ?? $demande->type,
+                        'etudiantNom'      => $etudiantNom,
+                        'etudiantMatricule'=> $etudiantMatricule,
+                        'dateTransmission' => now()->format('d/m/Y à H:i'),
+                        'commentaire'      => $commentaire,
+                        'urlEspace'        => config('app.url') . '/dashboard',
+                        'etablissement'    => config('app.name', 'CAP-EPAC'),
+                    ],
+                    fn($m) => $m
+                        ->to($destinataire->email, $destinataire->name)
+                        ->subject("📂 Dossier à traiter — Réf : {$demande->reference}")
+                );
+
+                Log::info("Notification inter-acteurs envoyée", [
+                    'destinataire' => $destinataire->email,
+                    'role'         => $targetRoleSlug,
+                    'ref'          => $demande->reference,
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Erreur envoi mail acteur interne', [
+                    'error'        => $e->getMessage(),
+                    'destinataire' => $destinataire->email,
+                    'ref'          => $demande->reference,
+                ]);
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HELPERS PRIVÉS (inchangés)
     // ─────────────────────────────────────────────────────────────────────────
 
     private function getVisibleStatusesForRole(?string $role): array
     {
         return match ($role) {
             'secretaire' => [
-                'pending', 'secretaire_correction',          // ← secretaire_review retiré
+                'pending', 'secretaire_correction',
                 'comptable_review', 'chef_division_review', 'chef_cap_review',
                 'sec_dir_adjointe_review', 'directrice_adjointe_review',
                 'sec_directeur_review', 'directeur_review',
@@ -465,7 +624,7 @@ class DocumentRequestController extends Controller
 
         $matrix = [
             'secretaire' => [
-                'secretaire_validate'     => ['pending'],           // ← remplace accept + send
+                'secretaire_validate'     => ['pending'],
                 'secretaire_reject'       => ['pending'],
                 'secretaire_resend'       => ['secretaire_correction'],
                 'secretaire_reject_final' => ['secretaire_correction'],
