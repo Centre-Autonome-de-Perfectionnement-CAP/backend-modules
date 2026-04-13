@@ -1,7 +1,7 @@
 <?php
-
+ 
 namespace App\Modules\Demandes\Http\Controllers;
-
+ 
 use App\Http\Controllers\Controller;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -10,48 +10,59 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Auth;
-
+ 
 /**
  * Workflow des demandes de documents — Module Demandes
  *
  * Déplacé depuis App\Modules\Attestation\Http\Controllers\DocumentRequestController
  *
  * FLUX :
- *   pending → secretaire_review → chef_division_review → comptable_review
- *          → chef_cap_review → directeur_adjoint_review → directeur_review → ready → delivered
+ *   pending
+ *     → secretaire_review             (Secrétaire accepte)
+ *     → comptable_review              (Secrétaire envoie)
+ *     → chef_division_review          (Comptable valide)
+ *     → chef_cap_review               (Chef Division valide)
+ *     → sec_dir_adjointe_review       (Chef CAP paraphe → Sec. Dir. Adjointe)
+ *     → directrice_adjointe_review    (Sec. DA transmet → Directrice Adjointe)
+ *     → sec_directeur_review          (Directrice Adjointe signe → Sec. Directeur)
+ *     → directeur_review              (Sec. Dir. transmet → Directeur)
+ *     → ready                         (Directeur signe)
+ *     → delivered                     (Secrétaire remet — clôture)
  *
  *   Tout rejet intermédiaire → secretaire_correction
- *   Rejet définitif → rejected
+ *   Rejet définitif          → rejected
  */
 class DocumentRequestController extends Controller
 {
     use ApiResponse;
-
+ 
     private const ROLE_LABELS = [
-        'chef-division'     => 'Chef Division',
-        'comptable'         => 'Comptable',
-        'chef-cap'          => 'Chef CAP',
-        'directeur-adjoint' => 'Directeur Adjoint',
-        'directeur'         => 'Directeur',
-        'secretaire'        => 'Secrétaire',
+        'chef-division'       => 'Chef Division',
+        'comptable'           => 'Comptable',
+        'chef-cap'            => 'Chef CAP',
+        'sec-da'              => 'Secrétaire Directrice Adjointe',
+        'directrice-adjointe' => 'Directrice Adjointe',
+        'sec-dir'             => 'Secrétaire Directeur',
+        'directeur'           => 'Directeur',
+        'secretaire'          => 'Secrétaire',
     ];
-
+ 
     private const TYPE_LABELS = [
         'attestation_passage'     => 'Attestation de Passage',
         'attestation_definitive'  => 'Attestation Définitive',
         'attestation_inscription' => "Attestation d'Inscription",
         'bulletin_notes'          => 'Bulletin de Notes',
     ];
-
+ 
     // ─────────────────────────────────────────────────────────────────────────
     // INDEX
     // ─────────────────────────────────────────────────────────────────────────
-
+ 
     public function index(Request $request): JsonResponse
     {
         $user = Auth::user();
         $role = $user->roles->first()?->slug ?? null;
-
+ 
         $query = DB::table('document_requests as dr')
             ->join('student_pending_student as sps', 'dr.student_pending_student_id', '=', 'sps.id')
             ->join('pending_students as ps', 'sps.pending_student_id', '=', 'ps.id')
@@ -78,6 +89,9 @@ class DocumentRequestController extends Controller
                 'dr.chef_division_reviewed_at',
                 'dr.comptable_reviewed_at',
                 'dr.chef_cap_reviewed_at',
+                'dr.sec_da_reviewed_at',
+                'dr.directrice_adjointe_reviewed_at',
+                'dr.sec_directeur_reviewed_at',
                 'dr.delivered_at',
                 'dr.student_pending_student_id',
                 'pi.last_name',
@@ -88,16 +102,16 @@ class DocumentRequestController extends Controller
                 'dept.name as department',
                 'ay.academic_year',
             ]);
-
+ 
         $visibleStatuses = $this->getVisibleStatusesForRole($role);
         if (!empty($visibleStatuses)) {
             $query->whereIn('dr.status', $visibleStatuses);
         }
-
+ 
         if ($role === 'chef-division' && $user->chef_division_type) {
             $query->where('dr.chef_division_type', $user->chef_division_type);
         }
-
+ 
         if ($request->filled('status')) {
             $query->where('dr.status', $request->status);
         }
@@ -112,20 +126,20 @@ class DocumentRequestController extends Controller
                   ->orWhere('dr.reference', 'like', $s);
             });
         }
-
+ 
         $demandes = $query->orderBy('dr.updated_at', 'desc')->get();
-
+ 
         return response()->json([
             'success' => true,
             'data'    => $demandes,
             'role'    => $role,
         ]);
     }
-
+ 
     // ─────────────────────────────────────────────────────────────────────────
     // SHOW
     // ─────────────────────────────────────────────────────────────────────────
-
+ 
     public function show(int $id): JsonResponse
     {
         $demande = DB::table('document_requests as dr')
@@ -148,18 +162,18 @@ class DocumentRequestController extends Controller
                 DB::raw("ps.level as study_level"),
             ])
             ->first();
-
+ 
         if (!$demande) {
             return response()->json(['message' => 'Demande introuvable.'], 404);
         }
-
+ 
         return response()->json(['success' => true, 'data' => $demande]);
     }
-
+ 
     // ─────────────────────────────────────────────────────────────────────────
     // TRANSITION
     // ─────────────────────────────────────────────────────────────────────────
-
+ 
     public function transition(Request $request, int $id): JsonResponse
     {
         $request->validate([
@@ -169,47 +183,38 @@ class DocumentRequestController extends Controller
             'chef_division_type' => 'nullable|in:formation_distance,formation_continue',
             'resend_to'          => 'nullable|string',
         ]);
-
+ 
         $user   = Auth::user();
         $role   = $user->roles->first()?->slug ?? null;
         $action = $request->action;
         $motif  = $request->motif;
-
+ 
         $demande = DB::table('document_requests')->where('id', $id)->first();
         if (!$demande) {
             return response()->json(['message' => 'Demande introuvable.'], 404);
         }
-
+ 
         if (!$this->isActionAllowed($role, $action, $demande->status)) {
             return response()->json([
                 'message' => "Action « {$action} » non autorisée pour le rôle « {$role} » depuis le statut « {$demande->status} ».",
             ], 403);
         }
-
+ 
         $update   = ['updated_at' => now()];
         $mailData = null;
-
+ 
         switch ($action) {
-
+ 
             case 'secretaire_accept':
                 $update['status']                     = 'secretaire_review';
                 $update['processed_by_secretaire_id'] = $user->id;
                 break;
-
-            case 'secretaire_send_chef_division':
-                if (empty($demande->department_name)) {
-                    $dept = DB::table('document_requests as dr')
-                        ->join('student_pending_student as sps', 'dr.student_pending_student_id', '=', 'sps.id')
-                        ->join('pending_students as ps', 'sps.pending_student_id', '=', 'ps.id')
-                        ->join('departments as d', 'ps.department_id', '=', 'd.id')
-                        ->where('dr.id', $id)
-                        ->value('d.name');
-                    $update['department_name'] = $dept;
-                }
-                $update['status']             = 'chef_division_review';
-                $update['chef_division_type'] = $request->chef_division_type;
+ 
+            case 'secretaire_send_comptable':
+                // Secrétaire → Comptable (premier maillon du circuit)
+                $update['status'] = 'comptable_review';
                 break;
-
+ 
             case 'secretaire_reject':
                 if (empty($motif)) {
                     return response()->json(['message' => 'Un motif est obligatoire pour rejeter.'], 422);
@@ -220,7 +225,7 @@ class DocumentRequestController extends Controller
                 $update['rejected_by']        = 'Secrétaire';
                 $mailData = $this->rejectedMail($demande, $motif);
                 break;
-
+ 
             case 'secretaire_reject_final':
                 if (empty($motif)) {
                     return response()->json(['message' => 'Un motif est obligatoire.'], 422);
@@ -231,14 +236,16 @@ class DocumentRequestController extends Controller
                 $update['rejected_by']        = 'Secrétaire';
                 $mailData = $this->rejectedMail($demande, $motif);
                 break;
-
+ 
             case 'secretaire_resend':
                 $statusMap = [
-                    'chef_division'     => 'chef_division_review',
-                    'comptable'         => 'comptable_review',
-                    'chef_cap'          => 'chef_cap_review',
-                    'directeur_adjoint' => 'directeur_adjoint_review',
-                    'directeur'         => 'directeur_review',
+                    'comptable'           => 'comptable_review',
+                    'chef_division'       => 'chef_division_review',
+                    'chef_cap'            => 'chef_cap_review',
+                    'sec_da'              => 'sec_dir_adjointe_review',
+                    'directrice_adjointe' => 'directrice_adjointe_review',
+                    'sec_directeur'       => 'sec_directeur_review',
+                    'directeur'           => 'directeur_review',
                 ];
                 $newStatus = $statusMap[$request->resend_to] ?? null;
                 if (!$newStatus) {
@@ -251,13 +258,13 @@ class DocumentRequestController extends Controller
                     $update['chef_division_type'] = $request->chef_division_type;
                 }
                 break;
-
+ 
             case 'secretaire_deliver':
                 $update['status']       = 'delivered';
                 $update['delivered_at'] = now();
                 $mailData = $this->deliveredMail($demande);
                 break;
-
+ 
             case 'chef_division_reject':
                 if (empty($motif)) {
                     return response()->json(['message' => 'Un commentaire est obligatoire.'], 422);
@@ -269,13 +276,13 @@ class DocumentRequestController extends Controller
                 $update['chef_division_reviewed_at']     = now();
                 $update['processed_by_chef_division_id'] = $user->id;
                 break;
-
+ 
             case 'chef_division_validate':
-                $update['status']                        = 'comptable_review';
+                $update['status']                        = 'chef_cap_review';
                 $update['chef_division_reviewed_at']     = now();
                 $update['processed_by_chef_division_id'] = $user->id;
                 break;
-
+ 
             case 'comptable_reject':
                 if (empty($motif)) {
                     return response()->json(['message' => 'Un commentaire est obligatoire.'], 422);
@@ -287,13 +294,13 @@ class DocumentRequestController extends Controller
                 $update['comptable_reviewed_at']     = now();
                 $update['processed_by_comptable_id'] = $user->id;
                 break;
-
+ 
             case 'comptable_validate':
-                $update['status']                    = 'chef_cap_review';
+                $update['status']                    = 'chef_division_review';
                 $update['comptable_reviewed_at']     = now();
                 $update['processed_by_comptable_id'] = $user->id;
                 break;
-
+ 
             case 'chef_cap_reject':
                 if (empty($motif)) {
                     return response()->json(['message' => 'Un motif est obligatoire.'], 422);
@@ -304,34 +311,68 @@ class DocumentRequestController extends Controller
                 $update['chef_cap_reviewed_at']     = now();
                 $update['processed_by_chef_cap_id'] = $user->id;
                 break;
-
+ 
             case 'chef_cap_sign':
                 $sigType                            = $request->signature_type ?? 'signature';
                 $update['signature_type']           = $sigType;
                 $update['chef_cap_reviewed_at']     = now();
                 $update['processed_by_chef_cap_id'] = $user->id;
                 if ($sigType === 'paraphe') {
-                    $update['status'] = 'directeur_adjoint_review';
+                    $update['status'] = 'sec_dir_adjointe_review';
                 } else {
                     $update['status'] = 'ready';
                     $mailData = $this->readyMail($demande);
                 }
                 break;
-
-            case 'directeur_adjoint_reject':
+ 
+            case 'sec_da_reject':
                 if (empty($motif)) {
                     return response()->json(['message' => 'Un motif est obligatoire.'], 422);
                 }
-                $update['status']          = 'secretaire_correction';
-                $update['rejected_reason'] = $motif;
-                $update['rejected_by']     = self::ROLE_LABELS[$role] ?? $role;
+                $update['status']             = 'secretaire_correction';
+                $update['rejected_reason']    = $motif;
+                $update['rejected_by']        = self::ROLE_LABELS[$role] ?? $role;
+                $update['sec_da_reviewed_at'] = now();
                 break;
-
-            case 'directeur_adjoint_sign':
-                $update['status']                        = 'directeur_review';
-                $update['directeur_adjoint_reviewed_at'] = now();
+ 
+            case 'sec_da_transmit':
+                // Sec. Dir. Adjointe → Directrice Adjointe
+                $update['status']             = 'directrice_adjointe_review';
+                $update['sec_da_reviewed_at'] = now();
                 break;
-
+ 
+            case 'directrice_adjointe_reject':
+                if (empty($motif)) {
+                    return response()->json(['message' => 'Un motif est obligatoire.'], 422);
+                }
+                $update['status']                          = 'secretaire_correction';
+                $update['rejected_reason']                 = $motif;
+                $update['rejected_by']                     = self::ROLE_LABELS[$role] ?? $role;
+                $update['directrice_adjointe_reviewed_at'] = now();
+                break;
+ 
+            case 'directrice_adjointe_sign':
+                // Directrice Adjointe → Sec. Directeur
+                $update['status']                          = 'sec_directeur_review';
+                $update['directrice_adjointe_reviewed_at'] = now();
+                break;
+ 
+            case 'sec_directeur_reject':
+                if (empty($motif)) {
+                    return response()->json(['message' => 'Un motif est obligatoire.'], 422);
+                }
+                $update['status']                    = 'secretaire_correction';
+                $update['rejected_reason']           = $motif;
+                $update['rejected_by']               = self::ROLE_LABELS[$role] ?? $role;
+                $update['sec_directeur_reviewed_at'] = now();
+                break;
+ 
+            case 'sec_directeur_transmit':
+                // Sec. Directeur → Directeur
+                $update['status']                    = 'directeur_review';
+                $update['sec_directeur_reviewed_at'] = now();
+                break;
+ 
             case 'directeur_reject':
                 if (empty($motif)) {
                     return response()->json(['message' => 'Un motif est obligatoire.'], 422);
@@ -340,17 +381,19 @@ class DocumentRequestController extends Controller
                 $update['rejected_reason'] = $motif;
                 $update['rejected_by']     = self::ROLE_LABELS[$role] ?? $role;
                 break;
-
+ 
             case 'directeur_sign':
-                $update['status']                = 'ready';
+                $sigType                         = $request->signature_type ?? 'signature';
+                $update['signature_type']        = $sigType;
                 $update['directeur_reviewed_at'] = now();
+                $update['status']                = 'ready';
                 $mailData = $this->readyMail($demande);
                 break;
-
+ 
             default:
                 return response()->json(['message' => "Action inconnue : {$action}"], 422);
         }
-
+ 
         // Envoi mail AVANT mise à jour en base
         if ($mailData && $demande->email) {
             try {
@@ -366,80 +409,91 @@ class DocumentRequestController extends Controller
                 ]);
             }
         }
-
+ 
         DB::table('document_requests')->where('id', $id)->update($update);
-
+ 
         $updated = DB::table('document_requests')->where('id', $id)->first();
-
+ 
         return response()->json([
             'success' => true,
             'message' => 'Statut mis à jour avec succès.',
             'data'    => $updated,
         ]);
     }
-
+ 
     // ─────────────────────────────────────────────────────────────────────────
     // HELPERS PRIVÉS
     // ─────────────────────────────────────────────────────────────────────────
-
+ 
     private function getVisibleStatusesForRole(?string $role): array
     {
         return match ($role) {
             'secretaire' => [
                 'pending', 'secretaire_review', 'secretaire_correction',
-                'chef_division_review', 'comptable_review', 'chef_cap_review',
-                'directeur_adjoint_review', 'directeur_review',
+                'comptable_review', 'chef_division_review', 'chef_cap_review',
+                'sec_dir_adjointe_review', 'directrice_adjointe_review',
+                'sec_directeur_review', 'directeur_review',
                 'ready', 'delivered', 'rejected',
             ],
-            'chef-division'     => ['chef_division_review'],
-            'comptable'         => ['comptable_review'],
-            'chef-cap'          => ['chef_cap_review'],
-            'directeur-adjoint' => ['directeur_adjoint_review'],
-            'directeur'         => ['directeur_review'],
-            'admin'             => [],
-            default             => ['pending'],
+            'comptable'           => ['comptable_review'],
+            'chef-division'       => ['chef_division_review'],
+            'chef-cap'            => ['chef_cap_review'],
+            'sec-da'              => ['sec_dir_adjointe_review'],
+            'directrice-adjointe' => ['directrice_adjointe_review'],
+            'sec-dir'             => ['sec_directeur_review'],
+            'directeur'           => ['directeur_review'],
+            'admin'               => [],
+            default               => ['pending'],
         };
     }
-
+ 
     private function isActionAllowed(?string $role, string $action, string $currentStatus): bool
     {
         if ($role === 'admin') return true;
-
+ 
         $matrix = [
             'secretaire' => [
-                'secretaire_accept'            => ['pending'],
-                'secretaire_send_chef_division' => ['secretaire_review'],
-                'secretaire_reject'            => ['pending', 'secretaire_review'],
-                'secretaire_resend'            => ['secretaire_correction'],
-                'secretaire_reject_final'      => ['secretaire_correction'],
-                'secretaire_deliver'           => ['ready'],
-            ],
-            'chef-division' => [
-                'chef_division_reject'   => ['chef_division_review'],
-                'chef_division_validate' => ['chef_division_review'],
+                'secretaire_accept'        => ['pending'],
+                'secretaire_send_comptable' => ['secretaire_review'],
+                'secretaire_reject'        => ['pending', 'secretaire_review'],
+                'secretaire_resend'        => ['secretaire_correction'],
+                'secretaire_reject_final'  => ['secretaire_correction'],
+                'secretaire_deliver'       => ['ready'],
             ],
             'comptable' => [
                 'comptable_reject'   => ['comptable_review'],
                 'comptable_validate' => ['comptable_review'],
             ],
+            'chef-division' => [
+                'chef_division_reject'   => ['chef_division_review'],
+                'chef_division_validate' => ['chef_division_review'],
+            ],
             'chef-cap' => [
                 'chef_cap_reject' => ['chef_cap_review'],
                 'chef_cap_sign'   => ['chef_cap_review'],
             ],
-            'directeur-adjoint' => [
-                'directeur_adjoint_reject' => ['directeur_adjoint_review'],
-                'directeur_adjoint_sign'   => ['directeur_adjoint_review'],
+            'sec-da' => [
+                'sec_da_reject'   => ['sec_dir_adjointe_review'],
+                'sec_da_transmit' => ['sec_dir_adjointe_review'],
+            ],
+            'directrice-adjointe' => [
+                'directrice_adjointe_reject' => ['directrice_adjointe_review'],
+                'directrice_adjointe_sign'   => ['directrice_adjointe_review'],
+            ],
+            'sec-dir' => [
+                'sec_directeur_reject'   => ['sec_directeur_review'],
+                'sec_directeur_transmit' => ['sec_directeur_review'],
             ],
             'directeur' => [
                 'directeur_reject' => ['directeur_review'],
                 'directeur_sign'   => ['directeur_review'],
             ],
         ];
-
+ 
         $allowedStatuses = $matrix[$role][$action] ?? null;
         return $allowedStatuses !== null && in_array($currentStatus, $allowedStatuses);
     }
-
+ 
     private function rejectedMail(object $demande, string $motif): array
     {
         return [
@@ -452,7 +506,7 @@ class DocumentRequestController extends Controller
             ],
         ];
     }
-
+ 
     private function readyMail(object $demande): array
     {
         return [
@@ -464,7 +518,7 @@ class DocumentRequestController extends Controller
             ],
         ];
     }
-
+ 
     private function deliveredMail(object $demande): array
     {
         return [
