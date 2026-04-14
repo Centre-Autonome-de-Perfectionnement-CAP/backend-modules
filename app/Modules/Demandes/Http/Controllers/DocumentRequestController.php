@@ -12,10 +12,19 @@ use Illuminate\Support\Facades\DB;
 /**
  * DocumentRequestController
  *
- * Responsabilité : lecture uniquement (index + show).
+ * Responsabilité unique : LECTURE (index + show).
+ *
+ * Chaque objet demande retourné inclut :
+ *   - has_flag    (boolean)        — flag actif ou non
+ *   - flagged_by  (string|null)    — nom de l'acteur du dernier flag
+ *   - flagged_at  (datetime|null)  — date du dernier flag
+ *
+ * Ces deux derniers champs sont calculés à la volée depuis
+ * document_request_histories (dernière entrée validation_flagged).
  *
  * Transitions  → DocumentRequestTransitionController
  * Historique   → DocumentRequestHistoryController
+ * Stats        → DocumentRequestStatsController
  */
 class DocumentRequestController extends Controller
 {
@@ -56,9 +65,14 @@ class DocumentRequestController extends Controller
             });
         }
 
+        $demandes = $query->orderBy('dr.updated_at', 'desc')->get();
+
+        // Enrichir chaque demande avec flagged_by / flagged_at
+        $demandes = $this->enrichWithFlagMeta($demandes);
+
         return response()->json([
             'success' => true,
-            'data'    => $query->orderBy('dr.updated_at', 'desc')->get(),
+            'data'    => $demandes,
             'role'    => $role,
         ]);
     }
@@ -81,7 +95,65 @@ class DocumentRequestController extends Controller
             return response()->json(['message' => 'Demande introuvable.'], 404);
         }
 
+        // Enrichir le dossier unique avec flagged_by / flagged_at
+        $demande = $this->enrichWithFlagMeta(collect([$demande]))->first();
+
         return response()->json(['success' => true, 'data' => $demande]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ENRICHISSEMENT FLAG META
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Ajoute flagged_by et flagged_at à chaque objet de la collection
+     * en faisant une seule requête groupée (pas de N+1).
+     *
+     * Calcul : dernière entrée action_type = 'validation_flagged'
+     * dans document_request_histories pour chaque dossier concerné.
+     */
+    private function enrichWithFlagMeta(\Illuminate\Support\Collection $demandes): \Illuminate\Support\Collection
+    {
+        // Récupérer uniquement les IDs dont has_flag = true (inutile pour les autres)
+        $flaggedIds = $demandes
+            ->filter(fn($d) => (bool) $d->has_flag)
+            ->pluck('id')
+            ->all();
+
+        if (empty($flaggedIds)) {
+            // Aucun flag actif : on pose des valeurs null sur tout le monde
+            return $demandes->map(function ($d) {
+                $d->flagged_by = null;
+                $d->flagged_at = null;
+                return $d;
+            });
+        }
+
+        // Une seule requête pour tous les dossiers flaggés
+        // On veut la dernière validation_flagged par document_request_id
+        $flags = DB::table('document_request_histories as h1')
+            ->whereIn('h1.document_request_id', $flaggedIds)
+            ->where('h1.action_type', 'validation_flagged')
+            ->whereRaw('h1.id = (
+                SELECT MAX(h2.id)
+                FROM document_request_histories h2
+                WHERE h2.document_request_id = h1.document_request_id
+                  AND h2.action_type = ?
+            )', ['validation_flagged'])
+            ->select('h1.document_request_id', 'h1.actor_name', 'h1.created_at')
+            ->get()
+            ->keyBy('document_request_id');
+
+        return $demandes->map(function ($d) use ($flags) {
+            if ($d->has_flag && isset($flags[$d->id])) {
+                $d->flagged_by = $flags[$d->id]->actor_name;
+                $d->flagged_at = $flags[$d->id]->created_at;
+            } else {
+                $d->flagged_by = null;
+                $d->flagged_at = null;
+            }
+            return $d;
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -102,6 +174,7 @@ class DocumentRequestController extends Controller
     {
         return [
             'dr.id', 'dr.reference', 'dr.type', 'dr.status',
+            'dr.has_flag',                                   // ← nouveau
             'dr.email', 'dr.files', 'dr.submitted_at', 'dr.updated_at',
             'dr.rejected_reason', 'dr.rejected_by',
             'dr.chef_division_comment', 'dr.secretaire_comment', 'dr.comptable_comment',

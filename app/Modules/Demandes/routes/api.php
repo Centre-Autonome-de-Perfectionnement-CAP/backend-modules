@@ -2,6 +2,7 @@
 
 use App\Modules\Demandes\Http\Controllers\DocumentRequestController;
 use App\Modules\Demandes\Http\Controllers\DocumentRequestHistoryController;
+use App\Modules\Demandes\Http\Controllers\DocumentRequestStatsController;
 use App\Modules\Demandes\Http\Controllers\DocumentRequestTransitionController;
 use Illuminate\Support\Facades\Route;
 
@@ -10,26 +11,30 @@ use Illuminate\Support\Facades\Route;
 | Module Demandes — Routes API
 |--------------------------------------------------------------------------
 |
-| Préfixe inchangé : /api/attestations/document-requests
-| → Aucun impact sur le frontend existant (document-request.service.ts).
-|
 | Découpage :
-|   DocumentRequestController           → lecture (index, show)
-|   DocumentRequestTransitionController → mutations (transition)
-|   DocumentRequestHistoryController    → historique (index)
+|   DocumentRequestController           → GET  index, show
+|   DocumentRequestTransitionController → POST transition (workflow + flag ack)
+|   DocumentRequestHistoryController    → GET  history
+|   DocumentRequestStatsController      → GET  stats/direction
+|
+| ⚠ La route stats/direction doit être déclarée AVANT /{id}
+|   pour ne pas être capturée comme un ID numérique.
 |
 */
 
-Route::prefix('api/attestations')->middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum'])->group(function () {
 
-    // ── Lecture ──────────────────────────────────────────────────────────────
-    Route::get('document-requests',       [DocumentRequestController::class, 'index']);
-    Route::get('document-requests/{id}',  [DocumentRequestController::class, 'show']);
+    // ── Stats (avant /{id} pour éviter les collisions de routing) ────────────
+    Route::get('/document-requests/stats/direction', [DocumentRequestStatsController::class, 'direction']);
 
-    // ── Mutations (workflow) ──────────────────────────────────────────────────
-    Route::post('document-requests/{id}/transition', [DocumentRequestTransitionController::class, 'transition']);
+    // ── Lecture ───────────────────────────────────────────────────────────────
+    Route::get('/document-requests',              [DocumentRequestController::class, 'index']);
+    Route::get('/document-requests/{id}',         [DocumentRequestController::class, 'show']);
 
-    // ── Historique ── NOUVEAU ─────────────────────────────────────────────────
-    Route::get('document-requests/{id}/history', [DocumentRequestHistoryController::class, 'index']);
+    // ── Mutations (workflow + acknowledge flag) ────────────────────────────────
+    Route::post('/document-requests/{id}/transition', [DocumentRequestTransitionController::class, 'transition']);
+
+    // ── Historique ────────────────────────────────────────────────────────────
+    Route::get('/document-requests/{id}/history',     [DocumentRequestHistoryController::class, 'index']);
 
 });
