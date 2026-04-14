@@ -1,22 +1,35 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Modules\Demandes\Http\Controllers\DocumentRequestController;
+use App\Modules\Demandes\Http\Controllers\DocumentRequestHistoryController;
+use App\Modules\Demandes\Http\Controllers\DocumentRequestTransitionController;
+use Illuminate\Support\Facades\Route;
 
 /*
- * Module Demandes — routes gestion du workflow de documents
- *
- * Ces routes étaient précédemment dans App\Modules\Attestation\routes\api.php.
- * Elles vivent maintenant dans leur propre module, indépendant d'Attestation.
- *
- * URL de base identique : /api/attestations/document-requests
- * (inchangée côté frontend — aucun impact sur document-request.service.ts)
- */
+|--------------------------------------------------------------------------
+| Module Demandes — Routes API
+|--------------------------------------------------------------------------
+|
+| Préfixe inchangé : /api/attestations/document-requests
+| → Aucun impact sur le frontend existant (document-request.service.ts).
+|
+| Découpage :
+|   DocumentRequestController           → lecture (index, show)
+|   DocumentRequestTransitionController → mutations (transition)
+|   DocumentRequestHistoryController    → historique (index)
+|
+*/
 
 Route::prefix('api/attestations')->middleware('auth:sanctum')->group(function () {
 
-    Route::get('document-requests',                   [DocumentRequestController::class, 'index']);
-    Route::get('document-requests/{id}',              [DocumentRequestController::class, 'show']);
-    Route::post('document-requests/{id}/transition',  [DocumentRequestController::class, 'transition']);
+    // ── Lecture ──────────────────────────────────────────────────────────────
+    Route::get('document-requests',       [DocumentRequestController::class, 'index']);
+    Route::get('document-requests/{id}',  [DocumentRequestController::class, 'show']);
+
+    // ── Mutations (workflow) ──────────────────────────────────────────────────
+    Route::post('document-requests/{id}/transition', [DocumentRequestTransitionController::class, 'transition']);
+
+    // ── Historique ── NOUVEAU ─────────────────────────────────────────────────
+    Route::get('document-requests/{id}/history', [DocumentRequestHistoryController::class, 'index']);
 
 });
