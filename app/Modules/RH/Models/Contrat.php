@@ -5,6 +5,7 @@ namespace App\Modules\RH\Models;
 use App\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 
 class Contrat extends Model
 {
@@ -30,17 +31,52 @@ class Contrat extends Model
         'status',
         'notes',
         'rejection_reason',
+        // ── Signature électronique ──────────────────────────────────────────
+        'professor_signature_path',
+        'professor_signature_type',  // 'drawn' | 'uploaded'
+        'professor_signed_at',
     ];
 
     protected $casts = [
-        'start_date'      => 'date',
-        'end_date'        => 'date',
-        'validation_date' => 'date',
-        'authorization_date'=> 'datetime',
-        'is_validated'    => 'boolean',
-        'amount'          => 'decimal:2',
-        'is_authorized'     => 'boolean',
+        'start_date'          => 'date',
+        'end_date'            => 'date',
+        'validation_date'     => 'date',
+        'authorization_date'  => 'datetime',
+        'professor_signed_at' => 'datetime',
+        'is_validated'        => 'boolean',
+        'is_authorized'       => 'boolean',
+        'amount'              => 'decimal:2',
     ];
+
+    // ─── Appends ──────────────────────────────────────────────────────────────
+
+    protected $appends = ['professor_signature_url'];
+
+    // ─── Accessors ────────────────────────────────────────────────────────────
+
+    /**
+     * URL publique de la signature (null si aucune signature)
+     */
+    public function getProfessorSignatureUrlAttribute(): ?string
+    {
+        if (!$this->professor_signature_path) {
+            return null;
+        }
+        return Storage::disk('public')->url($this->professor_signature_path);
+    }
+
+    public function getStatusLabelAttribute(): string
+    {
+        return match ($this->status) {
+            'pending'    => 'En attente',
+            'transfered' => 'Transféré',
+            'signed'     => 'Signé',
+            'ongoing'    => 'En cours',
+            'completed'  => 'Terminé',
+            'cancelled'  => 'Rejeté',
+            default      => 'Inconnu',
+        };
+    }
 
     // ─── Relations ────────────────────────────────────────────────────────────
 
@@ -49,7 +85,8 @@ class Contrat extends Model
         return $this->belongsTo(Professor::class, 'professor_id');
     }
 
-    public function cycle(){
+    public function cycle()
+    {
         return $this->belongsTo(Cycle::class, 'cycle_id');
     }
 
@@ -71,21 +108,4 @@ class Contrat extends Model
             'course_element_professor_id'
         )->with(['courseElement.teachingUnit', 'classGroup']);
     }
-
-    // ─── Accessors ────────────────────────────────────────────────────────────
-
-    public function getStatusLabelAttribute(): string
-    {
-        return match ($this->status) {
-            'pending'   => 'En attente',
-            'signed'    => 'Signé',
-            'ongoing'   => 'En cours',
-            'completed' => 'Terminé',
-            'cancelled' => 'Résilié',
-            'rejected'  => 'Rejeté',
-            default     => 'Inconnu',
-        };
-    }
 }
-
-

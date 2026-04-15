@@ -16,7 +16,7 @@ use App\Modules\Inscription\Http\Controllers\StudentController;
 use App\Modules\Inscription\Http\Controllers\PendingStudentExportController;
 use App\Modules\Inscription\Http\Controllers\ResponsableController;
 use App\Modules\Inscription\Http\Controllers\StudentBroadcastController;
-
+use App\Modules\Inscription\Http\Controllers\TextbookController;
 
 
 Route::prefix('inscription')->group(function () {
@@ -141,33 +141,26 @@ Route::prefix('inscription')->group(function () {
 }); // Fin du groupe api/inscription
 
 
-Route::prefix('api/inscription')->group(function () {
-    // Routes existantes...
-    
-    // Routes pour le responsable de classe
-    Route::prefix('responsable')->middleware(['auth:sanctum'])->group(function () {
-        Route::get('/dashboard', [ResponsableController::class, 'dashboard']);
-        Route::get('/classes', [ResponsableController::class, 'getClasses']);
-        Route::get('/export/{type}', [ResponsableController::class, 'export']);
-    });
 
-  Route::prefix('responsable')->middleware('auth.multi')->group(function () {
-    // Dashboard principal
-    Route::get('/dashboard',  [ResponsableController::class, 'dashboard']);
-    // Liste des classes du responsable
-    Route::get('/classes',    [ResponsableController::class, 'getClasses']);
-    // Étudiants d'une classe spécifique
-    Route::get('/classes/{classGroupId}/students', [ResponsableController::class, 'getStudentsByClass']);
-    // Exports PDF
-    Route::get('/export/{type}', [ResponsableController::class, 'export']);
-});
- 
-    
-    // Routes pour les classes
-    Route::prefix('classes')->middleware(['auth:sanctum'])->group(function () {
-        Route::get('/{classId}/students', [ClassGroupController::class, 'getStudents']);
-        Route::get('/{classId}/stats', [ClassGroupController::class, 'getStats']);
-        Route::get('/{classId}/export/{type}', [ClassGroupController::class, 'exportList']);
-    });
-});
+Route::prefix('inscription/responsable')->middleware('auth:sanctum')->group(function () {
 
+    // ── Routes existantes ──────────────────────────────────────────────────
+    Route::get('/dashboard', [\App\Modules\Inscription\Http\Controllers\ResponsableController::class, 'dashboard']);
+    Route::get('/classes',   [\App\Modules\Inscription\Http\Controllers\ResponsableController::class, 'getClasses']);
+
+    // ── Nouvelles routes : programmes d'une classe ─────────────────────────
+    Route::get('/classes/{classGroupId}/programs', [TextbookController::class, 'getClassPrograms']);
+
+    // ── Nouvelles routes : étudiants d'une classe ─────────────────────────
+    Route::get('/classes/{classGroupId}/students', [\App\Modules\Inscription\Http\Controllers\ResponsableController::class, 'getStudentsByClass']);
+
+    // ── Nouvelles routes : cahier de texte ────────────────────────────────
+    // Vérification anticipée (fenêtre de saisie)
+    Route::get('/programs/{programId}/textbook/can-add', [TextbookController::class, 'canAdd']);
+
+    // CRUD des entrées
+    Route::get('/programs/{programId}/textbook',    [TextbookController::class, 'index']);
+    Route::post('/programs/{programId}/textbook',   [TextbookController::class, 'store']);
+    Route::put('/textbook/{entryId}',               [TextbookController::class, 'update']);
+    Route::delete('/textbook/{entryId}',            [TextbookController::class, 'destroy']);
+});

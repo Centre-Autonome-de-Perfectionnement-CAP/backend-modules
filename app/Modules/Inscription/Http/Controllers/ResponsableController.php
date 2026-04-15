@@ -9,53 +9,58 @@ use App\Modules\Inscription\Models\StudentGroup;
 use App\Modules\Inscription\Models\PendingStudent;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Exception;
 
 class ResponsableController extends Controller
 {
-    public function dashboard(Request $request) {
+    // ────────────────────────────────────────────────────────────────────────
+    // Dashboard : retourne la 1ère classe + ses étudiants
+    // ────────────────────────────────────────────────────────────────────────
+    public function dashboard(Request $request)
+    {
         try {
             $user = Auth::user();
-
             if (!$user instanceof PersonalInformation || $user->role_id != 9) {
                 return response()->json(['error' => 'Non autorisé'], 403);
             }
 
-            $classGroup = $this->getUserClasses($user->id)->first();
+            $classGroup = $this->getUserClasses($user->id)
+                ->with(['academicYear', 'department'])
+                ->first();
 
             if (!$classGroup) {
-                return response()->json([
-                    'class_info' => null,
-                    'students' => []
-                ]);
+                return response()->json(['class_info' => null, 'students' => []]);
             }
 
             $students = $this->getClassStudents($classGroup->id);
 
             return response()->json([
                 'class_info' => [
-                    'filiere' => optional($classGroup->department)->name,
-                    'niveau' => $classGroup->study_level,
-                    'annee' => optional($classGroup->academicYear)->name,
-                    'groupe' => $classGroup->group_name,
-                    'totalEtudiants' => count($students)
+                    'filiere'        => optional($classGroup->department)->name,
+                    'niveau'         => $classGroup->study_level,
+                    'annee'          => optional($classGroup->academicYear)->academic_year
+                                        ?? optional($classGroup->academicYear)->name
+                                        ?? 'N/A',
+                    'groupe'         => $classGroup->group_name,
+                    'totalEtudiants' => count($students),
                 ],
-                'students' => $students
+                'students' => $students,
             ]);
 
         } catch (Exception $e) {
-            return response()->json([
-                'error' => 'Erreur serveur',
-                'message' => $e->getMessage()
-            ], 500);
+            return response()->json(['error' => 'Erreur serveur', 'message' => $e->getMessage()], 500);
         }
     }
 
-    public function getClasses(Request $request) {
+    // ────────────────────────────────────────────────────────────────────────
+    // Toutes les classes du responsable groupées par année
+    // ────────────────────────────────────────────────────────────────────────
+    public function getClasses(Request $request)
+    {
         try {
             $user = Auth::user();
-
             if (!$user instanceof PersonalInformation || $user->role_id != 9) {
                 return response()->json(['error' => 'Non autorisé'], 403);
             }
@@ -67,133 +72,141 @@ class ResponsableController extends Controller
                 ->orderBy('group_name')
                 ->get();
 
+            if ($classes->isEmpty()) {
+                return response()->json(['classes_by_year' => []]);
+            }
+
             $classesByYear = [];
 
             foreach ($classes as $class) {
-                $yearId = $class->academic_year_id;
-                $yearName = optional($class->academicYear)->academic_year ?? 'Année inconnue';
+                $yearId   = $class->academic_year_id;
+                $yearName = optional($class->academicYear)->academic_year
+                            ?? optional($class->academicYear)->name
+                            ?? 'Année inconnue';
 
                 if (!isset($classesByYear[$yearId])) {
                     $classesByYear[$yearId] = [
-                        'academic_year_id' => $yearId,
+                        'academic_year_id'   => $yearId,
                         'academic_year_name' => $yearName,
-                        'classes' => []
+                        'classes'            => [],
                     ];
                 }
 
                 $studentCount = StudentGroup::where('class_group_id', $class->id)->count();
 
                 $classesByYear[$yearId]['classes'][] = [
-                    'id' => $class->id,
-                    'group_name' => $class->group_name,
-                    'study_level' => $class->study_level,
-                    'filiere' => optional($class->department)->name,
-                    'cycle' => optional($class->department->cycle)->name,
-                    'total_etudiants' => $studentCount,
-                    'validation_average' => $class->validation_average,
+                    'id'                 => $class->id,
+                    'group_name'         => $class->group_name,
+                    'study_level'        => $class->study_level,
+                    'filiere'            => optional($class->department)->name,
+                    'cycle'              => optional(optional($class->department)->cycle)->name,
+                    'total_etudiants'    => $studentCount,
+                    'validation_average' => $class->validation_average ?? null,
                 ];
             }
 
-            return response()->json([
-                'classes_by_year' => array_values($classesByYear)
-            ]);
+            return response()->json(['classes_by_year' => array_values($classesByYear)]);
 
         } catch (Exception $e) {
-            return response()->json([
-                'error' => 'Erreur serveur',
-                'message' => $e->getMessage()
-            ], 500);
+            return response()->json(['error' => 'Erreur serveur', 'message' => $e->getMessage()], 500);
         }
     }
 
-    public function export(Request $request, string $type) {
+    // ────────────────────────────────────────────────────────────────────────
+    // Étudiants d'une classe (endpoint dédié pour le frontend)
+    // ────────────────────────────────────────────────────────────────────────
+    public function getStudentsByClass(Request $request, int $classGroupId)
+    {
         try {
             $user = Auth::user();
-
             if (!$user instanceof PersonalInformation || $user->role_id != 9) {
                 return response()->json(['error' => 'Non autorisé'], 403);
             }
 
-            $classGroup = $this->getUserClasses($user->id)->first();
-
-            if (!$classGroup) {
-                return response()->json(['error' => 'Aucune classe trouvée'], 404);
+            // Vérifier que la classe appartient au responsable
+            $authorizedClassIds = $this->getUserClasses($user->id)->pluck('id');
+            if (!$authorizedClassIds->contains($classGroupId)) {
+                return response()->json(['error' => 'Accès interdit à cette classe'], 403);
             }
 
-            $students = $this->getClassStudents($classGroup->id);
+            $students = $this->getClassStudents($classGroupId);
 
-            $data = [
-                'class' => $classGroup,
-                'students' => $students,
-                'date' => now()->format('d/m/Y'),
-                'responsable' => $user
-            ];
-
-            if ($type === 'fiche-presence') {
-                $pdf = Pdf::loadView('inscription::exports.fiche-presence', $data);
-            } elseif ($type === 'fiche-emargement') {
-                $pdf = Pdf::loadView('inscription::exports.fiche-emargement', $data);
-            } else {
-                return response()->json(['error' => 'Type d\'export invalide'], 400);
-            }
-
-            return $pdf->download("{$type}-{$classGroup->group_name}.pdf");
+            return response()->json(['students' => $students]);
 
         } catch (Exception $e) {
-            return response()->json([
-                'error' => 'Erreur export',
-                'message' => $e->getMessage()
-            ], 500);
+            return response()->json(['error' => 'Erreur serveur', 'message' => $e->getMessage()], 500);
         }
     }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Helpers privés
+    // ────────────────────────────────────────────────────────────────────────
 
     private function getUserClasses(int $personalInfoId)
     {
-        return ClassGroup::whereHas('studentGroups', function ($query) use ($personalInfoId) {
-            $query->whereHas('student.pendingStudents', function ($q) use ($personalInfoId) {
-                $q->where('personal_information_id', $personalInfoId);
-            });
-        });
+        $pendingStudentIds = PendingStudent::where('personal_information_id', $personalInfoId)
+            ->pluck('id');
+
+        if ($pendingStudentIds->isEmpty()) {
+            return ClassGroup::whereRaw('1 = 0');
+        }
+
+        $studentIds = DB::table('student_pending_student')
+            ->whereIn('pending_student_id', $pendingStudentIds)
+            ->pluck('student_id')
+            ->unique();
+
+        if ($studentIds->isEmpty()) {
+            return ClassGroup::whereRaw('1 = 0');
+        }
+
+        $classGroupIds = StudentGroup::whereIn('student_id', $studentIds)
+            ->pluck('class_group_id')
+            ->unique();
+
+        if ($classGroupIds->isEmpty()) {
+            return ClassGroup::whereRaw('1 = 0');
+        }
+
+        return ClassGroup::whereIn('id', $classGroupIds);
     }
 
-
-    private function getClassStudents(int $classGroupId){
-        // 1️⃣ récupérer les student_id depuis student_groups
+    private function getClassStudents(int $classGroupId): array
+    {
         $studentIds = StudentGroup::where('class_group_id', $classGroupId)
             ->pluck('student_id');
 
-        // 2️⃣ récupérer les pending_students via student_id
-        $pendingStudents = PendingStudent::whereIn('student_id', $studentIds)
+        if ($studentIds->isEmpty()) return [];
+
+        $pendingStudentIds = DB::table('student_pending_student')
+            ->whereIn('student_id', $studentIds)
+            ->pluck('pending_student_id')
+            ->unique();
+
+        if ($pendingStudentIds->isEmpty()) return [];
+
+        $pendingStudents = PendingStudent::whereIn('id', $pendingStudentIds)
             ->with('personalInformation')
             ->get();
 
-        // 3️⃣ formatter les données (inchangé)
-        return $pendingStudents->map(function ($student) {
+        return $pendingStudents->map(function ($ps) {
+            $info = $ps->personalInformation;
             return [
-                'id' => $student->id,
-                'matricule' => $student->matricule,
-                'nomPrenoms' => trim(
-                    ($student->personalInformation->first_names ?? '') . ' ' .
-                    ($student->personalInformation->last_name ?? '')
-                ),
-                'email' => $student->personalInformation->email ?? null,
-                'sexe' => $student->personalInformation->gender ?? null,
-                'redoublant' => $student->is_repeating ? 'Oui' : 'Non',
-                'telephone' => $this->extractPhone($student->personalInformation->contacts ?? null)
+                'id'         => $ps->id,
+                'matricule'  => $ps->matricule ?? null,
+                'nomPrenoms' => trim(($info->first_names ?? '') . ' ' . ($info->last_name ?? '')),
+                'email'      => $info->email ?? null,
+                'sexe'       => $info->gender ?? null,  
+                'redoublant' => $ps->is_repeating ? 'Oui' : 'Non',
+                'telephone'  => $this->extractPhone($info->contacts ?? null),
             ];
-        });
+        })->values()->toArray();
     }
 
-    private function extractPhone($contacts)
+    private function extractPhone($contacts): ?string
     {
-        if (is_string($contacts)) {
-            $contacts = json_decode($contacts, true);
-        }
-
-        if (!is_array($contacts)) {
-            return null;
-        }
-
+        if (is_string($contacts)) $contacts = json_decode($contacts, true);
+        if (!is_array($contacts)) return null;
         return $contacts['phone'] ?? $contacts['telephone'] ?? null;
     }
 }
