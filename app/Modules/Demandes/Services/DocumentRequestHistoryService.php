@@ -2,50 +2,35 @@
 
 namespace App\Modules\Demandes\Services;
 
-use App\Modules\Demandes\Models\DocumentRequestHistory as H;
+use App\Modules\Demandes\Models\DocumentRequestHistory;
+use App\Modules\Demandes\WorkflowConstants;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 /**
- * DocumentRequestHistoryService
- *
- * Seule classe autorisée à écrire dans document_request_histories.
- * Injectée via le trait RecordsDocumentHistory dans les controllers de transition.
+ * Gère toutes les écritures dans document_request_histories.
+ * Chaque entrée est immuable après création.
  */
 class DocumentRequestHistoryService
 {
     /**
-     * Enregistre une action.
-     *
-     * @param  array|null $actorOverride  ['id', 'name', 'role'] — si null, Auth::user() est utilisé
+     * Enregistre une transition de workflow.
      */
     public function record(
         int     $documentRequestId,
-        string  $actionType,
-        ?string $statusBefore  = null,
-        ?string $statusAfter   = null,
-        ?string $comment       = null,
-        ?array  $actorOverride = null
-    ): H {
-        if ($actorOverride) {
-            $actorId   = $actorOverride['id']   ?? null;
-            $actorName = $actorOverride['name']  ?? 'Système';
-            $actorRole = $actorOverride['role']  ?? 'system';
-        } else {
-            $user      = Auth::user();
-            $actorId   = $user?->id;
-            $actorName = $user
-                ? trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''))
-                : 'Système';
-            $actorRole = $user?->roles?->first()?->slug ?? 'unknown';
-        }
+        string  $action,
+        string  $statusBefore,
+        string  $statusAfter,
+        ?string $comment = null,
+    ): DocumentRequestHistory {
+        $user = Auth::user();
 
-        return H::create([
+        return DocumentRequestHistory::create([
             'document_request_id' => $documentRequestId,
-            'actor_id'            => $actorId,
-            'actor_name'          => $actorName ?: 'Inconnu',
-            'actor_role'          => $actorRole,
-            'action_type'         => $actionType,
+            'actor_id'            => $user->id,
+            'actor_name'          => $user->name ?? trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
+            'actor_role'          => $user->roles->first()?->slug ?? 'inconnu',
+            'action_type'         => $this->resolveActionType($action),
+            'action_label'        => WorkflowConstants::ACTION_LABELS[$action] ?? $action,
             'status_before'       => $statusBefore,
             'status_after'        => $statusAfter,
             'comment'             => $comment,
@@ -53,44 +38,60 @@ class DocumentRequestHistoryService
     }
 
     /**
-     * Enregistre l'envoi d'un email (étudiant ou acteur interne).
+     * Enregistre la levée d'une réserve (flag_cleared).
+     * Pas de changement de statut, on enregistre quand même pour traçabilité.
      */
-    public function recordMail(int $documentRequestId, string $subject): void
+    public function recordFlagCleared(int $documentRequestId, string $currentStatus): DocumentRequestHistory
     {
-        H::create([
-            'document_request_id' => $documentRequestId,
-            'actor_id'            => null,
-            'actor_name'          => 'Système',
-            'actor_role'          => 'system',
-            'action_type'         => H::ACTION_MESSAGE_ENVOYE,
-            'status_before'       => null,
-            'status_after'        => null,
-            'comment'             => "Email : {$subject}",
-        ]);
+        return $this->record(
+            documentRequestId: $documentRequestId,
+            action:            'clear_flag',
+            statusBefore:      $currentStatus,
+            statusAfter:       $currentStatus,
+            comment:           null,
+        );
     }
 
     /**
-     * Retourne l'historique complet d'un dossier, ordre chronologique croissant.
-     * Chaque entrée reçoit :
-     *   - action_label   : libellé lisible du type d'action
-     *   - is_own_action  : true si l'entrée appartient au rôle $currentRole
-     *                      (hint UI — ne restreint pas la visibilité)
+     * Récupère l'historique d'une demande avec le champ is_own_action.
      */
-    public function getHistory(int $documentRequestId, ?string $currentRole = null): \Illuminate\Support\Collection
+    public function getForDemande(int $documentRequestId): array
     {
-        return DB::table('document_request_histories')
-            ->where('document_request_id', $documentRequestId)
-            ->orderBy('created_at', 'asc')
-            ->select([
-                'id', 'actor_id', 'actor_name', 'actor_role',
-                'action_type', 'status_before', 'status_after',
-                'comment', 'created_at',
-            ])
+        $userId = Auth::id();
+
+        return DocumentRequestHistory::where('document_request_id', $documentRequestId)
+            ->orderBy('created_at')
             ->get()
-            ->map(function ($entry) use ($currentRole) {
-                $entry->action_label  = H::ACTION_LABELS[$entry->action_type] ?? $entry->action_type;
-                $entry->is_own_action = ($currentRole !== null && $entry->actor_role === $currentRole);
-                return $entry;
-            });
+            ->map(fn($entry) => array_merge($entry->toArray(), [
+                'is_own_action' => $entry->actor_id === $userId,
+            ]))
+            ->all();
+    }
+
+    // ── Helpers privés ────────────────────────────────────────────────────────
+
+    private function resolveActionType(string $action): string
+    {
+        if (str_ends_with($action, '_flagged')) {
+            return 'validation_flagged';
+        }
+
+        if ($action === 'clear_flag') {
+            return 'flag_cleared';
+        }
+
+        if (str_contains($action, 'reject')) {
+            return 'rejection';
+        }
+
+        if ($action === 'secretaire_resend') {
+            return 'resend';
+        }
+
+        if ($action === 'secretaire_deliver') {
+            return 'delivery';
+        }
+
+        return 'validation';
     }
 }
