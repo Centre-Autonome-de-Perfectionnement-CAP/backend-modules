@@ -33,4 +33,3 @@ Route::get('/services/{any?}', function () {
 Route::get('/{any}', function () {
     return file_get_contents(public_path('app-cap/index.html'));
 })->where('any', '^(?!api/)(?!services/)(?!.*\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot|map)).*');
-

@@ -212,7 +212,7 @@ class ContratController extends Controller{
         // Génération du numéro de contrat
         $year  = Carbon::now()->format('Y');
         $count = Contrat::whereYear('created_at', $year)->count() + 1;
-        $validated['contrat_number'] = sprintf('CAP-%s-%04d', $year, $count);
+        $validated['contrat_number'] = sprintf('%05d', $count);
         $validated['status']         = 'pending';
 
         $contrat = Contrat::create($validated);
