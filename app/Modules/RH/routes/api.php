@@ -41,10 +41,13 @@ Route::prefix('rh')->group(function () {
     Route::delete('contrats/{id}', [ContratController::class, 'destroy']);
 
     // ─── Autorisation d'un contrat validé (admin uniquement) ─────────────────
-    Route::post('contrats/{id}/authorize',            [ContratController::class, 'authorizeContrat']);
+    Route::post('contrats/{id}/authorize',   [ContratController::class, 'authorizeContrat']);
+
+    // ─── Upload PDF final (admin remplace ou ajoute le PDF définitif) ─────────
+    Route::post('contrats/{id}/upload-pdf',  [ContratController::class, 'uploadPdf']);
 
     // ─── Email de transfert ───────────────────────────────────────────────────
-    Route::post('contrats/{id}/send-transfer-email',  [ContratController::class, 'sendTransferEmail']);
+    Route::post('contrats/{id}/send-transfer-email', [ContratController::class, 'sendTransferEmail']);
 
     // ─── Routes protégées ─────────────────────────────────────────────────────
     Route::apiResource('documents', DocumentManagementController::class)->except(['index']);
