@@ -35,6 +35,11 @@ class Contrat extends Model
         'professor_signature_path',
         'professor_signature_type',  // 'drawn' | 'uploaded'
         'professor_signed_at',
+
+        // ── PDF final ───────────────────────────────────────────────────────
+        'pdf_path',
+        'pdf_uploaded_at',
+
     ];
 
     protected $casts = [
@@ -43,14 +48,21 @@ class Contrat extends Model
         'validation_date'     => 'date',
         'authorization_date'  => 'datetime',
         'professor_signed_at' => 'datetime',
+
+
+        'pdf_uploaded_at'     => 'datetime',
         'is_validated'        => 'boolean',
         'is_authorized'       => 'boolean',
         'amount'              => 'decimal:2',
     ];
 
-    // ─── Appends ──────────────────────────────────────────────────────────────
 
-    protected $appends = ['professor_signature_url'];
+    protected $appends = [
+        'professor_signature_url',
+        'pdf_url',
+        'is_locked',
+    ];
+
 
     // ─── Accessors ────────────────────────────────────────────────────────────
 
@@ -63,6 +75,26 @@ class Contrat extends Model
             return null;
         }
         return Storage::disk('public')->url($this->professor_signature_path);
+    }
+
+
+    /**
+     * URL publique du PDF final stocké (null si aucun PDF)
+     */
+    public function getPdfUrlAttribute(): ?string
+    {
+        if (!$this->pdf_path) {
+            return null;
+        }
+        return Storage::disk('public')->url($this->pdf_path);
+    }
+
+    /**
+     * Un contrat est verrouillé (non modifiable) dès qu'il est validé ou autorisé
+     */
+    public function getIsLockedAttribute(): bool
+    {
+        return $this->is_validated === true || $this->is_authorized === true;
     }
 
     public function getStatusLabelAttribute(): string

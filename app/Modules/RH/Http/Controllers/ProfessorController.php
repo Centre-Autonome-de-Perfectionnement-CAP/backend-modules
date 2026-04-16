@@ -31,7 +31,7 @@ class ProfessorController extends Controller
     {
         try {
             $filters = $request->only([
-                'search', 'statut', 'grade_id', 'bank',
+                'search', 'status', 'grade_id', 'bank',
                 'sort_by', 'sort_order',
                 'nationality', 'city', 'profession'
             ]);
@@ -230,14 +230,15 @@ class ProfessorController extends Controller
         try {
             $stats = [
                 'total_contrats'     => $professor->contrats()->count(),
-                'active_contrats'    => $professor->contrats()->where('statut', 'ongoing')->count(),
-                'completed_contrats' => $professor->contrats()->where('statut', 'completed')->count(),
+                'active_contrats'    => $professor->contrats()->where('status', 'ongoing')->count(),
+                'completed_contrats' => $professor->contrats()->where('status', 'completed')->count(),
                 'total_amount'       => $professor->contrats()->sum('amount'),
             ];
 
             return $this->successResponse(
                 $stats,
                 'Statistiques récupérées avec succès'
+
             );
         } catch (Exception $e) {
             return $this->errorResponse(

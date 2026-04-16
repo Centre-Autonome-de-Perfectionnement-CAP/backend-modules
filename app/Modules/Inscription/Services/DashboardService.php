@@ -37,6 +37,7 @@ class DashboardService
      */
     public function getGraphData($academicYearId = null): array {
         $currentYear = null;
+
        
 
         // Nettoyer l'ID si c'est la chaîne 'null'
@@ -52,12 +53,18 @@ class DashboardService
         if (is_string($academicYearId) && preg_match('/^\d{4}-\d{4}$/', $academicYearId)) {
             $currentYear = AcademicYear::where('academic_year', $academicYearId)->first();
 
+
+
+        // Si l'ID ressemble à une année académique (ex: "2026-2027"), chercher par academic_year
+        if (is_string($academicYearId) && preg_match('/^\d{4}-\d{4}$/', $academicYearId)) {
+            $currentYear = AcademicYear::where('academic_year', $academicYearId)->first();
+
             $academicYearId = $currentYear ? $currentYear->id : null;
         } 
         else {
             // Sanitize l'ID pour PostgreSQL (convertir en int ou null)
             $academicYearId = DatabaseAdapter::sanitizeId($academicYearId);
-            
+
             if ($academicYearId) {
                 $currentYear = AcademicYear::find($academicYearId);
             } else {
@@ -78,10 +85,6 @@ class DashboardService
             'anneeAcademique' => $currentYear ? $currentYear->academic_year : null,
         ];
     }
-
-    /**
-     * Get students grouped by department
-     */
     
     protected function getStudentsByDepartment($academicYearId = null): array  {
         $departments = Department::all();
