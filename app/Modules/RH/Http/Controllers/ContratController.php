@@ -16,7 +16,8 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Barryvdh\DomPDF\Facade\Pdf;
 
-class ContratController extends Controller{
+class ContratController extends Controller
+{
     /**
      * Sérialise un contrat en ajoutant le professor via ProfessorResource.
      */
@@ -79,7 +80,8 @@ class ContratController extends Controller{
 
 
     // ─── EMAIL DE TRANSFERT ───────────────────────────────────────────────────
-    public function sendTransferEmail($id) {
+    public function sendTransferEmail($id)
+    {
         $contrat = Contrat::with(['professor', 'academicYear', 'cycle'])->find($id);
 
         if (!$contrat) {
@@ -128,7 +130,7 @@ class ContratController extends Controller{
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => "Erreur lors de l'envoi de l'email ". $e->getMessage(),
+                'message' => "Erreur lors de l'envoi de l'email " . $e->getMessage(),
                 'error'   => $e->getMessage(),
             ], 500);
         }
@@ -148,13 +150,13 @@ class ContratController extends Controller{
         ]);
 
         return array_merge($c->toArray(), [
-            'academic_year'                => $c->academicYear,
-            'course_element_professors'    => $c->courseElementProfessors->map(fn($p) => [
-                'id'              => $p->id,
-                'is_primary'      => $p->is_primary ?? false,
-                'label'           => $p->label ?? ($p->courseElement->name ?? ''),
-                'hours'           => $p->pivot->hours ?? 0,
-                'course_element'  => $p->courseElement ? [
+            'academic_year'             => $c->academicYear,
+            'course_element_professors' => $c->courseElementProfessors->map(fn($p) => [
+                'id'             => $p->id,
+                'is_primary'     => $p->is_primary ?? false,
+                'label'          => $p->label ?? ($p->courseElement->name ?? ''),
+                'hours'          => $p->pivot->hours ?? 0,
+                'course_element' => $p->courseElement ? [
                     'id'           => $p->courseElement->id,
                     'name'         => $p->courseElement->name,
                     'code'         => $p->courseElement->code,
@@ -196,17 +198,17 @@ class ContratController extends Controller{
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'division'                      => 'nullable|string',
-            'professor_id'                  => 'required|integer|exists:professors,id',
-            'academic_year_id'              => 'required|integer',
-            'cycle_id'                      => 'nullable|integer',
-            'regroupement'                  => 'nullable|string',
-            'start_date'                    => 'required|date',
-            'end_date'                      => 'nullable|date|after_or_equal:start_date',
-            'amount'                        => 'required|numeric|min:100',
-            'notes'                         => 'nullable|string',
-            'course_element_professor_ids'  => 'nullable|array',
-            'course_element_professor_ids.*'=> 'integer',
+            'division'                       => 'nullable|string',
+            'professor_id'                   => 'required|integer|exists:professors,id',
+            'academic_year_id'               => 'required|integer',
+            'cycle_id'                       => 'nullable|integer',
+            'regroupement'                   => 'nullable|string',
+            'start_date'                     => 'required|date',
+            'end_date'                       => 'nullable|date|after_or_equal:start_date',
+            'amount'                         => 'required|numeric|min:100',
+            'notes'                          => 'nullable|string',
+            'course_element_professor_ids'   => 'nullable|array',
+            'course_element_professor_ids.*' => 'integer',
         ]);
 
         // Génération du numéro de contrat
@@ -254,21 +256,27 @@ class ContratController extends Controller{
         }
 
         $validated = $request->validate([
-            'division'                      => 'nullable|string',
-            'professor_id'                  => 'required|integer|exists:professors,id',
-            'academic_year_id'              => 'required|integer',
-            'cycle_id'                      => 'nullable|integer',
-            'regroupement'                  => 'nullable|string',
-            'start_date'                    => 'required|date',
-            'end_date'                      => 'nullable|date|after_or_equal:start_date',
-            'amount'                        => 'required|numeric|min:100',
-            'notes'                         => 'nullable|string',
-            'status'                        => 'sometimes|string|in:pending,transfered,signed,ongoing,completed,cancelled',
-            'course_element_professor_ids'  => 'nullable|array',
-            'course_element_professor_ids.*'=> 'integer',
+            'division'                       => 'nullable|string',
+            'professor_id'                   => 'required|integer|exists:professors,id',
+            'academic_year_id'               => 'required|integer',
+            'cycle_id'                       => 'nullable|integer',
+            'regroupement'                   => 'nullable|string',
+            'start_date'                     => 'required|date',
+            'end_date'                       => 'nullable|date|after_or_equal:start_date',
+            'amount'                         => 'required|numeric|min:100',
+            'notes'                          => 'nullable|string',
+            'status'                         => 'sometimes|string|in:pending,transfered,signed,ongoing,completed,cancelled',
+            'course_element_professor_ids'   => 'nullable|array',
+            'course_element_professor_ids.*' => 'integer',
         ]);
 
         $contrat->update($validated);
+
+        // ── Si l'admin remet le contrat en "pending" (relance après rejet),
+        //    on efface le motif de rejet pour repartir proprement ──────────────
+        if (($validated['status'] ?? null) === 'pending') {
+            $contrat->update(['rejection_reason' => null]);
+        }
 
         if (array_key_exists('course_element_professor_ids', $validated)) {
             $contrat->courseElementProfessors()->sync($validated['course_element_professor_ids'] ?? []);
@@ -333,7 +341,6 @@ class ContratController extends Controller{
         $signatureType = $request->input('signature_type');
 
         if ($signatureType === 'drawn' && $request->filled('signature_data')) {
-            // Décoder le base64 et sauvegarder
             $dataUrl = $request->input('signature_data');
             $base64  = preg_replace('/^data:image\/\w+;base64,/', '', $dataUrl);
             $binary  = base64_decode($base64);
@@ -391,9 +398,29 @@ class ContratController extends Controller{
             'rejection_reason' => $request->input('rejection_reason'),
         ]);
 
+        // ── Notifier l'admin par email du rejet ───────────────────────────────
+        try {
+            $professor = $contrat->professor;
+            $adminEmail = config('mail.admin_email', config('mail.from.address'));
+
+            if ($adminEmail) {
+                Mail::to($adminEmail)->send(
+                    new \App\Mail\ContratRejectedNotification([
+                        'contrat_number'    => $contrat->contrat_number,
+                        'professor_name'    => $professor?->full_name ?? 'Inconnu',
+                        'rejection_reason'  => $request->input('rejection_reason'),
+                        'rejected_at'       => now()->format('d/m/Y à H:i'),
+                    ])
+                );
+            }
+        } catch (\Exception $e) {
+            // Ne bloque pas la réponse si l'email échoue
+            Log::warning("Email de notification de rejet non envoyé pour contrat #{$contrat->id} : " . $e->getMessage());
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Contrat rejeté.',
+            'message' => 'Contrat rejeté. Le motif a été transmis au CAP.',
             'data'    => $this->formatContrat($contrat->fresh()),
         ]);
     }
@@ -538,7 +565,10 @@ class ContratController extends Controller{
         ]);
     }
 
-    private function generateAndStorePdf(Contrat $contrat): void {
+    // ─── GENERATE AND STORE PDF ───────────────────────────────────────────────
+
+    private function generateAndStorePdf(Contrat $contrat): void
+    {
         try {
             // Charger les relations nécessaires
             $contrat->load([
@@ -549,7 +579,6 @@ class ContratController extends Controller{
                 'courseElementProfessors.classGroup',
             ]);
 
-            // Vérification minimale
             if (!$contrat) {
                 throw new \Exception('Contrat invalide');
             }
@@ -565,22 +594,15 @@ class ContratController extends Controller{
 
             // ───────────── DomPDF ─────────────
             if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
-
                 try {
-                    $pdf = Pdf::loadHTML($html)
-                        ->setPaper('a4', 'portrait');
-
+                    $pdf = Pdf::loadHTML($html)->setPaper('a4', 'portrait');
                     Storage::disk('public')->put($filename, $pdf->output());
-
                     $contrat->update([
                         'pdf_path'        => $filename,
                         'pdf_uploaded_at' => now(),
                     ]);
-
                     Log::info("PDF généré avec DomPDF pour contrat #{$contrat->id}");
-
                     return;
-
                 } catch (\Exception $e) {
                     Log::error("Erreur DomPDF contrat #{$contrat->id} : " . $e->getMessage());
                 }
@@ -588,33 +610,24 @@ class ContratController extends Controller{
 
             // ───────────── Snappy ─────────────
             if (app()->bound('snappy.pdf')) {
-
                 try {
                     $snappy = app('snappy.pdf');
-
                     $output = $snappy->getOutputFromHtml($html);
-
                     Storage::disk('public')->put($filename, $output);
-
                     $contrat->update([
                         'pdf_path'        => $filename,
                         'pdf_uploaded_at' => now(),
                     ]);
-
                     Log::info("PDF généré avec Snappy pour contrat #{$contrat->id}");
-
                     return;
-
                 } catch (\Exception $e) {
                     Log::error("Erreur Snappy contrat #{$contrat->id} : " . $e->getMessage());
                 }
             }
 
-            // ───────────── Aucun moteur PDF ─────────────
             Log::warning("Aucune librairie PDF disponible pour contrat #{$contrat->id}");
 
         } catch (\Throwable $e) {
-            // Ne bloque pas le processus principal
             Log::error("Erreur globale génération PDF contrat #{$contrat->id} : " . $e->getMessage());
         }
     }
