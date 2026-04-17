@@ -112,18 +112,8 @@ class TextbookController extends Controller
         return response()->json(['programs' => $result]);
     }
 
-    /**
-     * Résout l'état du contrat d'un professeur pour une année donnée.
-     *
-     * Règles métier :
-     *   - Aucun contrat              → status = null,      can_add = false
-     *   - Contrat en attente         → status = pending,   can_add = false
-     *   - Contrat rejeté/annulé      → status = rejected,  can_add = false
-     *   - Contrat expiré (end_date)  → status = expired,   can_add = false
-     *   - Contrat validé ET autorisé → status = validated, can_add = true
-     */
-    private function resolveContractInfo(?int $professorId, ?int $academicYearId, Carbon $today): array
-    {
+   
+    private function resolveContractInfo(?int $professorId, ?int $academicYearId, Carbon $today): array {
         if (!$professorId || !$academicYearId) {
             return ['status' => null, 'can_add' => false];
         }
@@ -149,7 +139,7 @@ class TextbookController extends Controller
 
         // Contrat non valide pour ajout (ex: terminé)
         if ($contrat->status === 'completed') {
-            return ['status' => 'rejected', 'can_add' => false];
+            return ['status' => 'validated', 'can_add' => true];
         }
 
         // Contrat valide (signed ou ongoing)
