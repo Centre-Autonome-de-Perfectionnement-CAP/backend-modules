@@ -31,12 +31,19 @@ class DocumentRequest extends Model
         'processed_by_comptable_id',
         'processed_by_chef_division_id',
         'processed_by_chef_cap_id',
+        // ── Complément de dossier ──────────────────────────────────────────
+        'complement_files',
+        'complement_at',
+        'complement_pieces_requises',
     ];
 
     protected $casts = [
-        'has_flag'    => 'boolean',
-        'submitted_at'=> 'datetime',
-        'delivered_at'=> 'datetime',
+        'has_flag'                   => 'boolean',
+        'submitted_at'               => 'datetime',
+        'delivered_at'               => 'datetime',
+        'complement_at'              => 'datetime',
+        'complement_files'           => 'array',
+        'complement_pieces_requises' => 'array',
     ];
 
     public function histories(): HasMany

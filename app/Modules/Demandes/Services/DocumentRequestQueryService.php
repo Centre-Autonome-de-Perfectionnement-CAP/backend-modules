@@ -8,6 +8,10 @@ use Illuminate\Support\Facades\DB;
 /**
  * Toutes les lectures DB pour les demandes (index, show, stats).
  * Aucune écriture ici.
+ *
+ * Harmonisation : ajout de dr.complement_files dans BASE_SELECT
+ * pour que le progiciel puisse afficher les pièces complémentaires
+ * via DossierFilesSplit.
  */
 class DocumentRequestQueryService
 {
@@ -21,6 +25,7 @@ class DocumentRequestQueryService
         'dr.has_flag',
         'dr.email',
         'dr.files',
+        'dr.complement_files',          // ← AJOUTÉ — pièces complémentaires
         'dr.submitted_at',
         'dr.updated_at',
         'dr.rejected_reason',
@@ -123,7 +128,6 @@ class DocumentRequestQueryService
 
     public function statsForDirectionUser(int $userId, string $role): array
     {
-        // Statut correspondant au rôle connecté
         $myStatus = array_flip(WorkflowConstants::STATUS_TO_ROLE)[$role] ?? null;
 
         $totalInProgress = DB::table('document_requests')

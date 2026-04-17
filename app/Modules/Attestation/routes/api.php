@@ -2,28 +2,38 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Modules\Attestation\Http\Controllers\AttestationController;
+use App\Modules\Attestation\Http\Controllers\Public\DemandeController;
 use App\Modules\Attestation\Http\Controllers\Public\QuittanceController;
+use App\Modules\Attestation\Http\Controllers\Public\ComplementDossierController;
 
 /*
- * Module Attestation — routes/api.php pour proj2
+ * Module Attestation — routes/api.php
  *
- * CORRECTIONS vs version précédente :
- *   ✅ Route POST quittance/generate ajoutée (manquait, causait 404 côté site vitrine)
- *   ✅ Routes document-requests absentes (dans App\Modules\Demandes\routes\api.php)
+ * Harmonisation : ajout des routes complément de dossier (publiques, sans auth)
+ *   GET  /api/attestations/demandes/complement/find
+ *   POST /api/attestations/demandes/complement
+ *
+ * IMPORTANT : la route GET find doit être déclarée AVANT le groupe auth:sanctum
+ * pour ne pas être interceptée par le middleware.
  */
 
 Route::prefix('api/attestations')->group(function () {
 
-    // ── Routes publiques (site vitrine app-cap) ───────────────────────────────
-    Route::get('academic-years',       [AttestationController::class, 'getAcademicYears']);
-    Route::get('status',               [AttestationController::class, 'getStatus']);
-    Route::get('bulletin-status',      [AttestationController::class, 'getBulletinStatus']);
-    Route::get('identify',             [AttestationController::class, 'identify']);
-    Route::get('check-availability',   [AttestationController::class, 'checkAvailability']);
-    Route::get('demandes/suivi',       [AttestationController::class, 'suiviDemande']); // AVANT post('demandes')
-    Route::post('demandes',            [AttestationController::class, 'storeDemande']);
-    Route::post('bulletins',           [AttestationController::class, 'storeBulletinDemande']);
-    Route::post('quittance/generate', [QuittanceController::class, 'generateAndSendQuittance']); // ← AJOUTÉ
+    // ── Routes publiques (site vitrine) ───────────────────────────────────────
+
+    Route::get('academic-years',        [AttestationController::class, 'getAcademicYears']);
+    Route::get('status',                [AttestationController::class, 'getStatus']);
+    Route::get('bulletin-status',       [AttestationController::class, 'getBulletinStatus']);
+    Route::get('identify',              [AttestationController::class, 'identify']);
+    Route::get('check-availability',    [AttestationController::class, 'checkAvailability']);
+    Route::get('demandes/suivi',        [AttestationController::class, 'suiviDemande']);
+    Route::post('demandes',             [AttestationController::class, 'storeDemande']);
+    Route::post('bulletins',            [AttestationController::class, 'storeBulletinDemande']);
+    Route::post('quittance/generate',   [QuittanceController::class, 'generateAndSendQuittance']);
+
+    // ── Complément de dossier (public — étudiant sans compte) ─────────────────
+    Route::get('demandes/complement/find', [ComplementDossierController::class, 'find']);
+    Route::post('demandes/complement',     [ComplementDossierController::class, 'store']);
 
     // ── Routes protégées (progiciel interne) ──────────────────────────────────
     Route::middleware('auth:sanctum')->group(function () {
@@ -53,7 +63,5 @@ Route::prefix('api/attestations')->group(function () {
         // Utilitaires étudiants
         Route::put('students/{studentPendingStudentId}/names',             [AttestationController::class, 'updateStudentNames']);
         Route::get('students/{studentPendingStudentId}/birth-certificate', [AttestationController::class, 'getBirthCertificate']);
-
     });
-
 });
