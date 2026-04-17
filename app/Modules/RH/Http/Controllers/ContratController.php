@@ -212,17 +212,17 @@ class ContratController extends Controller
         ]);
 
         // Génération du numéro de contrat
-        $lastContrat = Contrat::whereYear('created_at', now()->year)
-            ->orderBy('contrat_number', 'desc')
-            ->first();
+        $lastContrat = Contrat::latest('id')->first();
 
         if ($lastContrat) {
-            $nextNumber = intval($lastContrat->contrat_number) + 1;
+            $nextNumber = $lastContrat->id + 1;
         } else {
             $nextNumber = 1;
         }
 
+        // Formatage sur 5 caractères avec des zéros devant
         $validated['contrat_number'] = str_pad($nextNumber, 5, '0', STR_PAD_LEFT);
+
         $validated['status'] = 'pending';
 
         $contrat = Contrat::create($validated);
