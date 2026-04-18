@@ -1,0 +1,122 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add VPS to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to VPS
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          ssh $SSH_USER@$SSH_HOST << 'ENDSSH'
+            set -e
+            
+            # Variables
+            DEPLOY_PATH="/var/www/laravel-app"
+            REPO_URL="git@github.com:Centre-Autonome-de-Perfectionnement-CAP/backend-modules.git"
+            BRANCH="main"
+            RELEASE_DIR="$DEPLOY_PATH/releases/$(date +%Y%m%d%H%M%S)"
+            SHARED_DIR="$DEPLOY_PATH/shared"
+            CURRENT_DIR="$DEPLOY_PATH/current"
+            
+            echo "🚀 Starting deployment..."
+            
+            # Create release directory
+            mkdir -p $RELEASE_DIR
+            
+            # Clone repository
+            echo "📦 Cloning repository..."
+            git clone --depth 1 --branch $BRANCH $REPO_URL $RELEASE_DIR
+            
+            # Navigate to release directory
+            cd $RELEASE_DIR
+            
+            # Install Composer dependencies
+            echo "📚 Installing Composer dependencies..."
+            composer install --no-dev --optimize-autoloader --no-interaction
+            
+            # Create symlinks to shared directories
+            echo "🔗 Creating symlinks..."
+            rm -rf $RELEASE_DIR/storage
+            ln -nfs $SHARED_DIR/storage $RELEASE_DIR/storage
+            
+            rm -f $RELEASE_DIR/.env
+            ln -nfs $SHARED_DIR/.env $RELEASE_DIR/.env
+            
+            # Set permissions
+            echo "🔐 Setting permissions..."
+            chown -R deployer:www-data $RELEASE_DIR
+            chmod -R 755 $RELEASE_DIR
+            chmod -R 775 $RELEASE_DIR/bootstrap/cache
+            
+            # Generate APP_KEY if not set
+            if ! grep -q "APP_KEY=base64:" $SHARED_DIR/.env; then
+              echo "🔑 Generating application key..."
+              php artisan key:generate --force
+            fi
+            
+            # Run migrations
+            echo "🗄️  Running migrations..."
+            php artisan migrate --force
+            
+            # Clear and cache config
+            echo "🧹 Clearing caches..."
+            php artisan config:clear
+            php artisan cache:clear
+            php artisan route:clear
+            php artisan view:clear
+            
+            echo "⚡ Optimizing..."
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            
+            # Update current symlink
+            echo "🔄 Updating current release..."
+            ln -nfs $RELEASE_DIR $CURRENT_DIR
+            
+            # Restart PHP-FPM
+            echo "♻️  Restarting PHP-FPM..."
+            sudo systemctl reload php8.4-fpm
+            
+            # Restart queue workers if supervisor is configured
+            if command -v supervisorctl &> /dev/null; then
+              echo "👷 Restarting queue workers..."
+              sudo supervisorctl restart laravel-worker:* || true
+            fi
+            
+            # Keep only last 5 releases
+            echo "🧹 Cleaning old releases..."
+            cd $DEPLOY_PATH/releases
+            ls -t | tail -n +6 | xargs -r rm -rf
+            
+            echo "✅ Deployment completed successfully!"
+          ENDSSH
+
+      - name: Deployment Status
+        if: success()
+        run: echo "🎉 Deployment to production completed successfully!"
+
+      - name: Deployment Failed
+        if: failure()
+        run: echo "❌ Deployment failed. Please check the logs."
