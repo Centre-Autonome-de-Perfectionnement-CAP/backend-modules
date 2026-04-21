@@ -14,12 +14,9 @@ use App\Modules\Inscription\Http\Controllers\DashboardController;
 use App\Modules\Inscription\Http\Controllers\ClassGroupController;
 use App\Modules\Inscription\Http\Controllers\StudentController;
 use App\Modules\Inscription\Http\Controllers\PendingStudentExportController;
-<<<<<<< HEAD
 
 
 use App\Modules\Inscription\Http\Controllers\StudentBroadcastController;
-=======
->>>>>>> eea2b06 (draft)
 
 
 Route::prefix('api/inscription')->group(function () {
@@ -122,7 +119,6 @@ Route::prefix('api/inscription')->group(function () {
 
     Route::middleware('auth:sanctum')->get('files/legacy', [\App\Modules\Inscription\Http\Controllers\FileController::class, 'viewLegacyFile']);
     Route::middleware('auth:sanctum')->post('send-mail', [\App\Modules\Inscription\Http\Controllers\MailController::class, 'sendMail']);
-<<<<<<< HEAD
     
     // Broadcast messages aux étudiants
     Route::middleware('auth:sanctum')->post('broadcast/whatsapp-invitation', [StudentBroadcastController::class, 'sendWhatsAppInvitation']);
@@ -152,8 +148,6 @@ Route::prefix('api/inscription')->group(function () {
             Route::patch('/{id}/reject', [\App\Modules\Inscription\Http\Controllers\InformationCorrectionController::class, 'reject']);
         });
     });
-=======
->>>>>>> f355611 (draft)
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('export/pdf', [PendingStudentExportController::class, 'exportPdf']);

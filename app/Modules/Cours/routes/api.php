@@ -33,10 +33,7 @@ Route::prefix('api/cours')->group(function () {
         Route::post('programs/bulk', [ProgramController::class, 'bulkStore']);
         Route::post('programs/copy', [ProgramController::class, 'copyPrograms']);
         Route::post('programs/renew', [ProgramController::class, 'renewForNextYear']);
-<<<<<<< HEAD
         Route::post('programs/{program}/renew', [ProgramController::class, 'renewProgram']);
-=======
->>>>>>> f355611 (draft)
         
         // Routes utilitaires pour les programmes
         Route::get('class-groups/{classGroupId}/programs', [ProgramController::class, 'getByClassGroup']);

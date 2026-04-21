@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Route;
 
 // Route pour l'application principale app-cap (site vitrine à la racine)
 Route::get('/', function () {
-    return file_get_contents(public_path('index.html'));
+    return file_get_contents(public_path('app-cap/index.html'));
 });
 
 // Route pour app-cap-frontend (services) - exclure les fichiers statiques
