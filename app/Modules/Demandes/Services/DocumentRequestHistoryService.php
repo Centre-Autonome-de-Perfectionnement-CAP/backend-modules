@@ -92,6 +92,13 @@ class DocumentRequestHistoryService
             return 'delivery';
         }
 
+        // ── Circuit de correction ─────────────────────────────────────────────
+        // return_to_secretaire : un acteur renvoie le dossier à la secrétaire
+        // pendant la boucle de correction. Affiché en orange dans l'historique.
+        if ($action === 'return_to_secretaire') {
+            return 'correction';
+        }
+
         return 'validation';
     }
 }

@@ -8,10 +8,6 @@ use Illuminate\Support\Facades\DB;
 /**
  * Toutes les lectures DB pour les demandes (index, show, stats).
  * Aucune écriture ici.
- *
- * Harmonisation : ajout de dr.complement_files dans BASE_SELECT
- * pour que le progiciel puisse afficher les pièces complémentaires
- * via DossierFilesSplit.
  */
 class DocumentRequestQueryService
 {
@@ -25,7 +21,7 @@ class DocumentRequestQueryService
         'dr.has_flag',
         'dr.email',
         'dr.files',
-        'dr.complement_files',          // ← AJOUTÉ — pièces complémentaires
+        'dr.complement_files',
         'dr.submitted_at',
         'dr.updated_at',
         'dr.rejected_reason',
@@ -44,6 +40,13 @@ class DocumentRequestQueryService
         'dr.sec_directeur_reviewed_at',
         'dr.delivered_at',
         'dr.student_pending_student_id',
+        // ── Circuit de correction ──────────────────────────────────────────────
+        // Ces colonnes sont indispensables pour que le frontend sache si le dossier
+        // est en boucle de correction et affiche les bons boutons.
+        'dr.is_in_correction_circuit',
+        'dr.correction_origin_role',
+        'dr.correction_origin_status',
+        // ──────────────────────────────────────────────────────────────────────
         'pi.last_name',
         'pi.first_names',
         'dept.name as department',

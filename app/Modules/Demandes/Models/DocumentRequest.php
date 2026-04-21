@@ -31,14 +31,19 @@ class DocumentRequest extends Model
         'processed_by_comptable_id',
         'processed_by_chef_division_id',
         'processed_by_chef_cap_id',
-        // ── Complément de dossier ──────────────────────────────────────────
+        // Complément de dossier
         'complement_files',
         'complement_at',
         'complement_pieces_requises',
+        // Circuit de correction
+        'is_in_correction_circuit',   // bool  — true = boucle active
+        'correction_origin_role',     // string — slug du rôle ayant déclenché le rejet
+        'correction_origin_status',   // string — statut BD avant le rejet (ex: 'comptable_review')
     ];
 
     protected $casts = [
         'has_flag'                   => 'boolean',
+        'is_in_correction_circuit'   => 'boolean',
         'submitted_at'               => 'datetime',
         'delivered_at'               => 'datetime',
         'complement_at'              => 'datetime',

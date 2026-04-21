@@ -163,6 +163,7 @@ class ComplementDossierController extends Controller
         $nomComplet = strtoupper(trim(
             ($personal?->last_name ?? '') . ' ' . ($personal?->first_names ?? '')
         ));
+        $matricule  = $link?->student?->student_id_number ?? '—';
 
         // ── Chemin du dossier ─────────────────────────────────────────────────
         //
@@ -257,7 +258,7 @@ class ComplementDossierController extends Controller
             $request->email,
             "Complément de dossier reçu — Réf : {$reference}",
             'core::emails.complement-confirmation',
-            compact('nomComplet', 'reference', 'dateComplement', 'piecesList')
+            compact('nomComplet', 'matricule', 'reference', 'dateComplement', 'piecesList')
         );
 
         // Notification secrétariat
@@ -265,7 +266,7 @@ class ComplementDossierController extends Controller
             self::SECRETARIAT_EMAIL,
             "Nouveau complément — Réf : {$reference}",
             'core::emails.complement-notification-secretariat',
-            compact('nomComplet', 'reference', 'dateComplement', 'piecesList') + ['email' => $request->email]
+            compact('nomComplet', 'matricule', 'reference', 'dateComplement', 'piecesList') + ['email' => $request->email]
         );
 
         return response()->json([
