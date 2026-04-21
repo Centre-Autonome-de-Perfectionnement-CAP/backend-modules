@@ -77,7 +77,7 @@ jobs:
             
             # Run migrations
             echo "🗄️  Running migrations..."
-            php artisan migrate --force
+            #php artisan migrate --force
             
             # Clear and cache config
             echo "🧹 Clearing caches..."
