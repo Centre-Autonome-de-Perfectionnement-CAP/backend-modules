@@ -63,7 +63,7 @@
         .logo-header{
             position: absolute;
             right: 0;
-            height: 110px;
+            height: 130px;
         }
         .logo-header.epac{
             left: 0;
