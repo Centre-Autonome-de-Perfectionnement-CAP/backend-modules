@@ -39,6 +39,10 @@ class TarifController extends Controller
     }
 
     /**
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 7854261 (commit)
      * Liste toutes les classes disponibles
      */
     public function getAvailableClasses(Request $request)
@@ -46,6 +50,7 @@ class TarifController extends Controller
         try {
             $academicYearId = $request->query('academic_year_id');
             
+<<<<<<< HEAD
             $query = \DB::table('class_groups')
                 ->join('departments', 'class_groups.department_id', '=', 'departments.id');
             
@@ -54,11 +59,18 @@ class TarifController extends Controller
             }
             
             $classes = $query->select(
+=======
+            $classes = \DB::table('class_groups')
+                ->join('departments', 'class_groups.department_id', '=', 'departments.id')
+                ->where('class_groups.academic_year_id', $academicYearId)
+                ->select(
+>>>>>>> 7854261 (commit)
                     'class_groups.academic_year_id',
                     'class_groups.department_id',
                     'class_groups.study_level',
                     'departments.name as department_name'
                 )
+<<<<<<< HEAD
                 ->groupBy('class_groups.academic_year_id', 'class_groups.department_id', 'class_groups.study_level', 'departments.name')
                 ->get()
                 ->map(function($class) {
@@ -66,6 +78,15 @@ class TarifController extends Controller
                         'academic_year_id' => (int) $class->academic_year_id,
                         'department_id' => (int) $class->department_id,
                         'study_level' => (int) $class->study_level,
+=======
+                ->distinct()
+                ->get()
+                ->map(function($class) {
+                    return [
+                        'academic_year_id' => $class->academic_year_id,
+                        'department_id' => $class->department_id,
+                        'study_level' => $class->study_level,
+>>>>>>> 7854261 (commit)
                         'label' => $class->department_name . ' - Niveau ' . $class->study_level,
                     ];
                 });
@@ -84,6 +105,7 @@ class TarifController extends Controller
     }
 
     /**
+<<<<<<< HEAD
      * Récupère un tarif avec ses classes
      */
     public function show($id)
@@ -117,6 +139,10 @@ class TarifController extends Controller
     }
 
     /**
+=======
+>>>>>>> eea2b06 (draft)
+=======
+>>>>>>> 7854261 (commit)
      * Crée un nouveau tarif
      */
     public function store(CreateTarifRequest $request)

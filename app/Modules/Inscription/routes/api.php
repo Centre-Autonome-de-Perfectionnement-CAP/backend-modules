@@ -149,4 +149,11 @@ Route::prefix('api/inscription')->group(function () {
         });
     });
 
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('export/pdf', [PendingStudentExportController::class, 'exportPdf']);
+        Route::get('export/excel', [PendingStudentExportController::class, 'exportExcel']);
+        Route::get('export/word', [PendingStudentExportController::class, 'exportWord']);
+        Route::get('export/emails', [PendingStudentExportController::class, 'exportEmails']);
+    });
+
 }); // Fin du groupe api/inscription

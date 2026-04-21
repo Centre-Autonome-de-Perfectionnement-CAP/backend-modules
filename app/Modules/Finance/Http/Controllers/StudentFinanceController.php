@@ -48,7 +48,19 @@ class StudentFinanceController extends Controller
             'matricule' => 'required|string',
             'department_id' => 'required|integer',
             'montant' => 'required|numeric|min:0',
-            'reference' => 'required|string|unique:payments,reference',
+            'reference' => [
+                'required',
+                'string',
+                function ($attribute, $value, $fail) {
+                    $exists = Paiement::where('reference', $value)
+                        ->whereIn('status', ['pending', 'approved'])
+                        ->exists();
+                    
+                    if ($exists) {
+                        $fail('Cette référence existe déjà dans le système.');
+                    }
+                },
+            ],
             'numero_compte' => 'required|string',
             'date_versement' => 'required|date',
             'motif' => 'nullable|string',

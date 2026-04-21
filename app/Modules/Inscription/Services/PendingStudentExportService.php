@@ -128,20 +128,29 @@ class PendingStudentExportService
 
     public function prepareEmailsExportData(array $filters): array
     {
+<<<<<<< HEAD
         \Log::info('=== prepareEmailsExportData START ===');
+=======
+>>>>>>> f2a73ba (commit)
         $query = PendingStudent::with(['personalInformation', 'department', 'academicYear']);
         
         if (!empty($filters['year']) && $filters['year'] !== 'all') {
             if (is_numeric($filters['year'])) {
                 $query->where('academic_year_id', $filters['year']);
+<<<<<<< HEAD
                 \Log::info('Filter by year:', ['year' => $filters['year']]);
+=======
+>>>>>>> f2a73ba (commit)
             }
         }
         
         if (!empty($filters['filiere']) && $filters['filiere'] !== 'all') {
             if (is_numeric($filters['filiere'])) {
                 $query->where('department_id', $filters['filiere']);
+<<<<<<< HEAD
                 \Log::info('Filter by filiere:', ['filiere' => $filters['filiere']]);
+=======
+>>>>>>> f2a73ba (commit)
             }
         }
         
@@ -158,6 +167,7 @@ class PendingStudentExportService
                 $period = $periods[$cohortIndex];
                 $query->whereDate('created_at', '>=', $period->start_date)
                       ->whereDate('created_at', '<=', $period->end_date);
+<<<<<<< HEAD
                 \Log::info('Filter by cohort:', ['cohort' => $filters['cohort']]);
             }
         }
@@ -170,6 +180,12 @@ class PendingStudentExportService
             });
         
         \Log::info('Students fetched:', ['count' => $pendingStudents->count()]);
+=======
+            }
+        }
+        
+        $pendingStudents = $query->get();
+>>>>>>> f2a73ba (commit)
         
         $academicYear = null;
         if (!empty($filters['year']) && is_numeric($filters['year'])) {
@@ -178,17 +194,22 @@ class PendingStudentExportService
             $academicYear = AcademicYear::where('is_current', true)->first();
         }
         
+<<<<<<< HEAD
         // Grouper par filière
         $studentsByDepartment = $pendingStudents->groupBy(function($student) {
             return $student->department->name ?? 'Sans filière';
         });
         
         \Log::info('Grouped by department:', ['departments' => $studentsByDepartment->keys()->toArray()]);
+=======
+        $department = $pendingStudents->first()?->department;
+>>>>>>> f2a73ba (commit)
         
         $emails = $pendingStudents->map(function($student) {
             return [
                 'name' => $student->personalInformation->last_name . ' ' . $student->personalInformation->first_names,
                 'email' => $student->personalInformation->email,
+<<<<<<< HEAD
                 'department' => $student->department->name ?? 'N/A',
             ];
         });
@@ -199,6 +220,15 @@ class PendingStudentExportService
             'emails' => $emails,
             'studentsByDepartment' => $studentsByDepartment,
             'academicYear' => $academicYear?->academic_year ?? 'N/A',
+=======
+            ];
+        });
+        
+        return [
+            'emails' => $emails,
+            'academicYear' => $academicYear?->academic_year ?? 'N/A',
+            'department' => $department?->name ?? 'Toutes filières',
+>>>>>>> f2a73ba (commit)
             'totalStudents' => $pendingStudents->count(),
             'exportDate' => now()->format('d/m/Y'),
         ];
@@ -206,6 +236,7 @@ class PendingStudentExportService
 
     public function generateEmailsFilename(array $data): string
     {
+<<<<<<< HEAD
         $academicYear = str_replace(['/', '-'], '_', $data['academicYear']);
         $dateTime = now()->format('Ymd_His');
         
@@ -289,3 +320,12 @@ class PendingStudentExportService
         
         return "ETUDIANTS_VALIDES_{$type}_{$academicYear}_{$dateTime}.pdf";
     }}
+=======
+        $department = str_replace(' ', '_', $data['department']);
+        $academicYear = str_replace(['/', '-'], '_', $data['academicYear']);
+        $dateTime = now()->format('Ymd_His');
+        
+        return "EMAILS_ETUDIANTS_{$academicYear}_{$department}_{$dateTime}.pdf";
+    }
+}
+>>>>>>> f2a73ba (commit)
