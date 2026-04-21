@@ -9,8 +9,10 @@ use App\Modules\EmploiDuTemps\Http\Requests\UpdateScheduledCourseRequest;
 use App\Modules\EmploiDuTemps\Http\Resources\ScheduledCourseResource;
 use App\Modules\EmploiDuTemps\Services\ScheduledCourseService;
 use App\Modules\EmploiDuTemps\Services\ConflictDetectionService;
+use App\Modules\EmploiDuTemps\Services\ScheduleGeneratorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use App\Traits\ApiResponse;
 use App\Traits\HasPagination;
 use Exception;
@@ -21,7 +23,8 @@ class ScheduledCourseController extends Controller
 
     public function __construct(
         protected ScheduledCourseService $scheduledCourseService,
-        protected ConflictDetectionService $conflictDetectionService
+        protected ConflictDetectionService $conflictDetectionService,
+        protected ScheduleGeneratorService $scheduleGeneratorService
     ) {
         $this->middleware('auth:sanctum');
     }
@@ -317,5 +320,220 @@ class ScheduledCourseController extends Controller
             ],
             'Occurrences récupérées avec succès'
         );
+    }
+
+    /**
+     * Reconduire l'emploi du temps d'une année vers une autre
+     */
+    public function renewSchedule(Request $request): JsonResponse
+    {
+        $request->validate([
+            'source_academic_year_id' => 'required|exists:academic_years,id',
+            'target_academic_year_id' => 'required|exists:academic_years,id|different:source_academic_year_id',
+            'date_offset' => 'nullable|integer|min:1',
+            'check_conflicts' => 'nullable|boolean',
+            'ignore_conflicts' => 'nullable|boolean',
+        ]);
+
+        try {
+            $result = $this->scheduledCourseService->renewSchedule(
+                $request->source_academic_year_id,
+                $request->target_academic_year_id,
+                [
+                    'date_offset' => $request->date_offset ?? 365,
+                    'check_conflicts' => $request->check_conflicts ?? true,
+                    'ignore_conflicts' => $request->ignore_conflicts ?? false,
+                ]
+            );
+
+            return $this->successResponse(
+                $result,
+                "Reconduction terminée : {$result['created']} cours créés, {$result['skipped']} ignorés"
+            );
+        } catch (Exception $e) {
+            return $this->errorResponse(
+                'Erreur lors de la reconduction : ' . $e->getMessage(),
+                500
+            );
+        }
+    }
+
+    /**
+     * Générer automatiquement un emploi du temps
+     */
+    public function generateSchedule(Request $request): JsonResponse
+    {
+        $request->validate([
+            'academic_year_id' => 'required|exists:academic_years,id',
+            'start_date' => 'nullable|date',
+        ]);
+
+        try {
+            $result = $this->scheduleGeneratorService->generateSchedule(
+                $request->academic_year_id,
+                [
+                    'start_date' => $request->start_date,
+                ]
+            );
+
+            return $this->successResponse(
+                $result,
+                "Génération terminée : {$result['created']} cours créés, {$result['skipped']} ignorés"
+            );
+        } catch (Exception $e) {
+            return $this->errorResponse(
+                'Erreur lors de la génération : ' . $e->getMessage(),
+                500
+            );
+        }
+    }
+
+    /**
+     * Télécharger l'emploi du temps d'un groupe en PDF
+     */
+    public function downloadClassGroupSchedulePDF(int $classGroupId, Request $request)
+    {
+        $pdfService = app(\App\Modules\EmploiDuTemps\Services\SchedulePDFService::class);
+        
+        $pdf = $pdfService->generateClassGroupSchedulePDF(
+            $classGroupId,
+            $request->query('start_date'),
+            $request->query('end_date')
+        );
+
+        // Récupérer les infos du groupe pour le nom du fichier
+        $classGroup = \App\Modules\Inscription\Models\ClassGroup::with('department.cycle')->find($classGroupId);
+        $fileName = 'emploi-du-temps-' . 
+                    ($classGroup->department->cycle->name ?? 'classe') . '-' . 
+                    ($classGroup->name ?? $classGroupId) . '-' . 
+                    date('Y-m-d') . '.pdf';
+        $fileName = str_replace(' ', '-', strtolower($fileName));
+
+        \Log::info('Téléchargement PDF: ' . $fileName);
+
+        return $pdf->download($fileName);
+    }
+
+    /**
+     * Télécharger l'emploi du temps d'un professeur en PDF
+     */
+    public function downloadProfessorSchedulePDF(int $professorId, Request $request)
+    {
+        $pdfService = app(\App\Modules\EmploiDuTemps\Services\SchedulePDFService::class);
+        
+        $pdf = $pdfService->generateProfessorSchedulePDF(
+            $professorId,
+            $request->query('start_date'),
+            $request->query('end_date')
+        );
+
+        return $pdf->download('emploi-du-temps-professeur-' . $professorId . '.pdf');
+    }
+
+    /**
+     * Télécharger l'emploi du temps d'une salle en PDF
+     */
+    public function downloadRoomSchedulePDF(int $roomId, Request $request)
+    {
+        // TODO: Implémenter la génération PDF pour les salles
+        return response()->json(['message' => 'Fonctionnalité en cours de développement'], 501);
+    }
+
+    /**
+     * Créer plusieurs cours en masse (mode brouillon)
+     */
+    public function bulkCreate(Request $request): JsonResponse
+    {
+        $request->validate([
+            'courses' => 'required|array|min:1',
+            'courses.*.program_id' => 'required|exists:programs,id',
+            'courses.*.time_slot_id' => 'required|exists:time_slots,id',
+            'courses.*.room_id' => 'required|exists:rooms,id',
+            'courses.*.start_date' => 'required|date',
+            'courses.*.total_hours' => 'required|numeric|min:0',
+            'courses.*.is_recurring' => 'boolean',
+            'courses.*.recurrence_end_date' => 'nullable|date|after:courses.*.start_date',
+            'courses.*.notes' => 'nullable|string',
+        ]);
+
+        try {
+            $created = [];
+            $errors = [];
+            $conflicts = [];
+
+            DB::beginTransaction();
+
+            foreach ($request->courses as $index => $courseData) {
+                try {
+                    // Vérifier les conflits
+                    $courseConflicts = $this->conflictDetectionService->detectConflicts($courseData);
+                    
+                    if (!empty($courseConflicts)) {
+                        $conflicts[] = [
+                            'index' => $index,
+                            'data' => $courseData,
+                            'conflicts' => $courseConflicts,
+                        ];
+                        continue;
+                    }
+
+                    // Créer le cours
+                    $scheduledCourse = $this->scheduledCourseService->create($courseData);
+                    $created[] = new ScheduledCourseResource($scheduledCourse->load([
+                        'timeSlot',
+                        'room.building',
+                        'program.classGroup.department',
+                        'program.classGroup.academicYear',
+                        'program.courseElementProfessor.courseElement.teachingUnit',
+                        'program.courseElementProfessor.professor'
+                    ]));
+                } catch (Exception $e) {
+                    $errors[] = [
+                        'index' => $index,
+                        'data' => $courseData,
+                        'error' => $e->getMessage(),
+                    ];
+                }
+            }
+
+            if (!empty($conflicts) || !empty($errors)) {
+                DB::rollBack();
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Certains cours n\'ont pas pu être créés',
+                    'data' => [
+                        'created' => [],
+                        'conflicts' => $conflicts,
+                        'errors' => $errors,
+                        'summary' => [
+                            'total' => count($request->courses),
+                            'created_count' => 0,
+                            'conflict_count' => count($conflicts),
+                            'error_count' => count($errors),
+                        ],
+                    ],
+                ], 422);
+            }
+
+            DB::commit();
+
+            return $this->successResponse([
+                'created' => $created,
+                'summary' => [
+                    'total' => count($request->courses),
+                    'created_count' => count($created),
+                    'conflict_count' => 0,
+                    'error_count' => 0,
+                ],
+            ], count($created) . ' cours créés avec succès');
+
+        } catch (Exception $e) {
+            DB::rollBack();
+            return $this->errorResponse(
+                'Erreur lors de la création en masse : ' . $e->getMessage(),
+                500
+            );
+        }
     }
 }

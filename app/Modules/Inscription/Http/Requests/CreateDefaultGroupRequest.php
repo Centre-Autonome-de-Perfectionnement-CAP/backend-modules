@@ -17,7 +17,7 @@ class CreateDefaultGroupRequest extends FormRequest
             'academic_year_id' => 'required|exists:academic_years,id',
             'department_id' => 'required|exists:departments,id',
             'study_level' => 'required|string',
-            'cohort' => 'required|string',
+            'cohort' => 'nullable|string',
         ];
     }
 }

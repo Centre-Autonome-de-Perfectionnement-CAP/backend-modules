@@ -22,15 +22,23 @@ Route::prefix('api/emploi-temps')->group(function () {
     
     // Scheduled Courses (Cours planifiés)
     Route::apiResource('scheduled-courses', ScheduledCourseController::class);
+    Route::post('scheduled-courses/bulk-create', [ScheduledCourseController::class, 'bulkCreate']);
     Route::post('scheduled-courses/check-conflicts', [ScheduledCourseController::class, 'checkConflicts']);
     Route::post('scheduled-courses/{scheduledCourse}/cancel', [ScheduledCourseController::class, 'cancel']);
     Route::post('scheduled-courses/{scheduledCourse}/update-hours', [ScheduledCourseController::class, 'updateHours']);
     Route::post('scheduled-courses/{scheduledCourse}/exclude-date', [ScheduledCourseController::class, 'excludeDate']);
     Route::get('scheduled-courses/{scheduledCourse}/occurrences', [ScheduledCourseController::class, 'getOccurrences']);
+    Route::post('scheduled-courses/renew-schedule', [ScheduledCourseController::class, 'renewSchedule']);
+    Route::post('scheduled-courses/generate-schedule', [ScheduledCourseController::class, 'generateSchedule']);
     
     // Schedule Views (Vues d'emploi du temps)
     Route::get('schedule/class-group/{classGroupId}', [ScheduledCourseController::class, 'getByClassGroup']);
     Route::get('schedule/professor/{professorId}', [ScheduledCourseController::class, 'getByProfessor']);
     Route::get('schedule/room/{roomId}', [ScheduledCourseController::class, 'getByRoom']);
+    
+    // PDF Downloads (Téléchargement PDF)
+    Route::get('schedule/class-group/{classGroupId}/pdf', [ScheduledCourseController::class, 'downloadClassGroupSchedulePDF']);
+    Route::get('schedule/professor/{professorId}/pdf', [ScheduledCourseController::class, 'downloadProfessorSchedulePDF']);
+    Route::get('schedule/room/{roomId}/pdf', [ScheduledCourseController::class, 'downloadRoomSchedulePDF']);
     
 }); // Fin du groupe api/emploi-temps
