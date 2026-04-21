@@ -158,7 +158,10 @@
             <div style="text-indent: 2em; font-size: 18px; line-height: 1.8; text-align: justify ;text-align: right; ">Fait à Abomey-Calavi, le <?= date('d/m/Y'); ?>.</div>
 
              <br/>
-            <br/>
+             <br/>
+             <br/>
+             <br/>
+             <br/>
             <div style="font-weight: bold; text-indent: 2em; font-size: 18px; line-height: 1.8; text-align: justify ;text-align: right; ">{{ $titre }} {{ $nom }} {{ $prenom }}</div>
             <br/>
             
