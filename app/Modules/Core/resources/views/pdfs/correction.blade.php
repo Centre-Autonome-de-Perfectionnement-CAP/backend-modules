@@ -103,14 +103,31 @@
 </head>
 <body>
     <div class="header">
+        @php
+            $epacPath = storage_path("images/epac.png");
+            $capPath = storage_path("images/cap.png");
+            $bannerPath = storage_path("images/banner.png");
+            
+            $epacBase64 = file_exists($epacPath) ? 'data:image/png;base64,' . base64_encode(file_get_contents($epacPath)) : '';
+            $capBase64 = file_exists($capPath) ? 'data:image/png;base64,' . base64_encode(file_get_contents($capPath)) : '';
+            $bannerBase64 = file_exists($bannerPath) ? 'data:image/png;base64,' . base64_encode(file_get_contents($bannerPath)) : '';
+        @endphp
 
-        <img src='{{ storage_path("images/epac.png") }}' alt="logo-epac" class="logo-header epac">
-        <img src='{{ storage_path("images/cap.png") }}' alt="logo-cap"  class="logo-header">
+        @if($epacBase64)
+        <img src='{{ $epacBase64 }}' alt="logo-epac" class="logo-header epac">
+        @endif
+        @if($capBase64)
+        <img src='{{ $capBase64 }}' alt="logo-cap"  class="logo-header">
+        @endif
         <h3 style="margin:0px">Université d'Abomey-Calavi</h3>
 
-        <img src='{{ storage_path("images/banner.png") }}' alt="header-separator-img" style="margin:0px">
+        @if($bannerBase64)
+        <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
+        @endif
         <h2 style="margin:0">Ecole Polytechnique d'Abomey-Calavi</h2>
-        <img src='{{ storage_path("images/banner.png") }}' alt="header-separator-img" style="margin:0px">
+        @if($bannerBase64)
+        <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
+        @endif
         <h1 style="margin:0;">Centre Autonome de Perfectionnement</h1>
         <p>
             01 BP 2009 COTONOU - TEl. 21 36 14 32/21 36 09 93 - Email. epac.uac@epac.uac.bj
