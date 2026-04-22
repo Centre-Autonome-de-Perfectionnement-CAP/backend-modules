@@ -166,7 +166,6 @@ class CycleController extends Controller
     }
 
     /**
-<<<<<<< HEAD
      * Liste des cohortes disponibles pour une année académique et optionnellement une filière
      */
     public function cohorts(Request $request): JsonResponse
@@ -203,18 +202,6 @@ class CycleController extends Controller
             ];
         }
         
-=======
-     * Liste des cohortes disponibles
-     */
-    public function cohorts(): JsonResponse
-    {
-        $cohorts = \DB::table('academic_paths')
-            ->distinct()
-            ->whereNotNull('cohort')
-            ->pluck('cohort')
-            ->values();
-
->>>>>>> eea2b06 (draft)
         return $this->successResponse(
             $cohorts,
             'Cohortes récupérées avec succès'

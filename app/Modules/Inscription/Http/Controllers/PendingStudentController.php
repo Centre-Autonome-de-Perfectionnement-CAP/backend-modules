@@ -220,7 +220,6 @@ class PendingStudentController extends Controller
     public function update(CreatePendingStudentRequest $request, PendingStudent $pendingStudent): JsonResponse
     {
         $data = $request->validated();
-<<<<<<< HEAD
         
         \Log::info('=== UPDATE PENDING STUDENT START ===', [
             'pending_student_id' => $pendingStudent->id,
@@ -245,9 +244,6 @@ class PendingStudentController extends Controller
                 'old_status' => $pendingStudent->status,
                 'new_status' => $data['status'],
             ]);
-=======
-        if (isset($data['status']) && $data['status'] !== $pendingStudent->status) {
->>>>>>> eea2b06 (draft)
             $pendingStudent = $this->pendingStudentService->changeStatus($pendingStudent, $data['status']);
             unset($data['status']); 
         }
