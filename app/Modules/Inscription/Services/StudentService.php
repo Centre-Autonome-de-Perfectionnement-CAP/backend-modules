@@ -237,11 +237,7 @@ class StudentService
                 'nom' => explode(' ', $student->nomPrenoms)[0] ?? '',
                 'prenoms' => implode(' ', array_slice(explode(' ', $student->nomPrenoms), 1)) ?: '',
                 'red' => $student->redoublant === 'Oui',
-<<<<<<< HEAD
                 'nationalite' => NationalityService::getNationality($student->nationality ?? ''),
-=======
-                'nationalite' => 'CI',
->>>>>>> eea2b06 (draft)
             ];
         });
 
