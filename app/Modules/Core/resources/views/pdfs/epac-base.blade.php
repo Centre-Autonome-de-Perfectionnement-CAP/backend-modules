@@ -114,26 +114,29 @@
         @php
             $epacLogo = storage_path("images/epac.png");
             $capLogo = storage_path("images/cap.png");
+            $epacBase64 = file_exists($epacLogo) && filesize($epacLogo) > 0 ? 'data:image/png;base64,' . base64_encode(file_get_contents($epacLogo)) : '';
+            $capBase64 = file_exists($capLogo) && filesize($capLogo) > 0 ? 'data:image/png;base64,' . base64_encode(file_get_contents($capLogo)) : '';
         @endphp
-        @if(file_exists($epacLogo) && filesize($epacLogo) > 0)
-        <img src='{{ $epacLogo }}' alt="logo-epac" class="logo-header epac">
+        @if($epacBase64)
+        <img src='{{ $epacBase64 }}' alt="logo-epac" class="logo-header epac">
         @endif
-        @if(file_exists($capLogo) && filesize($capLogo) > 0)
-        <img src='{{ $capLogo }}' alt="logo-cap"  class="logo-header">
+        @if($capBase64)
+        <img src='{{ $capBase64 }}' alt="logo-cap"  class="logo-header">
         @endif
         <h3 style="margin:0px">Université d'Abomey-Calavi</h3>
         @php
             $bannerImg = storage_path("images/banner.png");
             $hasBanner = file_exists($bannerImg) && filesize($bannerImg) > 0;
+            $bannerBase64 = $hasBanner ? 'data:image/png;base64,' . base64_encode(file_get_contents($bannerImg)) : '';
         @endphp
-        @if($hasBanner)
-        <img src='{{ $bannerImg }}' alt="header-separator-img" style="margin:0px">
+        @if($bannerBase64)
+        <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
         @else
         <hr style="margin: 5px 0;">
         @endif
         <h2 style="margin:0">Ecole Polytechnique d'Abomey-Calavi</h2>
-        @if($hasBanner)
-        <img src='{{ $bannerImg }}' alt="header-separator-img" style="margin:0px">
+        @if($bannerBase64)
+        <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
         @else
         <hr style="margin: 5px 0;">
         @endif
