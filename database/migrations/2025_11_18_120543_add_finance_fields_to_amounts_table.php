@@ -11,11 +11,7 @@ return new class extends Migration
         Schema::table('amounts', function (Blueprint $table) {
             $table->string('type')->default('scolarite')->after('id');
             $table->string('libelle')->nullable()->after('type');
-<<<<<<< HEAD
-            $table->boolean('is_active')->default(true);
-=======
             $table->boolean('is_active')->default(true)->after('sponsored_amount');
->>>>>>> eea2b06 (draft)
             $table->decimal('penalty_amount', 10, 2)->nullable()->after('is_active');
             $table->enum('penalty_type', ['fixed', 'percentage'])->default('fixed')->after('penalty_amount');
             $table->boolean('penalty_active')->default(false)->after('penalty_type');

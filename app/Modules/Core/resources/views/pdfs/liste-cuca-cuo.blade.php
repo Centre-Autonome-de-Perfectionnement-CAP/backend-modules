@@ -67,16 +67,11 @@
             border-collapse: collapse;
             margin: 10px 0 0 0;
             text-align: center;
-<<<<<<< HEAD
-=======
-            page-break-inside: avoid;
->>>>>>> eea2b06 (draft)
           }
           .liste th, td {
               border: 0.5px solid black;
               padding: 5px;
           }
-<<<<<<< HEAD
      
  
 thead {
@@ -90,12 +85,6 @@ thead {
 .liste tr {
     page-break-inside: auto !important;
 }
-=======
-          .liste tr {
-              page-break-inside: avoid;
-              page-break-after: auto;
-          }
->>>>>>> eea2b06 (draft)
 
           .name{
             padding: 5px;
@@ -118,25 +107,11 @@ thead {
 
       <main>
           <table class="entete">
-<<<<<<< HEAD
             <tbody>
                 <tr>
                   <th scope="row" class="title">Etablissement: </th>
                   <td>ECOLE POLYTECHNIQUE D'ABOMEY-CALAVI</td>
                 </tr>
-=======
-            <thead>
-                <tr>
-                    <th scope="row"  rowspan="2" ></th>
-                </tr>
-            </thead> 
-            <br />
-            <tbody>
-                <tr>
-                  <th scope="row" class="title">Etablissement: </th>
-                  <td>ECOLE POLYTECHNIQUE D'ABOMEY-CALAVI</td>
-                </tr>
->>>>>>> eea2b06 (draft)
                 <tr>
                   <th scope="row" class="title">DEPARTEMENT: </th>
                   <td>Centre Autonome de Perfectionnement (CAP)</td>
