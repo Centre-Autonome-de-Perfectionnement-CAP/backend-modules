@@ -111,19 +111,4 @@ class DatabaseAdapter
         // Otherwise, it's not a valid ID
         return null;
     }
-
-    /**
-     * Extraction JSON
-     * MySQL: JSON_UNQUOTE(JSON_EXTRACT(column, '$.path'))
-     * PostgreSQL: column->>'path'
-     */
-    public static function jsonExtract(string $column, string $path): string
-    {
-        if (self::isPostgres()) {
-            // Convertir $.phone en 'phone'
-            $cleanPath = str_replace('$.', '', $path);
-            return "{$column}->'{$cleanPath}'";
-        }
-        return "JSON_UNQUOTE(JSON_EXTRACT({$column}, '{$path}'))";
-    }
 }
