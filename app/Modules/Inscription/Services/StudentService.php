@@ -347,16 +347,10 @@ class StudentService
                 'students.id',
                 'student_pending_student.id as student_pending_student_id',
                 'students.student_id_number as matricule',
-<<<<<<< HEAD
-                DB::raw(DatabaseAdapter::concat(['personal_information.last_name', "' '", 'personal_information.first_names']) . ' as nomPrenoms'),
+                DB::raw("CONCAT(personal_information.last_name, ' ', personal_information.first_names) as nomPrenoms"),
                 'pending_students.level as niveau',
                 'class_groups.group_name as groupe',
                 'personal_information.nationality'
-=======
-                DB::raw("CONCAT(personal_information.last_name, ' ', personal_information.first_names) as nomPrenoms"),
-                'pending_students.level as niveau',
-                'class_groups.group_name as groupe'
->>>>>>> eea2b06 (draft)
             );
 
         // Filtres
