@@ -29,15 +29,6 @@ class ProgramService
             $query->where('academic_year_id', $filters['academic_year_id']);
         }
 
-<<<<<<< HEAD
-=======
-        // Filtre par année académique
-        if (!empty($filters['academic_year_id'])) {
-            $query->where('academic_year_id', $filters['academic_year_id']);
-        }
-
-        // Filtre par élément de cours
->>>>>>> f355611 (draft)
         if (!empty($filters['course_element_id'])) {
             $query->whereHas('courseElementProfessor', function ($q) use ($filters) {
                 $q->where('course_element_id', $filters['course_element_id']);
