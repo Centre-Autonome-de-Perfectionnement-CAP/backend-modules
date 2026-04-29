@@ -411,16 +411,6 @@ class ContratController extends Controller
             $professor = $contrat->professor;
             $adminEmail = config('mail.admin_email', config('mail.from.address'));
 
-            if ($adminEmail) {
-                Mail::to($adminEmail)->send(
-                    new \App\Mail\ContratRejectedNotification([
-                        'contrat_number'    => $contrat->contrat_number,
-                        'professor_name'    => $professor?->full_name ?? 'Inconnu',
-                        'rejection_reason'  => $request->input('rejection_reason'),
-                        'rejected_at'       => now()->format('d/m/Y à H:i'),
-                    ])
-                );
-            }
         } catch (\Exception $e) {
             // Ne bloque pas la réponse si l'email échoue
             Log::warning("Email de notification de rejet non envoyé pour contrat #{$contrat->id} : " . $e->getMessage());
@@ -559,7 +549,7 @@ class ContratController extends Controller
             return response()->json(['success' => true, 'data' => []]);
         }
 
-        $contrats = Contrat::with([
+        $contrats = Contrat::where('status', '!=', 'pending')->with([
             'professor',
             'cycle',
             'academicYear',

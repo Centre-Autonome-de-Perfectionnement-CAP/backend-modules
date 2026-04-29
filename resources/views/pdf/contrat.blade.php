@@ -214,7 +214,7 @@ Le Centre retient par la présente les prestations de l'enseignant pour l'exécu
 @php
     $totalHours = 0;
     foreach($contrat->courseElementProfessors as $prog) {
-        $totalHours += $prog->pivot->hours ?? 0;
+        $totalHours += $prog->courseElement?->hours ?? 0;
     }
     echo $totalHours;
 @endphp
@@ -224,7 +224,8 @@ Le Centre retient par la présente les prestations de l'enseignant pour l'exécu
 @foreach($contrat->courseElementProfessors as $prog)
 <div>
 ({{ $prog->courseElement?->code ?? '' }}) : {{ $prog->courseElement?->name ?? '' }}
-en {{ $prog->classGroup?->name ?? 'Classe non spécifiée' }} et pendant {{ $prog->pivot->hours ?? '' }} H
+
+en {{ $contrat->cycle?->name ?? 'Cycle non spécifié' }} {{ $contrat->cycle?->years_count ?? 'Année non spécifiée' }} et pendant {{ $prog->courseElement?->hours ?? 'Na' }} H
 </div>
 @endforeach
 

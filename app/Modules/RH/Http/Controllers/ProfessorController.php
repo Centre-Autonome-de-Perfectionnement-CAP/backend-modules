@@ -58,14 +58,11 @@ class ProfessorController extends Controller
     }
 
     // ───────────────────────── CREATE
-    public function store(CreateProfessorRequest $request): JsonResponse
-{
+    public function store(CreateProfessorRequest $request): JsonResponse{
 
         try {
             $data = $request->validated();
 
-            // ✅ CORRECTION : passer les fichiers au service
-            // Le service s'occupe lui-même du stockage des fichiers
             $ribFile = $request->file('rib');
             $ifuFile = $request->file('ifu');
 

@@ -5,68 +5,63 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <title>{{ $details['title'] }}</title>
-  <!--[if mso]>
-  <noscript>
-    <xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml>
-  </noscript>
-  <![endif]-->
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background-color: #f0f2f5; font-family: 'Segoe UI', Helvetica, Arial, sans-serif; color: #1a1a2e; -webkit-font-smoothing: antialiased; }
-    .email-wrapper { width: 100%; background-color: #f0f2f5; padding: 40px 16px; }
+    body { background-color: #eef5f0; font-family: 'Segoe UI', Helvetica, Arial, sans-serif; color: #1a2e1f; -webkit-font-smoothing: antialiased; }
+    .email-wrapper { width: 100%; background-color: #eef5f0; padding: 40px 16px; }
     .email-container { max-width: 600px; margin: 0 auto; }
 
     /* Header */
-    .email-header { background: linear-gradient(135deg, #0d3b6e 0%, #1a5fa8 60%, #0d3b6e 100%); border-radius: 12px 12px 0 0; padding: 36px 40px; text-align: center; }
+    .email-header { background-color: #1b5e2a; border-radius: 12px 12px 0 0; padding: 36px 40px; text-align: center; }
     .header-logo-row { display: flex; align-items: center; justify-content: center; gap: 24px; margin-bottom: 28px; }
     .header-logo-divider { width: 1px; height: 40px; background-color: rgba(255,255,255,0.3); }
-    .header-institution { color: rgba(255,255,255,0.85); font-size: 11px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px; }
+    .header-institution { color: rgba(255,255,255,0.8); font-size: 11px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px; }
     .header-title { color: #ffffff; font-size: 22px; font-weight: 700; line-height: 1.3; }
     .header-subtitle { color: rgba(255,255,255,0.75); font-size: 13px; margin-top: 6px; }
 
     /* Badge statut */
-    .status-badge { display: inline-block; background-color: #f59e0b; color: #1a1a2e; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 5px 16px; border-radius: 20px; margin-top: 18px; }
+    .status-badge { display: inline-block; background-color: #ffffff; color: #1b5e2a; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 5px 16px; border-radius: 20px; margin-top: 18px; border: 1px solid rgba(255,255,255,0.3); }
 
     /* Body */
     .email-body { background-color: #ffffff; padding: 40px; }
-    .greeting { font-size: 16px; color: #1a1a2e; margin-bottom: 16px; }
-    .greeting strong { color: #0d3b6e; }
-    .intro-text { font-size: 14px; line-height: 1.75; color: #4a4a6a; margin-bottom: 28px; }
+    .greeting { font-size: 16px; color: #1a2e1f; margin-bottom: 16px; }
+    .greeting strong { color: #1b5e2a; }
+    .intro-text { font-size: 14px; line-height: 1.75; color: #2c4a2e; margin-bottom: 28px; }
 
     /* Info card */
-    .info-card { background-color: #f8faff; border: 1px solid #dbe8ff; border-radius: 10px; overflow: hidden; margin-bottom: 28px; }
-    .info-card-header { background-color: #0d3b6e; padding: 12px 20px; }
+    .info-card { background-color: #f5faf6; border: 1px solid #c8e0cf; border-radius: 10px; overflow: hidden; margin-bottom: 28px; }
+    .info-card-header { background-color: #1b5e2a; padding: 12px 20px; }
     .info-card-header-text { color: #ffffff; font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
     .info-table { width: 100%; border-collapse: collapse; }
-    .info-table tr { border-bottom: 1px solid #e8eeff; }
+    .info-table tr { border-bottom: 1px solid #d4e8da; }
     .info-table tr:last-child { border-bottom: none; }
     .info-table td { padding: 11px 20px; font-size: 13px; }
-    .info-table td:first-child { color: #6b7ab0; font-weight: 500; width: 45%; }
-    .info-table td:last-child { color: #1a1a2e; font-weight: 600; }
+    .info-table td:first-child { color: #4a7c51; font-weight: 500; width: 45%; }
+    .info-table td:last-child { color: #1a2e1f; font-weight: 600; }
 
     /* CTA principal */
     .cta-section { text-align: center; margin: 32px 0; }
-    .cta-label { font-size: 13px; color: #6b7ab0; margin-bottom: 14px; }
-    .btn-primary { display: inline-block; background: linear-gradient(135deg, #0d3b6e, #1a5fa8); color: #ffffff !important; text-decoration: none !important; font-size: 15px; font-weight: 700; padding: 15px 40px; border-radius: 8px; letter-spacing: 0.3px; }
-    .btn-primary:hover { background: #0a2f58; }
+    .cta-label { font-size: 13px; color: #4a7c51; margin-bottom: 14px; }
+    .btn-primary { display: inline-block; background-color: #1b5e2a; color: #ffffff !important; text-decoration: none !important; font-size: 15px; font-weight: 700; padding: 15px 40px; border-radius: 8px; letter-spacing: 0.3px; border: none; }
+    .btn-primary:hover { background-color: #0e3d19; }
 
     /* Notice urgence */
-    .notice-box { background-color: #fff8ed; border: 1px solid #fcd89a; border-radius: 8px; padding: 14px 18px; margin-bottom: 24px; }
-    .notice-box p { font-size: 13px; color: #92500a; line-height: 1.6; }
-    .notice-box strong { color: #7a3f06; }
+    .notice-box { background-color: #f5faf6; border-left: 4px solid #1b5e2a; border-right: 1px solid #c8e0cf; border-top: 1px solid #c8e0cf; border-bottom: 1px solid #c8e0cf; border-radius: 8px; padding: 14px 18px; margin-bottom: 24px; }
+    .notice-box p { font-size: 13px; color: #2c4a2e; line-height: 1.6; }
+    .notice-box strong { color: #1b5e2a; }
 
-    /* Séparateur */
-    .divider { border: none; border-top: 1px solid #e8eeff; margin: 24px 0; }
+    /* Separateur */
+    .divider { border: none; border-top: 1px solid #d4e8da; margin: 24px 0; }
 
     /* Lien texte alternatif */
-    .link-fallback { font-size: 12px; color: #6b7ab0; line-height: 1.6; margin-bottom: 20px; }
-    .link-fallback a { color: #1a5fa8; word-break: break-all; text-decoration: underline; }
+    .link-fallback { font-size: 12px; color: #4a7c51; line-height: 1.6; margin-bottom: 20px; }
+    .link-fallback a { color: #1b5e2a; word-break: break-all; text-decoration: underline; }
 
     /* Footer */
-    .email-footer { background-color: #f8faff; border: 1px solid #dbe8ff; border-radius: 0 0 12px 12px; padding: 24px 40px; text-align: center; }
-    .footer-institution { font-size: 12px; font-weight: 700; color: #0d3b6e; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
-    .footer-address { font-size: 11px; color: #8896c0; line-height: 1.6; }
-    .footer-legal { font-size: 11px; color: #b0bad8; margin-top: 14px; padding-top: 14px; border-top: 1px solid #dbe8ff; }
+    .email-footer { background-color: #f5faf6; border: 1px solid #c8e0cf; border-radius: 0 0 12px 12px; padding: 24px 40px; text-align: center; }
+    .footer-institution { font-size: 12px; font-weight: 700; color: #1b5e2a; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+    .footer-address { font-size: 11px; color: #5a8c64; line-height: 1.6; }
+    .footer-legal { font-size: 11px; color: #8fba99; margin-top: 14px; padding-top: 14px; border-top: 1px solid #c8e0cf; }
 
     @media only screen and (max-width: 480px) {
       .email-header { padding: 24px 20px; }
@@ -77,7 +72,7 @@
       .header-title { font-size: 18px; }
       .btn-primary { display: block; padding: 14px 20px; }
       .info-table td { display: block; width: 100%; padding: 6px 16px; }
-      .info-table td:first-child { padding-bottom: 2px; background-color: #f0f4ff; font-size: 11px; }
+      .info-table td:first-child { padding-bottom: 2px; background-color: #eaf5ed; font-size: 11px; }
     }
   </style>
 </head>
@@ -85,16 +80,16 @@
   <div class="email-wrapper">
     <div class="email-container">
 
-      <!-- ── En-tête ── -->
+      <!-- Header -->
       <div class="email-header">
         <div class="header-logo-row">
           <div>
-            <div style="color:rgba(255,255,255,0.6);font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;margin-bottom:2px;">École Polytechnique</div>
+            <div style="color:rgba(255,255,255,0.7);font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;margin-bottom:2px;">École Polytechnique</div>
             <div style="color:#ffffff;font-size:13px;font-weight:700;letter-spacing:1px;">d'Abomey-Calavi</div>
           </div>
           <div class="header-logo-divider"></div>
           <div>
-            <div style="color:rgba(255,255,255,0.6);font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;margin-bottom:2px;">Centre Autonome de</div>
+            <div style="color:rgba(255,255,255,0.7);font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;margin-bottom:2px;">Centre Autonome de</div>
             <div style="color:#ffffff;font-size:13px;font-weight:700;letter-spacing:1px;">Perfectionnement</div>
           </div>
         </div>
@@ -105,7 +100,7 @@
         <div><span class="status-badge">Action requise</span></div>
       </div>
 
-      <!-- ── Corps ── -->
+      <!-- Body -->
       <div class="email-body">
         <p class="greeting">Bonjour, <strong>{{ $details['professor_name'] }}</strong>,</p>
         <p class="intro-text">
@@ -118,7 +113,7 @@
         <!-- Fiche contrat -->
         <div class="info-card">
           <div class="info-card-header">
-            <span class="info-card-header-text">Récapitulatif du contrat</span>
+            <span class="info-card-header-text">Recapitulatif du contrat</span>
           </div>
           <table class="info-table">
             <tr>
@@ -181,17 +176,17 @@
           <a href="{{ $details['contrat_url'] }}">{{ $details['contrat_url'] }}</a>
         </div>
 
-        <p style="font-size:13px;color:#6b7ab0;line-height:1.7;">
+        <p style="font-size:13px;color:#5a8c64;line-height:1.7;">
           Pour toute question relative à ce contrat, veuillez contacter le service
           des ressources humaines du CAP directement par email ou par téléphone.
         </p>
       </div>
 
-      <!-- ── Pied de page ── -->
+      <!-- Footer -->
       <div class="email-footer">
-        <div class="footer-institution">CAP &mdash; École Polytechnique d'Abomey-Calavi</div>
+        <div class="footer-institution">CAP — École Polytechnique d'Abomey-Calavi</div>
         <div class="footer-address">
-          Abomey-Calavi, Bénin &bull; Service des Ressources Humaines
+          Abomey-Calavi, Bénin • Service des Ressources Humaines
         </div>
         <div class="footer-legal">
           Cet email a été envoyé automatiquement par le système de gestion RH du CAP.
