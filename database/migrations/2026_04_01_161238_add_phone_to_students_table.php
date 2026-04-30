@@ -11,9 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('students', function (Blueprint $table) {
+        // On vérifie si la colonne n'existe pas avant de tenter de l'ajouter
+        if (!Schema::hasColumn('students', 'phone')) {
+            Schema::table('students', function (Blueprint $table) {
                 $table->string('phone')->nullable();
-        });
+            });
+        }
     }
 
     /**
@@ -21,8 +24,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('students', function (Blueprint $table) {
-            //
-        });
+        if (Schema::hasColumn('students', 'phone')) {
+            Schema::table('students', function (Blueprint $table) {
+                $table->dropColumn('phone');
+            });
+        }
     }
 };

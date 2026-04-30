@@ -1,7 +1,6 @@
 <?php
 
 namespace App\Modules\Attendance\Exports;
-
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
@@ -38,7 +37,7 @@ class AttendanceExport implements FromArray, WithStyles, WithColumnWidths, WithT
     {
         $isManagement = $this->type === 'management';
 
-        // ── Ligne 1 : institution (fusionnée après dans styles) ──
+        //  Ligne 1 : institution (fusionnée après dans styles) 
         $rows = [];
 
         // Ligne 1 : EPAC | institution | CAP
@@ -74,7 +73,7 @@ class AttendanceExport implements FromArray, WithStyles, WithColumnWidths, WithT
 
         $rows[] = [''];
 
-        // ── En-têtes colonnes ──
+        // En-têtes colonnes 
         if ($isManagement) {
             $rows[] = ['N°', 'Matricule', 'Noms et Prénoms', 'Contact', 'Matière', 'Date', 'Créneau', 'Statut'];
         } else {
@@ -83,7 +82,7 @@ class AttendanceExport implements FromArray, WithStyles, WithColumnWidths, WithT
 
         $this->dataStartRow = count($rows); // ligne Excel où commencent les données (après en-têtes)
 
-        // ── Données ──
+        //  Données
         foreach ($this->students as $idx => $s) {
             if ($isManagement) {
                 $statusText = ($s->status ?? '') === 'present' ? 'Présent' : 'Absent';
@@ -111,7 +110,7 @@ class AttendanceExport implements FromArray, WithStyles, WithColumnWidths, WithT
 
         $this->lastDataRow = count($rows);
 
-        // ── Pied de page ──
+        // Pied de page
         $rows[] = [''];
 
         $presents = count(array_filter($this->students, fn($s) => ($s->status ?? '') === 'present'));

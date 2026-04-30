@@ -20,8 +20,7 @@ class AttendanceServiceProvider extends ServiceProvider
 
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
-        //  Charge les vues du module avec le namespace "attendance"
-         $this->loadViewsFrom(__DIR__.'/../Resources/views', 'attendance');
-
+        // CORRECTION : 'resources' en minuscules (Linux est case-sensitive)
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'attendance');
     }
 }

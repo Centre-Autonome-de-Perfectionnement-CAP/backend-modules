@@ -12,10 +12,10 @@ class DatabaseSeeder extends Seeder
         // Désactiver les contraintes FK pendant le seeding
         DB::statement('SET FOREIGN_KEY_CHECKS=0;');
 
-        $this->command->info('🌱 Début du seeding...');
+        $this->command->info(' Début du seeding...');
 
-        // ── Seeders existants du projet ──────────────────────
-        $this->command->info('📋 Données de référence...');
+        // ── Seeders existants du projet 
+        $this->command->info(' Données de référence...');
         $this->call([
             RoleSeeder::class,
             EntryDiplomaSeeder::class,
@@ -24,8 +24,8 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
         ]);
 
-        // ── Seeders importés depuis l'ancienne base ──────────
-        $this->command->info('📦 Import des anciennes données...');
+        //  Seeders importés depuis l'ancienne base 
+        $this->command->info(' Import des anciennes données...');
         $this->call([
             CyclesSeeder::class,
             GradesSeeder::class,
@@ -57,11 +57,12 @@ class DatabaseSeeder extends Seeder
             ImportantInformationsSeeder::class,
             ContactsSeeder::class,
             PaymentsSeeder::class,
+            
         ]);
 
         // Réactiver les contraintes FK
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
-        $this->command->info('✅ Seeding terminé !');
+        $this->command->info(' Seeding terminé !');
     }
 }
