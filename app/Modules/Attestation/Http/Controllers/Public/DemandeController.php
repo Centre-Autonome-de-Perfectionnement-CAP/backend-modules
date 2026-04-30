@@ -292,17 +292,29 @@ class DemandeController extends Controller
         }
 
         $statusPublic = match (true) {
-            $demande->status === 'pending'   => 'pending',
             $demande->status === 'rejected'  => 'rejected',
             $demande->status === 'ready'     => 'ready',
             $demande->status === 'delivered' => 'delivered',
             default                          => 'processing',
         };
 
+        // Récupérer le motif de la réserve si le dossier est sous réserve
+        $flagReason = null;
+        if (!empty($demande->has_flag)) {
+            $history = DB::table('document_request_histories')
+                ->where('document_request_id', $demande->id)
+                ->where('action', 'like', '%_flagged')
+                ->latest('id')
+                ->first();
+            $flagReason = $history ? $history->comment : 'Dossier validé sous réserve.';
+        }
+
         return response()->json([
             'reference'       => $demande->reference,
             'type'            => $demande->type,
             'status'          => $statusPublic,
+            'has_flag'        => !empty($demande->has_flag),
+            'flag_reason'     => $flagReason,
             'submitted_at'    => $demande->created_at,
             'rejected_reason' => $demande->status === 'rejected' ? $demande->rejected_reason : null,
         ]);
