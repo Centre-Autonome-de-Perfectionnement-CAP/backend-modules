@@ -152,6 +152,33 @@ class NotificationService
     }
 
     /**
+     * Dossier validé sous réserve.
+     * Notifie : étudiant (email + WhatsApp).
+     */
+    public function sendSousReserve(object $demande, string $motif): void
+    {
+        $typeLabel = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+
+        $this->sendMailToStudent($demande, [
+            'view'    => 'core::emails.demande-sous-reserve',
+            'subject' => "Action requise : Votre dossier est sous réserve — Réf : {$demande->reference}",
+            'vars'    => [
+                'reference' => $demande->reference,
+                'type'      => $typeLabel,
+                'motif'     => $motif,
+            ],
+        ]);
+
+        if (!empty($demande->demandeur_whatsapp)) {
+            $this->whatsApp->send(
+                $demande->demandeur_whatsapp,
+                $this->whatsApp->templateSousReserve($demande->reference, $typeLabel, $motif),
+                "sous_reserve:{$demande->reference}"
+            );
+        }
+    }
+
+    /**
      * Document prêt à être retiré.
      * Notifie : étudiant (email + WhatsApp).
      */

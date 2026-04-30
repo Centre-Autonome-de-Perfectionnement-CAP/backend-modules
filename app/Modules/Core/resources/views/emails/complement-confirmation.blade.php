@@ -1,82 +1,70 @@
+{{-- resources/views/core/emails/complement-confirmation.blade.php --}}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Complément de dossier reçu</title>
+  <title>Complément de dossier reçu — {{ $reference ?? '—' }}</title>
   <style>
-    body { margin: 0; padding: 0; background: #f4f6f8; font-family: 'Segoe UI', Arial, sans-serif; color: #1a2b2b; }
-    .wrapper { max-width: 600px; margin: 32px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
-    .header  { background: #326761; padding: 32px 40px; text-align: center; }
-    .header h1 { color: #ffffff; margin: 0; font-size: 22px; font-weight: 700; }
-    .header p  { color: #b2d8d4; margin: 6px 0 0; font-size: 14px; }
-    .body    { padding: 32px 40px; }
-    .salut   { font-size: 16px; margin-bottom: 16px; }
-    .intro   { font-size: 14px; line-height: 1.7; color: #3d5555; margin-bottom: 24px; }
-    .ref-box { background: #f0f9f7; border: 1px solid #b2d8d4; border-radius: 10px; padding: 16px 20px; margin-bottom: 24px; text-align: center; }
-    .ref-box .label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #326761; font-weight: 600; }
-    .ref-box .value { font-family: 'Courier New', monospace; font-size: 20px; font-weight: 800; color: #326761; margin-top: 4px; }
-    .pieces-block { background: #f8fafb; border: 1px solid #e0e9e8; border-radius: 10px; padding: 16px 20px; margin-bottom: 24px; }
-    .pieces-block h3 { font-size: 13px; font-weight: 700; color: #326761; margin: 0 0 12px; text-transform: uppercase; letter-spacing: .05em; }
-    .pieces-block ul { margin: 0; padding: 0; list-style: none; }
-    .pieces-block li { padding: 5px 0; font-size: 13px; color: #3d5555; display: flex; align-items: center; gap: 8px; }
-    .pieces-block li::before { content: '✔'; color: #326761; font-weight: 700; font-size: 12px; }
-    .info-box { background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 14px 18px; margin-bottom: 24px; font-size: 13px; color: #78350f; line-height: 1.6; }
-    .footer  { background: #f0f9f7; padding: 20px 40px; text-align: center; font-size: 12px; color: #6b8e8a; border-top: 1px solid #e0e9e8; }
-    .footer a { color: #326761; text-decoration: none; }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,'Open Sans','Helvetica Neue',sans-serif; background:#f4f6f8; color:#1a1a2e; font-size:15px; line-height:1.6; }
+    .wrapper { max-width:600px; margin:32px auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.05); }
+    .header { background:#1e293b; padding:24px 32px; text-align:center; border-bottom:4px solid #326761; }
+    .header h1 { color:#ffffff; font-size:20px; font-weight:600; letter-spacing:0.5px; }
+    .body { padding:32px; }
+    .greeting { font-size:16px; font-weight:600; margin-bottom:16px; color:#0f172a; }
+    .text { margin-bottom:24px; color:#475569; }
+    .info-card { background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:20px; margin-bottom:24px; }
+    .info-row { display:flex; margin-bottom:12px; }
+    .info-row:last-child { margin-bottom:0; }
+    .info-label { width:120px; color:#64748b; font-size:13px; text-transform:uppercase; font-weight:600; }
+    .info-value { color:#0f172a; font-weight:500; flex:1; }
+    .ref-badge { background:#e2e8f0; color:#334155; padding:2px 8px; border-radius:4px; font-family:monospace; font-size:14px; letter-spacing:1px; }
+    .pieces-list { margin-top:12px; padding-left:20px; color:#475569; }
+    .pieces-list li { margin-bottom:6px; }
+    .footer { background:#f8fafc; padding:20px 32px; text-align:center; font-size:13px; color:#64748b; border-top:1px solid #e2e8f0; }
   </style>
 </head>
 <body>
   <div class="wrapper">
-
     <div class="header">
-      <h1>✅ Complément de dossier reçu</h1>
-      <p>CAP-EPAC — École Polytechnique d'Abomey-Calavi</p>
+      <h1>{{ config('app.name', 'CAP-EPAC') }}</h1>
     </div>
-
     <div class="body">
-      <p class="salut">Bonjour <strong>{{ $nomComplet }}</strong>,</p>
-
-      <p class="intro">
-        Nous avons bien reçu votre complément de dossier déposé le
-        <strong>{{ $dateComplement }}</strong>.
-        Les nouvelles pièces ont été enregistrées et transmises au secrétariat pour traitement.
+      <p class="greeting">Bonjour {{ $nomComplet ?? '' }},</p>
+      <p class="text">
+        Nous accusons réception des pièces complémentaires que vous avez fournies pour votre dossier.
       </p>
 
-      <!-- Numéro de référence -->
-      <div class="ref-box">
-        <div class="label">Numéro de référence — inchangé</div>
-        <div class="value">{{ $reference }}</div>
+      <div class="info-card">
+        <div class="info-row">
+          <div class="info-label">Référence</div>
+          <div class="info-value"><span class="ref-badge">{{ $reference ?? '—' }}</span></div>
+        </div>
+        <div class="info-row" style="flex-direction:column; margin-top:16px;">
+          <div class="info-label" style="margin-bottom:8px;">Pièces reçues</div>
+          <div class="info-value">
+            @if(!empty($piecesList) && count($piecesList) > 0)
+              <ul class="pieces-list">
+                @foreach($piecesList as $piece)
+                  <li>{{ $piece }}</li>
+                @endforeach
+              </ul>
+            @else
+              <em>Aucune pièce spécifiée</em>
+            @endif
+          </div>
+        </div>
       </div>
 
-      <!-- Liste des pièces -->
-      <div class="pieces-block">
-        <h3>Pièces déposées</h3>
-        <ul>
-          @foreach($piecesList as $piece)
-            <li>{{ $piece }}</li>
-          @endforeach
-        </ul>
-      </div>
-
-      <!-- Conseil -->
-      <div class="info-box">
-        ℹ️ <strong>Conservez ce numéro de référence</strong> pour suivre l'avancement de votre
-        dossier sur notre espace étudiant. Si vous avez des questions, contactez le secrétariat
-        du CAP-EPAC.
-      </div>
-
-      <p style="font-size:13px;color:#3d5555;">
-        Matricule associé : <strong>{{ $matricule }}</strong>
+      <p class="text">
+        Ces éléments ont été transmis au secrétariat pour vérification. Le traitement de votre demande va pouvoir reprendre.
       </p>
     </div>
-
     <div class="footer">
-      <p>CAP-EPAC — Université d'Abomey-Calavi, Bénin</p>
-      <p><a href="https://cap-epac.online">cap-epac.online</a></p>
-      <p style="margin-top:8px;color:#9ab5b2;">Ce message est généré automatiquement, merci de ne pas y répondre.</p>
+      <p>Cet e-mail a été généré automatiquement. Merci de ne pas y répondre.</p>
+      <p style="margin-top:8px;">Le Secrétariat du {{ config('app.name', 'CAP-EPAC') }}</p>
     </div>
-
   </div>
 </body>
 </html>

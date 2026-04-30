@@ -1,36 +1,61 @@
+{{-- resources/views/core/emails/demande-delivered.blade.php --}}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Confirmation de retrait — {{ $reference }}</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 0; }
-    .container { max-width: 600px; margin: 40px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-    .header { background: #6b7280; color: white; padding: 32px 40px; }
-    .header h1 { margin: 0; font-size: 22px; }
-    .body { padding: 32px 40px; color: #374151; line-height: 1.7; }
-    .ref { display: inline-block; background: #f3f4f6; color: #374151; font-family: monospace; padding: 4px 12px; border-radius: 4px; font-weight: bold; }
-    .info-box { background: #f9fafb; border-left: 4px solid #6b7280; padding: 16px 20px; border-radius: 4px; margin: 20px 0; }
-    .footer { background: #f9fafb; padding: 20px 40px; font-size: 12px; color: #9ca3af; text-align: center; }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,'Open Sans','Helvetica Neue',sans-serif; background:#f4f6f8; color:#1a1a2e; font-size:15px; line-height:1.6; }
+    .wrapper { max-width:600px; margin:32px auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.05); }
+    .header { background:#1e293b; padding:24px 32px; text-align:center; border-bottom:4px solid #326761; }
+    .header h1 { color:#ffffff; font-size:20px; font-weight:600; letter-spacing:0.5px; }
+    .body { padding:32px; }
+    .greeting { font-size:16px; font-weight:600; margin-bottom:16px; color:#0f172a; }
+    .text { margin-bottom:24px; color:#475569; }
+    .info-card { background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:20px; margin-bottom:24px; }
+    .info-row { display:flex; margin-bottom:12px; }
+    .info-row:last-child { margin-bottom:0; }
+    .info-label { width:120px; color:#64748b; font-size:13px; text-transform:uppercase; font-weight:600; }
+    .info-value { color:#0f172a; font-weight:500; flex:1; }
+    .ref-badge { background:#e2e8f0; color:#334155; padding:2px 8px; border-radius:4px; font-family:monospace; font-size:14px; letter-spacing:1px; }
+    .footer { background:#f8fafc; padding:20px 32px; text-align:center; font-size:13px; color:#64748b; border-top:1px solid #e2e8f0; }
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="wrapper">
     <div class="header">
-      <h1>📦 Remise de document confirmée</h1>
+      <h1>{{ config('app.name', 'CAP-EPAC') }}</h1>
     </div>
     <div class="body">
-      <p>Bonjour,</p>
-      <p>Nous confirmons la bonne remise de votre document.</p>
-      <div class="info-box">
-        <strong>Type de document :</strong> {{ $type }}<br>
-        <strong>Référence :</strong> <span class="ref">{{ $reference }}</span><br>
-        <strong>Date de remise :</strong> {{ now()->format('d/m/Y à H:i') }}
+      <p class="greeting">Bonjour,</p>
+      <p class="text">
+        Nous vous confirmons que le document suivant vous a été remis en mains propres. Votre dossier est désormais clos.
+      </p>
+
+      <div class="info-card">
+        <div class="info-row">
+          <div class="info-label">Référence</div>
+          <div class="info-value"><span class="ref-badge">{{ $reference }}</span></div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">Document</div>
+          <div class="info-value">{{ $type }}</div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">Date</div>
+          <div class="info-value">{{ now()->format('d/m/Y à H:i') }}</div>
+        </div>
       </div>
-      <p>Nous vous souhaitons bonne continuation dans vos études.</p>
-      <p>Cordialement,<br><strong>Le Secrétariat du CAP</strong></p>
+
+      <p class="text">
+        Nous vous remercions pour votre confiance et vous souhaitons une excellente continuation.
+      </p>
     </div>
     <div class="footer">
-      Cet email a été envoyé automatiquement. Merci de ne pas y répondre.
+      <p>Cet e-mail a été généré automatiquement. Merci de ne pas y répondre.</p>
+      <p style="margin-top:8px;">Le Secrétariat du {{ config('app.name', 'CAP-EPAC') }}</p>
     </div>
   </div>
 </body>

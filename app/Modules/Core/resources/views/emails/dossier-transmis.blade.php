@@ -1,81 +1,75 @@
 {{-- resources/views/core/emails/dossier-transmis.blade.php --}}
-{{-- Utilisé pour : soumission (vers secrétaire) + transmissions inter-acteurs --}}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dossier à traiter — {{ $reference }}</title>
+  <title>Dossier à traiter — Réf : {{ $reference }}</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family:'Segoe UI',Arial,sans-serif; background:#f4f6f8; color:#1a1a2e; font-size:15px; line-height:1.6; }
-    .wrapper { max-width:620px; margin:32px auto; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 2px 16px rgba(0,0,0,.08); }
-    .header { background:#326761; padding:32px 40px; text-align:center; }
-    .header h1 { color:#fff; font-size:22px; font-weight:700; }
-    .header p { color:rgba(255,255,255,.75); font-size:13px; margin-top:6px; }
-    .body { padding:36px 40px; }
-    .greeting { font-size:16px; font-weight:600; margin-bottom:12px; }
-    .intro { color:#444; margin-bottom:24px; }
-    .info-card { background:#f8fafb; border:1px solid #e2e8f0; border-left:4px solid #326761; border-radius:8px; padding:20px 24px; margin-bottom:24px; }
-    .info-card table { width:100%; border-collapse:collapse; }
-    .info-card td { padding:6px 0; vertical-align:top; }
-    .info-card td:first-child { color:#64748b; font-size:13px; text-transform:uppercase; letter-spacing:.5px; width:140px; }
-    .info-card td:last-child { color:#1a1a2e; font-weight:600; }
-    .ref-badge { display:inline-block; background:#326761; color:#fff; font-family:'Courier New',monospace; font-size:13px; font-weight:700; padding:3px 10px; border-radius:4px; letter-spacing:1px; }
-    .commentaire { background:#fffbeb; border:1px solid #fcd34d; border-radius:8px; padding:14px 18px; margin-bottom:24px; font-size:14px; color:#78350f; }
-    .commentaire strong { display:block; margin-bottom:4px; color:#92400e; }
-    .cta { text-align:center; margin:28px 0; }
-    .cta a { display:inline-block; background:#326761; color:#fff !important; text-decoration:none; padding:13px 32px; border-radius:8px; font-weight:700; font-size:15px; }
-    .footer { background:#f8fafb; border-top:1px solid #e2e8f0; padding:20px 40px; text-align:center; font-size:12px; color:#94a3b8; }
-    hr { border:none; border-top:1px solid #e2e8f0; margin:24px 0; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,'Open Sans','Helvetica Neue',sans-serif; background:#f4f6f8; color:#1a1a2e; font-size:15px; line-height:1.6; }
+    .wrapper { max-width:600px; margin:32px auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.05); }
+    .header { background:#1e293b; padding:24px 32px; text-align:center; border-bottom:4px solid #3b82f6; }
+    .header h1 { color:#ffffff; font-size:20px; font-weight:600; letter-spacing:0.5px; }
+    .body { padding:32px; }
+    .greeting { font-size:16px; font-weight:600; margin-bottom:16px; color:#0f172a; }
+    .text { margin-bottom:24px; color:#475569; }
+    .info-card { background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:20px; margin-bottom:24px; }
+    .info-row { display:flex; margin-bottom:12px; }
+    .info-row:last-child { margin-bottom:0; }
+    .info-label { width:130px; color:#64748b; font-size:13px; text-transform:uppercase; font-weight:600; }
+    .info-value { color:#0f172a; font-weight:500; flex:1; }
+    .ref-badge { background:#e2e8f0; color:#334155; padding:2px 8px; border-radius:4px; font-family:monospace; font-size:14px; letter-spacing:1px; }
+    .note-box { background:#fffbeb; border:1px solid #fde68a; border-radius:6px; padding:16px; color:#92400e; font-size:14px; margin-bottom:24px; font-style:italic; }
+    .cta-container { text-align:center; margin:32px 0; }
+    .cta-button { display:inline-block; background-color:#3b82f6; color:#ffffff !important; text-decoration:none; padding:12px 28px; border-radius:6px; font-weight:600; font-size:15px; transition:background-color 0.2s; }
+    .cta-button:hover { background-color:#2563eb; }
+    .footer { background:#f8fafc; padding:20px 32px; text-align:center; font-size:13px; color:#64748b; border-top:1px solid #e2e8f0; }
   </style>
 </head>
 <body>
   <div class="wrapper">
     <div class="header">
-      <h1>{{ $etablissement ?? config('app.name', 'CAP-EPAC') }}</h1>
-      <p>Système de gestion des demandes de documents</p>
+      <h1>{{ config('app.name', 'CAP-EPAC') }}</h1>
     </div>
     <div class="body">
-      <p class="greeting">Bonjour {{ $destinataireNom }},</p>
-      <p class="intro">
-        @if(!empty($expediteurNom) && !empty($expediteurRole))
-          Un dossier vous a été transmis par <strong>{{ $expediteurNom }}</strong> ({{ $expediteurRole }}) et requiert votre attention.
-        @else
-          Une nouvelle demande de document vient d'être soumise et requiert votre traitement.
-        @endif
+      <p class="greeting">Bonjour {{ $destinataireNom ?? '' }},</p>
+      <p class="text">
+        Un dossier nécessitant votre intervention vient de vous être transmis par <strong>{{ $expediteurNom ?? 'le système' }}</strong> {{ !empty($expediteurRole) ? "({$expediteurRole})" : '' }}.
       </p>
 
       <div class="info-card">
-        <table>
-          <tr><td>Référence</td><td><span class="ref-badge">{{ $reference }}</span></td></tr>
-          <tr><td>Document</td><td>{{ $typeDocument }}</td></tr>
-          <tr><td>Étudiant(e)</td><td>{{ $etudiantNom }}</td></tr>
-          @if(!empty($etudiantMatricule) && $etudiantMatricule !== '—')
-          <tr><td>Matricule</td><td>{{ $etudiantMatricule }}</td></tr>
-          @endif
-          <tr><td>Transmis le</td><td>{{ $dateTransmission }}</td></tr>
-          @if(!empty($destinataireRole))
-          <tr><td>Pour</td><td>{{ $destinataireRole }}</td></tr>
-          @endif
-        </table>
+        <div class="info-row">
+          <div class="info-label">Référence</div>
+          <div class="info-value"><span class="ref-badge">{{ $reference }}</span></div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">Document</div>
+          <div class="info-value">{{ $typeDocument ?? '' }}</div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">Étudiant(e)</div>
+          <div class="info-value">
+            {{ $etudiantNom ?? '' }} 
+            @if(!empty($etudiantMatricule))
+              <span style="color:#64748b; font-size:13px;">({{ $etudiantMatricule }})</span>
+            @endif
+          </div>
+        </div>
       </div>
 
       @if(!empty($commentaire))
-      <div class="commentaire">
-        <strong>Commentaire :</strong>{{ $commentaire }}
+      <div class="note-box">
+        <strong>Note :</strong> {{ $commentaire }}
       </div>
       @endif
 
-      <div class="cta">
-        <a href="{{ $urlEspace }}">Accéder au tableau de bord</a>
+      <div class="cta-container">
+        <a href="{{ $urlEspace ?? config('app.url') . '/dashboard' }}" class="cta-button">Accéder au tableau de bord</a>
       </div>
-
-      <hr />
-      <p style="font-size:13px;color:#64748b;text-align:center;">Ne répondez pas à cet e-mail.</p>
     </div>
     <div class="footer">
-      <p>{{ $etablissement ?? config('app.name', 'CAP-EPAC') }}</p>
+      <p>Notification automatique du système de gestion des demandes.</p>
     </div>
   </div>
 </body>

@@ -75,6 +75,10 @@ class TransitionService
         // Mails
         $fresh = DB::table('document_requests')->where('id', $id)->first();
 
+        if (str_ends_with($action, '_flagged')) {
+            $this->notificationService->sendSousReserve($fresh, $payload['motif'] ?? '');
+        }
+
         match ($mailTrigger) {
             'rejected'               => $this->notificationService->sendRejected($fresh, $payload['motif'] ?? ''),
             'ready'                  => $this->notificationService->sendReady($fresh),
@@ -246,6 +250,7 @@ class TransitionService
 
             if ($isFlagged) {
                 $update['has_flag'] = true;
+                $mail = 'sous_reserve';
             }
 
             if ($sigType === 'paraphe') {

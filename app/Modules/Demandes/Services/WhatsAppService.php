@@ -131,110 +131,90 @@ class WhatsAppService
 
     public function templateSoumission(string $reference, string $typeLabel, string $email): string
     {
-        $appName = config('app.name', 'CAP-EPAC');
+        $suiviUrl = config('app.url') . '/app-cap/student-services?ref=' . $reference;
         return implode("\n", [
-            "*{$appName}*",
-            self::DIVIDER,
-            '',
-            'Votre demande a bien été reçue.',
-            '',
-            "*Type      :* {$typeLabel}",
-            "*Référence :* {$reference}",
-            "*E-mail    :* {$email}",
-            '',
-            self::DIVIDER,
-            'Votre dossier est en cours d\'examen.',
-            'Vous serez notifié(e) par WhatsApp et e-mail à chaque étape importante.',
-            '',
-            '_Ne répondez pas à ce message._',
+            "✅ *Demande Reçue*",
+            "",
+            "Votre demande de *{$typeLabel}* (Réf: {$reference}) a bien été enregistrée.",
+            "",
+            "Votre dossier est en cours d'examen. Vous serez notifié(e) à chaque étape.",
+            "",
+            "Suivez l'avancement ici : {$suiviUrl}"
         ]);
     }
 
     public function templateComplementEtudiant(string $reference, array $piecesList): string
     {
-        $appName = config('app.name', 'CAP-EPAC');
-        $nb      = count($piecesList);
-        $label   = $nb <= 1 ? 'pièce déposée' : 'pièces déposées';
+        $nb = count($piecesList);
+        $label = $nb <= 1 ? 'pièce complémentaire reçue' : 'pièces complémentaires reçues';
+        $suiviUrl = config('app.url') . '/app-cap/student-services?ref=' . $reference;
 
         $lines = [
-            "*{$appName}*",
-            self::DIVIDER,
-            '',
-            'Complément de dossier reçu.',
-            '',
-            "*Référence :* {$reference}",
-            "*{$nb} {$label}*",
-            '',
+            "📎 *Complément Reçu*",
+            "",
+            "Pour votre demande (Réf: {$reference}), nous avons bien reçu {$nb} {$label} :",
         ];
 
         foreach ($piecesList as $piece) {
-            $lines[] = "  - {$piece}";
+            $lines[] = "- {$piece}";
         }
 
-        $lines[] = '';
-        $lines[] = self::DIVIDER;
-        $lines[] = 'Vos pièces ont été transmises au secrétariat pour traitement.';
-        $lines[] = '';
-        $lines[] = '_Ne répondez pas à ce message._';
+        $lines[] = "";
+        $lines[] = "Elles ont été transmises au secrétariat pour vérification.";
+        $lines[] = "";
+        $lines[] = "Suivez l'avancement ici : {$suiviUrl}";
 
         return implode("\n", $lines);
     }
 
     public function templatePret(string $reference, string $typeLabel): string
     {
-        $appName = config('app.name', 'CAP-EPAC');
         return implode("\n", [
-            "*{$appName}*",
-            self::DIVIDER,
-            '',
-            'Votre document est *prêt* à être retiré.',
-            '',
-            "*Type      :* {$typeLabel}",
-            "*Référence :* {$reference}",
-            '',
-            self::DIVIDER,
-            'Vous pouvez venir le récupérer au secrétariat durant les heures d\'ouverture.',
-            '',
-            '_Ne répondez pas à ce message._',
+            "🎉 *Document Prêt*",
+            "",
+            "Votre demande de *{$typeLabel}* (Réf: {$reference}) a été traitée avec succès.",
+            "",
+            "Vous pouvez venir récupérer votre document au secrétariat durant les heures d'ouverture.",
         ]);
     }
 
     public function templateRejete(string $reference, string $typeLabel, string $motif): string
     {
-        $appName = config('app.name', 'CAP-EPAC');
         return implode("\n", [
-            "*{$appName}*",
-            self::DIVIDER,
-            '',
-            'Votre demande a été *rejetée*.',
-            '',
-            "*Type      :* {$typeLabel}",
-            "*Référence :* {$reference}",
-            "*Motif     :* {$motif}",
-            '',
-            self::DIVIDER,
-            'Veuillez vous rapprocher du secrétariat pour plus d\'informations.',
-            '',
-            '_Ne répondez pas à ce message._',
+            "❌ *Demande Rejetée*",
+            "",
+            "Votre demande de *{$typeLabel}* (Réf: {$reference}) n'a pas pu aboutir.",
+            "",
+            "*Motif :* {$motif}",
+            "",
+            "Veuillez corriger ces éléments ou vous rapprocher du secrétariat.",
+        ]);
+    }
+
+    public function templateSousReserve(string $reference, string $typeLabel, string $motif): string
+    {
+        $suiviUrl = config('app.url') . '/app-cap/student-services?ref=' . $reference;
+        return implode("\n", [
+            "⚠️ *Dossier Sous Réserve*",
+            "",
+            "Votre demande de *{$typeLabel}* (Réf: {$reference}) est en cours de traitement mais nécessite votre attention.",
+            "",
+            "*Motif :* {$motif}",
+            "",
+            "Veuillez régulariser la situation en soumettant un complément de dossier en ligne.",
+            "",
+            "Suivez l'avancement et complétez ici : {$suiviUrl}"
         ]);
     }
 
     public function templateRemis(string $reference, string $typeLabel): string
     {
-        $appName = config('app.name', 'CAP-EPAC');
         return implode("\n", [
-            "*{$appName}*",
-            self::DIVIDER,
-            '',
-            'Votre document vous a été *remis*.',
-            '',
-            "*Type      :* {$typeLabel}",
-            "*Référence :* {$reference}",
-            '',
-            self::DIVIDER,
-            'Merci de votre confiance. Bonne continuation !',
-            '',
-            '_Ne répondez pas à ce message._',
+            "🤝 *Document Retiré*",
+            "",
+            "Votre document *{$typeLabel}* (Réf: {$reference}) vous a été remis avec succès.",
+            "",
+            "Merci de votre confiance et bonne continuation !",
         ]);
     }
 
@@ -249,25 +229,13 @@ class WhatsAppService
         string $nomEtudiant,
         string $matricule,
     ): string {
-        $appName = config('app.name', 'CAP-EPAC');
-        $url     = config('app.url') . '/dashboard';
         return implode("\n", [
-            "*{$appName} — Nouvelle demande*",
-            self::DIVIDER,
-            '',
+            "📥 *Nouvelle Demande Reçue*",
+            "",
             "Bonjour *{$destinataireNom}*,",
-            '',
-            'Une nouvelle demande de document a été soumise.',
-            '',
-            "*Document   :* {$typeDocument}",
-            "*Référence  :* {$reference}",
-            "*Étudiant(e):* {$nomEtudiant}",
-            "*Matricule  :* {$matricule}",
-            '',
-            self::DIVIDER,
-            "Connectez-vous sur *{$url}* pour traiter ce dossier.",
-            '',
-            '_Ne répondez pas à ce message._',
+            "Une nouvelle demande de *{$typeDocument}* a été soumise par *{$nomEtudiant}* (Réf: {$reference}).",
+            "",
+            "Veuillez vérifier et initier le traitement du dossier.",
         ]);
     }
 
@@ -277,25 +245,14 @@ class WhatsAppService
         string $nomEtudiant,
         int    $nbPieces,
     ): string {
-        $appName = config('app.name', 'CAP-EPAC');
-        $url     = config('app.url') . '/dashboard';
-        $label   = $nbPieces <= 1 ? 'pièce complémentaire' : 'pièces complémentaires';
+        $label = $nbPieces <= 1 ? 'pièce complémentaire' : 'pièces complémentaires';
         return implode("\n", [
-            "*{$appName} — Nouveau complément de dossier*",
-            self::DIVIDER,
-            '',
+            "📎 *Complément de Dossier*",
+            "",
             "Bonjour *{$destinataireNom}*,",
-            '',
-            'Un(e) étudiant(e) vient de déposer un complément de dossier.',
-            '',
-            "*Étudiant(e):* {$nomEtudiant}",
-            "*Référence  :* {$reference}",
-            "*Pièces     :* {$nbPieces} {$label}",
-            '',
-            self::DIVIDER,
-            "Connectez-vous sur *{$url}* pour consulter et traiter ce dossier.",
-            '',
-            '_Ne répondez pas à ce message._',
+            "L'étudiant(e) *{$nomEtudiant}* (Réf: {$reference}) vient de déposer {$nbPieces} {$label}.",
+            "",
+            "Veuillez vérifier les nouveaux documents.",
         ]);
     }
 
@@ -310,30 +267,20 @@ class WhatsAppService
         string  $matricule = '',
         ?string $commentaire = null,
     ): string {
-        $appName = config('app.name', 'CAP-EPAC');
-        $url     = config('app.url') . '/dashboard';
-
         $lines = [
-            "*{$appName} — Dossier à traiter*",
-            self::DIVIDER,
-            '',
+            "📁 *Nouveau Dossier à Traiter*",
+            "",
             "Bonjour *{$destinataireNom}*,",
-            '',
-            "Un dossier vous a été transmis par *{$expediteurNom}* ({$expediteurRole}).",
-            '',
-            "*Document   :* {$typeDocument}",
-            "*Référence  :* {$reference}",
-            "*Étudiant(e):* {$etudiantNom}",
+            "*[{$expediteurRole}] {$expediteurNom}* vient de vous transmettre la demande de *{$etudiantNom}* (Réf: {$reference} - {$typeDocument}).",
+            "",
         ];
 
-        if ($matricule) $lines[] = "*Matricule  :* {$matricule}";
-        if ($commentaire) $lines[] = "*Commentaire:* {$commentaire}";
+        if ($commentaire) {
+            $lines[] = "*Note :* {$commentaire}";
+            $lines[] = "";
+        }
 
-        $lines[] = '';
-        $lines[] = self::DIVIDER;
-        $lines[] = "Connectez-vous sur *{$url}* pour traiter ce dossier.";
-        $lines[] = '';
-        $lines[] = '_Ne répondez pas à ce message._';
+        $lines[] = "Veuillez vous connecter pour traiter ce dossier.";
 
         return implode("\n", $lines);
     }
@@ -348,30 +295,19 @@ class WhatsAppService
         string  $matricule = '',
         ?string $commentaire = null,
     ): string {
-        $appName = config('app.name', 'CAP-EPAC');
-        $url     = config('app.url') . '/dashboard';
-
         $lines = [
-            "*{$appName} — Dossier en correction*",
-            self::DIVIDER,
-            '',
+            "⚠️ *Dossier Renvoyé pour Correction*",
+            "",
             "Bonjour *{$destinataireNom}*,",
-            '',
-            "Un dossier vous a été renvoyé pour correction par *{$expediteurNom}* ({$expediteurRole}).",
-            '',
-            "*Document   :* {$typeDocument}",
-            "*Référence  :* {$reference}",
-            "*Étudiant(e):* {$etudiantNom}",
+            "Le dossier de *{$etudiantNom}* (Réf: {$reference}) vous a été renvoyé par *[{$expediteurRole}] {$expediteurNom}*.",
+            "",
         ];
 
-        if ($matricule) $lines[] = "*Matricule  :* {$matricule}";
-        if ($commentaire) $lines[] = "*Motif      :* {$commentaire}";
+        if ($commentaire) {
+            $lines[] = "*Motif :* {$commentaire}";
+        }
 
-        $lines[] = '';
-        $lines[] = self::DIVIDER;
-        $lines[] = "Connectez-vous sur *{$url}* pour traiter ce dossier.";
-        $lines[] = '';
-        $lines[] = '_Ne répondez pas à ce message._';
+        $lines[] = "Veuillez vous connecter pour corriger la demande.";
 
         return implode("\n", $lines);
     }
