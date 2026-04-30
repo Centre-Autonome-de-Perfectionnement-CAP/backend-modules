@@ -282,6 +282,58 @@ class NotificationService
         }
     }
 
+    /**
+     * Notifie la secrétaire qu'un dossier entre en Direction.
+     */
+    public function notifySecretaryOfDirectionTransmission(object $demande): void
+    {
+        $secretaires = $this->findUsersWithRole('secretaire', null);
+        $typeLabel   = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $etudiantInfo = $this->fetchEtudiantInfo($demande->id);
+        $etudiantNom  = $this->buildNom($etudiantInfo);
+        $matricule    = $etudiantInfo->matricule ?? '';
+
+        foreach ($secretaires as $sec) {
+            // Email
+            try {
+                Mail::send(
+                    'core::emails.dossier-transmis',
+                    [
+                        'destinataireNom'   => $sec->name,
+                        'destinataireRole'  => 'Secrétaire',
+                        'expediteurNom'     => 'Chef CAP',
+                        'expediteurRole'    => 'Chef CAP',
+                        'reference'         => $demande->reference,
+                        'typeDocument'      => $typeLabel,
+                        'etudiantNom'       => $etudiantNom,
+                        'etudiantMatricule' => $matricule,
+                        'dateTransmission'  => now()->format('d/m/Y à H:i'),
+                        'commentaire'       => "Ce dossier est maintenant en cours de signature (Direction). Veuillez préparer et transmettre les documents physiques correspondants.",
+                        'urlEspace'         => config('app.url') . '/dashboard',
+                        'etablissement'     => config('app.name', 'CAP-EPAC'),
+                    ],
+                    fn($m) => $m->to($sec->email, $sec->name)
+                               ->subject("Dossier à transmettre physiquement (Direction) — Réf : {$demande->reference}")
+                );
+            } catch (\Exception $e) {
+                Log::error('[Notification] Erreur email secrétaire transmission direction', [
+                    'error' => $e->getMessage(),
+                    'ref'   => $demande->reference,
+                ]);
+            }
+
+            // WhatsApp
+            if (!empty($sec->phone)) {
+                $message = "🚨 *Dossier en Direction*\n\nBonjour {$sec->name},\nLe dossier de *{$etudiantNom}* (Réf: {$demande->reference}) vient d'être transmis à la Direction.\n\nMerci de préparer et d'acheminer le dossier physique.";
+                $this->whatsApp->send(
+                    $sec->phone,
+                    $message,
+                    "direction-secretaire:{$demande->reference}"
+                );
+            }
+        }
+    }
+
     // ═════════════════════════════════════════════════════════════════════════
     // NOTIFICATION ACTEURS INTERNES
     // ═════════════════════════════════════════════════════════════════════════

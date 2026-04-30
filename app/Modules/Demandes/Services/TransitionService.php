@@ -76,10 +76,11 @@ class TransitionService
         $fresh = DB::table('document_requests')->where('id', $id)->first();
 
         match ($mailTrigger) {
-            'rejected'  => $this->notificationService->sendRejected($fresh, $payload['motif'] ?? ''),
-            'ready'     => $this->notificationService->sendReady($fresh),
-            'delivered' => $this->notificationService->sendDelivered($fresh),
-            default     => null,
+            'rejected'               => $this->notificationService->sendRejected($fresh, $payload['motif'] ?? ''),
+            'ready'                  => $this->notificationService->sendReady($fresh),
+            'delivered'              => $this->notificationService->sendDelivered($fresh),
+            'direction_transmission' => $this->notificationService->notifySecretaryOfDirectionTransmission($fresh),
+            default                  => null,
         };
 
         if ($newStatus) {
@@ -250,6 +251,7 @@ class TransitionService
             if ($sigType === 'paraphe') {
                 $newStatus        = 'sec_dir_adjointe_review';
                 $update['status'] = $newStatus;
+                $mail = 'direction_transmission';
             } else {
                 $update['status'] = 'ready';
                 $mail = 'ready';
