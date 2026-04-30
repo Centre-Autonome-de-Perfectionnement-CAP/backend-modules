@@ -26,9 +26,9 @@ Route::prefix('api/attestations')->group(function () {
     Route::get('bulletin-status',       [AttestationController::class, 'getBulletinStatus']);
     Route::get('identify',              [AttestationController::class, 'identify']);
     Route::get('check-availability',    [AttestationController::class, 'checkAvailability']);
-    Route::get('demandes/suivi',        [AttestationController::class, 'suiviDemande']);
-    Route::post('demandes',             [AttestationController::class, 'storeDemande']);
-    Route::post('bulletins',            [AttestationController::class, 'storeBulletinDemande']);
+    Route::get('demandes/suivi',        [DemandeController::class, 'suiviDemande']);
+    Route::post('demandes',             [DemandeController::class, 'storeDemande']);
+    Route::post('bulletins',            [DemandeController::class, 'storeBulletinDemande']);
     Route::post('quittance/generate',   [QuittanceController::class, 'generateAndSendQuittance']);
 
     // ── Complément de dossier (public — étudiant sans compte) ─────────────────

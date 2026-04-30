@@ -5,6 +5,7 @@ use App\Modules\Demandes\Http\Controllers\DocumentRequestController;
 use App\Modules\Demandes\Http\Controllers\DocumentRequestTransitionController;
 use App\Modules\Demandes\Http\Controllers\DocumentRequestHistoryController;
 use App\Modules\Demandes\Http\Controllers\DocumentRequestStatsController;
+use App\Modules\Demandes\Http\Controllers\DocumentRequestBadgeController;  // ← AJOUT 11.1
 
 /*
  * Module Demandes — workflow de gestion des demandes de documents
@@ -15,9 +16,12 @@ use App\Modules\Demandes\Http\Controllers\DocumentRequestStatsController;
 Route::prefix('api/attestations')->middleware('auth:sanctum')->group(function () {
 
     // ── Listing + détail ──────────────────────────────────────────────────────
-    Route::get('document-requests',        [DocumentRequestController::class, 'index']);
-    Route::get('document-requests/{id}',   [DocumentRequestController::class, 'show']);
+    Route::get('document-requests', [DocumentRequestController::class, 'index']);
 
+// ✅ ICI
+Route::get('document-requests/badge-count', DocumentRequestBadgeController::class);
+
+Route::get('document-requests/{id}', [DocumentRequestController::class, 'show']);
     // ── Stats direction ───────────────────────────────────────────────────────
     Route::get('document-requests/stats',  DocumentRequestStatsController::class);
 

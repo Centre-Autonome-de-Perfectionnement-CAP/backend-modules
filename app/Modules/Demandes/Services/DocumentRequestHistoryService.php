@@ -9,6 +9,10 @@ use Illuminate\Support\Facades\Auth;
 /**
  * Gère toutes les écritures dans document_request_histories.
  * Chaque entrée est immuable après création.
+ *
+ * CORRECTION : ajout de recordMail() qui était référencé dans le trait
+ * RecordsDocumentHistory mais absent de ce service (provoquait une erreur
+ * BadMethodCallException à l'appel de logMail()).
  */
 class DocumentRequestHistoryService
 {
@@ -39,7 +43,6 @@ class DocumentRequestHistoryService
 
     /**
      * Enregistre la levée d'une réserve (flag_cleared).
-     * Pas de changement de statut, on enregistre quand même pour traçabilité.
      */
     public function recordFlagCleared(int $documentRequestId, string $currentStatus): DocumentRequestHistory
     {
@@ -50,6 +53,29 @@ class DocumentRequestHistoryService
             statusAfter:       $currentStatus,
             comment:           null,
         );
+    }
+
+    /**
+     * Enregistre l'envoi d'un mail (traçabilité).
+     * Utilisé par le trait RecordsDocumentHistory::logMail().
+     *
+     * CORRECTION : cette méthode était absente alors que le trait l'appelait.
+     */
+    public function recordMail(int $documentRequestId, string $subject): DocumentRequestHistory
+    {
+        $user = Auth::user();
+
+        return DocumentRequestHistory::create([
+            'document_request_id' => $documentRequestId,
+            'actor_id'            => $user?->id,
+            'actor_name'          => $user?->name ?? 'Système',
+            'actor_role'          => $user?->roles->first()?->slug ?? 'système',
+            'action_type'         => 'message_envoye',
+            'action_label'        => 'Email envoyé',
+            'status_before'       => '',
+            'status_after'        => '',
+            'comment'             => $subject,
+        ]);
     }
 
     /**
@@ -92,9 +118,6 @@ class DocumentRequestHistoryService
             return 'delivery';
         }
 
-        // ── Circuit de correction ─────────────────────────────────────────────
-        // return_to_secretaire : un acteur renvoie le dossier à la secrétaire
-        // pendant la boucle de correction. Affiché en orange dans l'historique.
         if ($action === 'return_to_secretaire') {
             return 'correction';
         }

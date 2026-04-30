@@ -60,8 +60,12 @@ final class WorkflowConstants
     ];
 
     // ── Nouveau statut → slug rôle notifié ────────────────────────────────────
+    //
+    // CORRECTION BUG 3 : 'pending' ajouté pour notifier la secrétaire
+    // à chaque nouvelle soumission de demande ou de complément de dossier.
 
     public const STATUS_TO_ROLE = [
+        'pending'                    => 'secretaire',       // ← AJOUT (Bug 3)
         'comptable_review'           => 'comptable',
         'chef_division_review'       => 'chef-division',
         'chef_cap_review'            => 'chef-cap',
