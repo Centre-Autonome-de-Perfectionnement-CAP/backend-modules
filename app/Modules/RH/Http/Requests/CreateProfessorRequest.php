@@ -27,6 +27,12 @@ class CreateProfessorRequest extends FormRequest
             'bank' => 'nullable|string|max:255',
             'status' => 'nullable|in:active,inactive,suspended',
             'grade_id' => 'nullable|exists:grades,id',
+            'nationality'  => 'nullable|string|max:100',
+            'profession'   => 'nullable|string|max:100',
+            'city'         => 'nullable|string|max:100',
+            'district'     => 'nullable|string|max:100',
+            'plot_number'  => 'nullable|string|max:100',
+            'house_number' => 'nullable|string|max:100',
         ];
     }
 

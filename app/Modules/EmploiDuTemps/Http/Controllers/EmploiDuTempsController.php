@@ -156,12 +156,17 @@ class EmploiDuTempsController extends Controller
         );
     }
 
-    // ──────────────────────────────────────────────────────────
-    // UPDATE  PUT /api/emploi-temps/emploi-du-temps/{id}
-    // ──────────────────────────────────────────────────────────
+    public function update(Request $request, $id): JsonResponse{
+        // 🔍 Récupération manuelle par ID
+        $emploiDuTemps = EmploiDuTemps::find($id);
 
-    public function update(Request $request, EmploiDuTemps $emploiDuTemps): JsonResponse
-    {
+        if (!$emploiDuTemps) {
+            return response()->json([
+                'message' => 'Emploi du temps non trouvé.'
+            ], 404);
+        }
+
+        // ✅ Validation
         $validator = Validator::make($request->all(), [
             'academic_year_id'    => 'sometimes|exists:academic_years,id',
             'department_id'       => 'sometimes|exists:departments,id',
@@ -183,10 +188,10 @@ class EmploiDuTempsController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $conflicts = $this->detectConflicts(
-            array_merge($emploiDuTemps->toArray(), $request->all()),
-            $emploiDuTemps->id
-        );
+        // ⚠️ Fusion ancienne + nouvelle data pour check conflits
+        $data = array_merge($emploiDuTemps->toArray(), $request->all());
+
+        $conflicts = $this->detectConflicts($data, $emploiDuTemps->id);
 
         if (!empty($conflicts)) {
             return response()->json([
@@ -195,37 +200,49 @@ class EmploiDuTempsController extends Controller
             ], 409);
         }
 
+        // ✅ Update
         $emploiDuTemps->update($validator->validated());
 
         return response()->json([
             'message' => 'Emploi du temps modifié avec succès.',
-            'data'    => new EmploiDuTempsResource($emploiDuTemps->fresh($this->with)),
+            'data'    => new EmploiDuTempsResource(
+                $emploiDuTemps->fresh($this->with)
+            ),
         ]);
     }
+    
 
-    // ──────────────────────────────────────────────────────────
-    // DELETE  DELETE /api/emploi-temps/emploi-du-temps/{id}
-    // ──────────────────────────────────────────────────────────
-
-    public function destroy(EmploiDuTemps $emploiDuTemps): JsonResponse
-    {
+    public function destroy($id): JsonResponse {
         try {
+            $emploiDuTemps = EmploiDuTemps::find($id);
+
+            if (!$emploiDuTemps) {
+                return response()->json([
+                    'message' => 'Emploi du temps non trouvé.'
+                ], 404);
+            }
+
             $emploiDuTemps->delete();
-            return response()->json(['message' => 'Emploi du temps supprimé avec succès.']);
-        } catch (\Exception $e) {
+
             return response()->json([
-                'message' => 'Impossible de supprimer cet emploi du temps.',
-                'error'   => $e->getMessage(),
+                'message' => 'Emploi du temps supprimé avec succès.'
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Erreur suppression emploi du temps', [
+                'id' => $id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'message' => 'Une erreur est survenue lors de la suppression.',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
 
-    // ──────────────────────────────────────────────────────────
-    // CANCEL  POST /api/emploi-temps/emploi-du-temps/{id}/cancel
-    // ──────────────────────────────────────────────────────────
 
-    public function cancel(EmploiDuTemps $emploiDuTemps): JsonResponse
-    {
+    public function cancel(EmploiDuTemps $emploiDuTemps): JsonResponse {
         $emploiDuTemps->update(['is_cancelled' => true]);
         return response()->json(['message' => 'Emploi du temps annulé.']);
     }

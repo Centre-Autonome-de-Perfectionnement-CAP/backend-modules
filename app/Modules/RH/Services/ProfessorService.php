@@ -26,8 +26,8 @@ class ProfessorService
             });
         }
 
-        if (!empty($filters['statut'])) {
-            $query->where('statut', $filters['statut']);
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
         }
 
         if (!empty($filters['grade_id'])) {
@@ -53,7 +53,7 @@ class ProfessorService
         $sortBy = $filters['sort_by'] ?? 'created_at';
         $sortOrder = $filters['sort_order'] ?? 'desc';
 
-        return $query->orderBy($sortBy, $sortOrder)->paginate($perPage);
+        return $query->with('grade')->orderBy($sortBy, $sortOrder)->paginate($perPage);
     }
 
     // ───────────────────────── CREATE PROFESSOR

@@ -7,14 +7,10 @@ use App\Modules\RH\Models\AcademicYear;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
-class AcademicYearController extends Controller
-{
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
-    {
-        $academicYears = AcademicYear::all();
+class AcademicYearController extends Controller{
+    
+    public function index() {
+        $academicYears = AcademicYear::where('is_current', true)->get();
 
         return response()->json([
             'success' => true,
@@ -22,11 +18,7 @@ class AcademicYearController extends Controller
         ]);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
+    public function store(Request $request) {
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|unique:academic_years',
             'start_date' => 'required|date',

@@ -257,7 +257,7 @@ class AdminUserService
         return [
             'total_admin_users' => User::count(),
             'total_professors' => \App\Modules\RH\Models\Professor::count(),
-            'active_professors' => \App\Modules\RH\Models\Professor::where('statut', 'active')->count(),
+            'active_professors' => \App\Modules\RH\Models\Professor::where('status', 'active')->count(),
         ];
     }
 }

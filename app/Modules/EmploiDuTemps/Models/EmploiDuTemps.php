@@ -189,4 +189,8 @@ class EmploiDuTemps extends Model
 
         return $occurrences;
     }
+    public function getRouteKeyName()
+    {
+        return 'uuid'; // ou le nom réel de ta colonne UUID
+    }
 }
