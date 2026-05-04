@@ -66,10 +66,6 @@ Route::prefix('emploi-temps')->group(function () {
     Route::get('schedule/professor/{professorId}',    [ScheduledCourseController::class, 'getByProfessor']);
     Route::get('schedule/room/{roomId}',              [ScheduledCourseController::class, 'getByRoom']);
 
-    // ════════════════════════════════════════════════════════════
-    // Emploi du Temps — CRUD
-    // IMPORTANT: routes nommées AVANT apiResource
-    // ════════════════════════════════════════════════════════════
     Route::get('emploi-du-temps-stats',              [EmploiDuTempsController::class, 'stats']);
     Route::post('emploi-du-temps/check-conflicts',   [EmploiDuTempsController::class, 'checkConflicts']);
 
