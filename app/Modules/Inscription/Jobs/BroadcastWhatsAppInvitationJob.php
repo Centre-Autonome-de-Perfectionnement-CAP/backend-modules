@@ -23,17 +23,19 @@ class BroadcastWhatsAppInvitationJob implements ShouldQueue
     protected $whatsappLink;
     protected $departmentName;
     protected $broadcastId;
+    protected $pdfPath;
 
     /**
      * Create a new job instance.
      */
-    public function __construct($students, $message, $whatsappLink, $departmentName, $broadcastId)
+    public function __construct($students, $message, $whatsappLink, $departmentName, $broadcastId, $pdfPath = null)
     {
         $this->students = $students;
         $this->message = $message;
         $this->whatsappLink = $whatsappLink;
         $this->departmentName = $departmentName;
         $this->broadcastId = $broadcastId;
+        $this->pdfPath = $pdfPath;
     }
 
     /**
@@ -61,7 +63,7 @@ class BroadcastWhatsAppInvitationJob implements ShouldQueue
                 if ($email) {
                     try {
                         Mail::to($email)->send(
-                            new WhatsAppGroupInvitation($this->message, $this->whatsappLink, $this->departmentName)
+                            new WhatsAppGroupInvitation($this->message, $this->whatsappLink, $this->departmentName, $this->pdfPath)
                         );
                         $sentCount++;
                         
@@ -120,6 +122,27 @@ class BroadcastWhatsAppInvitationJob implements ShouldQueue
             'status' => 'completed',
             'completed_at' => now(),
         ], now()->addHours(24));
+
+        // Nettoyer le PDF temporaire après l'envoi (seulement pour le dernier chunk)
+        if ($this->pdfPath && file_exists($this->pdfPath)) {
+            // Vérifier si c'est le dernier job en vérifiant le statut
+            $status = \Cache::get($cacheKey);
+            if ($status && $status['status'] === 'completed') {
+                try {
+                    unlink($this->pdfPath);
+                    Log::info('PDF temporaire supprimé', [
+                        'broadcast_id' => $this->broadcastId,
+                        'pdf_path' => $this->pdfPath,
+                    ]);
+                } catch (\Exception $e) {
+                    Log::warning('Impossible de supprimer le PDF temporaire', [
+                        'broadcast_id' => $this->broadcastId,
+                        'pdf_path' => $this->pdfPath,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
     }
 
     /**

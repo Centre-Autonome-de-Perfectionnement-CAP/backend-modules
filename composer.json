@@ -19,7 +19,8 @@
         "maatwebsite/excel": "*",
         "phpoffice/phpword": "*",
         "simplesoftwareio/simple-qrcode": "^4.2",
-        "socialiteproviders/keycloak": "^5.3"
+        "socialiteproviders/keycloak": "^5.3",
+        "twilio/sdk": "^8.11"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

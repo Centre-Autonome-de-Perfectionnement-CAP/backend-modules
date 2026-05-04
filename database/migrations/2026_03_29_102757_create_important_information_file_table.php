@@ -8,6 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+
         if (!Schema::hasTable('important_information_file')) {
             Schema::create('important_information_file', function (Blueprint $table) {
                 $table->id();
@@ -58,6 +59,7 @@ return new class extends Migration
                 }
             });
         }
+
     }
 
     public function down(): void

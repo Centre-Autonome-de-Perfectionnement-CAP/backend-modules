@@ -30,6 +30,7 @@ class PendingStudent extends Model
         'level',
         'documents',
         'entry_diploma_id',
+        'photo',
         'sponsorise',
         'exonere',
         'status',

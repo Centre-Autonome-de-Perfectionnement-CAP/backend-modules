@@ -16,18 +16,23 @@ use App\Exceptions\ResourceNotFoundException;
 use App\Exceptions\FileUploadException;
 use App\Modules\Inscription\Mail\DossierSubmissionConfirmation;
 use App\Modules\Inscription\Mail\DossierCompletedConfirmation;
+use App\Modules\Inscription\Mail\DossierSubmissionWithAttachment;
 use App\Modules\Stockage\Services\FileStorageService;
+use App\Modules\Core\Services\PdfService;
 use App\Services\StringUtilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class DossierSubmissionService
 {
-    public function __construct(private FileStorageService $fileStorageService)
-    {
+    public function __construct(
+        private FileStorageService $fileStorageService,
+        private PdfService $pdfService
+    ) {
     }
     public function submitDossier(Request $request, string $cycleName, array $validDiplomas, array $fileFields, bool $isPersonalInfoRequired = true): array
     {
@@ -141,21 +146,70 @@ class DossierSubmissionService
                 'department_id' => $request->department_id,
             ]);
 
-            // Envoi d'email optionnel: non implémenté ici pour éviter les dépendances
+            // Génération de la fiche de confirmation et envoi par email
             try {
+                $submissionDatetime = now()->format('d/m/Y à H:i');
+                $academicYear = AcademicYear::findOrFail($request->academic_year_id);
+                
+                // Préparer les données pour le PDF
+                $pdfData = [
+                    'tracking_code' => $pendingStudent->tracking_code,
+                    'submission_datetime' => $submissionDatetime,
+                    'last_name' => $personalInformation->last_name,
+                    'first_names' => $personalInformation->first_names,
+                    'email' => $personalInformation->email,
+                    'contacts' => $personalInformation->contacts,
+                    'birth_date' => $personalInformation->birth_date ? date('d/m/Y', strtotime($personalInformation->birth_date)) : null,
+                    'birth_place' => $personalInformation->birth_place,
+                    'gender' => $personalInformation->gender,
+                    'cycle_name' => $cycleName,
+                    'department' => $department->name,
+                    'study_level' => $request->study_level,
+                    'academic_year' => $academicYear->academic_year,
+                    'documents' => array_keys($documents),
+                ];
+
+                // Générer le PDF
+                $pdfFileName = 'fiche_confirmation_' . $pendingStudent->tracking_code . '.pdf';
+                $pdfPath = storage_path('app/temp/' . $pdfFileName);
+                
+                // Créer le dossier temp s'il n'existe pas
+                if (!file_exists(storage_path('app/temp'))) {
+                    mkdir(storage_path('app/temp'), 0755, true);
+                }
+
+                $this->pdfService->saveWithTemplate('fiche-confirmation-inscription', $pdfData, $pdfPath);
+
+                // Préparer les données pour l'email
                 $mailData = [
                     'department' => $department->name,
-                    'academic_year' => AcademicYear::findOrFail($request->academic_year_id)->academic_year,
+                    'academic_year' => $academicYear->academic_year,
                     'tracking_code' => $pendingStudent->tracking_code,
                     'study_level' => $request->study_level,
                     'first_names' => $personalInformation->first_names,
+                    'last_name' => $personalInformation->last_name,
                     'email' => $personalInformation->email,
-                    'contacts' => $personalInformation->contacts, // Déjà un array grâce au cast
+                    'contacts' => $personalInformation->contacts,
                     'cycle_name' => $cycleName,
+                    'submission_datetime' => $submissionDatetime,
                 ];
-                Mail::to($personalInformation->email)->send(new DossierSubmissionConfirmation($mailData));
+
+                // Envoyer l'email avec la fiche en pièce jointe
+                Mail::to($personalInformation->email)->send(new DossierSubmissionWithAttachment($mailData, $pdfPath));
+
+                // Supprimer le fichier temporaire après l'envoi
+                if (file_exists($pdfPath)) {
+                    unlink($pdfPath);
+                }
+
+                Log::info('Fiche de confirmation envoyée avec succès', [
+                    'tracking_code' => $pendingStudent->tracking_code,
+                    'email' => $personalInformation->email
+                ]);
             } catch (\Exception $e) {
-                Log::error('Echec lors de l\'envoi du mail de confirmation: ' . $e->getMessage());
+                Log::error('Echec lors de la génération/envoi de la fiche de confirmation: ' . $e->getMessage(), [
+                    'trace' => $e->getTraceAsString()
+                ]);
             }
 
             return [

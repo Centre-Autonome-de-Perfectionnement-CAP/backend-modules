@@ -25,6 +25,12 @@
         <strong>Important :</strong> Cliquez sur le bouton ci-dessus pour rejoindre le groupe WhatsApp de votre filière.
     </div>
 
+    @if($pdfPath)
+    <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; text-align: center; font-size: 14px; margin: 20px 0; border-left: 4px solid #ffc107;">
+        📎 <strong>Document joint :</strong> Vous trouverez en pièce jointe la liste complète des étudiants de votre filière avec leurs coordonnées.
+    </div>
+    @endif
+
     <p>Ce groupe vous permettra de rester informé(e) des actualités importantes et de communiquer avec vos camarades de classe.</p>
 @endsection
 

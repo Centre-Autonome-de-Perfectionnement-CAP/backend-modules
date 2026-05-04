@@ -90,7 +90,7 @@ class UserSeeder extends Seeder
                 ])
             );
 
-            // Vérification du rôle
+
             $role = Role::where('slug', $roleName)->first();
 
             if (!$role) {
@@ -101,6 +101,8 @@ class UserSeeder extends Seeder
             $user->roles()->syncWithoutDetaching([$role->id]);
         }
 
+
         $this->command->info('Utilisateurs créés avec succès!');
+
     }
 }

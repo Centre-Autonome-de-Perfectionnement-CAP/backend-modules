@@ -5,6 +5,7 @@ namespace App\Modules\Inscription\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Inscription\Models\Department;
 use App\Modules\Core\Services\BroadcastService;
+use App\Modules\Inscription\Services\StudentListPdfService;
 use App\Modules\Core\Mail\WhatsAppGroupInvitation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,10 +16,12 @@ class StudentBroadcastController extends Controller
     use ApiResponse;
 
     protected $broadcastService;
+    protected $pdfService;
 
-    public function __construct(BroadcastService $broadcastService)
+    public function __construct(BroadcastService $broadcastService, StudentListPdfService $pdfService)
     {
         $this->broadcastService = $broadcastService;
+        $this->pdfService = $pdfService;
     }
 
     /**
@@ -65,6 +68,15 @@ class StudentBroadcastController extends Controller
                 return $this->errorResponse('Aucun étudiant trouvé pour cette filière', 404);
             }
 
+            // Générer le PDF avec la liste des étudiants
+            $pdfPath = $this->pdfService->generateStudentListPdf($students->toArray(), $department->name);
+
+            \Log::info('PDF liste étudiants généré', [
+                'department_id' => $department->id,
+                'pdf_path' => $pdfPath,
+                'total_students' => $students->count(),
+            ]);
+
             // Générer un ID unique pour ce broadcast
             $broadcastId = uniqid('whatsapp_broadcast_', true);
 
@@ -87,7 +99,8 @@ class StudentBroadcastController extends Controller
                     $data['message'],
                     $department->whatsapp_link,
                     $department->name,
-                    $broadcastId
+                    $broadcastId,
+                    $pdfPath // Passer le chemin du PDF
                 )->onQueue('emails');
             }
 
