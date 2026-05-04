@@ -9,16 +9,31 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('professors', function (Blueprint $table) {
-            // ✅ 1. Supprimer la clé étrangère d'abord
-            $table->dropForeign('professors_rib_foreign');
-            $table->dropForeign('professors_ifu_foreign'); // au cas où ifu aussi
+        // 1. Désactiver les contraintes au niveau global
+        Schema::disableForeignKeyConstraints();
 
-            // ✅ 2. Modifier les colonnes
+        // 2. Supprimer les clés étrangères physiquement
+        // On utilise try/catch pour éviter que ça plante si elles ont déjà été supprimées
+        try {
+            Schema::table('professors', function (Blueprint $table) {
+                $table->dropForeign('professors_rib_foreign');
+                $table->dropForeign('professors_ifu_foreign');
+            });
+        } catch (\Exception $e) {
+            // Si l'erreur est que la clé n'existe pas, on continue
+        }
+
+        // 3. Modifier les colonnes
+        Schema::table('professors', function (Blueprint $table) {
+            // Renommage statut -> status
+            if (Schema::hasColumn('professors', 'statut')) {
+                $table->renameColumn('statut', 'status');
+            }
+
+            // Changement des types en string (Maintenant possible car la FK est supprimée)
             $table->string('rib')->nullable()->change();
             $table->string('ifu')->nullable()->change();
 
-            // ✅ 3. Ajouter rib_url et ifu_url si absents
             if (!Schema::hasColumn('professors', 'rib_url')) {
                 $table->string('rib_url')->nullable()->after('rib');
             }
@@ -27,8 +42,11 @@ return new class extends Migration
             }
         });
 
-        // ✅ 4. Corriger l'enum status
+        // 4. Modifier l'ENUM
         DB::statement("ALTER TABLE professors MODIFY COLUMN status ENUM('active', 'inactive', 'suspended') DEFAULT 'active'");
+
+        // 5. Réactiver les contraintes
+        Schema::enableForeignKeyConstraints();
     }
 
     public function down(): void
@@ -37,7 +55,5 @@ return new class extends Migration
             $table->unsignedBigInteger('rib')->nullable()->change();
             $table->unsignedBigInteger('ifu')->nullable()->change();
         });
-
-        DB::statement("ALTER TABLE professors MODIFY COLUMN status ENUM('active', 'inactive') DEFAULT 'active'");
     }
 };

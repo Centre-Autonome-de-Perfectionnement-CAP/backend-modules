@@ -14,7 +14,7 @@ class DashboardService
     /**
      * Get dashboard statistics
      */
-    public function getStats(): array{
+    public function getStats(): array {
         $currentAcademicYear = AcademicYear::where('is_current', true)->first();
         $anneeAcademique = $currentAcademicYear ? $currentAcademicYear->academic_year : null;
 
@@ -47,44 +47,42 @@ class DashboardService
 
         if (!$academicYearId) {
             $currentYear = AcademicYear::where('is_current', true)->first();
-
-        
-        // Si l'ID ressemble à une année académique (ex: "2026-2027"), chercher par academic_year
-        if (is_string($academicYearId) && preg_match('/^\d{4}-\d{4}$/', $academicYearId)) {
+            $academicYearId = $currentYear ? $currentYear->id : null;
+        } 
+        elseif (is_string($academicYearId) && preg_match('/^\d{4}-\d{4}$/', $academicYearId)) {
             $currentYear = AcademicYear::where('academic_year', $academicYearId)->first();
 
 
 
+
         // Si l'ID ressemble à une année académique (ex: "2026-2027"), chercher par academic_year
         if (is_string($academicYearId) && preg_match('/^\d{4}-\d{4}$/', $academicYearId)) {
             $currentYear = AcademicYear::where('academic_year', $academicYearId)->first();
+
 
             $academicYearId = $currentYear ? $currentYear->id : null;
         } 
         else {
-            // Sanitize l'ID pour PostgreSQL (convertir en int ou null)
             $academicYearId = DatabaseAdapter::sanitizeId($academicYearId);
+
+
 
             if ($academicYearId) {
                 $currentYear = AcademicYear::find($academicYearId);
             } else {
-                // Si pas d'ID valide, utiliser l'année courante
                 $currentYear = AcademicYear::where('is_current', true)->first();
                 $academicYearId = $currentYear ? $currentYear->id : null;
             }
         }
 
-        $inscritsParFiliere = $this->getStudentsByDepartment($academicYearId);
-        $inscritsParCycle = $this->getStudentsByCycle($academicYearId);
-        $dossiersParstatus = $this->getStudentsBystatus($academicYearId);
-
         return [
-            'inscritsParFiliere' => $inscritsParFiliere,
-            'inscritsParCycle' => $inscritsParCycle,
-            'dossiersParstatus' => $dossiersParstatus,
+            'inscritsParFiliere' => $this->getStudentsByDepartment($academicYearId),
+            'inscritsParCycle' => $this->getStudentsByCycle($academicYearId),
+            'dossiersParstatus' => $this->getStudentsBystatus($academicYearId),
             'anneeAcademique' => $currentYear ? $currentYear->academic_year : null,
         ];
     }
+
     
     protected function getStudentsByDepartment($academicYearId = null): array  {
         $departments = Department::all();
@@ -95,11 +93,9 @@ class DashboardService
 
         return $departments->map(function ($department) use ($academicYearId) {
             $query = PendingStudent::where('department_id', $department->id);
-
             if ($academicYearId && $academicYearId !== 'null') {
                 $query->where('academic_year_id', $academicYearId);
             }
-
             return [
                 'filiere' => $department->name ?? $department->libelle ?? 'N/A',
                 'nombre' => $query->count(),
@@ -121,11 +117,9 @@ class DashboardService
             $query = PendingStudent::whereHas('department', function($q) use ($cycle) {
                 $q->where('cycle_id', $cycle->id);
             });
-
             if ($academicYearId && $academicYearId !== 'null') {
                 $query->where('academic_year_id', $academicYearId);
             }
-
             return [
                 'cycle' => $cycle->name ?? $cycle->libelle ?? 'N/A',
                 'nombre' => $query->count(),
@@ -136,8 +130,7 @@ class DashboardService
     /**
      * Get students grouped by status
      */
-    protected function getStudentsBystatus($academicYearId = null): array
-    {
+    protected function getStudentsBystatus($academicYearId = null): array {
         $query = PendingStudent::select('status', DB::raw('count(*) as nombre'))
             ->groupBy('status');
 
@@ -146,7 +139,6 @@ class DashboardService
         }
 
         $statusData = $query->get();
-
         if ($statusData->isEmpty()) {
             return [['status' => 'Aucun dossier', 'nombre' => 0]];
         }
@@ -162,17 +154,13 @@ class DashboardService
     /**
      * Translate status to French
      */
-    protected function translatestatus(string $status): string
-    {
+    protected function translatestatus(string $status): string {
         $translations = [
             'pending' => 'En attente',
             'approved' => 'Approuvé',
             'rejected' => 'Rejeté',
             'withdrawn' => 'Retiré',
         ];
-
         return $translations[$status] ?? $status;
     }
-}
-
 }

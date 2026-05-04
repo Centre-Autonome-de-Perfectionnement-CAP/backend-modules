@@ -15,4 +15,8 @@ return [
     App\Modules\Attestation\Providers\AttestationServiceProvider::class,
     App\Modules\CahierTexte\Providers\CahierTexteServiceProvider::class,
     App\Modules\Demandes\Providers\DemandesServiceProvider::class,
+
+    App\Modules\Attendance\Providers\AttendanceServiceProvider::class,
+    App\Modules\Attendance\Providers\SeanceServiceProvider::class,
+
 ];
