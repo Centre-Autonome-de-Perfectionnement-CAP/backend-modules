@@ -12,7 +12,7 @@ use App\Modules\RH\Http\Controllers\ContratController;
 use App\Modules\RH\Http\Controllers\AcademicYearController;
 use App\Modules\RH\Http\Controllers\CycleController;
 
-Route::prefix('rh')->group(function () {
+Route::prefix('api/rh')->group(function () {
 
     Route::get('professors',             [ProfessorController::class, 'index']);
     Route::get('grades',                 [GradeController::class, 'index']);

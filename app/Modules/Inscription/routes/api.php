@@ -19,7 +19,7 @@ use App\Modules\Inscription\Http\Controllers\StudentBroadcastController;
 use App\Modules\Inscription\Http\Controllers\TextbookController;
 
 
-Route::prefix('inscription')->group(function () {
+Route::prefix('api/inscription')->group(function () {
 
 
     Route::prefix('pending-students')->group(function () {
@@ -142,7 +142,7 @@ Route::prefix('inscription')->group(function () {
 
 
 
-Route::prefix('inscription/responsable')->middleware('auth:sanctum')->group(function () {
+Route::prefix('api/inscription/responsable')->middleware('auth:sanctum')->group(function () {
 
     // ── Routes existantes ──────────────────────────────────────────────────
     Route::get('/dashboard', [\App\Modules\Inscription\Http\Controllers\ResponsableController::class, 'dashboard']);
