@@ -10,7 +10,7 @@ use App\Modules\EmploiDuTemps\Http\Controllers\EmploiDuTempsController;
 use App\Modules\EmploiDuTemps\Http\Controllers\SelectController;
 use App\Modules\EmploiDuTemps\Http\Controllers\PdfController;
 
-Route::prefix('emploi-temps')->group(function () {
+Route::prefix('api/emploi-temps')->group(function () {
 
     // ════════════════════════════════════════════════════════════
     // SELECTS — données de référence pour les formulaires
