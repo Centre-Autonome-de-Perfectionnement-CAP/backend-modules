@@ -59,7 +59,11 @@ class DatabaseSeeder extends Seeder
             PaymentsSeeder::class,
             DocumentRequestSeeder::class,
             DocumentRequestHistorySeeder::class,
+<<<<<<< HEAD
             AttendanceSeeder::class,
+=======
+            
+>>>>>>> a6a5dbad03ca42f5f4647ead91587738b1dda2be
         ]);
 
         // Réactiver les contraintes FK
