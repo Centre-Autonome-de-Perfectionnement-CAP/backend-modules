@@ -81,7 +81,7 @@ class UpdateIngenieurStudentsSeeder extends Seeder
 
         $bar->finish();
         $this->command->newLine(2);
-        
+
         $this->displayStats();
     }
 
@@ -98,7 +98,7 @@ class UpdateIngenieurStudentsSeeder extends Seeder
             $specDept = Department::where('abbreviation', $specialite)
                 ->whereHas('cycle', fn($q) => $q->where('name', 'LIKE', '%Ing%'))
                 ->first();
-            
+
             $prepaDept = Department::where('abbreviation', $prepa)
                 ->whereHas('cycle', fn($q) => $q->where('name', 'LIKE', '%Ing%'))
                 ->first();
@@ -127,7 +127,7 @@ class UpdateIngenieurStudentsSeeder extends Seeder
 
         // Récupérer les academic_paths existants pour déterminer le niveau réel
         $oldAcademicPaths = AcademicPath::where('student_pending_student_id', $link->id)->get();
-        
+
         // Le niveau actuel = MAX(study_level) des academic_paths
         $currentLevel = $oldAcademicPaths->max('study_level') ?? 1;
 
@@ -140,7 +140,7 @@ class UpdateIngenieurStudentsSeeder extends Seeder
             $levelKey = 'niveau_' . $currentLevel;
             $this->stats[$levelKey]++;
         }
-        
+
         // Si niveau 0 ou invalide, on ignore
         if ($currentLevel <= 0) {
             return;
@@ -150,7 +150,7 @@ class UpdateIngenieurStudentsSeeder extends Seeder
         if (!$student) {
             throw new \Exception("Student introuvable");
         }
-        
+
         // Si aucun academic_path (normalement impossible car on calcule currentLevel à partir d'eux)
         if ($oldAcademicPaths->isEmpty()) {
             $this->command->warn("⚠ Aucun academic_path pour {$oldPendingStudent->tracking_code}, création niveau 1 par défaut");
@@ -262,7 +262,7 @@ class UpdateIngenieurStudentsSeeder extends Seeder
 
         // Créer academic_paths pour chaque année en spécialité
         $baseAcademicPath = $oldAcademicPaths->first();
-        
+
         for ($i = 1; $i <= $specYears; $i++) {
             AcademicPath::create([
                 'student_pending_student_id' => $specLink->id,
@@ -281,22 +281,22 @@ class UpdateIngenieurStudentsSeeder extends Seeder
         $this->command->info('║           STATISTIQUES DE RESTRUCTURATION                     ║');
         $this->command->info('╚═══════════════════════════════════════════════════════════════╝');
         $this->command->newLine();
-        
+
         $this->command->info("📊 Total traité: {$this->stats['total']}");
-        
+
         if ($this->stats['niveau_0'] > 0) {
             $this->command->warn("   ⚠  Niveau 0 (ignorés): {$this->stats['niveau_0']}");
         }
-        
+
         $this->command->info("   • Niveau 1 (Prépa uniquement): {$this->stats['niveau_1']}");
         $this->command->info("   • Niveau 2 (Prépa + Ing 1): {$this->stats['niveau_2']}");
         $this->command->info("   • Niveau 3 (Prépa + Ing 1-2): {$this->stats['niveau_3']}");
         $this->command->info("   • Niveau 4 (Prépa + Ing 1-2-3): {$this->stats['niveau_4']}");
-        
+
         if ($this->stats['niveau_plus'] > 0) {
             $this->command->warn("   ⚠  Niveau 5+ (rares): {$this->stats['niveau_plus']}");
         }
-        
+
         if ($this->stats['errors'] > 0) {
             $this->command->error("   ❌ Erreurs: {$this->stats['errors']}");
         } else {

@@ -48,6 +48,10 @@ class PendingStudent extends Model
         'mail_cuo_count' => 'integer',
     ];
 
+     public function studentGroups() {
+        return $this->hasMany(\App\Modules\Inscription\Models\StudentGroup::class, 'student_id');
+    }
+
 
     public function personalInformation()
     {
@@ -69,10 +73,9 @@ class PendingStudent extends Model
         return $this->belongsTo(EntryDiploma::class);
     }
 
-    public function studentPendingStudents()
-{
-    return $this->hasMany(StudentPendingStudent::class, 'pending_student_id');
-}
+    public function studentPendingStudents() {
+        return $this->hasMany(StudentPendingStudent::class, 'pending_student_id');
+    }
 
     /**
      * Relation vers les parcours académiques via StudentPendingStudent
@@ -125,19 +128,28 @@ class PendingStudent extends Model
                 $value = [];
             }
         }
-    
+
         // Maintenant qu'on est sûr que c'est un tableau, on applique la modification demandée
         if (isset($value['Quittance de 15.000F'])) {
             $value['Quittance de 20.000F'] = $value['Quittance de 15.000F'];
             unset($value['Quittance de 15.000F']);
         }
-    
+
         return $value;
+    }
+
+    public function students(){
+        return $this->belongsToMany(
+            Student::class,
+            'student_pending_student',
+            'pending_student_id',
+            'student_id'
+        );
     }
 
 
 
 
 
-    
+
 }

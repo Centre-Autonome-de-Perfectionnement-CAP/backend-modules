@@ -34,7 +34,7 @@ class StudentSeeder extends Seeder
         $firstNamesFemale = ['Marie Ange', 'Aya', 'Adjoua', 'Akissi', 'Fatou', 'Aminata', 'Aïcha'];
         $cities = ['Abidjan', 'Bouaké', 'Yamoussoukro', 'Daloa', 'San-Pédro', 'Korhogo', 'Man'];
         $levels = ['L1', 'L2', 'L3'];
-        
+
         $studentsData = [];
         $studentNumber = 1;
 
@@ -42,7 +42,7 @@ class StudentSeeder extends Seeder
         foreach ($academicYears as $academicYear) {
             $isCurrentYear = $academicYear->is_current;
             $yearPrefix = substr($academicYear->academic_year, 2, 2); // Ex: "24" pour 2024-2025
-            
+
             // Créer 8 étudiants par année académique (mix de niveaux)
             for ($i = 0; $i < 20; $i++) {
                 $gender = ($i % 2 == 0) ? 'M' : 'F';
@@ -50,9 +50,9 @@ class StudentSeeder extends Seeder
                 $lastName = $lastNames[array_rand($lastNames)];
                 $city = $cities[array_rand($cities)];
                 $level = $levels[$i % 3];
-                
+
                 $studentIdNumber = $yearPrefix . str_pad($studentNumber, 6, '0', STR_PAD_LEFT);
-                
+
                 $data = [
                     'personal_info' => [
                         'last_name' => $lastName,
@@ -72,7 +72,7 @@ class StudentSeeder extends Seeder
                     'entry_diploma' => $entryDiplomas->random(),
                     'is_current_year' => $isCurrentYear,
                 ];
-                
+
                 $studentsData[] = $data;
                 $studentNumber++;
             }
@@ -84,7 +84,7 @@ class StudentSeeder extends Seeder
             $personalInfo = PersonalInformation::create($data['personal_info']);
 
             // 2. Créer PendingStudent
-            $pendingStatus = $data['is_current_year'] ? 'pending' : 'approved';
+            $pendingstatus = $data['is_current_year'] ? 'pending' : 'approved';
             $pendingStudent = PendingStudent::create([
                 'personal_information_id' => $personalInfo->id,
                 'tracking_code' => 'PS-' . strtoupper(Str::random(8)),
@@ -92,7 +92,7 @@ class StudentSeeder extends Seeder
                 'department_id' => $data['department']->id,
                 'entry_diploma_id' => $data['entry_diploma']->id,
                 'level' => $data['level'],
-                'status' => $pendingStatus,
+                'status' => $pendingstatus,
                 'cuca_opinion' => $data['is_current_year'] ? null : 'favorable',
                 'cuca_comment' => $data['is_current_year'] ? null : 'Dossier complet et conforme',
             ]);
@@ -108,7 +108,7 @@ class StudentSeeder extends Seeder
                     'student_id' => $student->id,
                     'pending_student_id' => $pendingStudent->id,
                 ]);
-                
+
                 $status = "✅ Étudiant approuvé";
             } else {
                 $status = "⏳ Candidature en attente";

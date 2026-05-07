@@ -37,7 +37,7 @@ class PaiementService
             });
         }
 
-        // Filtre par statut
+        // Filtre par status
         if (!empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
@@ -68,7 +68,7 @@ class PaiementService
     public function getStudentInfo(string $matricule): array
     {
         $student = Student::with('pendingStudents.personalInformation')->where('student_id_number', $matricule)->first();
-        
+
         if (!$student) {
             throw new ResourceNotFoundException('Étudiant');
         }
@@ -127,7 +127,7 @@ class PaiementService
             if (empty($data['department_id'])) {
                 throw new \InvalidArgumentException('Le department_id est requis pour créer un paiement');
             }
-            
+
             $studentPendingStudent = StudentPendingStudent::query()
                 ->where('student_id', $student->id)
                 ->whereHas('pendingStudent', function ($q) use ($data) {
@@ -135,15 +135,15 @@ class PaiementService
                 })
                 ->latest('id') // Prendre le plus récent si plusieurs
                 ->first();
-            
+
             if (!$studentPendingStudent) {
                 throw new ResourceNotFoundException(
                     "Aucune inscription trouvée pour l'étudiant {$data['matricule']} dans le département {$data['department_id']}"
                 );
             }
-            
+
             $studentPendingStudentId = $studentPendingStudent->id;
-            
+
             Log::info('Récupération student_pending_student_id', [
                 'student_id' => $student->id,
                 'department_id' => $data['department_id'],
@@ -156,7 +156,7 @@ class PaiementService
             $year = date('Y');
             $filename = uniqid('receipt_' . $data['matricule'] . '_') . '.' . $quittanceFile->getClientOriginalExtension();
             $receiptPath = "payments/{$data['matricule']}/{$year}/{$filename}";
-            
+
             // Stocker le fichier
             Storage::disk('local')->put($receiptPath, file_get_contents($quittanceFile->getRealPath()));
 
@@ -189,7 +189,7 @@ class PaiementService
                         $student->load('pendingStudents.personalInformation');
                     }
                     $personalInfo = $student->personalInformation;
-                    
+
                     $mailData = [
                         'reference' => $paiement->reference,
                         'matricule' => $paiement->student_id_number,
@@ -200,9 +200,9 @@ class PaiementService
                         'prenoms' => $personalInfo?->first_names ?? 'Étudiant(e)',
                         'nom' => $personalInfo?->last_name ?? '',
                     ];
-                    
+
                     Mail::to($paiement->email)->send(new QuittanceConfirmation($mailData));
-                    
+
                     Log::info('Email de confirmation de quittance envoyé', [
                         'paiement_id' => $paiement->id,
                         'email' => $paiement->email,
@@ -231,16 +231,16 @@ class PaiementService
     }
 
     /**
-     * Mettre à jour le statut d'un paiement
+     * Mettre à jour le status d'un paiement
      */
-    public function updateStatus(Paiement $paiement, string $status, ?string $observation = null): Paiement
+    public function updatestatus(Paiement $paiement, string $status, ?string $observation = null): Paiement
     {
         $paiement->update([
             'status' => $status,
             'observation' => $observation,
         ]);
 
-        Log::info('Statut du paiement mis à jour', [
+        Log::info('status du paiement mis à jour', [
             'paiement_id' => $paiement->id,
             'reference' => $paiement->reference,
             'new_status' => $status,

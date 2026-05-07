@@ -16,7 +16,7 @@ class GenerateCorrectionRequest extends FormRequest
         return [
             'nom' => 'required|string|max:255',
             'prenom' => 'required|string|max:255',
-            'statut' => 'required|string|max:255',
+            'status' => 'required|string|max:255',
             'titre' => 'required|string|max:255',
             'nometu' => 'required|string|max:255',
             'prenometu' => 'required|string|max:255',
@@ -30,7 +30,7 @@ class GenerateCorrectionRequest extends FormRequest
         return [
             'nom.required' => 'Le nom est requis',
             'prenom.required' => 'Le prénom est requis',
-            'statut.required' => 'Le statut est requis',
+            'status.required' => 'Le status est requis',
             'titre.required' => 'Le titre est requis',
             'nometu.required' => 'Le nom de l\'étudiant est requis',
             'prenometu.required' => 'Le prénom de l\'étudiant est requis',

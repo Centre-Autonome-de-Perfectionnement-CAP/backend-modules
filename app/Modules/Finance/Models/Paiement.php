@@ -69,9 +69,9 @@ class Paiement extends Model
     }
 
     /**
-     * Scope pour filtrer par statut
+     * Scope pour filtrer par status
      */
-    public function scopeByStatus($query, string $status)
+    public function scopeBystatus($query, string $status)
     {
         return $query->where('status', $status);
     }

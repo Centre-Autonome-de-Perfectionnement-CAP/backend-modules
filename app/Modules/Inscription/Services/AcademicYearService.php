@@ -92,21 +92,21 @@ class AcademicYearService
             Log::info('Début de la progression automatique des étudiants', [
                 'academic_year_id' => $year->id,
             ]);
-            
+
             $this->progressionService->progressStudents($year);
-            
+
             Log::info('Fin de la progression automatique des étudiants', [
                 'academic_year_id' => $year->id,
             ]);
 
             $freshYear = $year->fresh();
-            
+
             Log::info('Année académique créée avec succès - Résumé final', [
                 'academic_year_id' => $freshYear->id,
                 'label' => $academicYearLabel,
                 'is_current' => $freshYear->is_current,
             ]);
-            
+
             return $freshYear;
         });
     }
@@ -127,19 +127,19 @@ class AcademicYearService
         return DB::transaction(function () use ($academicYear, $data) {
             // Mise à jour des dates si fournies
             $updateData = [];
-            
+
             if (isset($data['year_start'])) {
                 $updateData['year_start'] = $data['year_start'];
             }
-            
+
             if (isset($data['year_end'])) {
                 $updateData['year_end'] = $data['year_end'];
             }
-            
+
             if (isset($data['submission_start'])) {
                 $updateData['submission_start'] = $data['submission_start'];
             }
-            
+
             if (isset($data['submission_end'])) {
                 $updateData['submission_end'] = $data['submission_end'];
             }
@@ -152,7 +152,7 @@ class AcademicYearService
             if (isset($data['departments'])) {
                 // Supprimer les anciennes périodes
                 $academicYear->submissionPeriod()->delete();
-                
+
                 // Créer les nouvelles
                 foreach ($data['departments'] as $departmentId) {
                     SubmissionPeriod::create([
@@ -203,7 +203,7 @@ class AcademicYearService
         return DB::transaction(function () use ($academicYear) {
             // Désactiver toutes les autres
             AcademicYear::where('is_current', true)->update(['is_current' => false]);
-            
+
             // Activer celle-ci
             $academicYear->update(['is_current' => true]);
 
@@ -230,7 +230,7 @@ class AcademicYearService
     public function isSubmissionOpen(): bool
     {
         $current = $this->getCurrent();
-        
+
         if (!$current) {
             return false;
         }
@@ -254,7 +254,7 @@ class AcademicYearService
     public function getYearsForDepartment(int $departmentId)
     {
         $now = now();
-        
+
         return AcademicYear::whereHas('submissionPeriods', function ($query) use ($departmentId, $now) {
             $query->where('department_id', $departmentId)
                   ->where('start_date', '<=', $now)
@@ -395,7 +395,7 @@ class AcademicYearService
 
         // Récupérer les périodes de réclamation
         $reclamationPeriods = $academicYear->reclamationPeriod;
-        
+
         foreach ($reclamationPeriods as $period) {
             $periods[] = [
                 'type' => 'reclamation',

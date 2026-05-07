@@ -128,7 +128,7 @@ class DefenseSubmissionService
     private function validateSubmissionPeriod($period): void
     {
         $currentDate = now()->toDateString();
-        
+
         if ($currentDate < $period->start_date || $currentDate > $period->end_date) {
             throw new \Exception("La période de soumission est fermée");
         }
@@ -140,14 +140,14 @@ class DefenseSubmissionService
             ->find($id);
     }
 
-    public function updateStatus(DefenseSubmission $submission, string $status, ?string $rejectionReason = null): DefenseSubmission
+    public function updatestatus(DefenseSubmission $submission, string $status, ?string $rejectionReason = null): DefenseSubmission
     {
         $submission->update([
             'status' => $status,
             'rejection_reason' => $rejectionReason,
         ]);
 
-        Log::info('Statut de soumission mis à jour', [
+        Log::info('status de soumission mis à jour', [
             'submission_id' => $submission->id,
             'new_status' => $status,
         ]);
@@ -159,7 +159,7 @@ class DefenseSubmissionService
                 Mail::to($submission->email)->send(new DefenseSubmissionRejected($submission, $rejectionReason));
             }
         } catch (\Exception $e) {
-            Log::error('Échec envoi email changement statut: '.$e->getMessage());
+            Log::error('Échec envoi email changement status: '.$e->getMessage());
         }
 
         return $submission->fresh(['student', 'department', 'professor', 'period', 'room']);

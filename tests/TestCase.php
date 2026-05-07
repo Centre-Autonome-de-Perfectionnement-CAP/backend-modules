@@ -64,7 +64,7 @@ abstract class TestCase extends BaseTestCase
      */
     protected function assertValidationErrors($response, array $fields): void
     {
-        $response->assertStatus(422);
+        $response->assertstatus(422);
         $response->assertJsonValidationErrors($fields);
     }
 }

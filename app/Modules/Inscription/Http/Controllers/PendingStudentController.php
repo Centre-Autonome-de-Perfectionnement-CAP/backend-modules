@@ -43,7 +43,7 @@ class PendingStudentController extends Controller
      *     @OA\Parameter(
      *         name="status",
      *         in="query",
-     *         description="Filtrer par statut",
+     *         description="Filtrer par status",
      *         required=false,
      *         @OA\Schema(type="string", enum={"pending", "documents_submitted", "approved", "rejected"})
      *     ),
@@ -77,10 +77,10 @@ class PendingStudentController extends Controller
 {
     $filters = $request->only(['status', 'department_id', 'academic_year_id', 'entry_diploma_id', 'level', 'cohort', 'search']);
     $perPage = $this->getPerPage($request);
-    
+
     $pendingStudents = $this->pendingStudentService->getAll($filters, $perPage);
     $transformedData = PendingStudentResource::collection($pendingStudents->items());
-    
+
     $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
         $transformedData,
         $pendingStudents->total(),
@@ -220,7 +220,7 @@ class PendingStudentController extends Controller
     public function update(CreatePendingStudentRequest $request, PendingStudent $pendingStudent): JsonResponse
     {
         $data = $request->validated();
-        
+
         \Log::info('=== UPDATE PENDING STUDENT START ===', [
             'pending_student_id' => $pendingStudent->id,
             'data_received' => $data,
@@ -228,31 +228,31 @@ class PendingStudentController extends Controller
             'current_cuca_opinion' => $pendingStudent->cuca_opinion,
             'current_cuo_opinion' => $pendingStudent->cuo_opinion,
         ]);
-        
+
         // Si on met à jour les opinions CUCA ou CUO, ne pas changer le status automatiquement
         $isOpinionUpdate = isset($data['cuca_opinion']) || isset($data['cuo_opinion']);
-        
+
         \Log::info('Opinion update check', [
             'isOpinionUpdate' => $isOpinionUpdate,
             'has_cuca_opinion' => isset($data['cuca_opinion']),
             'has_cuo_opinion' => isset($data['cuo_opinion']),
             'has_status' => isset($data['status']),
         ]);
-        
+
         if (isset($data['status']) && $data['status'] !== $pendingStudent->status && !$isOpinionUpdate) {
-            \Log::info('Calling changeStatus', [
+            \Log::info('Calling changestatus', [
                 'old_status' => $pendingStudent->status,
                 'new_status' => $data['status'],
             ]);
-            $pendingStudent = $this->pendingStudentService->changeStatus($pendingStudent, $data['status']);
-            unset($data['status']); 
+            $pendingStudent = $this->pendingStudentService->changestatus($pendingStudent, $data['status']);
+            unset($data['status']);
         }
 
         if (!empty($data)) {
             \Log::info('Calling update service', ['data' => $data]);
             $pendingStudent = $this->pendingStudentService->update($pendingStudent, $data);
         }
-        
+
         \Log::info('=== UPDATE PENDING STUDENT END ===');
 
         return $this->updatedResponse(
@@ -262,9 +262,9 @@ class PendingStudentController extends Controller
     }
 
     /**
- * Mettre à jour uniquement les statuts (exonéré, sponsorisé)
+ * Mettre à jour uniquement les statuss (exonéré, sponsorisé)
  */
-public function updateStatus(Request $request, PendingStudent $pendingStudent): JsonResponse
+public function updatestatus(Request $request, PendingStudent $pendingStudent): JsonResponse
 {
     $validated = $request->validate([
         'exonere' => 'sometimes|in:Oui,Non',
@@ -275,7 +275,7 @@ public function updateStatus(Request $request, PendingStudent $pendingStudent): 
 
     return $this->successResponse(
         new PendingStudentResource($pendingStudent),
-        'Statuts mis à jour avec succès'
+        'statuss mis à jour avec succès'
     );
 }
 
@@ -403,10 +403,10 @@ public function updateStatus(Request $request, PendingStudent $pendingStudent): 
     {
         $validated = $request->validated();
 
-        $documents = is_string($pendingStudent->documents) 
-            ? json_decode($pendingStudent->documents, true) 
+        $documents = is_string($pendingStudent->documents)
+            ? json_decode($pendingStudent->documents, true)
             : ($pendingStudent->documents ?? []);
-        
+
         if (!isset($documents[$validated['piece_key']])) {
             return $this->errorResponse('Pièce non trouvée', 404, 'PIECE_NOT_FOUND');
         }

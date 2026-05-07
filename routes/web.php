@@ -2,21 +2,46 @@
 
 use Illuminate\Support\Facades\Route;
 
-// Route pour l'application principale app-cap (site vitrine à la racine)
-Route::get('/', function () {
-    return file_get_contents(public_path('app-cap/index.html'));
-});
+function returnIndexHtml($path = 'index.html') {
+    $file = public_path($path);
+    if (file_exists($file)) {
+        return response()->file($file, [
+            'Content-Type' => 'text/html'
+        ]);
+    }
+    abort(404, 'Fichier introuvable : '.$path);
+}
 
-// Route pour app-cap-frontend (services) - exclure les fichiers statiques
-Route::get('/services/{any?}', function () {
-    return file_get_contents(public_path('app-cap-frontend/index.html'));
+// ========== ROUTES STATIQUES (fichiers stockés) - DOIVENT ÊTRE AVANT ==========
+Route::get('/stockage/{path}', function ($path) {
+    $fullPath = storage_path('app/public/' . $path);
+    
+    if (!file_exists($fullPath)) {
+        abort(404, 'Fichier non trouvé : ' . $path);
+    }
+    
+    return response()->file($fullPath);
+})->where('path', '.*');
+
+// ========== ROUTES API ==========
+// (Vos routes API ici...)
+
+// ========== ROUTES PRINCIPALES ==========
+Route::get('/', fn() => returnIndexHtml());
+
+// Route pour services
+Route::get('/services/{any?}', fn() => returnIndexHtml('services/index.html'))
+    ->where('any', '^(?!.*\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot|map)).*');
+
+// Route pour app-cap-frontend
+Route::get('/app-cap-frontend/{any?}', function () {
+    $path = public_path('app-cap-frontend/index.html');
+    if (file_exists($path)) {
+        return file_get_contents($path);
+    }
+    abort(404, 'Fichier app-cap-frontend/index.html non trouvé');
 })->where('any', '^(?!.*\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot|map)).*');
 
-// Route catch-all pour app-cap (doit être en dernier) - exclure les fichiers statiques et les routes API
-Route::get('/{any}', function () {
-    return file_get_contents(public_path('app-cap/index.html'));
-})->where('any', '^(?!api/)(?!services/)(?!.*\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot|map)).*');
-// Route pour l'API Laravel (si vous en avez)
-// Route::get('/api/endpoint', [Controller::class, 'method']);
-
-
+// ========== CATCH-ALL (DOIT ÊTRE EN DERNIER) ==========
+Route::get('/{any}', fn() => returnIndexHtml())
+    ->where('any', '^(?!api/)(?!services/)(?!app-cap-frontend/)(?!stockage/)(?!.*\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot|map)).*');

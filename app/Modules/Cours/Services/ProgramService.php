@@ -15,8 +15,7 @@ class ProgramService
     {
         $query = Program::query()
             ->with([
-                'classGroup.department',
-                'classGroup.academicYear',
+                'classGroup',
                 'academicYear',
                 'courseElementProfessor.courseElement.teachingUnit',
                 'courseElementProfessor.professor'
@@ -93,8 +92,7 @@ class ProgramService
         ]);
 
         return $program->load([
-            'classGroup.department',
-            'classGroup.academicYear',
+            'classGroup',
             'academicYear',
             'courseElementProfessor.courseElement.teachingUnit',
             'courseElementProfessor.professor'
@@ -107,8 +105,7 @@ class ProgramService
     public function getById(int $id): ?Program
     {
         return Program::with([
-            'classGroup.department',
-            'classGroup.academicYear',
+            'classGroup',
             'courseElementProfessor.courseElement.teachingUnit',
             'courseElementProfessor.professor'
         ])->find($id);
@@ -126,8 +123,7 @@ class ProgramService
         ]);
 
         return $program->fresh([
-            'classGroup.department',
-            'classGroup.academicYear',
+            'classGroup',
             'courseElementProfessor.courseElement.teachingUnit',
             'courseElementProfessor.professor'
         ]);
@@ -162,8 +158,6 @@ class ProgramService
     public function getProgramsByClassGroup(int $classGroupId, int $perPage = 50)
     {
         return Program::with([
-            'classGroup.department',
-            'classGroup.academicYear',
             'academicYear',
             'courseElementProfessor.courseElement.teachingUnit',
             'courseElementProfessor.professor'
@@ -179,8 +173,7 @@ class ProgramService
     public function getProgramsByProfessor(int $professorId, int $perPage = 50)
     {
         return Program::with([
-            'classGroup.department',
-            'classGroup.academicYear',
+            'classGroup',
             'academicYear',
             'courseElementProfessor.courseElement.teachingUnit'
         ])
@@ -197,8 +190,7 @@ class ProgramService
     public function getProgramsByCourseElement(int $courseElementId, int $perPage = 50)
     {
         return Program::with([
-            'classGroup.department',
-            'classGroup.academicYear',
+            'classGroup',
             'academicYear',
             'courseElementProfessor.professor'
         ])
@@ -236,8 +228,7 @@ class ProgramService
 
                 $program = Program::create($data);
                 $createdPrograms[] = $program->load([
-                    'classGroup.department',
-                    'classGroup.academicYear',
+                    'classGroup',
                     'academicYear',
                     'courseElementProfessor.courseElement.teachingUnit',
                     'courseElementProfessor.professor'
@@ -313,8 +304,7 @@ class ProgramService
                 ]);
 
                 $createdPrograms[] = $newProgram->load([
-                    'classGroup.department',
-                    'classGroup.academicYear',
+                    'classGroup',
                     'academicYear',
                     'courseElementProfessor.courseElement.teachingUnit',
                     'courseElementProfessor.professor'

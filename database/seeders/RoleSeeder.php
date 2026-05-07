@@ -23,7 +23,7 @@ class RoleSeeder extends Seeder
                 'permissions' => ['*'], // Toutes les permissions
             ],
             [
-                'name' => 'Chef Division',
+                'name' => 'Responsable Division',
                 'slug' => 'chef-division',
                 'permissions' => [
                     'can_view_dashboard', 'can_export_data',

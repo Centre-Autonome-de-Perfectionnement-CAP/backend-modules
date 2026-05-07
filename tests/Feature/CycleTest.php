@@ -19,7 +19,7 @@ class CycleTest extends TestCase
 
         $response = $this->getJson('/api/inscription/cycles');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -68,7 +68,7 @@ class CycleTest extends TestCase
 
         $response = $this->getJson('/api/inscription/filieres');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -107,7 +107,7 @@ class CycleTest extends TestCase
         $department = Department::factory()->create(['cycle_id' => $cycle->id]);
 
         $response = $this->getJson('/api/inscription/next-deadline');
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -145,7 +145,7 @@ class CycleTest extends TestCase
         $department = Department::factory()->create(['cycle_id' => $cycle->id]);
 
         $response = $this->getJson('/api/inscription/niveaux');
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -187,10 +187,10 @@ class CycleTest extends TestCase
         $response3 = $this->getJson('/api/inscription/next-deadline');
         $response4 = $this->getJson('/api/inscription/niveaux');
 
-        $response1->assertStatus(200);
-        $response2->assertStatus(200);
-        $response3->assertStatus(200);
-        $response4->assertStatus(200);
+        $response1->assertstatus(200);
+        $response2->assertstatus(200);
+        $response3->assertstatus(200);
+        $response4->assertstatus(200);
     }
 
     /**
@@ -199,7 +199,7 @@ class CycleTest extends TestCase
     public function test_empty_cycles_list_returns_valid_structure(): void
     {
         $response = $this->getJson('/api/inscription/cycles');
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',

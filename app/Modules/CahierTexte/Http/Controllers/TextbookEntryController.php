@@ -73,7 +73,7 @@ class TextbookEntryController extends Controller
                 'success' => false,
                 'message' => 'Entrée non trouvée',
                 'error' => $e->getMessage(),
-            ], 404);
+            ], 404); 
         }
     }
 

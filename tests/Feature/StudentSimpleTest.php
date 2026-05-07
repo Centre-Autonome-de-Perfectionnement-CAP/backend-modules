@@ -13,7 +13,7 @@ class StudentSimpleTest extends TestCase
     {
         $response = $this->getJson('/api/inscription/students');
 
-        $response->assertStatus(401);
+        $response->assertstatus(401);
     }
 
     /**
@@ -25,7 +25,7 @@ class StudentSimpleTest extends TestCase
 
         $response = $this->getJson('/api/inscription/students');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -40,7 +40,7 @@ class StudentSimpleTest extends TestCase
     {
         $response = $this->getJson('/api/inscription/students/1');
 
-        $response->assertStatus(401);
+        $response->assertstatus(401);
     }
 
     /**
@@ -63,7 +63,7 @@ class StudentSimpleTest extends TestCase
 
         $response = $this->getJson('/api/inscription/students?year=2024-2025');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',

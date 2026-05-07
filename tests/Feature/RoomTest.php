@@ -16,7 +16,7 @@ class RoomTest extends TestCase
     {
         $response = $this->getJson('/api/emploi-temps/rooms');
 
-        $response->assertStatus(401);
+        $response->assertstatus(401);
     }
 
     /**
@@ -29,7 +29,7 @@ class RoomTest extends TestCase
 
         $response = $this->getJson('/api/emploi-temps/rooms');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -72,7 +72,7 @@ class RoomTest extends TestCase
 
         $response = $this->postJson('/api/emploi-temps/rooms', $data);
 
-        $response->assertStatus(201)
+        $response->assertstatus(201)
             ->assertJson([
                 'success' => true,
                 'data' => [
@@ -152,7 +152,7 @@ class RoomTest extends TestCase
             'capacity' => 50,
         ]);
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson([
                 'success' => true,
                 'data' => [
@@ -178,7 +178,7 @@ class RoomTest extends TestCase
 
         $response = $this->deleteJson("/api/emploi-temps/rooms/{$room->id}");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson(['success' => true]);
 
         $this->assertDatabaseMissing('rooms', [
@@ -200,7 +200,7 @@ class RoomTest extends TestCase
 
         $response = $this->getJson("/api/emploi-temps/rooms?building_id={$building1->id}");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonPath('meta.total', 1);
     }
 
@@ -215,7 +215,7 @@ class RoomTest extends TestCase
 
         $response = $this->getJson('/api/emploi-temps/rooms?room_type=amphitheater');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonPath('meta.total', 1);
     }
 
@@ -230,7 +230,7 @@ class RoomTest extends TestCase
 
         $response = $this->getJson('/api/emploi-temps/rooms?min_capacity=50');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonPath('meta.total', 1);
     }
 
@@ -245,7 +245,7 @@ class RoomTest extends TestCase
 
         $response = $this->getJson('/api/emploi-temps/rooms-available?time_slot_id=' . $timeSlot->id . '&date=2025-11-15');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson(['success' => true]);
     }
 

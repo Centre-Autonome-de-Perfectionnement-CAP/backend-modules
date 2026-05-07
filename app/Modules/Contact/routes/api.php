@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
-Route::prefix('api')->group(function () {
+Route::prefix('contact')->group(function () {
     // Route publique pour soumettre un message de contact
     Route::post('/contact', [ContactController::class, 'store'])->name('contact.store');
 

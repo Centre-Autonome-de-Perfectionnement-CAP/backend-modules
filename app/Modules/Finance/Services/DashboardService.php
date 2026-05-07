@@ -24,10 +24,10 @@ class DashboardService
                 $academicYear = AcademicYear::orderBy('year_start', 'desc')->first();
             }
         }
-        
+
         // Paiements non validés en attente
         $pendingPayments = Paiement::pending()->count();
-        
+
         // Frais encaissés dans l'année académique (somme des montants payés validés)
         $collectedAmount = Paiement::approved()
             ->whereBetween('payment_date', [
@@ -35,22 +35,22 @@ class DashboardService
                 $academicYear->year_end
             ])
             ->sum('amount');
-        
+
         // Montant attendu (somme de la scolarité que doit payer chaque étudiant)
         $expectedAmount = $this->calculateExpectedAmount($academicYear);
-        
+
         // Nombre total d'étudiants
         $totalStudents = Student::count();
-        
+
         // Taux de recouvrement
         $recoveryRate = $expectedAmount > 0 ? ($collectedAmount / $expectedAmount) * 100 : 0;
-        
+
         // Paiements par mois
         $monthlyPayments = $this->getMonthlyPayments($academicYear);
-        
-        // Répartition par statut
-        $paymentsByStatus = $this->getPaymentsByStatus();
-        
+
+        // Répartition par status
+        $paymentsBystatus = $this->getPaymentsBystatus();
+
         return [
             'pending_payments_count' => $pendingPayments,
             'collected_amount' => $collectedAmount,
@@ -58,7 +58,7 @@ class DashboardService
             'total_students' => $totalStudents,
             'recovery_rate' => round($recoveryRate, 2),
             'monthly_payments' => $monthlyPayments,
-            'payments_by_status' => $paymentsByStatus,
+            'payments_by_status' => $paymentsBystatus,
             'academic_year' => $academicYear ? $academicYear->libelle : 'Année courante'
         ];
     }
@@ -70,25 +70,25 @@ class DashboardService
     {
         // Utilise directement l'objet AcademicYear passé en paramètre
         $academicYearRecord = $academicYear;
-        
+
         if (!$academicYearRecord) {
             return 0;
         }
-        
+
         if (!$academicYear) {
             return 0;
         }
-        
+
         // Compte les étudiants inscrits cette année (via les dossiers)
         $studentsCount = Student::whereHas('studentPendingStudents.pendingStudent', function($query) use ($academicYearRecord) {
             $query->where('academic_year_id', $academicYearRecord->id);
         })->count();
-        
+
         // Récupère le montant de base de la scolarité
         $baseAmount = Amount::where('type', 'scolarite')
             ->where('academic_year_id', $academicYearRecord->id)
             ->first();
-        
+
         return $studentsCount * ($baseAmount ? $baseAmount->amount : 0);
     }
 
@@ -119,9 +119,9 @@ class DashboardService
     }
 
     /**
-     * Récupère la répartition des paiements par statut
+     * Récupère la répartition des paiements par status
      */
-    private function getPaymentsByStatus()
+    private function getPaymentsBystatus()
     {
         return Paiement::select('status', DB::raw('COUNT(*) as count'))
             ->groupBy('status')
@@ -130,7 +130,7 @@ class DashboardService
                 return [
                     'status' => $item->status,
                     'count' => $item->count,
-                    'label' => $this->getStatusLabel($item->status)
+                    'label' => $this->getstatusLabel($item->status)
                 ];
             });
     }
@@ -148,16 +148,16 @@ class DashboardService
     }
 
     /**
-     * Retourne le libellé d'un statut
+     * Retourne le libellé d'un status
      */
-    private function getStatusLabel($status)
+    private function getstatusLabel($status)
     {
         $labels = [
             'pending' => 'En attente',
             'approved' => 'Approuvé',
             'rejected' => 'Rejeté'
         ];
-        
+
         return $labels[$status] ?? $status;
     }
 }
