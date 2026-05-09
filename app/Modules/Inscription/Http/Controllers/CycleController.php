@@ -9,12 +9,7 @@ use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-/**
- * @OA\Tag(
- *     name="Cycles",
- *     description="Gestion des cycles d'études"
- * )
- */
+
 class CycleController extends Controller
 {
     use ApiResponse;

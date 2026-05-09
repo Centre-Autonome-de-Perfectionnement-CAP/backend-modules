@@ -21,7 +21,6 @@ use App\Modules\Inscription\Http\Controllers\TextbookController;
 
 Route::prefix('api/inscription')->group(function () {
 
-
     Route::prefix('pending-students')->group(function () {
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('/', [PendingStudentController::class, 'index']);

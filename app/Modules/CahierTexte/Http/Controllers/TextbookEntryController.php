@@ -8,38 +8,130 @@ use App\Modules\CahierTexte\Http\Requests\UpdateTextbookEntryRequest;
 use App\Modules\CahierTexte\Http\Resources\TextbookEntryResource;
 use App\Modules\CahierTexte\Services\TextbookEntryService;
 use Illuminate\Http\Request;
+use App\Modules\CahierTexte\Models\TextbookEntry;
 
-class TextbookEntryController extends Controller
-{
+class TextbookEntryController extends Controller{
     protected $textbookEntryService;
 
-    public function __construct(TextbookEntryService $textbookEntryService)
-    {
+    public function __construct(TextbookEntryService $textbookEntryService)  {
         $this->textbookEntryService = $textbookEntryService;
     }
 
-    /**
-     * Liste des entrées du cahier de texte
-     */
-    public function index(Request $request)
-    {
+ 
+
+    
+    public function index(Request $request) {
+        $perPage = $request->integer('per_page', 15);
         try {
-            $filters = $request->only([
-                'search',
-                'program_id',
-                'class_group_id',
-                'professor_id',
-                'status',
-                'start_date',
-                'end_date',
-                'per_page',
+    
+            $query = TextbookEntry::with([
+                'program.classGroup.department.cycle',  // Charger les relations imbriquées
+                'program.courseElementProfessor.courseElement',
+                'program.courseElementProfessor.professor',
             ]);
 
-            $entries = $this->textbookEntryService->getAll($filters);
+            if ($request->filled('program_id')) {
+                $query->where('program_id', $request->program_id);
+            }
+
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+            }
+
+            if ($request->filled('start_date') && $request->filled('end_date')) {
+                $query->whereBetween('session_date', [
+                    $request->start_date,
+                    $request->end_date
+                ]);
+            }
+
+            $entries = $query
+                ->orderByDesc('session_date')
+                ->paginate($perPage);
+
+            $data = $entries->getCollection()->map(function ($entry) {
+                $program = $entry->program;
+                $cep = $program?->courseElementProfessor;
+                $course = $cep?->courseElement;
+                $professor = $cep?->professor;
+                $classGroup = $program?->classGroup;
+                
+                // Récupérer le département et le cycle pour formater la classe
+                $department = $classGroup?->department;
+                $cycle = $department?->cycle;
+                
+                // Formater le nom de la classe: Department.name - Cycle.years_count - ClassGroup.group_name
+                $formattedClassName = null;
+                if ($classGroup) {
+                    $departmentName = $department?->name ?? '';
+                    $cycleYears = $classGroup->study_level ?? '';
+                    $groupName = $classGroup->group_name ?? '';
+                    $abs_dep = $department?->abbreviation ?? '';
+                    $abs = $abs_dep." ". $cycleYears ." ". $groupName;
+                    
+                    $parts = array_filter([$departmentName, $cycleYears, $groupName]);
+                    $formattedClassName = !empty($parts) ? implode(' - ', $parts) : $groupName;
+
+                    $formattedClassName = $formattedClassName . " (". $abs .")";
+                }
+
+                return [
+                    'id' => $entry->id,
+                    'uuid' => $entry->uuid,
+
+                    'course_element' => $course ? [
+                        'id' => $course->id,
+                        'name' => $course->name,
+                        'code' => $course->code,
+                    ] : null,
+
+                    'professor' => $professor ? [
+                        'id' => $professor->id,
+                        'first_name' => $professor->first_name ?? '',
+                        'last_name' => $professor->last_name ?? '',
+                        'full_name' => trim(
+                            ($professor->first_name ?? '') . ' ' .
+                            ($professor->last_name ?? '')
+                        ),
+                        'email' => $professor->email ?? '',
+                        'phone' => $professor->phone ?? '',
+                        'rib_number' => $professor->rib_number ?? '',
+                        'hourly_rate' => $professor->hourly_rate ?? 0,
+                    ] : null,
+
+                    'class_group' => $classGroup ? [
+                        'id' => $classGroup->id,
+                        'group_name' => $formattedClassName,  // Utiliser le nom formaté
+                        'original_name' => $classGroup->group_name,  // Optionnel: garder le nom original
+                    ] : null,
+
+                    'program' => $program ? [
+                        'id' => $program->id,
+                        'semester' => $program->semester,
+                        'quota_hours' => $program->quota_hours ?? $program->total_hours ?? 0,
+                    ] : null,
+
+                    // Entry fields
+                    'session_date' => $entry->session_date?->format('Y-m-d'),
+                    'start_time' => $entry->start_time,
+                    'end_time' => $entry->end_time,
+                    'hours_taught' => $entry->hours_taught,
+                    'session_title' => $entry->session_title,
+                    'content_covered' => $entry->content_covered,
+                    'objectives' => $entry->objectives,
+                    'teaching_methods' => $entry->teaching_methods,
+                    'homework' => $entry->homework,
+                    'students_present' => $entry->students_present,
+                    'students_absent' => $entry->students_absent,
+                    'status' => $entry->status,
+                    'created_at' => $entry->created_at?->format('Y-m-d H:i'),
+                    'validated_at' => $entry->validated_at?->format('Y-m-d H:i'),
+                ];
+            });
 
             return response()->json([
                 'success' => true,
-                'data' => TextbookEntryResource::collection($entries->items()),
+                'data' => $data,
                 'meta' => [
                     'current_page' => $entries->currentPage(),
                     'last_page' => $entries->lastPage(),
@@ -47,7 +139,8 @@ class TextbookEntryController extends Controller
                     'total' => $entries->total(),
                 ],
             ]);
-        } catch (\Exception $e) {
+
+        } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de la récupération des entrées',
@@ -164,11 +257,8 @@ class TextbookEntryController extends Controller
         }
     }
 
-    /**
-     * Valider une entrée
-     */
-    public function validateEntry(Request $request, $id)
-    {
+    
+    public function validateEntry(Request $request, $id) {
         try {
             $entry = $this->textbookEntryService->validate($id, $request->user());
 
@@ -186,11 +276,7 @@ class TextbookEntryController extends Controller
         }
     }
 
-    /**
-     * Entrées par groupe de classe
-     */
-    public function byClassGroup(Request $request, $classGroupId)
-    {
+    public function byClassGroup(Request $request, $classGroupId) {
         try {
             $filters = $request->only(['start_date', 'end_date', 'status', 'per_page']);
             $entries = $this->textbookEntryService->getByClassGroup($classGroupId, $filters);
@@ -214,11 +300,7 @@ class TextbookEntryController extends Controller
         }
     }
 
-    /**
-     * Entrées par professeur
-     */
-    public function byProfessor(Request $request, $professorId)
-    {
+    public function byProfessor(Request $request, $professorId) {
         try {
             $filters = $request->only(['start_date', 'end_date', 'status', 'per_page']);
             $entries = $this->textbookEntryService->getByProfessor($professorId, $filters);
@@ -242,11 +324,7 @@ class TextbookEntryController extends Controller
         }
     }
 
-    /**
-     * Statistiques
-     */
-    public function statistics(Request $request)
-    {
+    public function statistics(Request $request) {
         try {
             $filters = $request->only([
                 'start_date',

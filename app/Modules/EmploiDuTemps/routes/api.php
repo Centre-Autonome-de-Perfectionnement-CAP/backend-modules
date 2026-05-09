@@ -9,6 +9,18 @@ use App\Modules\EmploiDuTemps\Http\Controllers\ScheduledCourseController;
 use App\Modules\EmploiDuTemps\Http\Controllers\EmploiDuTempsController;
 use App\Modules\EmploiDuTemps\Http\Controllers\SelectController;
 use App\Modules\EmploiDuTemps\Http\Controllers\PdfController;
+use App\Modules\EmploiDuTemps\Http\Controllers\TextbookProfessorController;
+
+// Routes pour le professeur (cahier de texte)
+Route::middleware(['auth:sanctum'])->prefix('api/notes/professor/textbook')->group(function () {
+    
+    // Entrées pour un programme spécifique
+    Route::get('/entries/{programId}', [TextbookProfessorController::class, 'entries']);
+    
+    // Publier/Dépublier une entrée
+    Route::put('/publish/{entryId}', [TextbookProfessorController::class, 'publish']);
+    Route::put('/unpublish/{entryId}', [TextbookProfessorController::class, 'unpublish']);
+});
 
 Route::prefix('api/emploi-temps')->group(function () {
 

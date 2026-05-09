@@ -15,14 +15,12 @@ class Cycle extends Model
     /**
      * Create a new factory instance for the model.
      */
-    protected static function newFactory()
-    {
+    protected static function newFactory(){
         return \Database\Factories\CycleFactory::new();
     }
 
     
-    public function departments()
-    {
+    public function departments() {
         return $this->hasMany(Department::class);
     }
 

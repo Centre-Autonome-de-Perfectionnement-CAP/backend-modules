@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Modules\CahierTexte\Http\Controllers\TextbookEntryController;
 use App\Modules\CahierTexte\Http\Controllers\TextbookCommentController;
 
-Route::middleware(['auth:sanctum'])->prefix('cahier-texte')->group(function () {
+Route::middleware(['auth:sanctum'])->prefix('api/cahier-texte')->group(function () {
     
     // Textbook Entries
     Route::get('/', [TextbookEntryController::class, 'index']);
