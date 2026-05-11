@@ -6,6 +6,7 @@ use App\Modules\Alumni\Services\AlumniService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Validation\ValidationException;
 
 class AlumniController extends Controller
 {
@@ -13,8 +14,12 @@ class AlumniController extends Controller
     {
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    //  PUBLIC
+    // ──────────────────────────────────────────────────────────────────────────
+
     /**
-     * Soumettre une fiche alumni (public).
+     * Soumettre une fiche alumni (route publique).
      */
     public function store(Request $request): JsonResponse
     {
@@ -47,17 +52,121 @@ class AlumniController extends Controller
         ], 201);
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    //  ADMIN — LISTE
+    // ──────────────────────────────────────────────────────────────────────────
+
     /**
-     * Liste des alumni (admin).
+     * Liste paginée des alumni (admin).
+     *
+     * Query params : ecole, formation, annee_sortie, promotion,
+     *                situation_professionnelle, type_emploi,
+     *                secteur_emploi, search, per_page
      */
     public function index(Request $request): JsonResponse
     {
-        $alumni = $this->alumniService->getAll($request->only(['ecole', 'formation', 'annee_sortie', 'search']));
+        $perPage = (int) $request->get('per_page', 20);
+        $filters = $request->only([
+            'ecole', 'formation', 'annee_sortie', 'promotion',
+            'situation_professionnelle', 'type_emploi', 'secteur_emploi', 'search',
+        ]);
+
+        $alumni = $this->alumniService->getAll($filters, $perPage);
+
+        return response()->json([
+            'success' => true,
+            'data'    => $alumni->items(),
+            'meta'    => [
+                'total'        => $alumni->total(),
+                'per_page'     => $alumni->perPage(),
+                'current_page' => $alumni->currentPage(),
+                'last_page'    => $alumni->lastPage(),
+                'from'         => $alumni->firstItem(),
+                'to'           => $alumni->lastItem(),
+            ],
+        ]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    //  ADMIN — DÉTAIL
+    // ──────────────────────────────────────────────────────────────────────────
+
+    public function show(int $id): JsonResponse
+    {
+        $alumni = $this->alumniService->getById($id);
 
         return response()->json([
             'success' => true,
             'data'    => $alumni,
-            'total'   => $alumni->count(),
+        ]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    //  ADMIN — MISE À JOUR
+    // ──────────────────────────────────────────────────────────────────────────
+
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'ecole'                     => 'sometimes|in:CAP,EPAC',
+            'nom'                       => 'sometimes|string|max:255',
+            'prenom'                    => 'sometimes|string|max:255',
+            'civilite'                  => 'sometimes|in:Monsieur,Madame',
+            'mail'                      => 'sometimes|email|max:255|unique:alumni,mail,' . $id,
+            'telephone'                 => 'sometimes|string|max:30',
+            'situation_professionnelle' => 'sometimes|string',
+            'autre_situation'           => 'nullable|string|max:255',
+            'secteur_emploi'            => 'sometimes|string',
+            'secteur_professionnel'     => 'sometimes|string',
+            'type_emploi'               => 'sometimes|in:Employeur,Employe,Aucun',
+            'nom_entreprise'            => 'nullable|string|max:255',
+            'annee_entree'              => 'sometimes|digits:4',
+            'annee_sortie'              => 'sometimes|digits:4',
+            'promotion'                 => 'sometimes|integer|min:1|max:999',
+            'formation'                 => 'sometimes|string',
+            'autre_formation'           => 'nullable|string|max:255',
+        ]);
+
+        $alumni = $this->alumniService->update($id, $validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Fiche alumni mise à jour avec succès.',
+            'data'    => $alumni,
+        ]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    //  ADMIN — SUPPRESSION
+    // ──────────────────────────────────────────────────────────────────────────
+
+    public function destroy(int $id): JsonResponse
+    {
+        $this->alumniService->delete($id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Fiche alumni supprimée.',
+        ]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    //  ADMIN — DASHBOARD KPI
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Dashboard avec tous les indicateurs KPI.
+     *
+     * Query params : ecole, annee_sortie
+     */
+    public function dashboard(Request $request): JsonResponse
+    {
+        $filters = $request->only(['ecole', 'annee_sortie']);
+        $stats   = $this->alumniService->getDashboardStats($filters);
+
+        return response()->json([
+            'success' => true,
+            'data'    => $stats,
         ]);
     }
 }
