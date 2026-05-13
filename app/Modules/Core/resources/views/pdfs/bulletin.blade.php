@@ -5,8 +5,8 @@
 @section('custom-header')
 <div class="header">
     @php
-        $epacLogo = public_path("assets/epac.png");
-        $capLogo = public_path("assets/cap.png");
+        $epacLogo = storage_path("images/epac.png");
+        $capLogo = storage_path("images/cap.png");
     @endphp
     @if(file_exists($epacLogo) && filesize($epacLogo) > 0)
     <img src='{{ $epacLogo }}' alt="logo-epac" class="logo-header epac">
@@ -16,7 +16,7 @@
     @endif
     <h3 style="margin:0px">Université d'Abomey-Calavi</h3>
     @php
-        $bannerImg = public_path("assets/banner.png");
+        $bannerImg = storage_path("images/banner.png");
         $hasBanner = file_exists($bannerImg) && filesize($bannerImg) > 0;
     @endphp
     @if($hasBanner)
