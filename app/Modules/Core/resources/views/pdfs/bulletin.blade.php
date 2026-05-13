@@ -20,15 +20,16 @@
     @php
         $bannerImg = storage_path("images/banner.png");
         $hasBanner = file_exists($bannerImg) && filesize($bannerImg) > 0;
+        $bannerBase64 = $hasBanner ? 'data:image/png;base64,' . base64_encode(file_get_contents($bannerImg)) : '';
     @endphp
-    @if($hasBanner)
-    <img src='{{ $bannerImg }}' alt="header-separator-img" style="margin:0px">
+    @if($bannerBase64)
+    <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
     @else
     <hr style="margin: 5px 0;">
     @endif
     <h2 style="margin:0">Ecole Polytechnique d'Abomey-Calavi</h2>
-    @if($hasBanner)
-    <img src='{{ $bannerImg }}' alt="header-separator-img" style="margin:0px">
+    @if($bannerBase64)
+    <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
     @else
     <hr style="margin: 5px 0;">
     @endif
