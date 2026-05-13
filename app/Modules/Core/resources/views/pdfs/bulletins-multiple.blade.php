@@ -99,7 +99,7 @@
         @endif
     </div>
     @if(isset($bulletin['qrcode']))
-    <div style="position: absolute; top: {{ !$loop->first ? '170px' : '50px' }}; right: 0;">
+    <div style="position: absolute; top: {{ !$loop->first ? '140px' : '20px' }}; right: 0;">
         <img src="data:image/svg+xml;base64,{{ $bulletin['qrcode'] }}" width="100px" height="100px" class="qrcode" alt="Code QR">
     </div>
     @endif
