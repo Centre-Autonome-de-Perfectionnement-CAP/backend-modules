@@ -56,11 +56,25 @@
         <img src='{{ $capBase64 }}' alt="logo-cap" style="position: absolute; right: 0; top: 0; height: 100px;">
         @endif
         <h3 style="margin:0px">Université d'Abomey-Calavi</h3>
-        <hr style="margin: 5px auto; width: 80px;">
-        <h2 style="margin:0">Ecole Polytechnique d'Abomey-Calavi</h2>
-        <hr style="margin: 5px auto; width: 150px;">
-        <h1 style="margin:0;">Centre Autonome de Perfectionnement</h1>
-        <p>01 BP 2009 COTONOU - TEl. 21 36 14 32/21 36 09 93 - Email. epac.uac@epac.uac.bj</p>
+         @php
+        $bannerImg = storage_path("images/banner.png");
+        $hasBanner = file_exists($bannerImg) && filesize($bannerImg) > 0;
+    @endphp
+    @if($hasBanner)
+    <img src='{{ $bannerImg }}' alt="header-separator-img" style="margin:0px">
+    @else
+    <hr style="margin: 5px 0;">
+    @endif
+    <h2 style="margin:0">Ecole Polytechnique d'Abomey-Calavi</h2>
+    @if($hasBanner)
+    <img src='{{ $bannerImg }}' alt="header-separator-img" style="margin:0px">
+    @else
+    <hr style="margin: 5px 0;">
+    @endif
+    <h1 style="margin:0;">Centre Autonome de Perfectionnement</h1>
+    <p>
+        01 BP 2009 COTONOU - TEl. 21 36 14 32/21 36 09 93 - Email. epac.uac@epac.uac.bj
+    </p>
         <hr>
     </div>
     @endif
