@@ -67,13 +67,13 @@
     @if($bannerBase64)
     <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
     @else
-    <hr style="margin: 5px 0;">
+    <hr style="margin: 2px 0;">
     @endif
     <h2 style="margin:0">Ecole Polytechnique d'Abomey-Calavi</h2>
     @if($bannerBase64)
     <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
     @else
-    <hr style="margin: 5px 0;">
+    <hr style="margin: 2px 0;">
     @endif
     <h1 style="margin:0;">Centre Autonome de Perfectionnement</h1>
     <p>
