@@ -83,8 +83,11 @@
     </div>
     @endif
 
+    
+    <div style="text-align: center; font-weight: bold; margin-bottom: 7px; margin-top: {{ !$loop->first ? '0px' : '20px' }}; font-size: 25px;">BULLETIN DE NOTES</div>
+    <div style="text-align: center; font-weight: bold; margin-bottom: 20px; font-size: 15px;">Année Académique: {{ $bulletin['annee'] ?? '' }}</div>
 
-      <div style="position: absolute; top: {{ !$loop->first ? '120px' : '0px' }}; left: 0;">
+    <div style="position: absolute; top: {{ !$loop->first ? '170px' : '50px' }}; left: 0;">
         @if(isset($bulletin['etudiant']->photo) && $bulletin['etudiant']->photo && file_exists($bulletin['etudiant']->photo))
             <img src="{{ $bulletin['etudiant']->photo }}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 5px;" alt="Photo étudiant">
         @else
@@ -95,12 +98,8 @@
             @endif
         @endif
     </div>
-
-    
-    <div style="text-align: center; font-weight: bold; margin-bottom: 7px; margin-top: 20px; font-size: 25px;">BULLETIN DE NOTES</div>
-    <div style="text-align: center; font-weight: bold; margin-bottom: 20px; font-size: 15px;">Année Académique: {{ $bulletin['annee'] ?? '' }}</div>
     @if(isset($bulletin['qrcode']))
-    <div style="position: absolute; top: {{ !$loop->first ? '120px' : '-2px' }}; right: 0;">
+    <div style="position: absolute; top: {{ !$loop->first ? '170px' : '50px' }}; right: 0;">
         <img src="data:image/svg+xml;base64,{{ $bulletin['qrcode'] }}" width="100px" height="100px" class="qrcode" alt="Code QR">
     </div>
     @endif
