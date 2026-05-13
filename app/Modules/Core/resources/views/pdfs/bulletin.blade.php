@@ -7,13 +7,15 @@
     @php
         $epacLogo = storage_path("images/epac.png");
         $capLogo = storage_path("images/cap.png");
+        $epacBase64 = file_exists($epacLogo) && filesize($epacLogo) > 0 ? 'data:image/png;base64,' . base64_encode(file_get_contents($epacLogo)) : '';
+        $capBase64 = file_exists($capLogo) && filesize($capLogo) > 0 ? 'data:image/png;base64,' . base64_encode(file_get_contents($capLogo)) : '';
     @endphp
-    @if(file_exists($epacLogo) && filesize($epacLogo) > 0)
-    <img src='{{ $epacLogo }}' alt="logo-epac" class="logo-header epac">
-    @endif
-    @if(file_exists($capLogo) && filesize($capLogo) > 0)
-    <img src='{{ $capLogo }}' alt="logo-cap"  class="logo-header">
-    @endif
+     @if($epacBase64)
+        <img src='{{ $epacBase64 }}' alt="logo-epac" class="logo-header epac">
+        @endif
+        @if($capBase64)
+        <img src='{{ $capBase64 }}' alt="logo-cap"  class="logo-header">
+        @endif
     <h3 style="margin:0px">Université d'Abomey-Calavi</h3>
     @php
         $bannerImg = storage_path("images/banner.png");
