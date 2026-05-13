@@ -25,13 +25,13 @@
     @if($bannerBase64)
     <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
     @else
-    <hr style="margin: 2px 0;">
+    <hr style="margin: 5px 0;">
     @endif
     <h2 style="margin:0">Ecole Polytechnique d'Abomey-Calavi</h2>
     @if($bannerBase64)
     <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
     @else
-    <hr style="margin: 2px 0;">
+    <hr style="margin: 5px 0;">
     @endif
     <h1 style="margin:0;">Centre Autonome de Perfectionnement</h1>
     <p>
@@ -87,7 +87,7 @@
     <div style="text-align: center; font-weight: bold; margin-bottom: 7px; margin-top: 20px; font-size: 25px;">BULLETIN DE NOTES</div>
     <div style="text-align: center; font-weight: bold; margin-bottom: 20px; font-size: 15px;">Année Académique: {{ $bulletin['annee'] ?? '' }}</div>
 
-    <div style="position: absolute; top: 70px; left: 0;">
+    <div style="position: absolute; top: 170px; left: 0;">
         @php
             if(isset($bulletin['etudiant']->photo) && $bulletin['etudiant']->photo && file_exists($bulletin['etudiant']->photo)) {
                 $photoPath = $bulletin['etudiant']->photo;
@@ -106,7 +106,7 @@
         @endif
     </div>
     @if(isset($bulletin['qrcode']))
-    <div style="position: absolute; top: 70px; right: 0;">
+    <div style="position: absolute; top: 170px; right: 0;">
         <img src="data:image/svg+xml;base64,{{ $bulletin['qrcode'] }}" width="100px" height="100px" class="qrcode" alt="Code QR">
     </div>
     @endif
