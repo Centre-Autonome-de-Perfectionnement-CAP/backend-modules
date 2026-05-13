@@ -83,30 +83,24 @@
     </div>
     @endif
 
+
+      <div style="position: absolute; top: {{ !$loop->first ? '120px' : '0px' }}; left: 0;">
+        @if(isset($bulletin['etudiant']->photo) && $bulletin['etudiant']->photo && file_exists($bulletin['etudiant']->photo))
+            <img src="{{ $bulletin['etudiant']->photo }}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 5px;" alt="Photo étudiant">
+        @else
+            @if(ucfirst($bulletin['etudiant']->genre) == 'Masculin')
+                <img src="{{ storage_path('avatars/homme.png') }}" style="width: 80px; height: 80px;" alt="Avatar homme">
+            @else
+                <img src="{{ storage_path('avatars/femme.png') }}" style="width: 80px; height: 80px;" alt="Avatar femme">
+            @endif
+        @endif
+    </div>
+
     
     <div style="text-align: center; font-weight: bold; margin-bottom: 7px; margin-top: 20px; font-size: 25px;">BULLETIN DE NOTES</div>
     <div style="text-align: center; font-weight: bold; margin-bottom: 20px; font-size: 15px;">Année Académique: {{ $bulletin['annee'] ?? '' }}</div>
-
-    <div style="position: absolute; top: 170px; left: 0;">
-        @php
-            if(isset($bulletin['etudiant']->photo) && $bulletin['etudiant']->photo && file_exists($bulletin['etudiant']->photo)) {
-                $photoPath = $bulletin['etudiant']->photo;
-                $photoBase64 = 'data:image/png;base64,' . base64_encode(file_get_contents($photoPath));
-            } else {
-                if(ucfirst($bulletin['etudiant']->genre) == 'Masculin') {
-                    $avatarPath = storage_path('avatars/homme.png');
-                } else {
-                    $avatarPath = storage_path('avatars/femme.png');
-                }
-                $photoBase64 = file_exists($avatarPath) ? 'data:image/png;base64,' . base64_encode(file_get_contents($avatarPath)) : '';
-            }
-        @endphp
-        @if(isset($photoBase64) && $photoBase64)
-        <img src="{{ $photoBase64 }}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 5px;" alt="Photo étudiant">
-        @endif
-    </div>
     @if(isset($bulletin['qrcode']))
-    <div style="position: absolute; top: 170px; right: 0;">
+    <div style="position: absolute; top: {{ !$loop->first ? '120px' : '-2px' }}; right: 0;">
         <img src="data:image/svg+xml;base64,{{ $bulletin['qrcode'] }}" width="100px" height="100px" class="qrcode" alt="Code QR">
     </div>
     @endif
