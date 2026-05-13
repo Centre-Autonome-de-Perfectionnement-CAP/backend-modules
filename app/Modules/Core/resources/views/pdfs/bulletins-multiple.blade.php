@@ -44,8 +44,8 @@
     @if(!$loop->first)
     <div class="header" style="margin-bottom: 20px;">
         @php
-            $epacLogo = public_path("assets/epac.png");
-            $capLogo = public_path("assets/cap.png");
+            $epacLogo = storage_path("images/epac.png");
+            $capLogo = storage_path("images/cap.png");
             $epacBase64 = file_exists($epacLogo) ? 'data:image/png;base64,' . base64_encode(file_get_contents($epacLogo)) : '';
             $capBase64 = file_exists($capLogo) ? 'data:image/png;base64,' . base64_encode(file_get_contents($capLogo)) : '';
         @endphp
