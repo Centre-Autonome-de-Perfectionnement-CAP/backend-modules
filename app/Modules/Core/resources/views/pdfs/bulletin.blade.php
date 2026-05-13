@@ -46,18 +46,25 @@
     <div style="text-align: center; font-weight: bold; margin-bottom: 7px; font-size: 25px;">BULLETIN DE NOTES</div>
     <div style="text-align: center; font-weight: bold; margin-bottom: 20px; font-size: 15px;">Année Académique: {{ $annee }}</div>
     
-    <div style="position: absolute; top: 20px; left: 0; margin-bottom: 10px;">
-        @if(isset($etudiant->photo) && $etudiant->photo && file_exists($etudiant->photo))
-            <img src="{{ $etudiant->photo }}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 5px;" alt="Photo étudiant">
-        @else
-            @if(ucfirst($etudiant->genre) == 'Masculin')
-                <img src="{{ storage_path('avatars/homme.png') }}" style="width: 80px; height: 80px;" alt="Avatar homme">
-            @else
-                <img src="{{ storage_path('avatars/femme.png') }}" style="width: 80px; height: 80px;" alt="Avatar femme">
-            @endif
+    <div style="position: absolute; top: 170px; left: 0; margin-bottom: 10px;">
+        @php
+            if(isset($etudiant->photo) && $etudiant->photo && file_exists($etudiant->photo)) {
+                $photoPath = $etudiant->photo;
+                $photoBase64 = 'data:image/png;base64,' . base64_encode(file_get_contents($photoPath));
+            } else {
+                if(ucfirst($etudiant->genre) == 'Masculin') {
+                    $avatarPath = storage_path('avatars/homme.png');
+                } else {
+                    $avatarPath = storage_path('avatars/femme.png');
+                }
+                $photoBase64 = file_exists($avatarPath) ? 'data:image/png;base64,' . base64_encode(file_get_contents($avatarPath)) : '';
+            }
+        @endphp
+        @if(isset($photoBase64) && $photoBase64)
+        <img src="{{ $photoBase64 }}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 5px;" alt="Photo étudiant">
         @endif
     </div>
-    <div style="position: absolute; top: 20px; right: 0;">
+    <div style="position: absolute; top: 170px; right: 0;">
         <img src="data:image/svg+xml;base64,{{ $qrcode }}" width="100px" height="100px" class="qrcode" alt="Code QR">
     </div>
     
