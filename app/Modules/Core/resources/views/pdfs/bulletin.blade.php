@@ -46,7 +46,7 @@
     <div style="text-align: center; font-weight: bold; margin-bottom: 7px; font-size: 25px;">BULLETIN DE NOTES</div>
     <div style="text-align: center; font-weight: bold; margin-bottom: 20px; font-size: 15px;">Année Académique: {{ $annee }}</div>
     
-    <div style="position: absolute; top: 170px; left: 0; margin-bottom: 10px;">
+    <div style="position: absolute; top: 190px; left: 0; margin-bottom: 10px;">
         @php
             if(isset($etudiant->photo) && $etudiant->photo && file_exists($etudiant->photo)) {
                 $photoPath = $etudiant->photo;
@@ -64,7 +64,7 @@
         <img src="{{ $photoBase64 }}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 5px;" alt="Photo étudiant">
         @endif
     </div>
-    <div style="position: absolute; top: 170px; right: 0;">
+    <div style="position: absolute; top: 190px; right: 0;">
         <img src="data:image/svg+xml;base64,{{ $qrcode }}" width="100px" height="100px" class="qrcode" alt="Code QR">
     </div>
     

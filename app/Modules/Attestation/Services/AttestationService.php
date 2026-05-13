@@ -618,7 +618,7 @@ class AttestationService
                     'nombre_credit_obtenu' => $obtainedCredits,
                     'moyenne' => $moyenne,
                     'grade' => $grade,
-                    'decision' => $academicPath->year_decision === 'pass' ? 'Admis' : ($academicPath->year_decision === 'repeat' ? 'Redouble' : 'Exclu')
+                    'decision' => $academicPath->year_decision === 'pass' ? 'Admis' : ($academicPath->year_decision === 'repeat' ? 'Redouble' : 'Admis')
                 ]]
             ];
         }
@@ -824,7 +824,7 @@ class AttestationService
                 'nombre_credit_obtenu' => $obtainedCredits,
                 'moyenne' => $moyenne,
                 'grade' => $grade,
-                'decision' => $academicPath->year_decision === 'pass' ? 'Admis' : ($academicPath->year_decision === 'repeat' ? 'Redouble' : 'Exclu')
+                'decision' => $academicPath->year_decision === 'pass' ? 'Admis' : ($academicPath->year_decision === 'repeat' ? 'Redouble' : 'Admis')
             ]]
         ], 'bulletin.pdf');
     }
