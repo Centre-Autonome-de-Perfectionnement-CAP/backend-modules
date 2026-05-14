@@ -77,4 +77,16 @@ Route::prefix('api/rh')->group(function () {
     Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('professor/my-contrats', [ContratController::class, 'myContrats']);
     });
+    Route::get(
+        'contrats/{contratId}/programs/{programId}/supports',
+        [ContratController::class, 'listProgramSupports']
+    );
+    Route::post(
+        'contrats/{contratId}/programs/{programId}/supports',
+        [ContratController::class, 'addProgramSupport']
+    );
+    Route::delete(
+        'contrats/{contratId}/programs/{programId}/supports/{index}',
+        [ContratController::class, 'deleteProgramSupport']
+    );
 });
