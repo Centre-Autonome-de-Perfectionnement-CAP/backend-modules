@@ -144,7 +144,7 @@ body {
     }
 @endphp
 
-{{-- ── EN-TÊTE ─────────────────────────────────────────────────────────────── --}}
+ 
 <table class="header-table">
     <tr>
         <td class="header-logo">
