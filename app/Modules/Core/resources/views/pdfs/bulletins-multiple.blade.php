@@ -84,26 +84,30 @@
     @endif
 
 
-      <div style="position: absolute; top: {{ !$loop->first ? '120px' : '0px' }}; left: 0;">
-        @if(isset($bulletin['etudiant']->photo) && $bulletin['etudiant']->photo && file_exists($bulletin['etudiant']->photo))
-            <img src="{{ $bulletin['etudiant']->photo }}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 5px;" alt="Photo étudiant">
-        @else
-            @if(ucfirst($bulletin['etudiant']->genre) == 'Masculin')
-                <img src="{{ storage_path('avatars/homme.png') }}" style="width: 80px; height: 80px;" alt="Avatar homme">
-            @else
-                <img src="{{ storage_path('avatars/femme.png') }}" style="width: 80px; height: 80px;" alt="Avatar femme">
-            @endif
-        @endif
-    </div>
-
-    
-    <div style="text-align: center; font-weight: bold; margin-bottom: 7px; margin-top: 20px; font-size: 25px;">BULLETIN DE NOTES</div>
-    <div style="text-align: center; font-weight: bold; margin-bottom: 20px; font-size: 15px;">Année Académique: {{ $bulletin['annee'] ?? '' }}</div>
-    @if(isset($bulletin['qrcode']))
-    <div style="position: absolute; top: {{ !$loop->first ? '120px' : '-2px' }}; right: 0;">
-        <img src="data:image/svg+xml;base64,{{ $bulletin['qrcode'] }}" width="100px" height="100px" class="qrcode" alt="Code QR">
-    </div>
-    @endif
+    <table style="width: 100%; border: none; border-collapse: collapse; margin-top: 10px; margin-bottom: 7px;">
+        <tr>
+            <td style="border: none; width: 90px; vertical-align: top; padding: 0;">
+                @if(isset($bulletin['etudiant']->photo) && $bulletin['etudiant']->photo && file_exists($bulletin['etudiant']->photo))
+                    <img src="{{ $bulletin['etudiant']->photo }}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 5px;" alt="Photo étudiant">
+                @else
+                    @if(ucfirst($bulletin['etudiant']->genre) == 'Masculin')
+                        <img src="{{ storage_path('avatars/homme.png') }}" style="width: 80px; height: 80px;" alt="Avatar homme">
+                    @else
+                        <img src="{{ storage_path('avatars/femme.png') }}" style="width: 80px; height: 80px;" alt="Avatar femme">
+                    @endif
+                @endif
+            </td>
+            <td style="border: none; text-align: center; vertical-align: middle; padding: 0;">
+                <div style="font-weight: bold; margin-bottom: 7px; font-size: 25px;">BULLETIN DE NOTES</div>
+                <div style="font-weight: bold; font-size: 15px;">Année Académique: {{ $bulletin['annee'] ?? '' }}</div>
+            </td>
+            <td style="border: none; width: 110px; text-align: right; vertical-align: top; padding: 0;">
+                @if(isset($bulletin['qrcode']))
+                    <img src="data:image/svg+xml;base64,{{ $bulletin['qrcode'] }}" width="100px" height="100px" class="qrcode" alt="Code QR">
+                @endif
+            </td>
+        </tr>
+    </table>
     
     <table style="width: 100%; text-align: left; margin-bottom: 10px; font-size: 11px; border: none; margin-top: 10px; border-collapse: collapse;">
         <tbody>
