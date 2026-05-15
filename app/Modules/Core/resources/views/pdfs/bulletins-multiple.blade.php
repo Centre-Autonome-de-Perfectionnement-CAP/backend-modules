@@ -84,17 +84,26 @@
     @endif
 
 
+    @php
+        // Encoder la photo de l'étudiant en base64 pour DomPDF
+        if(isset($bulletin['etudiant']->photo) && $bulletin['etudiant']->photo && file_exists($bulletin['etudiant']->photo)) {
+            $photoPath = $bulletin['etudiant']->photo;
+            $photoBase64 = 'data:image/png;base64,' . base64_encode(file_get_contents($photoPath));
+        } else {
+            if(ucfirst($bulletin['etudiant']->genre) == 'Masculin') {
+                $avatarPath = storage_path('avatars/homme.png');
+            } else {
+                $avatarPath = storage_path('avatars/femme.png');
+            }
+            $photoBase64 = file_exists($avatarPath) ? 'data:image/png;base64,' . base64_encode(file_get_contents($avatarPath)) : '';
+        }
+    @endphp
+    
     <table style="width: 100%; border: none; border-collapse: collapse; margin-top: 10px; margin-bottom: 7px;">
         <tr>
             <td style="border: none; width: 90px; vertical-align: top; padding: 0;">
-                @if(isset($bulletin['etudiant']->photo) && $bulletin['etudiant']->photo && file_exists($bulletin['etudiant']->photo))
-                    <img src="{{ $bulletin['etudiant']->photo }}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 5px;" alt="Photo étudiant">
-                @else
-                    @if(ucfirst($bulletin['etudiant']->genre) == 'Masculin')
-                        <img src="{{ storage_path('avatars/homme.png') }}" style="width: 80px; height: 80px;" alt="Avatar homme">
-                    @else
-                        <img src="{{ storage_path('avatars/femme.png') }}" style="width: 80px; height: 80px;" alt="Avatar femme">
-                    @endif
+                @if(isset($photoBase64) && $photoBase64)
+                    <img src="{{ $photoBase64 }}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 5px;" alt="Photo étudiant">
                 @endif
             </td>
             <td style="border: none; text-align: center; vertical-align: middle; padding: 0;">
