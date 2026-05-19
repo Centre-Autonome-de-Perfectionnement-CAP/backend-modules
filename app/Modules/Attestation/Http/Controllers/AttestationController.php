@@ -44,7 +44,10 @@ class AttestationController extends Controller
 {
     use ApiResponse;
 
-    public function __construct(private readonly AttestationService $attestationService) {}
+    public function __construct(
+        private readonly AttestationService $attestationService,
+        private readonly \App\Modules\Attestation\Services\WhatsAppNotificationService $whatsApp
+    ) {}
 
     // ══════════════════════════════════════════════════════════════════════════
     // ROUTES PUBLIQUES — Site vitrine
@@ -242,6 +245,12 @@ class AttestationController extends Controller
 
         $this->sendConfirmationEmail('core::emails.attestation-confirmation', $request->email, "Demande d'attestation reçue — Réf : {$reference}", ['reference' => $reference, 'type' => $request->type, 'studentName' => $student->student_id_number, 'submittedAt' => now()->format('d/m/Y à H:i'), 'paymentMethod' => $pm, 'paymentRef' => $pr], $pdf, $pdfFile);
 
+        // WhatsApp notification
+        $phone = $link->pendingStudent->personalInformation?->phone;
+        if ($phone) {
+            $this->whatsApp->sendSoumission($phone, $reference, $typeLabels[$request->type] ?? $request->type);
+        }
+
         return response()->json(['success' => true, 'data' => ['message' => 'Demande enregistrée avec succès. Un email de confirmation vous a été envoyé.', 'reference' => $reference, 'payment_method' => $pm, 'payment_reference' => $pr, 'quittance_pdf_url' => $quittancePdfUrl, 'quittance_pdf_base64' => $pdf ? base64_encode($pdf) : null, 'quittance_filename' => $pdfFile]], 201);
     }
 
@@ -259,6 +268,12 @@ class AttestationController extends Controller
         DB::table('document_requests')->insert(['reference' => $reference, 'student_pending_student_id' => $link->id, 'academic_year_id' => $year?->id, 'type' => $request->type, 'status' => 'pending', 'email' => $request->email, 'payment_method' => $pm, 'payment_reference' => $pr, 'files' => !empty($files) ? json_encode($files) : null, 'submitted_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
         [$pdf, $pdfFile] = $this->maybeGenerateQuittancePdf($pm, $pr, $link, $link->student, $reference, 'Bulletin de notes — CAP-EPAC', 500);
         $this->sendConfirmationEmail('core::emails.bulletin-confirmation', $request->email, "Demande de bulletin reçue — Réf : {$reference}", ['reference' => $reference, 'type' => $request->type, 'academicYear' => $year?->academic_year ?? '—', 'submittedAt' => now()->format('d/m/Y à H:i'), 'paymentMethod' => $pm, 'paymentRef' => $pr], $pdf, $pdfFile);
+
+        // WhatsApp notification
+        $phone = $link->pendingStudent->personalInformation?->phone;
+        if ($phone) {
+            $this->whatsApp->sendSoumission($phone, $reference, "Bulletin de notes (" . strtoupper(str_replace('bulletin_', '', $request->type)) . ")");
+        }
         return response()->json(['success' => true, 'data' => ['message' => 'Demande de bulletin enregistrée avec succès. Un email de confirmation vous a été envoyé.', 'reference' => $reference, 'payment_method' => $pm, 'payment_reference' => $pr]], 201);
     }
 
@@ -274,6 +289,17 @@ class AttestationController extends Controller
             $pdfContent = Pdf::loadView('core::pdfs.quittance-tresor', ['quittanceNumber' => $request->quittanceNumber, 'montant' => $request->montant, 'motif' => $request->motif, 'nomEtudiant' => strtoupper($request->nomEtudiant), 'matricule' => strtoupper($request->matricule), 'referenceDemande' => strtoupper($request->referenceDemande), 'datePaiement' => $datePaiement, 'simulation' => $request->boolean('simulation', true)])->setPaper('A4', 'portrait')->output();
             $pdfFilename = 'quittance-' . $request->quittanceNumber . '.pdf';
             Mail::send('core::emails.attestation-confirmation', ['reference' => $request->referenceDemande, 'type' => 'paiement_tresor', 'studentName' => $request->matricule, 'submittedAt' => $datePaiement, 'paymentMethod' => 'tresor_online', 'paymentRef' => $request->quittanceNumber], fn($m) => $m->to($request->email)->subject("Votre quittance de paiement — {$request->quittanceNumber}")->attachData($pdfContent, $pdfFilename, ['mime' => 'application/pdf']));
+
+            // WhatsApp notification
+            // We search for the student's phone number via matricule
+            $student = Student::where('student_id_number', strtoupper(trim($request->matricule)))->first();
+            if ($student) {
+                $link = StudentPendingStudent::where('student_id', $student->id)->with('pendingStudent.personalInformation')->latest('id')->first();
+                $phone = $link?->pendingStudent?->personalInformation?->phone;
+                if ($phone) {
+                    $this->whatsApp->sendQuittanceNotification($phone, $request->quittanceNumber, $request->referenceDemande);
+                }
+            }
             return response()->json(['success' => true, 'data' => ['message' => 'Quittance générée et envoyée par email.', 'pdfBase64' => base64_encode($pdfContent), 'pdfFilename' => $pdfFilename, 'quittanceNumber' => $request->quittanceNumber]]);
         } catch (\Exception $e) {
             Log::error('Erreur génération quittance PDF : ' . $e->getMessage());

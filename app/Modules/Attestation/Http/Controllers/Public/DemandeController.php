@@ -10,6 +10,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{DB, Log, Storage};
+use Illuminate\Support\Str;
 
 /**
  * Soumission des demandes de documents (site vitrine — accès public)
@@ -135,7 +136,7 @@ class DemandeController extends Controller
         }
 
         // Référence
-        $reference = 'ATT-' . strtoupper(substr(uniqid(), -8));
+        $reference = 'ATT-' . Str::upper(Str::random(4));
 
         // Paiement + quittance PDF
         $paymentMethod    = $request->payment_method ?? 'manual';
@@ -246,7 +247,7 @@ class DemandeController extends Controller
             }
         }
 
-        $reference     = 'BUL-' . strtoupper(substr(uniqid(), -8));
+        $reference     = 'BUL-' . Str::upper(Str::random(4));
         $paymentMethod = $request->payment_method ?? 'manual';
 
         // INSERT
@@ -291,12 +292,7 @@ class DemandeController extends Controller
             return response()->json(['message' => 'Demande introuvable.'], 404);
         }
 
-        $statusPublic = match (true) {
-            $demande->status === 'rejected'  => 'rejected',
-            $demande->status === 'ready'     => 'ready',
-            $demande->status === 'delivered' => 'delivered',
-            default                          => 'processing',
-        };
+        $statusPublic = $demande->status;
 
         // Récupérer le motif de la réserve si le dossier est sous réserve
         $flagReason = null;
@@ -309,6 +305,15 @@ class DemandeController extends Controller
             $flagReason = $history ? $history->comment : 'Dossier validé sous réserve.';
         }
 
+        // Récupérer les infos de l'étudiant pour l'affichage public
+        $studentData = DB::table('student_pending_student')
+            ->join('students', 'student_pending_student.student_id', '=', 'students.id')
+            ->join('pending_students', 'student_pending_student.pending_student_id', '=', 'pending_students.id')
+            ->join('personal_information', 'pending_students.personal_information_id', '=', 'personal_information.id')
+            ->where('student_pending_student.id', $demande->student_pending_student_id)
+            ->select('personal_information.last_name', 'personal_information.first_names', 'students.student_id_number as matricule')
+            ->first();
+
         return response()->json([
             'reference'       => $demande->reference,
             'type'            => $demande->type,
@@ -317,6 +322,11 @@ class DemandeController extends Controller
             'flag_reason'     => $flagReason,
             'submitted_at'    => $demande->created_at,
             'rejected_reason' => $demande->status === 'rejected' ? $demande->rejected_reason : null,
+            'student'         => $studentData ? [
+                'last_name'   => $studentData->last_name,
+                'first_names' => $studentData->first_names,
+                'matricule'   => $studentData->matricule,
+            ] : null,
         ]);
     }
 }

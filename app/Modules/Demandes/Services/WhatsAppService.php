@@ -2,127 +2,52 @@
 
 namespace App\Modules\Demandes\Services;
 
-use Illuminate\Support\Facades\Log;
-use Twilio\Rest\Client as TwilioClient;
+use App\Modules\Core\Services\WhatsAppBridgeClient;
 
 /**
- * Service d'envoi de messages WhatsApp via Twilio.
+ * Service WhatsApp du module Demandes.
+ *
+ * Ce service est un adaptateur de haut niveau :
+ *   - Il expose les templates métier (soumission, rejet, prêt…)
+ *   - Il délègue l'envoi réel au WhatsAppBridgeClient (micro-service Node.js / Baileys)
+ *
+ * Migration : ce service remplaçait l'ancienne intégration Twilio.
+ * Toute la normalisation de numéros est désormais gérée par WhatsAppBridgeClient.
  *
  * Règles :
- *  - Jamais bloquant : tout échec est loggué silencieusement
+ *  - Jamais bloquant : tout échec est loggué silencieusement par le bridge
  *  - Jamais d'exception propagée vers le workflow
- *  - Normalise automatiquement les numéros béninois (+229)
- *  - Journalise chaque envoi (succès + échec)
  *  - Aucun emoji — mise en forme WhatsApp (*gras*, _italique_)
- *
- * Formats acceptés en entrée :
- *   XXXXXXXX           → +22901XXXXXXXX  (8 chiffres → nouveau format béninois)
- *   01XXXXXXXX         → +22901XXXXXXXX  (10 chiffres commençant par 01)
- *   229XXXXXXXX        → +229XXXXXXXX    (11 chiffres, ancien format)
- *   22901XXXXXXXX      → +22901XXXXXXXX  (13 chiffres, nouveau format sans +)
- *   0022901XXXXXXXX    → +22901XXXXXXXX  (préfixe 00)
- *   00229XXXXXXXX      → +229XXXXXXXX    (préfixe 00, ancien format)
- *   +229XXXXXXXX       → inchangé
- *   +22901XXXXXXXX     → inchangé
- *   Séparateurs (espaces, tirets, points) tolérés entre chiffres.
- *
- * NOTE SANDBOX TWILIO :
- *   Le sandbox Twilio WhatsApp distingue +229XXXXXXXX et +22901XXXXXXXX
- *   comme deux numéros différents. Si un destinataire a fait "join" depuis
- *   son ancien numéro (+229XXXXXXXX) mais que le formulaire envoie le nouveau
- *   format (+22901XXXXXXXX), le message sera rejeté (error 63015).
- *   → Solution définitive : passer en production Twilio (WhatsApp Business API).
- *   → Solution temporaire sandbox : les destinataires doivent "join" depuis le
- *     numéro EXACTEMENT tel qu'il sera envoyé (format normalisé affiché dans le form).
  */
 class WhatsAppService
 {
-    private ?TwilioClient $client = null;
-
     private const DIVIDER = '――――――――――――――――――';
+
+    public function __construct(
+        private WhatsAppBridgeClient $bridge,
+    ) {}
 
     // ── Envoi principal ───────────────────────────────────────────────────────
 
+    /**
+     * Envoie un message WhatsApp.
+     *
+     * @param  string  $phone    Numéro brut (tout format béninois)
+     * @param  string  $message  Corps du message
+     * @param  string  $context  Identifiant pour les logs (ex: "soumission:REF-001")
+     */
     public function send(string $phone, string $message, string $context = ''): bool
     {
-        $normalized = $this->normalizePhone($phone);
-
-        if (!$normalized) {
-            Log::warning('[WhatsApp] Numéro invalide ou absent', [
-                'phone'   => $phone,
-                'context' => $context,
-            ]);
-            return false;
-        }
-
-        try {
-            $this->client()->messages->create(
-                "whatsapp:{$normalized}",
-                [
-                    'from' => config('services.twilio.whatsapp_from'),
-                    'body' => $message,
-                ]
-            );
-
-            Log::info('[WhatsApp] Message envoyé', [
-                'to'      => $normalized,
-                'context' => $context,
-            ]);
-
-            return true;
-
-        } catch (\Exception $e) {
-            Log::error('[WhatsApp] Échec envoi', [
-                'to'      => $normalized,
-                'context' => $context,
-                'error'   => $e->getMessage(),
-            ]);
-            return false;
-        }
+        return $this->bridge->send($phone, $message, $context);
     }
 
-    // ── Normalisation numéro ──────────────────────────────────────────────────
-
+    /**
+     * Normalise un numéro de téléphone vers le format international E.164.
+     * Délègue au bridge qui centralise cette logique.
+     */
     public function normalizePhone(string $phone): ?string
     {
-        // Supprimer séparateurs (espaces, tirets, points, parenthèses)
-        $clean   = preg_replace('/[\s\-.()\t]/', '', trim($phone));
-        $digits  = preg_replace('/\D/', '', $clean);
-
-        if (strlen($digits) < 8) {
-            return null;
-        }
-
-        // Préfixe 00 → enlever les deux zéros
-        if (str_starts_with($digits, '00')) {
-            $digits = substr($digits, 2);
-        }
-
-        return $this->normalizeDigits($digits);
-    }
-
-    private function normalizeDigits(string $digits): ?string
-    {
-        return match (strlen($digits)) {
-            8 => '+229' . $digits,                                         // XXXXXXXX → nouveau format béninois
-            10 => str_starts_with($digits, '01') ? '+229' . $digits : null,  // 01XXXXXXXX → +22901XXXXXXXX
-            11 => str_starts_with($digits, '229') ? '+' . $digits : null,    // 229XXXXXXXX → +229XXXXXXXX (ancien)
-            13 => str_starts_with($digits, '22901') ? '+' . $digits : null,  // 22901XXXXXXXX → +22901XXXXXXXX
-            default => null,
-        };
-    }
-
-    // ── Client Twilio (lazy) ──────────────────────────────────────────────────
-
-    private function client(): TwilioClient
-    {
-        if (!$this->client) {
-            $this->client = new TwilioClient(
-                config('services.twilio.sid'),
-                config('services.twilio.token')
-            );
-        }
-        return $this->client;
+        return $this->bridge->normalizePhone($phone);
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -133,26 +58,29 @@ class WhatsAppService
     {
         $suiviUrl = config('app.url') . '/app-cap/student-services?ref=' . $reference;
         return implode("\n", [
-            "✅ *Demande Reçue*",
+            "*Demande Reçue — CAP-EPAC*",
+            self::DIVIDER,
+            "Votre demande de *{$typeLabel}* a bien été enregistrée.",
             "",
-            "Votre demande de *{$typeLabel}* (Réf: {$reference}) a bien été enregistrée.",
+            "Référence : *{$reference}*",
             "",
             "Votre dossier est en cours d'examen. Vous serez notifié(e) à chaque étape.",
             "",
-            "Suivez l'avancement ici : {$suiviUrl}"
+            "Suivez l'avancement : {$suiviUrl}",
         ]);
     }
 
     public function templateComplementEtudiant(string $reference, array $piecesList): string
     {
-        $nb = count($piecesList);
-        $label = $nb <= 1 ? 'pièce complémentaire reçue' : 'pièces complémentaires reçues';
+        $nb       = count($piecesList);
+        $label    = $nb <= 1 ? 'pièce complémentaire reçue' : 'pièces complémentaires reçues';
         $suiviUrl = config('app.url') . '/app-cap/student-services?ref=' . $reference;
 
         $lines = [
-            "📎 *Complément Reçu*",
+            "*Complément Reçu — CAP-EPAC*",
+            self::DIVIDER,
+            "Pour votre demande (Réf: *{$reference}*), nous avons bien reçu {$nb} {$label} :",
             "",
-            "Pour votre demande (Réf: {$reference}), nous avons bien reçu {$nb} {$label} :",
         ];
 
         foreach ($piecesList as $piece) {
@@ -162,7 +90,7 @@ class WhatsAppService
         $lines[] = "";
         $lines[] = "Elles ont été transmises au secrétariat pour vérification.";
         $lines[] = "";
-        $lines[] = "Suivez l'avancement ici : {$suiviUrl}";
+        $lines[] = "Suivez l'avancement : {$suiviUrl}";
 
         return implode("\n", $lines);
     }
@@ -170,9 +98,9 @@ class WhatsAppService
     public function templatePret(string $reference, string $typeLabel): string
     {
         return implode("\n", [
-            "🎉 *Document Prêt*",
-            "",
-            "Votre demande de *{$typeLabel}* (Réf: {$reference}) a été traitée avec succès.",
+            "*Document Prêt — CAP-EPAC*",
+            self::DIVIDER,
+            "Votre demande de *{$typeLabel}* (Réf: *{$reference}*) a été traitée avec succès.",
             "",
             "Vous pouvez venir récupérer votre document au secrétariat durant les heures d'ouverture.",
         ]);
@@ -181,9 +109,9 @@ class WhatsAppService
     public function templateRejete(string $reference, string $typeLabel, string $motif): string
     {
         return implode("\n", [
-            "❌ *Demande Rejetée*",
-            "",
-            "Votre demande de *{$typeLabel}* (Réf: {$reference}) n'a pas pu aboutir.",
+            "*Demande Rejetée — CAP-EPAC*",
+            self::DIVIDER,
+            "Votre demande de *{$typeLabel}* (Réf: *{$reference}*) n'a pas pu aboutir.",
             "",
             "*Motif :* {$motif}",
             "",
@@ -195,24 +123,24 @@ class WhatsAppService
     {
         $suiviUrl = config('app.url') . '/app-cap/student-services?ref=' . $reference;
         return implode("\n", [
-            "⚠️ *Dossier Sous Réserve*",
-            "",
-            "Votre demande de *{$typeLabel}* (Réf: {$reference}) est en cours de traitement mais nécessite votre attention.",
+            "*Dossier Sous Réserve — CAP-EPAC*",
+            self::DIVIDER,
+            "Votre demande de *{$typeLabel}* (Réf: *{$reference}*) est en cours de traitement mais nécessite votre attention.",
             "",
             "*Motif :* {$motif}",
             "",
-            "Veuillez régulariser la situation en soumettant un complément de dossier en ligne.",
+            "Veuillez régulariser en soumettant un complément de dossier en ligne.",
             "",
-            "Suivez l'avancement et complétez ici : {$suiviUrl}"
+            "Accéder au portail : {$suiviUrl}",
         ]);
     }
 
     public function templateRemis(string $reference, string $typeLabel): string
     {
         return implode("\n", [
-            "🤝 *Document Retiré*",
-            "",
-            "Votre document *{$typeLabel}* (Réf: {$reference}) vous a été remis avec succès.",
+            "*Document Retiré — CAP-EPAC*",
+            self::DIVIDER,
+            "Votre document *{$typeLabel}* (Réf: *{$reference}*) vous a été remis avec succès.",
             "",
             "Merci de votre confiance et bonne continuation !",
         ]);
@@ -230,10 +158,14 @@ class WhatsAppService
         string $matricule,
     ): string {
         return implode("\n", [
-            "📥 *Nouvelle Demande Reçue*",
-            "",
+            "*Nouvelle Demande — CAP-EPAC*",
+            self::DIVIDER,
             "Bonjour *{$destinataireNom}*,",
-            "Une nouvelle demande de *{$typeDocument}* a été soumise par *{$nomEtudiant}* (Réf: {$reference}).",
+            "",
+            "Une nouvelle demande de *{$typeDocument}* a été soumise.",
+            "",
+            "Étudiant : *{$nomEtudiant}*" . ($matricule ? " ({$matricule})" : ''),
+            "Référence : *{$reference}*",
             "",
             "Veuillez vérifier et initier le traitement du dossier.",
         ]);
@@ -247,12 +179,13 @@ class WhatsAppService
     ): string {
         $label = $nbPieces <= 1 ? 'pièce complémentaire' : 'pièces complémentaires';
         return implode("\n", [
-            "📎 *Complément de Dossier*",
-            "",
+            "*Complément de Dossier — CAP-EPAC*",
+            self::DIVIDER,
             "Bonjour *{$destinataireNom}*,",
-            "L'étudiant(e) *{$nomEtudiant}* (Réf: {$reference}) vient de déposer {$nbPieces} {$label}.",
             "",
-            "Veuillez vérifier les nouveaux documents.",
+            "L'étudiant(e) *{$nomEtudiant}* (Réf: *{$reference}*) vient de déposer {$nbPieces} {$label}.",
+            "",
+            "Veuillez vérifier les nouveaux documents dans le portail.",
         ]);
     }
 
@@ -268,10 +201,15 @@ class WhatsAppService
         ?string $commentaire = null,
     ): string {
         $lines = [
-            "📁 *Nouveau Dossier à Traiter*",
-            "",
+            "*Nouveau Dossier à Traiter — CAP-EPAC*",
+            self::DIVIDER,
             "Bonjour *{$destinataireNom}*,",
-            "*[{$expediteurRole}] {$expediteurNom}* vient de vous transmettre la demande de *{$etudiantNom}* (Réf: {$reference} - {$typeDocument}).",
+            "",
+            "*[{$expediteurRole}] {$expediteurNom}* vient de vous transmettre le dossier suivant :",
+            "",
+            "Étudiant : *{$etudiantNom}*" . ($matricule ? " ({$matricule})" : ''),
+            "Document : *{$typeDocument}*",
+            "Référence : *{$reference}*",
             "",
         ];
 
@@ -296,19 +234,37 @@ class WhatsAppService
         ?string $commentaire = null,
     ): string {
         $lines = [
-            "⚠️ *Dossier Renvoyé pour Correction*",
-            "",
+            "*Dossier Renvoyé pour Correction — CAP-EPAC*",
+            self::DIVIDER,
             "Bonjour *{$destinataireNom}*,",
-            "Le dossier de *{$etudiantNom}* (Réf: {$reference}) vous a été renvoyé par *[{$expediteurRole}] {$expediteurNom}*.",
+            "",
+            "Le dossier de *{$etudiantNom}* (Réf: *{$reference}*) vous a été renvoyé par *[{$expediteurRole}] {$expediteurNom}*.",
             "",
         ];
 
         if ($commentaire) {
             $lines[] = "*Motif :* {$commentaire}";
+            $lines[] = "";
         }
 
         $lines[] = "Veuillez vous connecter pour corriger la demande.";
 
         return implode("\n", $lines);
+    }
+
+    public function templateDossierDirection(
+        string $destinataireNom,
+        string $nomEtudiant,
+        string $reference,
+    ): string {
+        return implode("\n", [
+            "*Dossier en Direction — CAP-EPAC*",
+            self::DIVIDER,
+            "Bonjour *{$destinataireNom}*,",
+            "",
+            "Le dossier de *{$nomEtudiant}* (Réf: *{$reference}*) vient d'être transmis à la Direction.",
+            "",
+            "Merci de préparer et d'acheminer le dossier physique correspondant.",
+        ]);
     }
 }

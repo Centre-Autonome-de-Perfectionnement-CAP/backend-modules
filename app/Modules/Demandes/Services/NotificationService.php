@@ -351,10 +351,13 @@ class NotificationService
 
             // WhatsApp
             if (!empty($sec->phone)) {
-                $message = "🚨 *Dossier en Direction*\n\nBonjour {$sec->name},\nLe dossier de *{$etudiantNom}* (Réf: {$demande->reference}) vient d'être transmis à la Direction.\n\nMerci de préparer et d'acheminer le dossier physique.";
                 $this->whatsApp->send(
                     $sec->phone,
-                    $message,
+                    $this->whatsApp->templateDossierDirection(
+                        destinataireNom: $sec->name,
+                        nomEtudiant:     $etudiantNom,
+                        reference:       $demande->reference,
+                    ),
                     "direction-secretaire:{$demande->reference}"
                 );
             }
