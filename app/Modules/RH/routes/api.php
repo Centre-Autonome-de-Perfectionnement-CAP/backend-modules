@@ -89,4 +89,9 @@ Route::prefix('api/rh')->group(function () {
         'contrats/{contratId}/programs/{programId}/supports/{index}',
         [ContratController::class, 'deleteProgramSupport']
     );
+    Route::put(
+        'contrats/{contratId}/programs/{programId}/monographie',
+        [ContratController::class, 'updateProgramMonographie']
+    );
+    Route::get('professors/{professorId}/programs/{programId}', [ContratController::class, 'getProfessorProgram']);
 });
