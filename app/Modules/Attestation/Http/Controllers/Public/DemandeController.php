@@ -179,6 +179,7 @@ class DemandeController extends Controller
             'payment_method'             => $paymentMethod,
             'payment_reference'          => $paymentReference,
             'files'                      => json_encode($filesData),
+            'submitted_at'               => now(),
             'created_at'                 => now(),
             'updated_at'                 => now(),
         ]);
@@ -261,6 +262,7 @@ class DemandeController extends Controller
             'payment_method'             => $paymentMethod,
             'payment_reference'          => $request->payment_reference ?? null,
             'files'                      => json_encode($filesData),
+            'submitted_at'               => now(),
             'created_at'                 => now(),
             'updated_at'                 => now(),
         ]);

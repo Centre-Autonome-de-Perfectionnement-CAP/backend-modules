@@ -41,6 +41,7 @@ class DocumentRequestQueryService
         'dr.complement_files',
         'dr.complement_at',
         'dr.submitted_at',
+        'dr.created_at',
         'dr.delivered_at',
         'dr.updated_at',
         'dr.rejected_reason',
@@ -194,8 +195,8 @@ class DocumentRequestQueryService
             });
         }
 
-        // Index dr_status_updated_idx utilisé ici
-        return $query->orderBy('dr.updated_at', 'desc')->get();
+        // Tri par ordre d'arrivée chronologique (du plus ancien en haut au plus nouveau en bas)
+        return $query->orderBy('dr.created_at', 'asc')->get();
     }
 
     // ── Détail ─────────────────────────────────────────────────────────────────

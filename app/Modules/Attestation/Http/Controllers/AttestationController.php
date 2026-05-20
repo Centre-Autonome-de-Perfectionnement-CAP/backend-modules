@@ -25,20 +25,18 @@ use App\Modules\Finance\Models\Transaction;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{DB, Log, Mail, Storage};
-use Carbon\Carbon;
-use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\DB;
 
 /**
- * Module Attestation — Controller complet pour proj2
+ * Module Attestation — Controller pour le progiciel interne
  *
- * Corrections vs version précédente de proj2 :
- *   ✅ generateAndSendQuittance() ajouté (manquait, causait erreur 404 côté site vitrine)
- *   ✅ getEligibleForInscription() → appelle AttestationService::getEligibleForInscription()
- *   ✅ generateInscription(), generateDefinitive(), generatePassage() → service complet
- *   ✅ generateMultiple* → toutes les versions implémentées
+ * Routes publiques (storeDemande, storeBulletinDemande, suiviDemande,
+ * generateAndSendQuittance) → déplacées vers Public\DemandeController
+ * et Public\QuittanceController.
  *
- * Routes document-requests → App\Modules\Demandes\routes\api.php
+ * Ce controller ne conserve que :
+ *   - les endpoints publics de consultation (getStatus, getBulletinStatus, identify, checkAvailability)
+ *   - les routes protégées d'éligibilité et de génération (progiciel)
  */
 class AttestationController extends Controller
 {
@@ -46,7 +44,6 @@ class AttestationController extends Controller
 
     public function __construct(
         private readonly AttestationService $attestationService,
-        private readonly \App\Modules\Attestation\Services\WhatsAppNotificationService $whatsApp
     ) {}
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -192,120 +189,9 @@ class AttestationController extends Controller
         return $this->unavailable('Type non reconnu.');
     }
 
-    public function suiviDemande(Request $request): JsonResponse
-    {
-        $request->validate(['reference' => 'required|string']);
-        $demande = DB::table('document_requests')->where('reference', strtoupper(trim($request->reference)))->first();
-        if (!$demande) return response()->json(['message' => 'Aucune demande trouvée avec cette référence.'], 404);
-        $link = StudentPendingStudent::with(['student', 'pendingStudent.personalInformation', 'pendingStudent.department', 'pendingStudent.academicYear'])->find($demande->student_pending_student_id);
-        $p    = $link?->pendingStudent?->personalInformation;
-        return response()->json(['success' => true, 'data' => [
-            'reference' => $demande->reference, 'type' => $demande->type, 'status' => $demande->status,
-            'submitted_at' => $demande->submitted_at, 'rejected_reason' => $demande->rejected_reason ?? null,
-            'student' => ['last_name' => $p?->last_name ?? '—', 'first_names' => $p?->first_names ?? '—', 'matricule' => $link?->student?->student_id_number ?? '—', 'level' => $link?->pendingStudent?->level ?? '—', 'department' => $link?->pendingStudent?->department?->name ?? '—', 'academic_year' => $link?->pendingStudent?->academicYear?->academic_year ?? '—'],
-        ]]);
-    }
-
-    public function storeDemande(Request $request): JsonResponse
-    {
-        $request->validate(['matricule' => 'required|string', 'type' => 'required|string', 'email' => 'required|email', 'payment_method' => 'nullable|in:manual,tresor_online', 'payment_reference' => 'nullable|string|max:50']);
-        $student = Student::where('student_id_number', strtoupper(trim($request->matricule)))->first();
-        if (!$student) return response()->json(['message' => 'Étudiant introuvable.'], 404);
-        $link = StudentPendingStudent::where('student_id', $student->id)->whereHas('pendingStudent', fn($q) => $q->where('status', 'approved'))->with(['pendingStudent.academicYear', 'pendingStudent.personalInformation'])->latest('id')->first();
-        if (!$link) return response()->json(['message' => 'Inscription approuvée introuvable.'], 404);
-        $validTypes = ['attestation_passage', 'attestation_definitive', 'attestation_inscription'];
-        if (!in_array($request->type, $validTypes)) return response()->json(['message' => "Type d'attestation invalide."], 422);
-        if ($this->hasActiveDemande($link->id, $request->type)) return response()->json(['message' => "Vous avez déjà une demande en cours pour ce type d'attestation."], 422);
-
-        $typeToFolder = ['attestation_definitive' => 'definitive', 'attestation_inscription' => 'inscription', 'attestation_passage' => 'passage'];
-        $filesByType  = ['attestation_definitive' => ['demande_manuscrite', 'acte_naissance', 'attestation_succes_file', 'quittance'], 'attestation_inscription' => ['demande_manuscrite', 'recu_paiement', 'quittance'], 'attestation_passage' => ['demande_manuscrite', 'acte_naissance', 'recu_paiement', 'bulletin', 'quittance']];
-        $typeLabels   = ['attestation_passage' => 'Attestation de Passage', 'attestation_definitive' => 'Attestation Définitive', 'attestation_inscription' => "Attestation d'Inscription"];
-        $montantMap   = ['attestation_passage' => 2000, 'attestation_definitive' => 2000, 'attestation_inscription' => 2000];
-
-        $reference = 'ATT-' . strtoupper(substr(md5(uniqid()), 0, 8));
-        $subFolder = $typeToFolder[$request->type] ?? 'autre';
-        $pm = $request->input('payment_method', 'manual');
-        $pr = $request->input('payment_reference');
-
-        $files = $this->storeFiles($request, $filesByType[$request->type] ?? [], "attestation-demandes/{$subFolder}/{$reference}");
-        DB::table('document_requests')->insert(['reference' => $reference, 'student_pending_student_id' => $link->id, 'academic_year_id' => $link->pendingStudent->academic_year_id ?? null, 'type' => $request->type, 'status' => 'pending', 'email' => $request->email, 'payment_method' => $pm, 'payment_reference' => $pr, 'files' => !empty($files) ? json_encode($files) : null, 'submitted_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
-
-        [$pdf, $pdfFile] = $this->maybeGenerateQuittancePdf($pm, $pr, $link, $student, $reference, ($typeLabels[$request->type] ?? $request->type) . ' — CAP-EPAC', $montantMap[$request->type] ?? 2000);
-
-        $quittancePdfUrl = null;
-        if ($pdf) {
-            try {
-                $qPath = "attestation-demandes/{$subFolder}/{$reference}/{$pdfFile}";
-                Storage::disk('public')->put($qPath, $pdf);
-                $files['quittance_generee'] = $qPath;
-                DB::table('document_requests')->where('reference', $reference)->update(['files' => json_encode($files)]);
-                $quittancePdfUrl = Storage::disk('public')->url($qPath);
-            } catch (\Exception $e) { Log::warning('Sauvegarde PDF quittance échouée : ' . $e->getMessage()); }
-        }
-
-        $this->sendConfirmationEmail('core::emails.attestation-confirmation', $request->email, "Demande d'attestation reçue — Réf : {$reference}", ['reference' => $reference, 'type' => $request->type, 'studentName' => $student->student_id_number, 'submittedAt' => now()->format('d/m/Y à H:i'), 'paymentMethod' => $pm, 'paymentRef' => $pr], $pdf, $pdfFile);
-
-        // WhatsApp notification
-        $phone = $link->pendingStudent->personalInformation?->phone;
-        if ($phone) {
-            $this->whatsApp->sendSoumission($phone, $reference, $typeLabels[$request->type] ?? $request->type);
-        }
-
-        return response()->json(['success' => true, 'data' => ['message' => 'Demande enregistrée avec succès. Un email de confirmation vous a été envoyé.', 'reference' => $reference, 'payment_method' => $pm, 'payment_reference' => $pr, 'quittance_pdf_url' => $quittancePdfUrl, 'quittance_pdf_base64' => $pdf ? base64_encode($pdf) : null, 'quittance_filename' => $pdfFile]], 201);
-    }
-
-    public function storeBulletinDemande(Request $request): JsonResponse
-    {
-        $request->validate(['link_id' => 'required|integer', 'type' => 'required|string', 'email' => 'required|email', 'payment_method' => 'nullable|in:manual,tresor_online', 'payment_reference' => 'nullable|string|max:50']);
-        $link = StudentPendingStudent::with(['pendingStudent.academicYear', 'pendingStudent.personalInformation'])->find($request->link_id);
-        if (!$link) return response()->json(['message' => 'Inscription introuvable.'], 404);
-        if ($this->hasActiveDemande($link->id, $request->type)) return response()->json(['message' => 'Vous avez déjà une demande en cours pour ce bulletin.'], 422);
-        $year = $link->pendingStudent->academicYear;
-        $reference = 'BUL-' . strtoupper(substr(uniqid(), -8));
-        $pm = $request->input('payment_method', 'manual');
-        $pr = $request->input('payment_reference');
-        $files = $this->storeFiles($request, ['demande_manuscrite', 'acte_naissance', 'quittance'], "bulletins-demandes/{$reference}");
-        DB::table('document_requests')->insert(['reference' => $reference, 'student_pending_student_id' => $link->id, 'academic_year_id' => $year?->id, 'type' => $request->type, 'status' => 'pending', 'email' => $request->email, 'payment_method' => $pm, 'payment_reference' => $pr, 'files' => !empty($files) ? json_encode($files) : null, 'submitted_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
-        [$pdf, $pdfFile] = $this->maybeGenerateQuittancePdf($pm, $pr, $link, $link->student, $reference, 'Bulletin de notes — CAP-EPAC', 500);
-        $this->sendConfirmationEmail('core::emails.bulletin-confirmation', $request->email, "Demande de bulletin reçue — Réf : {$reference}", ['reference' => $reference, 'type' => $request->type, 'academicYear' => $year?->academic_year ?? '—', 'submittedAt' => now()->format('d/m/Y à H:i'), 'paymentMethod' => $pm, 'paymentRef' => $pr], $pdf, $pdfFile);
-
-        // WhatsApp notification
-        $phone = $link->pendingStudent->personalInformation?->phone;
-        if ($phone) {
-            $this->whatsApp->sendSoumission($phone, $reference, "Bulletin de notes (" . strtoupper(str_replace('bulletin_', '', $request->type)) . ")");
-        }
-        return response()->json(['success' => true, 'data' => ['message' => 'Demande de bulletin enregistrée avec succès. Un email de confirmation vous a été envoyé.', 'reference' => $reference, 'payment_method' => $pm, 'payment_reference' => $pr]], 201);
-    }
-
-    /**
-     * POST /api/attestations/quittance/generate
-     * Génère PDF quittance + envoi email. Manquait dans proj2.
-     */
-    public function generateAndSendQuittance(Request $request): JsonResponse
-    {
-        $request->validate(['quittanceNumber' => 'required|string', 'montant' => 'required|integer|min:1', 'motif' => 'required|string', 'nomEtudiant' => 'required|string', 'matricule' => 'required|string', 'email' => 'required|email', 'referenceDemande' => 'required|string', 'paidAt' => 'required|string', 'simulation' => 'boolean']);
-        try {
-            $datePaiement = Carbon::parse($request->paidAt)->setTimezone('Africa/Porto-Novo')->translatedFormat('d F Y à H\hi');
-            $pdfContent = Pdf::loadView('core::pdfs.quittance-tresor', ['quittanceNumber' => $request->quittanceNumber, 'montant' => $request->montant, 'motif' => $request->motif, 'nomEtudiant' => strtoupper($request->nomEtudiant), 'matricule' => strtoupper($request->matricule), 'referenceDemande' => strtoupper($request->referenceDemande), 'datePaiement' => $datePaiement, 'simulation' => $request->boolean('simulation', true)])->setPaper('A4', 'portrait')->output();
-            $pdfFilename = 'quittance-' . $request->quittanceNumber . '.pdf';
-            Mail::send('core::emails.attestation-confirmation', ['reference' => $request->referenceDemande, 'type' => 'paiement_tresor', 'studentName' => $request->matricule, 'submittedAt' => $datePaiement, 'paymentMethod' => 'tresor_online', 'paymentRef' => $request->quittanceNumber], fn($m) => $m->to($request->email)->subject("Votre quittance de paiement — {$request->quittanceNumber}")->attachData($pdfContent, $pdfFilename, ['mime' => 'application/pdf']));
-
-            // WhatsApp notification
-            // We search for the student's phone number via matricule
-            $student = Student::where('student_id_number', strtoupper(trim($request->matricule)))->first();
-            if ($student) {
-                $link = StudentPendingStudent::where('student_id', $student->id)->with('pendingStudent.personalInformation')->latest('id')->first();
-                $phone = $link?->pendingStudent?->personalInformation?->phone;
-                if ($phone) {
-                    $this->whatsApp->sendQuittanceNotification($phone, $request->quittanceNumber, $request->referenceDemande);
-                }
-            }
-            return response()->json(['success' => true, 'data' => ['message' => 'Quittance générée et envoyée par email.', 'pdfBase64' => base64_encode($pdfContent), 'pdfFilename' => $pdfFilename, 'quittanceNumber' => $request->quittanceNumber]]);
-        } catch (\Exception $e) {
-            Log::error('Erreur génération quittance PDF : ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Erreur lors de la génération de la quittance.'], 500);
-        }
-    }
+    // ── SUPPRIMÉ : suiviDemande(), storeDemande(), storeBulletinDemande(),
+    //    generateAndSendQuittance() — déplacés vers Public\DemandeController
+    //    et Public\QuittanceController (références courtes ATT-XXXX / BUL-XXXX).
 
     // ══════════════════════════════════════════════════════════════════════════
     // ROUTES PROTÉGÉES — Éligibilité + Génération
@@ -357,44 +243,4 @@ class AttestationController extends Controller
 
     private function available(): JsonResponse { return response()->json(['success' => true, 'data' => ['available' => true]]); }
     private function unavailable(string $r): JsonResponse { return response()->json(['success' => true, 'data' => ['available' => false, 'reason' => $r]]); }
-
-    private function hasActiveDemande(int $linkId, string $type): bool
-    {
-        return DB::table('document_requests')->where('student_pending_student_id', $linkId)->where('type', $type)->whereIn('status', ['pending', 'processing', 'ready'])->exists();
-    }
-
-    private function storeFiles(Request $request, array $keys, string $folder): array
-    {
-        $uploaded = [];
-        foreach ($keys as $key) {
-            if ($request->hasFile($key) && $request->file($key)->isValid()) {
-                $file = $request->file($key);
-                $ext  = $file->getClientOriginalExtension();
-                $uploaded[$key] = $file->storeAs($folder, $key . ($ext ? ".{$ext}" : ''), 'public');
-            }
-        }
-        return $uploaded;
-    }
-
-    private function maybeGenerateQuittancePdf(string $pm, ?string $pr, StudentPendingStudent $link, $student, string $reference, string $motif, int $montant): array
-    {
-        if ($pm !== 'tresor_online' || !$pr) return [null, null];
-        try {
-            $personal = $link->pendingStudent->personalInformation;
-            $nom = strtoupper(trim(($personal->last_name ?? '') . ' ' . ($personal->first_names ?? '')));
-            $date = Carbon::now()->setTimezone('Africa/Porto-Novo')->translatedFormat('d F Y à H\hi');
-            $pdf = Pdf::loadView('core::pdfs.quittance-tresor', ['quittanceNumber' => $pr, 'montant' => $montant, 'motif' => $motif, 'nomEtudiant' => $nom, 'matricule' => strtoupper($student?->student_id_number ?? ''), 'referenceDemande' => $reference, 'datePaiement' => $date, 'simulation' => true])->setPaper('A4', 'portrait');
-            return [$pdf->output(), 'quittance-' . $pr . '.pdf'];
-        } catch (\Exception $e) { Log::warning('Génération PDF quittance échouée : ' . $e->getMessage()); return [null, null]; }
-    }
-
-    private function sendConfirmationEmail(string $view, string $to, string $subject, array $vars, ?string $pdfContent, ?string $pdfFilename): void
-    {
-        try {
-            Mail::send($view, $vars, function ($m) use ($to, $subject, $pdfContent, $pdfFilename) {
-                $m->to($to)->subject($subject);
-                if ($pdfContent && $pdfFilename) $m->attachData($pdfContent, $pdfFilename, ['mime' => 'application/pdf']);
-            });
-        } catch (\Exception $e) { Log::error('Échec envoi email : ' . $e->getMessage()); }
-    }
 }
