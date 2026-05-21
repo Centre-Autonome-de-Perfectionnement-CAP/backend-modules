@@ -39,6 +39,7 @@ class Contrat extends Model
         // ── PDF final ───────────────────────────────────────────────────────
         'pdf_path',
         'pdf_uploaded_at',
+        'transferred_at',
 
     ];
 
@@ -54,6 +55,7 @@ class Contrat extends Model
         'is_validated'        => 'boolean',
         'is_authorized'       => 'boolean',
         'amount'              => 'decimal:2',
+        'transferred_at'      => 'datetime',
     ];
 
 
@@ -106,6 +108,7 @@ class Contrat extends Model
             'ongoing'    => 'En cours',
             'completed'  => 'Terminé',
             'cancelled'  => 'Rejeté',
+            'resiliated' => 'Résilié',
             default      => 'Inconnu',
         };
     }

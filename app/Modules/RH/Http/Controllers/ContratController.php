@@ -134,6 +134,7 @@ class ContratController extends Controller
                 'error'   => $e->getMessage(),
             ], 500);
         }
+        $contrat->update(['transferred_at' => now()]);
     }
 
 
@@ -320,6 +321,7 @@ class ContratController extends Controller
     public function showByToken($token)
     {
         $contrat = Contrat::where('uuid', $token)->firstOrFail();
+        $this->expireIfOverdue($contrat);
         return response()->json([
             'success' => true,
             'data'    => $this->formatContrat($contrat),
@@ -338,6 +340,15 @@ class ContratController extends Controller
                 'message' => 'Ce contrat a déjà été validé.',
             ], 422);
         }
+        $this->expireIfOverdue($contrat->fresh());
+$contrat->refresh();
+
+if ($contrat->status === 'resiliated') {
+    return response()->json([
+        'success' => false,
+        'message' => 'Ce lien a expiré (72h dépassées). Veuillez contacter le service RH du CAP.',
+    ], 422);
+}
 
         $request->validate([
             'signature_type' => 'required|in:drawn,uploaded,manual',
@@ -628,5 +639,178 @@ class ContratController extends Controller
         } catch (\Throwable $e) {
             Log::error("Erreur globale génération PDF contrat #{$contrat->id} : " . $e->getMessage());
         }
+    }
+
+private function expireIfOverdue(Contrat $contrat): void
+{
+    if (
+        $contrat->status === 'transfered'
+        && !$contrat->is_validated
+        && $contrat->transferred_at
+        && Carbon::parse($contrat->transferred_at)->addHours(72)->isPast()
+    ) {
+        $contrat->update(['status' => 'resiliated']);
+    }
+}
+
+    public function listProgramSupports(Request $request, $contratId, $programId)
+    {
+        $contrat = \App\Modules\RH\Models\Contrat::findOrFail($contratId);
+
+        // Récupérer la ligne pivot dans contrat_programs
+        $pivot = \DB::table('contrat_programs')
+            ->where('contrat_id', $contratId)
+            ->where('course_element_professor_id', $programId)
+            ->first();
+
+        if (!$pivot) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Programme introuvable pour ce contrat.',
+            ], 404);
+        }
+
+        $supports = json_decode($pivot->course_support_file ?? '[]', true) ?? [];
+
+        // Reconstruire les URLs publiques
+        $supports = array_map(function ($s) {
+            if (!empty($s['file']) && Storage::disk('public')->exists($s['file'])) {
+                $s['url'] = Storage::disk('public')->url($s['file']);
+            }
+            return $s;
+        }, $supports);
+
+        return response()->json([
+            'success' => true,
+            'data'    => array_values($supports),
+        ]);
+    }
+
+    // ─── AJOUT d'un support ───────────────────────────────────────────────────
+
+    /**
+     * POST /api/rh/contrats/{contratId}/programs/{programId}/supports
+     *
+     * Body (multipart/form-data) :
+     *   - title    : string (obligatoire)
+     *   - pdf_file : file PDF (obligatoire)
+     */
+    public function addProgramSupport(Request $request, $contratId, $programId)
+    {
+        $contrat = \App\Modules\RH\Models\Contrat::findOrFail($contratId);
+
+        $request->validate([
+            'title'    => 'required|string|max:255',
+            'pdf_file' => 'required|file|mimes:pdf|max:20480', // max 20 Mo
+        ]);
+
+        // Récupérer la ligne pivot
+        $pivot = \DB::table('contrat_programs')
+            ->where('contrat_id', $contratId)
+            ->where('course_element_professor_id', $programId)
+            ->first();
+
+        if (!$pivot) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Programme introuvable pour ce contrat.',
+            ], 404);
+        }
+
+        // Charger les supports existants
+        $supports = json_decode($pivot->course_support_file ?? '[]', true) ?? [];
+
+        // Stocker le fichier PDF
+        $file     = $request->file('pdf_file');
+        $basename = \Illuminate\Support\Str::uuid() . '-support-' . $contratId . '-' . $programId . '.pdf';
+        $path     = 'supports/' . $basename;
+        $file->storeAs('supports', $basename, 'public');
+
+        // Ajouter l'entrée au tableau
+        $supports[] = [
+            'title' => $request->input('title'),
+            'file'  => $path,
+        ];
+
+        // Mettre à jour la colonne JSON + updated_by
+        \DB::table('contrat_programs')
+            ->where('contrat_id', $contratId)
+            ->where('course_element_professor_id', $programId)
+            ->update([
+                'course_support_file' => json_encode(array_values($supports)),
+                'updated_by'          => 'professor',
+                'updated_at'          => now(),
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Support de cours ajouté avec succès.',
+            'data'    => [
+                'title' => $request->input('title'),
+                'file'  => $path,
+                'url'   => Storage::disk('public')->url($path),
+            ],
+        ], 201);
+    }
+
+    // ─── SUPPRESSION d'un support ─────────────────────────────────────────────
+
+    /**
+     * DELETE /api/rh/contrats/{contratId}/programs/{programId}/supports/{index}
+     *
+     * Supprime l'entrée à l'index {index} du tableau JSON et efface le fichier.
+     */
+    public function deleteProgramSupport(Request $request, $contratId, $programId, $index)
+    {
+        $pivot = \DB::table('contrat_programs')
+            ->where('contrat_id', $contratId)
+            ->where('course_element_professor_id', $programId)
+            ->first();
+
+        if (!$pivot) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Programme introuvable pour ce contrat.',
+            ], 404);
+        }
+
+        $supports = json_decode($pivot->course_support_file ?? '[]', true) ?? [];
+        $index    = (int) $index;
+
+        if (!isset($supports[$index])) {
+            return response()->json([
+                'success' => false,
+                'message' => "Support introuvable à l'index {$index}.",
+            ], 404);
+        }
+
+        // Supprimer le fichier physique
+        $filePath = $supports[$index]['file'] ?? null;
+        if ($filePath && Storage::disk('public')->exists($filePath)) {
+            Storage::disk('public')->delete($filePath);
+        }
+
+        // Retirer du tableau et ré-indexer
+        array_splice($supports, $index, 1);
+
+        \DB::table('contrat_programs')
+            ->where('contrat_id', $contratId)
+            ->where('course_element_professor_id', $programId)
+            ->update([
+                'course_support_file' => json_encode(array_values($supports)),
+                'updated_by'          => 'professor',
+                'updated_at'          => now(),
+            ]);
+
+Contrat::where('status', 'transfered')
+    ->where('is_validated', false)
+    ->whereNotNull('transferred_at')
+    ->where('transferred_at', '<', Carbon::now()->subHours(72))
+    ->update(['status' => 'resiliated']);
+    
+        return response()->json([
+            'success' => true,
+            'message' => 'Support supprimé avec succès.',
+        ]);
     }
 }
