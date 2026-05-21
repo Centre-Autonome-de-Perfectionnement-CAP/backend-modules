@@ -54,6 +54,7 @@ class Contrat extends Model
         'is_validated'        => 'boolean',
         'is_authorized'       => 'boolean',
         'amount'              => 'decimal:2',
+         'factures_normalisees' => 'array',
     ];
 
 

@@ -642,7 +642,52 @@ class ContratController extends Controller
             Log::error("Erreur globale génération PDF contrat #{$contrat->id} : " . $e->getMessage());
         }
     }
-  
+  public function myFactures(Request $request)
+{
+    $user = $request->user();
+
+    $professor = Professor::where('email', $user->email)->first();
+
+    if (!$professor) {
+        return response()->json(['success' => true, 'data' => []]);
+    }
+
+    $contrats = Contrat::where('professor_id', $professor->id)
+        ->whereNotNull('factures_normalisees')
+        ->where('factures_normalisees', '!=', '[]')
+        ->with(['academicYear', 'cycle'])
+        ->latest()
+        ->get();
+
+    $data = $contrats->map(function ($c) {
+        $factures = array_map(function ($item) {
+            if (is_string($item)) {
+                return [
+                    'name' => $item,
+                    'path' => 'factures_normalisees/' . $item,
+                    'type' => 'facture',
+                    'url'  => \Storage::disk('public')->url('factures_normalisees/' . $item),
+                ];
+            }
+            return $item;
+        }, $c->factures_normalisees ?? []);
+
+        return [
+            'id'             => $c->id,
+            'contrat_number' => $c->contrat_number,
+            'status'         => $c->status,
+            'amount'         => $c->amount,
+            'start_date'     => $c->start_date,
+            'end_date'       => $c->end_date,
+            'academic_year'  => $c->academicYear?->academic_year,
+            'cycle'          => $c->cycle?->name,
+            'factures'       => $factures,
+            'uploaded_at'    => $c->updated_at,
+        ];
+    });
+
+    return response()->json(['success' => true, 'data' => $data]);
+}
 
     public function listProgramSupports(Request $request, $contratId, $programId)
     {
@@ -890,4 +935,83 @@ class ContratController extends Controller
             ], 500);
         }
     }
+    
+    public function uploadFacturesNormalisees(Request $request, $id)
+    {
+        $request->validate([
+            'factures_normalisees'   => 'required|array|min:1',
+            'factures_normalisees.*' => 'file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'replace'                => 'nullable|string',
+        ]);
+
+        $contrat  = Contrat::findOrFail($id);
+        $existing = $contrat->factures_normalisees ?? [];
+
+        // Rétrocompatibilité : normaliser les anciennes entrées string
+        $existing = array_map(function ($item) {
+            if (is_string($item)) {
+                return ['name' => $item, 'path' => 'factures_normalisees/' . $item, 'type' => 'facture'];
+            }
+            return $item;
+        }, $existing);
+
+        // Accepte "1", "true", "yes", true
+        $replace = filter_var($request->input('replace', false), FILTER_VALIDATE_BOOLEAN);
+
+        // Vérifier si une facture normalisée existe déjà
+        $existingFacture = collect($existing)->first(
+            fn($f) => isset($f['type']) && $f['type'] === 'facture'
+        );
+
+        // Si une facture existe et que le remplacement n'est pas confirmé → 422
+        if ($existingFacture && !$replace) {
+            return response()->json([
+                'success'       => false,
+                'has_existing'  => true,
+                'existing_name' => $existingFacture['name'] ?? 'fichier existant',
+                'message'       => 'Une facture existe déjà pour ce contrat.',
+            ], 422);
+        }
+
+        // Si remplacement confirmé : supprimer les anciens fichiers du disque
+        if ($replace) {
+            foreach ($existing as $item) {
+                if (!empty($item['path']) && \Storage::disk('public')->exists($item['path'])) {
+                    \Storage::disk('public')->delete($item['path']);
+                }
+            }
+            $existing = [];
+        }
+
+        // Uploader les nouveaux fichiers
+        $defaultTypes = ['facture', 'rib'];
+        $newEntries   = [];
+
+        foreach ($request->file('factures_normalisees') as $index => $file) {
+            $original = $file->getClientOriginalName();
+            $safe     = preg_replace('/[^a-zA-Z0-9._-]/', '_', $original);
+            $filename = time() . '_' . \Str::uuid() . '_' . $safe;
+
+            $file->storeAs('factures_normalisees', $filename, 'public');
+
+            $fileType = $request->input("type.{$index}") ?? ($defaultTypes[$index] ?? 'autre');
+
+            $newEntries[] = [
+                'name' => $original,
+                'path' => 'factures_normalisees/' . $filename,
+                'type' => $fileType,
+                'url'  => \Storage::disk('public')->url('factures_normalisees/' . $filename),
+            ];
+        }
+
+        $contrat->factures_normalisees = array_merge($existing, $newEntries);
+        $contrat->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => $replace ? 'Facture remplacée avec succès.' : 'Factures uploadées avec succès.',
+            'data'    => $contrat->factures_normalisees,
+        ]);
+    }
+    
 }

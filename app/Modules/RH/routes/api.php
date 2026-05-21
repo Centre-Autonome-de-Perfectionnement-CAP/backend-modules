@@ -76,6 +76,7 @@ Route::prefix('api/rh')->group(function () {
     // Protégé par Sanctum — accepte tout utilisateur authentifié (User ou Professor)
     Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('professor/my-contrats', [ContratController::class, 'myContrats']);
+        Route::get('professor/my-factures', [ContratController::class, 'myFactures']); 
     });
     Route::get(
         'contrats/{contratId}/programs/{programId}/supports',
@@ -94,4 +95,7 @@ Route::prefix('api/rh')->group(function () {
         [ContratController::class, 'updateProgramMonographie']
     );
     Route::get('professors/{professorId}/programs/{programId}', [ContratController::class, 'getProfessorProgram']);
+    Route::post('/contrats/{id}/factures-normalisees', [ContratController::class, 'uploadFacturesNormalisees']);
+
+    
 });
