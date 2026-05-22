@@ -697,6 +697,53 @@ class ContratController extends Controller
         }
     }
 
+  public function myFactures(Request $request)
+{
+    $user = $request->user();
+
+    $professor = Professor::where('email', $user->email)->first();
+
+    if (!$professor) {
+        return response()->json(['success' => true, 'data' => []]);
+    }
+
+    $contrats = Contrat::where('professor_id', $professor->id)
+        ->whereNotNull('factures_normalisees')
+        ->where('factures_normalisees', '!=', '[]')
+        ->with(['academicYear', 'cycle'])
+        ->latest()
+        ->get();
+
+    $data = $contrats->map(function ($c) {
+        $factures = array_map(function ($item) {
+            if (is_string($item)) {
+                return [
+                    'name' => $item,
+                    'path' => 'factures_normalisees/' . $item,
+                    'type' => 'facture',
+                    'url'  => \Storage::disk('public')->url('factures_normalisees/' . $item),
+                ];
+            }
+            return $item;
+        }, $c->factures_normalisees ?? []);
+
+        return [
+            'id'             => $c->id,
+            'contrat_number' => $c->contrat_number,
+            'status'         => $c->status,
+            'amount'         => $c->amount,
+            'start_date'     => $c->start_date,
+            'end_date'       => $c->end_date,
+            'academic_year'  => $c->academicYear?->academic_year,
+            'cycle'          => $c->cycle?->name,
+            'factures'       => $factures,
+            'uploaded_at'    => $c->updated_at,
+        ];
+    });
+
+    return response()->json(['success' => true, 'data' => $data]);
+}
+
 
     public function listProgramSupports(Request $request, $contratId, $programId)
     {
@@ -852,4 +899,174 @@ class ContratController extends Controller
             'message' => 'Support supprimé avec succès.',
         ]);
     }
+
+    // ─── MONOGRAPHIE d'un programme ───────────────────────────────────────────
+
+    /**
+     * PUT /api/rh/contrats/{contratId}/programs/{programId}/monographie
+     *
+     * Met à jour number_monographie et amount_monographie sur la ligne
+     * correspondante de la table contrat_programs.
+     */
+    public function updateProgramMonographie(Request $request, $contratId, $programId)
+    {
+        try {
+            $validated = $request->validate([
+                'number_monographie' => 'required|integer|min:0',
+                'amount_monographie' => 'required|numeric|min:0',
+            ]);
+
+            if (!is_numeric($contratId) || !is_numeric($programId)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Identifiants invalides.',
+                ], 400);
+            }
+
+            \DB::beginTransaction();
+
+            $pivot = \DB::table('contrat_programs')
+                ->where('contrat_id', $contratId)
+                ->where('course_element_professor_id', $programId)
+                ->first();
+
+            if (!$pivot) {
+                \DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Programme introuvable pour ce contrat.',
+                ], 404);
+            }
+
+            \DB::table('contrat_programs')
+                ->where('contrat_id', $contratId)
+                ->where('course_element_professor_id', $programId)
+                ->update([
+                    'number_monographie' => (int)   $validated['number_monographie'],
+                    'amount_monographie' => (float) $validated['amount_monographie'],
+                    'updated_at'         => now(),
+                ]);
+
+            $updated = \DB::table('contrat_programs')
+                ->where('contrat_id', $contratId)
+                ->where('course_element_professor_id', $programId)
+                ->first();
+
+            \DB::commit();
+
+            return response()->json([
+                'success'            => true,
+                'message'            => 'Monographie mise à jour avec succès.',
+                'number_monographie' => $updated->number_monographie,
+                'amount_monographie' => $updated->amount_monographie,
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur de validation.',
+                'errors'  => $e->errors(),
+            ], 422);
+
+        } catch (\Illuminate\Database\QueryException $e) {
+            \DB::rollBack();
+            Log::error('Erreur SQL updateProgramMonographie', [
+                'message'  => $e->getMessage(),
+                'sql'      => $e->getSql(),
+                'bindings' => $e->getBindings(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur SQL : ' . $e->getMessage(),
+            ], 500);
+
+        } catch (\Exception $e) {
+            \DB::rollBack();
+            Log::error('Erreur updateProgramMonographie', ['message' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur interne : ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function uploadFacturesNormalisees(Request $request, $id)
+    {
+        $request->validate([
+            'factures_normalisees'   => 'required|array|min:1',
+            'factures_normalisees.*' => 'file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'replace'                => 'nullable|string',
+        ]);
+
+        $contrat  = Contrat::findOrFail($id);
+        $existing = $contrat->factures_normalisees ?? [];
+
+        // Rétrocompatibilité : normaliser les anciennes entrées string
+        $existing = array_map(function ($item) {
+            if (is_string($item)) {
+                return ['name' => $item, 'path' => 'factures_normalisees/' . $item, 'type' => 'facture'];
+            }
+            return $item;
+        }, $existing);
+
+        // Accepte "1", "true", "yes", true
+        $replace = filter_var($request->input('replace', false), FILTER_VALIDATE_BOOLEAN);
+
+        // Vérifier si une facture normalisée existe déjà
+        $existingFacture = collect($existing)->first(
+            fn($f) => isset($f['type']) && $f['type'] === 'facture'
+        );
+
+        // Si une facture existe et que le remplacement n'est pas confirmé → 422
+        if ($existingFacture && !$replace) {
+            return response()->json([
+                'success'       => false,
+                'has_existing'  => true,
+                'existing_name' => $existingFacture['name'] ?? 'fichier existant',
+                'message'       => 'Une facture existe déjà pour ce contrat.',
+            ], 422);
+        }
+
+        // Si remplacement confirmé : supprimer les anciens fichiers du disque
+        if ($replace) {
+            foreach ($existing as $item) {
+                if (!empty($item['path']) && \Storage::disk('public')->exists($item['path'])) {
+                    \Storage::disk('public')->delete($item['path']);
+                }
+            }
+            $existing = [];
+        }
+
+        // Uploader les nouveaux fichiers
+        $defaultTypes = ['facture', 'rib'];
+        $newEntries   = [];
+
+        foreach ($request->file('factures_normalisees') as $index => $file) {
+            $original = $file->getClientOriginalName();
+            $safe     = preg_replace('/[^a-zA-Z0-9._-]/', '_', $original);
+            $filename = time() . '_' . \Str::uuid() . '_' . $safe;
+
+            $file->storeAs('factures_normalisees', $filename, 'public');
+
+            $fileType = $request->input("type.{$index}") ?? ($defaultTypes[$index] ?? 'autre');
+
+            $newEntries[] = [
+                'name' => $original,
+                'path' => 'factures_normalisees/' . $filename,
+                'type' => $fileType,
+                'url'  => \Storage::disk('public')->url('factures_normalisees/' . $filename),
+            ];
+        }
+
+        $contrat->factures_normalisees = array_merge($existing, $newEntries);
+        $contrat->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => $replace ? 'Facture remplacée avec succès.' : 'Factures uploadées avec succès.',
+            'data'    => $contrat->factures_normalisees,
+        ]);
+    }
+
 }
+ 
