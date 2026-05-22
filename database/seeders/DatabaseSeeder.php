@@ -59,6 +59,7 @@ class DatabaseSeeder extends Seeder
             PaymentsSeeder::class,
             DocumentRequestSeeder::class,
             DocumentRequestHistorySeeder::class,
+            RoleSeederCompleted::class,
             
         ]);
 

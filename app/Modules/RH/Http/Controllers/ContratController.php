@@ -150,29 +150,42 @@ class ContratController extends Controller
             'courseElementProfessors.classGroup',
         ]);
 
+        // Lire TOUTES les colonnes de contrat_programs en une requête
+        // car $p->pivot ne charge que les colonnes déclarées dans withPivot()
+        // et le modèle Contrat ne déclare pas number_monographie / amount_monographie
+        $pivotData = \DB::table('contrat_programs')
+            ->where('contrat_id', $c->id)
+            ->get()
+            ->keyBy('course_element_professor_id');
+
         return array_merge($c->toArray(), [
             'academic_year'             => $c->academicYear,
-            'course_element_professors' => $c->courseElementProfessors->map(fn($p) => [
-                'id'             => $p->id,
-                'is_primary'     => $p->is_primary ?? false,
-                'label'          => $p->label ?? ($p->courseElement->name ?? ''),
-                'hours'          => $p->pivot->hours ?? 0,
-                'course_element' => $p->courseElement ? [
-                    'id'           => $p->courseElement->id,
-                    'name'         => $p->courseElement->name,
-                    'code'         => $p->courseElement->code,
-                    'hours'        => $p->courseElement->hours ?? 0,
-                    'teaching_unit' => $p->courseElement->teachingUnit ? [
-                        'id'   => $p->courseElement->teachingUnit->id,
-                        'name' => $p->courseElement->teachingUnit->name,
-                        'code' => $p->courseElement->teachingUnit->code ?? '',
+            'course_element_professors' => $c->courseElementProfessors->map(function ($p) use ($pivotData) {
+                $pivot = $pivotData->get($p->id);
+                return [
+                    'id'                  => $p->id,
+                    'is_primary'          => $p->is_primary ?? false,
+                    'label'               => $p->label ?? ($p->courseElement->name ?? ''),
+                    'hours'               => $pivot->hours              ?? 0,
+                    'number_monographie'  => $pivot->number_monographie ?? null,
+                    'amount_monographie'  => $pivot->amount_monographie  ?? null,
+                    'course_element' => $p->courseElement ? [
+                        'id'           => $p->courseElement->id,
+                        'name'         => $p->courseElement->name,
+                        'code'         => $p->courseElement->code,
+                        'hours'        => $p->courseElement->hours ?? 0,
+                        'teaching_unit' => $p->courseElement->teachingUnit ? [
+                            'id'   => $p->courseElement->teachingUnit->id,
+                            'name' => $p->courseElement->teachingUnit->name,
+                            'code' => $p->courseElement->teachingUnit->code ?? '',
+                        ] : null,
                     ] : null,
-                ] : null,
-                'class_group' => $p->classGroup ? [
-                    'id'   => $p->classGroup->id,
-                    'name' => $p->classGroup->name,
-                ] : null,
-            ])->values()->all(),
+                    'class_group' => $p->classGroup ? [
+                        'id'   => $p->classGroup->id,
+                        'name' => $p->classGroup->name,
+                    ] : null,
+                ];
+            })->values()->all(),
         ]);
     }
 
@@ -681,8 +694,10 @@ private function expireIfOverdue(Contrat $contrat): void
         }, $supports);
 
         return response()->json([
-            'success' => true,
-            'data'    => array_values($supports),
+            'success'            => true,
+            'data'               => array_values($supports),
+            'number_monographie' => $pivot->number_monographie ?? null,
+            'amount_monographie' => $pivot->amount_monographie  ?? null,
         ]);
     }
 
@@ -812,5 +827,95 @@ Contrat::where('status', 'transfered')
             'success' => true,
             'message' => 'Support supprimé avec succès.',
         ]);
+    }
+
+    // ─── MONOGRAPHIE d'un programme ───────────────────────────────────────────
+
+    /**
+     * PUT /api/rh/contrats/{contratId}/programs/{programId}/monographie
+     *
+     * Met à jour number_monographie et amount_monographie sur la ligne
+     * correspondante de la table contrat_programs.
+     */
+    public function updateProgramMonographie(Request $request, $contratId, $programId)
+    {
+        try {
+            $validated = $request->validate([
+                'number_monographie' => 'required|integer|min:0',
+                'amount_monographie' => 'required|numeric|min:0',
+            ]);
+
+            if (!is_numeric($contratId) || !is_numeric($programId)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Identifiants invalides.',
+                ], 400);
+            }
+
+            \DB::beginTransaction();
+
+            $pivot = \DB::table('contrat_programs')
+                ->where('contrat_id', $contratId)
+                ->where('course_element_professor_id', $programId)
+                ->first();
+
+            if (!$pivot) {
+                \DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Programme introuvable pour ce contrat.',
+                ], 404);
+            }
+
+            \DB::table('contrat_programs')
+                ->where('contrat_id', $contratId)
+                ->where('course_element_professor_id', $programId)
+                ->update([
+                    'number_monographie' => (int)   $validated['number_monographie'],
+                    'amount_monographie' => (float) $validated['amount_monographie'],
+                    'updated_at'         => now(),
+                ]);
+
+            $updated = \DB::table('contrat_programs')
+                ->where('contrat_id', $contratId)
+                ->where('course_element_professor_id', $programId)
+                ->first();
+
+            \DB::commit();
+
+            return response()->json([
+                'success'            => true,
+                'message'            => 'Monographie mise à jour avec succès.',
+                'number_monographie' => $updated->number_monographie,
+                'amount_monographie' => $updated->amount_monographie,
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur de validation.',
+                'errors'  => $e->errors(),
+            ], 422);
+
+        } catch (\Illuminate\Database\QueryException $e) {
+            \DB::rollBack();
+            Log::error('Erreur SQL updateProgramMonographie', [
+                'message'  => $e->getMessage(),
+                'sql'      => $e->getSql(),
+                'bindings' => $e->getBindings(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur SQL : ' . $e->getMessage(),
+            ], 500);
+
+        } catch (\Exception $e) {
+            \DB::rollBack();
+            Log::error('Erreur updateProgramMonographie', ['message' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur interne : ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }
