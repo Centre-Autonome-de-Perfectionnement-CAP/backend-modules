@@ -78,6 +78,36 @@ class ContratController extends Controller
         throw new \Exception('Aucune source de signature valide.');
     }
 
+    // ─── EXPIRATION AUTOMATIQUE (72 h) ────────────────────────────────────────
+
+    /**
+     * Si le contrat est en statut "transfered", non validé, et que 72 h
+     * se sont écoulées depuis transferred_at, on le passe en "resiliated".
+     */
+    private function expireIfOverdue(Contrat $contrat): void
+    {
+        if (
+            $contrat->status === 'transfered'
+            && !$contrat->is_validated
+            && $contrat->transferred_at
+            && Carbon::parse($contrat->transferred_at)->addHours(72)->isPast()
+        ) {
+            $contrat->update(['status' => 'resiliated']);
+        }
+    }
+
+    /**
+     * Passe en masse tous les contrats transférés expirés en "resiliated".
+     * Appelé dans index() pour maintenir le dashboard admin à jour.
+     */
+    private function expireOverdueContrats(): void
+    {
+        Contrat::where('status', 'transfered')
+            ->where('is_validated', false)
+            ->whereNotNull('transferred_at')
+            ->where('transferred_at', '<', Carbon::now()->subHours(72))
+            ->update(['status' => 'resiliated']);
+    }
 
     // ─── EMAIL DE TRANSFERT ───────────────────────────────────────────────────
     public function sendTransferEmail($id)
@@ -123,6 +153,9 @@ class ContratController extends Controller
 
             Mail::to($professor->email)->send(new \App\Mail\ContratTransferred($details));
 
+            // ── Enregistrer l'heure exacte d'envoi pour calculer l'expiration 72 h ──
+            $contrat->update(['transferred_at' => now()]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Email envoyé avec succès',
@@ -134,7 +167,6 @@ class ContratController extends Controller
                 'error'   => $e->getMessage(),
             ], 500);
         }
-        $contrat->update(['transferred_at' => now()]);
     }
 
 
@@ -150,42 +182,29 @@ class ContratController extends Controller
             'courseElementProfessors.classGroup',
         ]);
 
-        // Lire TOUTES les colonnes de contrat_programs en une requête
-        // car $p->pivot ne charge que les colonnes déclarées dans withPivot()
-        // et le modèle Contrat ne déclare pas number_monographie / amount_monographie
-        $pivotData = \DB::table('contrat_programs')
-            ->where('contrat_id', $c->id)
-            ->get()
-            ->keyBy('course_element_professor_id');
-
         return array_merge($c->toArray(), [
             'academic_year'             => $c->academicYear,
-            'course_element_professors' => $c->courseElementProfessors->map(function ($p) use ($pivotData) {
-                $pivot = $pivotData->get($p->id);
-                return [
-                    'id'                  => $p->id,
-                    'is_primary'          => $p->is_primary ?? false,
-                    'label'               => $p->label ?? ($p->courseElement->name ?? ''),
-                    'hours'               => $pivot->hours              ?? 0,
-                    'number_monographie'  => $pivot->number_monographie ?? null,
-                    'amount_monographie'  => $pivot->amount_monographie  ?? null,
-                    'course_element' => $p->courseElement ? [
-                        'id'           => $p->courseElement->id,
-                        'name'         => $p->courseElement->name,
-                        'code'         => $p->courseElement->code,
-                        'hours'        => $p->courseElement->hours ?? 0,
-                        'teaching_unit' => $p->courseElement->teachingUnit ? [
-                            'id'   => $p->courseElement->teachingUnit->id,
-                            'name' => $p->courseElement->teachingUnit->name,
-                            'code' => $p->courseElement->teachingUnit->code ?? '',
-                        ] : null,
+            'course_element_professors' => $c->courseElementProfessors->map(fn($p) => [
+                'id'             => $p->id,
+                'is_primary'     => $p->is_primary ?? false,
+                'label'          => $p->label ?? ($p->courseElement->name ?? ''),
+                'hours'          => $p->pivot->hours ?? 0,
+                'course_element' => $p->courseElement ? [
+                    'id'           => $p->courseElement->id,
+                    'name'         => $p->courseElement->name,
+                    'code'         => $p->courseElement->code,
+                    'hours'        => $p->courseElement->hours ?? 0,
+                    'teaching_unit' => $p->courseElement->teachingUnit ? [
+                        'id'   => $p->courseElement->teachingUnit->id,
+                        'name' => $p->courseElement->teachingUnit->name,
+                        'code' => $p->courseElement->teachingUnit->code ?? '',
                     ] : null,
-                    'class_group' => $p->classGroup ? [
-                        'id'   => $p->classGroup->id,
-                        'name' => $p->classGroup->name,
-                    ] : null,
-                ];
-            })->values()->all(),
+                ] : null,
+                'class_group' => $p->classGroup ? [
+                    'id'   => $p->classGroup->id,
+                    'name' => $p->classGroup->name,
+                ] : null,
+            ])->values()->all(),
         ]);
     }
 
@@ -193,6 +212,9 @@ class ContratController extends Controller
 
     public function index(Request $request)
     {
+        // ── Expiration en masse : tous les contrats transférés depuis > 72 h ──
+        $this->expireOverdueContrats();
+
         $contrats = Contrat::with([
             'professor',
             'cycle',
@@ -287,17 +309,21 @@ class ContratController extends Controller
             'end_date'                       => 'nullable|date|after_or_equal:start_date',
             'amount'                         => 'required|numeric|min:100',
             'notes'                          => 'nullable|string',
-            'status'                         => 'sometimes|string|in:pending,transfered,signed,ongoing,completed,cancelled',
+            // ── 'resiliated' ajouté dans la liste des statuts autorisés ──────
+            'status'                         => 'sometimes|string|in:pending,transfered,signed,ongoing,completed,cancelled,resiliated',
             'course_element_professor_ids'   => 'nullable|array',
             'course_element_professor_ids.*' => 'integer',
         ]);
 
         $contrat->update($validated);
 
-        // ── Si l'admin remet le contrat en "pending" (relance après rejet),
-        //    on efface le motif de rejet pour repartir proprement ──────────────
+        // ── Si l'admin remet le contrat en "pending" (relance après rejet ou résiliation),
+        //    on efface le motif de rejet et la date de transfert ────────────────
         if (($validated['status'] ?? null) === 'pending') {
-            $contrat->update(['rejection_reason' => null]);
+            $contrat->update([
+                'rejection_reason' => null,
+                'transferred_at'   => null,
+            ]);
         }
 
         if (array_key_exists('course_element_professor_ids', $validated)) {
@@ -334,7 +360,11 @@ class ContratController extends Controller
     public function showByToken($token)
     {
         $contrat = Contrat::where('uuid', $token)->firstOrFail();
+
+        // ── Vérifier et appliquer l'expiration des 72 h avant de retourner ──
         $this->expireIfOverdue($contrat);
+        $contrat->refresh();
+
         return response()->json([
             'success' => true,
             'data'    => $this->formatContrat($contrat),
@@ -347,21 +377,23 @@ class ContratController extends Controller
     {
         $contrat = Contrat::where('uuid', $token)->firstOrFail();
 
+        // ── Vérifier l'expiration des 72 h AVANT toute autre vérification ──
+        $this->expireIfOverdue($contrat);
+        $contrat->refresh();
+
+        if ($contrat->status === 'resiliated') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce lien a expiré (délai de 72 heures dépassé). Veuillez contacter le service RH du CAP.',
+            ], 422);
+        }
+
         if ($contrat->is_validated) {
             return response()->json([
                 'success' => false,
                 'message' => 'Ce contrat a déjà été validé.',
             ], 422);
         }
-        $this->expireIfOverdue($contrat->fresh());
-$contrat->refresh();
-
-if ($contrat->status === 'resiliated') {
-    return response()->json([
-        'success' => false,
-        'message' => 'Ce lien a expiré (72h dépassées). Veuillez contacter le service RH du CAP.',
-    ], 422);
-}
 
         $request->validate([
             'signature_type' => 'required|in:drawn,uploaded,manual',
@@ -414,6 +446,17 @@ if ($contrat->status === 'resiliated') {
     {
         $contrat = Contrat::where('uuid', $token)->firstOrFail();
 
+        // ── Vérifier l'expiration des 72 h AVANT toute autre vérification ──
+        $this->expireIfOverdue($contrat);
+        $contrat->refresh();
+
+        if ($contrat->status === 'resiliated') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce lien a expiré (délai de 72 heures dépassé). Veuillez contacter le service RH du CAP.',
+            ], 422);
+        }
+
         if ($contrat->is_validated) {
             return response()->json([
                 'success' => false,
@@ -432,7 +475,7 @@ if ($contrat->status === 'resiliated') {
 
         // ── Notifier l'admin par email du rejet ───────────────────────────────
         try {
-            $professor = $contrat->professor;
+            $professor  = $contrat->professor;
             $adminEmail = config('mail.admin_email', config('mail.from.address'));
 
         } catch (\Exception $e) {
@@ -654,17 +697,6 @@ if ($contrat->status === 'resiliated') {
         }
     }
 
-private function expireIfOverdue(Contrat $contrat): void
-{
-    if (
-        $contrat->status === 'transfered'
-        && !$contrat->is_validated
-        && $contrat->transferred_at
-        && Carbon::parse($contrat->transferred_at)->addHours(72)->isPast()
-    ) {
-        $contrat->update(['status' => 'resiliated']);
-    }
-}
 
     public function listProgramSupports(Request $request, $contratId, $programId)
     {
@@ -694,10 +726,8 @@ private function expireIfOverdue(Contrat $contrat): void
         }, $supports);
 
         return response()->json([
-            'success'            => true,
-            'data'               => array_values($supports),
-            'number_monographie' => $pivot->number_monographie ?? null,
-            'amount_monographie' => $pivot->amount_monographie  ?? null,
+            'success' => true,
+            'data'    => array_values($supports),
         ]);
     }
 
@@ -817,105 +847,9 @@ private function expireIfOverdue(Contrat $contrat): void
                 'updated_at'          => now(),
             ]);
 
-Contrat::where('status', 'transfered')
-    ->where('is_validated', false)
-    ->whereNotNull('transferred_at')
-    ->where('transferred_at', '<', Carbon::now()->subHours(72))
-    ->update(['status' => 'resiliated']);
-    
         return response()->json([
             'success' => true,
             'message' => 'Support supprimé avec succès.',
         ]);
-    }
-
-    // ─── MONOGRAPHIE d'un programme ───────────────────────────────────────────
-
-    /**
-     * PUT /api/rh/contrats/{contratId}/programs/{programId}/monographie
-     *
-     * Met à jour number_monographie et amount_monographie sur la ligne
-     * correspondante de la table contrat_programs.
-     */
-    public function updateProgramMonographie(Request $request, $contratId, $programId)
-    {
-        try {
-            $validated = $request->validate([
-                'number_monographie' => 'required|integer|min:0',
-                'amount_monographie' => 'required|numeric|min:0',
-            ]);
-
-            if (!is_numeric($contratId) || !is_numeric($programId)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Identifiants invalides.',
-                ], 400);
-            }
-
-            \DB::beginTransaction();
-
-            $pivot = \DB::table('contrat_programs')
-                ->where('contrat_id', $contratId)
-                ->where('course_element_professor_id', $programId)
-                ->first();
-
-            if (!$pivot) {
-                \DB::rollBack();
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Programme introuvable pour ce contrat.',
-                ], 404);
-            }
-
-            \DB::table('contrat_programs')
-                ->where('contrat_id', $contratId)
-                ->where('course_element_professor_id', $programId)
-                ->update([
-                    'number_monographie' => (int)   $validated['number_monographie'],
-                    'amount_monographie' => (float) $validated['amount_monographie'],
-                    'updated_at'         => now(),
-                ]);
-
-            $updated = \DB::table('contrat_programs')
-                ->where('contrat_id', $contratId)
-                ->where('course_element_professor_id', $programId)
-                ->first();
-
-            \DB::commit();
-
-            return response()->json([
-                'success'            => true,
-                'message'            => 'Monographie mise à jour avec succès.',
-                'number_monographie' => $updated->number_monographie,
-                'amount_monographie' => $updated->amount_monographie,
-            ]);
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur de validation.',
-                'errors'  => $e->errors(),
-            ], 422);
-
-        } catch (\Illuminate\Database\QueryException $e) {
-            \DB::rollBack();
-            Log::error('Erreur SQL updateProgramMonographie', [
-                'message'  => $e->getMessage(),
-                'sql'      => $e->getSql(),
-                'bindings' => $e->getBindings(),
-            ]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur SQL : ' . $e->getMessage(),
-            ], 500);
-
-        } catch (\Exception $e) {
-            \DB::rollBack();
-            Log::error('Erreur updateProgramMonographie', ['message' => $e->getMessage()]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur interne : ' . $e->getMessage(),
-            ], 500);
-        }
     }
 }

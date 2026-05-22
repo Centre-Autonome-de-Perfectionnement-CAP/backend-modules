@@ -44,8 +44,8 @@ class ProfessorGradeController extends Controller
         }
 
         $result = $this->lmdGradeService->getProfessorClassesByCycle(
-            $professorId, 
-            $academicYearId, 
+            $professorId,
+            $academicYearId,
             $departmentId,
             $cohort
         );
@@ -81,7 +81,7 @@ class ProfessorGradeController extends Controller
 
         $isLmd = $programModel->classGroup->cycle->is_lmd ?? false;
         $service = $isLmd ? $this->lmdGradeService : $this->oldGradeService;
-        
+
         $result = $service->getGradeSheet($programModel, $request->input('cohort'));
 
         return $this->successResponse($result, 'Fiche de notation récupérée avec succès');
@@ -98,7 +98,7 @@ class ProfessorGradeController extends Controller
 
         $isLmd = $programModel->classGroup->cycle->is_lmd ?? false;
         $service = $isLmd ? $this->lmdGradeService : $this->oldGradeService;
-        
+
         $result = $service->getStudentsForEvaluation($programModel, $request->input('cohort'));
 
         return $this->successResponse($result, 'Étudiants récupérés avec succès');
@@ -116,7 +116,7 @@ class ProfessorGradeController extends Controller
         } else {
             $program = Program::with('classGroup.cycle')->findOrFail($programId);
         }
-        
+
         $isLmd = $program->classGroup->cycle->is_lmd ?? false;
         $service = $isLmd ? $this->lmdGradeService : $this->oldGradeService;
 
@@ -140,7 +140,7 @@ class ProfessorGradeController extends Controller
         } else {
             $program = Program::with('classGroup.cycle')->findOrFail($programId);
         }
-        
+
         $isLmd = $program->classGroup->cycle->is_lmd ?? false;
         $service = $isLmd ? $this->lmdGradeService : $this->oldGradeService;
 
@@ -148,7 +148,7 @@ class ProfessorGradeController extends Controller
         $grade = \App\Modules\Notes\Models\LmdSystemGrade::where('student_pending_student_id', $request->student_pending_student_id)
             ->where('program_id', $program->id)
             ->first();
-        
+
         $columnCount = $grade ? count($grade->grades ?? []) : 0;
         $isSessionNormale = $request->position < $columnCount;
         $adjustedPosition = $isSessionNormale ? $request->position : ($request->position - $columnCount);
@@ -175,7 +175,7 @@ class ProfessorGradeController extends Controller
         } else {
             $program = Program::with('classGroup.cycle')->findOrFail($programId);
         }
-        
+
         $isLmd = $program->classGroup->cycle->is_lmd ?? false;
         $service = $isLmd ? $this->lmdGradeService : $this->oldGradeService;
 
@@ -190,25 +190,25 @@ class ProfessorGradeController extends Controller
     public function exportGradeSheet(Request $request, string $program)
     {
         $programModel = Program::with([
-            'classGroup.department', 
-            'classGroup.cycle', 
+            'classGroup.department',
+            'classGroup.cycle',
             'classGroup.academicYear',
             'courseElementProfessor.courseElement',
             'courseElementProfessor.professor'
         ])->where('uuid', $program)->firstOrFail();
-        
+
         $isLmd = $programModel->classGroup->cycle->is_lmd ?? false;
         $service = $isLmd ? $this->lmdGradeService : $this->oldGradeService;
 
         $gradeSheet = $service->getGradeSheet($programModel, $request->cohort);
-        
+
         $includeRetake = $request->boolean('include_retake', false);
-        
+
         $department = $programModel->classGroup->department;
         $academicYear = $programModel->classGroup->academicYear;
         $professor = $programModel->courseElementProfessor->professor ?? null;
         $classeLabel = ($department->abbreviation ?? $department->name) . '-' . $programModel->classGroup->study_level;
-        
+
         $data = [
             'annee' => $academicYear ? $academicYear->academic_year : 'N/A',
             'filiere' => $department->name ?? 'N/A',
@@ -238,10 +238,10 @@ class ProfessorGradeController extends Controller
         $cohort = $request->cohort ?? 'all';
         $dateTime = now()->format('Ymd_His');
         $filename = 'FICHE_NOTES_' . str_replace(['/', '-', ' '], '_', $academicYear->academic_year ?? 'N_A') . '_COHORTE_' . $cohort . '_' . ($department->abbreviation ?? 'N_A') . '_' . $programModel->classGroup->study_level . '_' . $dateTime . '.pdf';
-        
+
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('core::pdfs.fiche-recapitulatif-notes', $data)
             ->setPaper('a4', 'portrait');
-        
+
         return response()->streamDownload(function() use ($pdf) {
             echo $pdf->output();
         }, $filename, ['Content-Type' => 'application/pdf']);
@@ -264,7 +264,7 @@ class ProfessorGradeController extends Controller
         } else {
             $program = Program::with('classGroup.cycle')->findOrFail($programId);
         }
-        
+
         $isLmd = $program->classGroup->cycle->is_lmd ?? false;
         $service = $isLmd ? $this->lmdGradeService : $this->oldGradeService;
 
@@ -294,7 +294,7 @@ class ProfessorGradeController extends Controller
         } else {
             $program = Program::with('classGroup.cycle')->findOrFail($programId);
         }
-        
+
         $isLmd = $program->classGroup->cycle->is_lmd ?? false;
         $service = $isLmd ? $this->lmdGradeService : $this->oldGradeService;
 
