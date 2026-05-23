@@ -81,8 +81,8 @@ class TransitionService
 
         match ($mailTrigger) {
             'rejected'               => $this->notificationService->sendRejected($fresh, $payload['motif'] ?? ''),
-            'ready'                  => $this->notificationService->sendReady($fresh),
-            'delivered'              => $this->notificationService->sendDelivered($fresh),
+            'ready_for_pickup'       => $this->notificationService->sendReady($fresh),
+            'picked_up'              => $this->notificationService->sendDelivered($fresh),
             'direction_transmission' => $this->notificationService->notifySecretaryOfDirectionTransmission($fresh),
             default                  => null,
         };
@@ -115,13 +115,13 @@ class TransitionService
         $mail      = null;
 
         $roleToStatus = [
-            'comptable'           => 'comptable_review',
-            'chef-division'       => 'chef_division_review',
-            'chef-cap'            => 'chef_cap_review',
-            'sec-da'              => 'sec_dir_adjointe_review',
-            'directrice-adjointe' => 'directrice_adjointe_review',
-            'sec-dir'             => 'sec_directeur_review',
-            'directeur'           => 'directeur_review',
+            'comptable'           => 'accounting_review',
+            'chef-division'       => 'division_manager_review',
+            'chef-cap'            => 'cap_manager_review',
+            'sec-da'              => 'deputy_director_secretary_review',
+            'directrice-adjointe' => 'deputy_director_review',
+            'sec-dir'             => 'director_secretary_review',
+            'directeur'           => 'director_review',
         ];
 
         // ── CLEAR FLAG ────────────────────────────────────────────────────────
@@ -135,7 +135,7 @@ class TransitionService
         // ═════════════════════════════════════════════════════════════════════
 
         if ($action === 'secretaire_validate') {
-            $newStatus        = 'comptable_review';
+            $newStatus        = 'accounting_review';
             $update['status'] = $newStatus;
         }
 
@@ -183,9 +183,9 @@ class TransitionService
         }
 
         elseif ($action === 'secretaire_deliver') {
-            $update['status']       = 'delivered';
+            $update['status']       = 'picked_up';
             $update['delivered_at'] = now();
-            $mail = 'delivered';
+            $mail = 'picked_up';
         }
 
         // ═════════════════════════════════════════════════════════════════════
@@ -196,7 +196,7 @@ class TransitionService
             if (empty($p['chef_division_type'])) {
                 abort(422, 'Vous devez sélectionner le Responsable Division.');
             }
-            $newStatus                    = 'chef_division_review';
+            $newStatus                    = 'division_manager_review';
             $update['status']             = $newStatus;
             $update['chef_division_type'] = $p['chef_division_type'];
 
@@ -207,7 +207,7 @@ class TransitionService
 
         elseif ($action === 'comptable_reject') {
             $this->requireMotif($p);
-            $newStatus                          = 'secretaire_correction';
+            $newStatus                          = 'secretary_correction';
             $update['status']                   = $newStatus;
             $update['rejected_reason']          = $p['motif'];
             $update['rejected_by']              = WorkflowConstants::ROLE_LABELS[$role] ?? $role;
@@ -221,7 +221,7 @@ class TransitionService
         // ═════════════════════════════════════════════════════════════════════
 
         elseif (in_array($action, ['chef_division_validate', 'chef_division_validate_flagged'])) {
-            $newStatus        = 'chef_cap_review';
+            $newStatus        = 'cap_manager_review';
             $update['status'] = $newStatus;
 
             if ($isFlagged) {
@@ -231,7 +231,7 @@ class TransitionService
 
         elseif ($action === 'chef_division_reject') {
             $this->requireMotif($p);
-            $newStatus                          = 'secretaire_correction';
+            $newStatus                          = 'secretary_correction';
             $update['status']                   = $newStatus;
             $update['rejected_reason']          = $p['motif'];
             $update['rejected_by']              = WorkflowConstants::ROLE_LABELS[$role] ?? $role;
@@ -254,18 +254,18 @@ class TransitionService
             }
 
             if ($sigType === 'paraphe') {
-                $newStatus        = 'sec_dir_adjointe_review';
+                $newStatus        = 'deputy_director_secretary_review';
                 $update['status'] = $newStatus;
                 $mail = 'direction_transmission';
             } else {
-                $update['status'] = 'ready';
-                $mail = 'ready';
+                $update['status'] = 'ready_for_pickup';
+                $mail = 'ready_for_pickup';
             }
         }
 
         elseif ($action === 'chef_cap_reject') {
             $this->requireMotif($p);
-            $newStatus                          = 'secretaire_correction';
+            $newStatus                          = 'secretary_correction';
             $update['status']                   = $newStatus;
             $update['rejected_reason']          = $p['motif'];
             $update['rejected_by']              = WorkflowConstants::ROLE_LABELS[$role] ?? $role;
@@ -279,7 +279,7 @@ class TransitionService
         // ═════════════════════════════════════════════════════════════════════
 
         elseif (in_array($action, ['sec_da_transmit', 'sec_da_transmit_flagged'])) {
-            $newStatus        = 'directrice_adjointe_review';
+            $newStatus        = 'deputy_director_review';
             $update['status'] = $newStatus;
 
             if ($isFlagged) {
@@ -289,7 +289,7 @@ class TransitionService
 
         elseif ($action === 'sec_da_reject') {
             $this->requireMotif($p);
-            $newStatus                          = 'secretaire_correction';
+            $newStatus                          = 'secretary_correction';
             $update['status']                   = $newStatus;
             $update['rejected_reason']          = $p['motif'];
             $update['rejected_by']              = WorkflowConstants::ROLE_LABELS[$role] ?? $role;
@@ -303,7 +303,7 @@ class TransitionService
         // ═════════════════════════════════════════════════════════════════════
 
         elseif (in_array($action, ['directrice_adjointe_sign', 'directrice_adjointe_sign_flagged'])) {
-            $newStatus        = 'sec_directeur_review';
+            $newStatus        = 'director_secretary_review';
             $update['status'] = $newStatus;
 
             if ($isFlagged) {
@@ -313,7 +313,7 @@ class TransitionService
 
         elseif ($action === 'directrice_adjointe_reject') {
             $this->requireMotif($p);
-            $newStatus                          = 'secretaire_correction';
+            $newStatus                          = 'secretary_correction';
             $update['status']                   = $newStatus;
             $update['rejected_reason']          = $p['motif'];
             $update['rejected_by']              = WorkflowConstants::ROLE_LABELS[$role] ?? $role;
@@ -327,7 +327,7 @@ class TransitionService
         // ═════════════════════════════════════════════════════════════════════
 
         elseif (in_array($action, ['sec_directeur_transmit', 'sec_directeur_transmit_flagged'])) {
-            $newStatus        = 'directeur_review';
+            $newStatus        = 'director_review';
             $update['status'] = $newStatus;
 
             if ($isFlagged) {
@@ -337,7 +337,7 @@ class TransitionService
 
         elseif ($action === 'sec_directeur_reject') {
             $this->requireMotif($p);
-            $newStatus                          = 'secretaire_correction';
+            $newStatus                          = 'secretary_correction';
             $update['status']                   = $newStatus;
             $update['rejected_reason']          = $p['motif'];
             $update['rejected_by']              = WorkflowConstants::ROLE_LABELS[$role] ?? $role;
@@ -352,8 +352,8 @@ class TransitionService
 
         elseif (in_array($action, ['directeur_sign', 'directeur_sign_flagged'])) {
             $update['signature_type'] = $p['signature_type'] ?? 'signature';
-            $update['status']         = 'ready';
-            $mail = 'ready';
+            $update['status']         = 'ready_for_pickup';
+            $mail = 'ready_for_pickup';
 
             if ($isFlagged) {
                 $update['has_flag'] = true;
@@ -362,7 +362,7 @@ class TransitionService
 
         elseif ($action === 'directeur_reject') {
             $this->requireMotif($p);
-            $newStatus                          = 'secretaire_correction';
+            $newStatus                          = 'secretary_correction';
             $update['status']                   = $newStatus;
             $update['rejected_reason']          = $p['motif'];
             $update['rejected_by']              = WorkflowConstants::ROLE_LABELS[$role] ?? $role;
@@ -377,7 +377,7 @@ class TransitionService
 
         elseif ($action === 'return_to_secretaire') {
             $this->requireComment($p);
-            $newStatus        = 'secretaire_correction';
+            $newStatus        = 'secretary_correction';
             $update['status'] = $newStatus;
         }
 

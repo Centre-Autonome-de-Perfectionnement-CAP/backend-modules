@@ -233,7 +233,7 @@ class DocumentRequestQueryService
         $myStatus = array_flip(WorkflowConstants::STATUS_TO_ROLE)[$role] ?? null;
 
         $totalInProgress = DB::table('document_requests')
-            ->whereNotIn('status', ['delivered', 'rejected'])
+            ->whereNotIn('status', ['picked_up', 'rejected'])
             ->count();
 
         $pendingAtMyLevel = $myStatus

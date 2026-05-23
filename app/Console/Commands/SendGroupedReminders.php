@@ -42,7 +42,7 @@ class SendGroupedReminders extends Command
         $seuil = now()->subHours(36);
 
         // Statuts ignorés car ne nécessitant pas d'action (ou clos)
-        $ignoredStatuses = ['pending', 'ready', 'delivered', 'rejected'];
+        $ignoredStatuses = ['submitted', 'ready_for_pickup', 'picked_up', 'rejected'];
 
         // On récupère toutes les demandes non traitées depuis > 36h
         $demandes = DB::table('document_requests as dr')

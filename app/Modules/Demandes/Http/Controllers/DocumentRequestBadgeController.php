@@ -48,7 +48,7 @@ class DocumentRequestBadgeController extends Controller
 
         if ($role === 'secretaire') {
             return (int) DB::table('document_requests')
-                ->whereIn('status', ['pending', 'secretaire_correction'])
+                ->whereIn('status', ['submitted', 'secretary_correction'])
                 ->count();
         }
 
@@ -66,7 +66,7 @@ class DocumentRequestBadgeController extends Controller
         // Pour les rôles non-secrétaire, on filtre sur les statuts actionnables
         // (on exclut 'ready', 'delivered', 'rejected' qui ne nécessitent pas d'action)
         $actionableStatuses = array_filter($statuses, fn($s) => !in_array($s, [
-            'ready', 'delivered', 'rejected',
+            'ready_for_pickup', 'picked_up', 'rejected',
         ]));
 
         if (empty($actionableStatuses)) {
