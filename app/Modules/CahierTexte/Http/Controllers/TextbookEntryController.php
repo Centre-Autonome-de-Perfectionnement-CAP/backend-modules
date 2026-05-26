@@ -974,28 +974,26 @@ class TextbookEntryController extends Controller{
             | 11. Génération Excel
             |--------------------------------------------------------------------------
             */
+
+
             $spreadsheet = new Spreadsheet();
             $sheet       = $spreadsheet->getActiveSheet();
-
             $sheet->setTitle('Feuil1');
 
-            // =========================
-            // Styles
-            // =========================
+            // ──────────────────────────────────────────────
+            // STYLES RÉUTILISABLES
+            // ──────────────────────────────────────────────
 
-            $bold = [
-                'font' => [
-                    'bold' => true,
-                    'name' => 'Arial',
-                    'size' => 10
-                ]
+            $arialBold11 = [
+                'font' => ['bold' => true, 'name' => 'Arial', 'size' => 11],
             ];
 
-            $normalFont = [
-                'font' => [
-                    'name' => 'Arial',
-                    'size' => 10
-                ]
+            $tnr11 = [
+                'font' => ['name' => 'Times New Roman', 'size' => 11],
+            ];
+
+            $tnr11Bold = [
+                'font' => ['bold' => true, 'name' => 'Times New Roman', 'size' => 11],
             ];
 
             $centerWrap = [
@@ -1003,7 +1001,15 @@ class TextbookEntryController extends Controller{
                     'horizontal' => Alignment::HORIZONTAL_CENTER,
                     'vertical'   => Alignment::VERTICAL_CENTER,
                     'wrapText'   => true,
-                ]
+                ],
+            ];
+
+            $leftWrap = [
+                'alignment' => [
+                    'horizontal' => Alignment::HORIZONTAL_LEFT,
+                    'vertical'   => Alignment::VERTICAL_CENTER,
+                    'wrapText'   => true,
+                ],
             ];
 
             $thinBorder = [
@@ -1011,21 +1017,253 @@ class TextbookEntryController extends Controller{
                     'allBorders' => [
                         'borderStyle' => Border::BORDER_THIN,
                         'color'       => ['argb' => 'FF000000'],
-                    ]
-                ]
+                    ],
+                ],
             ];
 
-            /*
-            |--------------------------------------------------------------------------
-            | CONTINUEZ ICI TOUT LE RESTE DE VOTRE CODE EXCEL
-            |--------------------------------------------------------------------------
-            */
+            // ──────────────────────────────────────────────
+            // EN-TÊTE INSTITUTION (lignes 3-7)
+            // ──────────────────────────────────────────────
 
-            // IMPORTANT :
-            // Gardez ici tout votre code Excel actuel
-            // (entêtes, cellules, totals, widths, etc.)
+            $sheet->setCellValue('A3', "UNIVERSITE D'ABOMEY-CALAVI");
+            $sheet->getStyle('A3')->applyFromArray(['font' => ['name' => 'Arial', 'size' => 11]]);
+            $sheet->getStyle('A3')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
 
-            DB::commit();
+            $sheet->setCellValue('A4', "ECOLE POLYTECHNIQUE D'ABOMEY-CALAVI");
+            $sheet->getStyle('A4')->applyFromArray($arialBold11);
+
+            $sheet->setCellValue('A5', 'CENTRE AUTONOME DE PERFECTIONNEMENT');
+            $sheet->getStyle('A5')->applyFromArray($arialBold11);
+
+            // Titre principal sur toute la largeur
+            $sheet->mergeCells('A6:N6');
+            $titreDoc = 'ETAT DES INDEMNITES DES HEURES DE VACATION DES ENSEIGNANTS, DU '
+                . strtoupper($regroupementLabel)
+                . ' REGROUPEMENT ' . $yearLabel;
+            $sheet->setCellValue('A6', $titreDoc);
+            $sheet->getStyle('A6')->applyFromArray([
+                'font'      => ['name' => 'Arial Black', 'size' => 11],
+                'alignment' => [
+                    'horizontal' => Alignment::HORIZONTAL_CENTER,
+                    'vertical'   => Alignment::VERTICAL_CENTER,
+                    'wrapText'   => true,
+                ],
+            ]);
+            $sheet->getRowDimension(6)->setRowHeight(37.5);
+
+            $sheet->setCellValue('H7', 'Abomey-Calavi, le …………………………');
+            $sheet->getStyle('H7')->applyFromArray($arialBold11);
+            $sheet->getStyle('H7')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+            // ──────────────────────────────────────────────
+            // EN-TÊTES DE COLONNES (ligne 9)
+            // ──────────────────────────────────────────────
+
+            $colHeaders = [
+                'A' => 'N°',
+                'B' => 'NOM & PRENOMS',
+                'C' => 'MATIERES ENSEIGNEES',
+                'D' => 'FILIERES',
+                'E' => 'MASSE HORAIRE PREVUE ',
+                'F' => 'MASSE HORAIRE EFFECTUEE',
+                'G' => 'TAUX HORAIRES',
+                'H' => 'MONTANT DES HEURES',
+                'I' => 'NOMBRE DE MONOGRAPHIE',
+                'J' => 'TAUX HORAIRES',
+                'K' => 'MONTANT MONOGRAPHIES',
+                'L' => 'MONTANT TOTAL A PAYER',
+                'M' => 'NUMERO DE COMPTE',
+                'N' => 'BANQUE',
+            ];
+
+            foreach ($colHeaders as $col => $label) {
+                $sheet->setCellValue($col . '9', $label);
+                $sheet->getStyle($col . '9')->applyFromArray(array_merge(
+                    ['font' => ['bold' => true, 'name' => 'Arial', 'size' => 9]],
+                    $centerWrap,
+                    $thinBorder
+                ));
+            }
+            $sheet->getRowDimension(9)->setRowHeight(37.5);
+
+            // ──────────────────────────────────────────────
+            // LARGEURS DE COLONNES (fidèles au template)
+            // ──────────────────────────────────────────────
+
+            $colWidths = [
+                'A' => 5.43,  'B' => 25.57, 'C' => 25.71,
+                'D' => 10.0,  'E' => 10.0,  'F' => 10.0,
+                'G' => 10.14, 'H' => 13.43, 'I' => 10.0,
+                'J' => 10.0,  'K' => 10.0,  'L' => 13.0,
+                'M' => 17.71, 'N' => 14.0,
+            ];
+            foreach ($colWidths as $col => $width) {
+                $sheet->getColumnDimension($col)->setWidth($width);
+            }
+
+            // ──────────────────────────────────────────────
+            // DONNÉES (une ligne par cours)
+            // ──────────────────────────────────────────────
+
+            $currentRow        = 10;
+            $lineNumber        = 1;
+            $totalHeures       = 0.0;
+            $totalMonographies = 0.0;
+            $totalGlobal       = 0.0;
+
+            foreach ($rows as $profData) {
+                $courses   = $profData['courses'];
+                $nbCourses = count($courses);
+                $startRow  = $currentRow;
+                $endRow    = $currentRow + $nbCourses - 1;
+
+                foreach ($courses as $idx => $course) {
+                    $r = $currentRow;
+
+                    // A – numéro séquentiel
+                    $sheet->setCellValue('A' . $r, $lineNumber);
+                    $sheet->getStyle('A' . $r)->applyFromArray(array_merge($tnr11, $centerWrap, $thinBorder));
+
+                    // B – Nom & Prénoms (seulement sur la 1re ligne du professeur)
+                    if ($idx === 0) {
+                        $sheet->setCellValue('B' . $r, $profData['professor_name']);
+                    }
+                    $sheet->getStyle('B' . $r)->applyFromArray(array_merge($tnr11, $leftWrap, $thinBorder));
+
+                    // C – Matière
+                    $sheet->setCellValue('C' . $r, $course['course_name']);
+                    $sheet->getStyle('C' . $r)->applyFromArray(array_merge($tnr11, $leftWrap, $thinBorder));
+
+                    // D – Filière
+                    $sheet->setCellValue('D' . $r, $course['filiere']);
+                    $sheet->getStyle('D' . $r)->applyFromArray(array_merge($tnr11, $centerWrap, $thinBorder));
+
+                    // E – Masse horaire prévue
+                    $sheet->setCellValue('E' . $r, $course['hours_planned']);
+                    $sheet->getStyle('E' . $r)->applyFromArray(array_merge($tnr11, $centerWrap, $thinBorder));
+
+                    // F – Masse horaire effectuée
+                    $sheet->setCellValue('F' . $r, $course['hours_done']);
+                    $sheet->getStyle('F' . $r)->applyFromArray(array_merge($tnr11, $centerWrap, $thinBorder));
+
+                    // G – Taux horaire heures
+                    $sheet->setCellValue('G' . $r, $course['taux_horaire']);
+                    $sheet->getStyle('G' . $r)->applyFromArray(array_merge($tnr11, $centerWrap, $thinBorder));
+
+                    // H – Montant des heures
+                    $sheet->setCellValue('H' . $r, $course['montant_heures']);
+                    $sheet->getStyle('H' . $r)->applyFromArray(array_merge($tnr11, $centerWrap, $thinBorder));
+
+                    // I – Nombre de monographies
+                    $sheet->setCellValue('I' . $r, $course['nb_monographies']);
+                    $sheet->getStyle('I' . $r)->applyFromArray(array_merge($tnr11, $centerWrap, $thinBorder));
+
+                    // J – Taux monographie
+                    $sheet->setCellValue('J' . $r, $course['taux_monographie']);
+                    $sheet->getStyle('J' . $r)->applyFromArray(array_merge($tnr11, $centerWrap, $thinBorder));
+
+                    // K – Montant monographies
+                    $sheet->setCellValue('K' . $r, $course['montant_monographies']);
+                    $sheet->getStyle('K' . $r)->applyFromArray(array_merge($tnr11, $centerWrap, $thinBorder));
+
+                    // L, M, N – style appliqué sur chaque ligne (la fusion gère l'affichage)
+                    $sheet->getStyle('L' . $r)->applyFromArray(array_merge($tnr11Bold, $centerWrap, $thinBorder));
+                    $sheet->getStyle('M' . $r)->applyFromArray(array_merge($tnr11, $centerWrap, $thinBorder));
+                    $sheet->getStyle('N' . $r)->applyFromArray(array_merge($tnr11, $centerWrap, $thinBorder));
+
+                    $sheet->getRowDimension($r)->setRowHeight(24.95);
+
+                    $totalHeures       += (float) $course['montant_heures'];
+                    $totalMonographies += (float) $course['montant_monographies'];
+                    $currentRow++;
+                    $lineNumber++;
+                }
+
+                // Fusion L / M / N pour les professeurs ayant plusieurs cours
+                if ($nbCourses > 1) {
+                    $sheet->mergeCells('L' . $startRow . ':L' . $endRow);
+                    $sheet->mergeCells('M' . $startRow . ':M' . $endRow);
+                    $sheet->mergeCells('N' . $startRow . ':N' . $endRow);
+                }
+
+                // Montant total du professeur (cellule fusionnée L, première ligne)
+                $sheet->setCellValue('L' . $startRow, $profData['montant_total']);
+                $sheet->getStyle('L' . $startRow)->applyFromArray(array_merge($tnr11Bold, $centerWrap));
+
+                // Numéro de compte RIB
+                $sheet->setCellValue('M' . $startRow, $profData['rib_number']);
+                $sheet->getStyle('M' . $startRow)->applyFromArray(array_merge($tnr11, $centerWrap));
+
+                // Banque
+                $sheet->setCellValue('N' . $startRow, $profData['bank']);
+                $sheet->getStyle('N' . $startRow)->applyFromArray(array_merge($tnr11, $centerWrap));
+
+                $totalGlobal += (float) $profData['montant_total'];
+            }
+
+            // ──────────────────────────────────────────────
+            // LIGNE TOTAL
+            // ──────────────────────────────────────────────
+
+            $totalRow = $currentRow;
+
+            $sheet->mergeCells('A' . $totalRow . ':F' . $totalRow);
+            $sheet->setCellValue('A' . $totalRow,
+                'TOTAL ………………………………………………………………………………………………………………………………………………');
+            $sheet->getStyle('A' . $totalRow)->applyFromArray(array_merge($arialBold11, [
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
+            ]));
+
+            $sheet->setCellValue('G' . $totalRow, '*****');
+            $sheet->getStyle('G' . $totalRow)->applyFromArray(array_merge(
+                ['font' => ['name' => 'Arial', 'size' => 11]],
+                $centerWrap
+            ));
+
+            $sheet->setCellValue('H' . $totalRow, $totalHeures);
+            $sheet->getStyle('H' . $totalRow)->applyFromArray(array_merge($arialBold11, [
+                'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+            ]));
+
+            $sheet->setCellValue('K' . $totalRow, $totalMonographies);
+            $sheet->getStyle('K' . $totalRow)->applyFromArray(array_merge($arialBold11, [
+                'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+            ]));
+
+            $sheet->setCellValue('L' . $totalRow, $totalGlobal);
+            $sheet->getStyle('L' . $totalRow)->applyFromArray($arialBold11);
+
+            $sheet->getRowDimension($totalRow)->setRowHeight(24.95);
+
+            // ──────────────────────────────────────────────
+            // LIGNE ARRÊTÉ (montant en chiffres)
+            // ──────────────────────────────────────────────
+
+            $arretRow = $totalRow + 1;
+            $sheet->mergeCells('A' . $arretRow . ':K' . ($arretRow + 1));
+            $montantFormate  = number_format((int) $totalGlobal, 0, ',', ' ');
+            $arretText = 'AARRETE LE PRESENT ETAT A LA SOMME DE : ' . $montantFormate . ' FRANCS CFA';
+            $sheet->setCellValue('A' . $arretRow, $arretText);
+            $sheet->getStyle('A' . $arretRow)->applyFromArray(array_merge($arialBold11, $leftWrap));
+            $sheet->getRowDimension($arretRow)->setRowHeight(15.75);
+
+            // ──────────────────────────────────────────────
+            // MISE EN PAGE
+            // ──────────────────────────────────────────────
+
+            $sheet->getPageSetup()
+                ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE)
+                ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4)
+                ->setFitToWidth(1)
+                ->setFitToHeight(0);
+
+            $sheet->getPageMargins()->setTop(0.5)->setBottom(0.5)->setLeft(0.5)->setRight(0.5);
+
+            // ─────────────────────────────────────────────────────────────────
+            // FIN DE SECTION — le code original reprend ici avec DB::commit();
+            // ─────────────────────────────────────────────────────────────────
+
+    
 
             Log::info('Export Excel généré avec succès', [
                 'academic_year_id' => $academicYear->id,
