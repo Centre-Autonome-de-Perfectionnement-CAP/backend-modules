@@ -697,53 +697,56 @@ class ContratController extends Controller
         }
     }
 
-  public function myFactures(Request $request)
-{
-    $user = $request->user();
+    // ─── MY FACTURES (professeur connecté) ───────────────────────────────────
 
-    $professor = Professor::where('email', $user->email)->first();
+    public function myFactures(Request $request)
+    {
+        $user = $request->user();
 
-    if (!$professor) {
-        return response()->json(['success' => true, 'data' => []]);
+        $professor = Professor::where('email', $user->email)->first();
+
+        if (!$professor) {
+            return response()->json(['success' => true, 'data' => []]);
+        }
+
+        $contrats = Contrat::where('professor_id', $professor->id)
+            ->whereNotNull('factures_normalisees')
+            ->where('factures_normalisees', '!=', '[]')
+            ->with(['academicYear', 'cycle'])
+            ->latest()
+            ->get();
+
+        $data = $contrats->map(function ($c) {
+            $factures = array_map(function ($item) {
+                if (is_string($item)) {
+                    return [
+                        'name' => $item,
+                        'path' => 'factures_normalisees/' . $item,
+                        'type' => 'facture',
+                        'url'  => \Storage::disk('public')->url('factures_normalisees/' . $item),
+                    ];
+                }
+                return $item;
+            }, $c->factures_normalisees ?? []);
+
+            return [
+                'id'             => $c->id,
+                'contrat_number' => $c->contrat_number,
+                'status'         => $c->status,
+                'amount'         => $c->amount,
+                'start_date'     => $c->start_date,
+                'end_date'       => $c->end_date,
+                'academic_year'  => $c->academicYear?->academic_year,
+                'cycle'          => $c->cycle?->name,
+                'factures'       => $factures,
+                'uploaded_at'    => $c->updated_at,
+            ];
+        });
+
+        return response()->json(['success' => true, 'data' => $data]);
     }
 
-    $contrats = Contrat::where('professor_id', $professor->id)
-        ->whereNotNull('factures_normalisees')
-        ->where('factures_normalisees', '!=', '[]')
-        ->with(['academicYear', 'cycle'])
-        ->latest()
-        ->get();
-
-    $data = $contrats->map(function ($c) {
-        $factures = array_map(function ($item) {
-            if (is_string($item)) {
-                return [
-                    'name' => $item,
-                    'path' => 'factures_normalisees/' . $item,
-                    'type' => 'facture',
-                    'url'  => \Storage::disk('public')->url('factures_normalisees/' . $item),
-                ];
-            }
-            return $item;
-        }, $c->factures_normalisees ?? []);
-
-        return [
-            'id'             => $c->id,
-            'contrat_number' => $c->contrat_number,
-            'status'         => $c->status,
-            'amount'         => $c->amount,
-            'start_date'     => $c->start_date,
-            'end_date'       => $c->end_date,
-            'academic_year'  => $c->academicYear?->academic_year,
-            'cycle'          => $c->cycle?->name,
-            'factures'       => $factures,
-            'uploaded_at'    => $c->updated_at,
-        ];
-    });
-
-    return response()->json(['success' => true, 'data' => $data]);
-}
-
+    // ─── LIST PROGRAM SUPPORTS ────────────────────────────────────────────────
 
     public function listProgramSupports(Request $request, $contratId, $programId)
     {
@@ -990,6 +993,8 @@ class ContratController extends Controller
         }
     }
 
+    // ─── UPLOAD FACTURES NORMALISÉES ──────────────────────────────────────────
+
     public function uploadFacturesNormalisees(Request $request, $id)
     {
         $request->validate([
@@ -1068,5 +1073,36 @@ class ContratController extends Controller
         ]);
     }
 
+    // ─── GET PROFESSOR PROGRAM (single) ──────────────────────────────────────
+
+    public function getProfessorProgram($professorId, $programId)
+    {
+        $program = \App\Modules\Cours\Models\CourseElementProfessor::with([
+            'courseElement.teachingUnit',
+            'classGroup',
+        ])->where('professor_id', $professorId)->findOrFail($programId);
+
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'id'             => $program->id,
+                'is_primary'     => $program->is_primary ?? false,
+                'label'          => $program->courseElement->name ?? '',
+                'course_element' => $program->courseElement ? [
+                    'id'           => $program->courseElement->id,
+                    'name'         => $program->courseElement->name,
+                    'code'         => $program->courseElement->code,
+                    'teaching_unit' => $program->courseElement->teachingUnit ? [
+                        'id'   => $program->courseElement->teachingUnit->id,
+                        'name' => $program->courseElement->teachingUnit->name,
+                        'code' => $program->courseElement->teachingUnit->code ?? '',
+                    ] : null,
+                ] : null,
+                'class_group' => $program->classGroup ? [
+                    'id'   => $program->classGroup->id,
+                    'name' => $program->classGroup->name,
+                ] : null,
+            ],
+        ]);
+    }
 }
- 
