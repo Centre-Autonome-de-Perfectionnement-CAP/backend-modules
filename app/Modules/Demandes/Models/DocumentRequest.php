@@ -40,6 +40,9 @@ class DocumentRequest extends Model
         'complement_files',
         'complement_at',
 
+        // Fichiers de la secrétaire
+        'secretary_files',
+
         // Livraison
         'delivered_at',
     ];
@@ -51,6 +54,7 @@ class DocumentRequest extends Model
         'delivered_at'             => 'datetime',
         'complement_at'            => 'datetime',
         'complement_files'         => 'array',
+        'secretary_files'          => 'array',
     ];
 
     // ── Relations ─────────────────────────────────────────────────────────────

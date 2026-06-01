@@ -39,6 +39,7 @@ class DocumentRequestQueryService
         'dr.email',
         'dr.files',
         'dr.complement_files',
+        'dr.secretary_files',
         'dr.complement_at',
         'dr.submitted_at',
         'dr.created_at',

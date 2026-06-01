@@ -16,12 +16,15 @@ use App\Modules\Demandes\Http\Controllers\DocumentRequestBadgeController;  // �
 Route::prefix('api/attestations')->middleware('auth:sanctum')->group(function () {
 
     // ── Listing + détail ──────────────────────────────────────────────────────
-    Route::get('document-requests', [DocumentRequestController::class, 'index']);
+    Route::get('document-requests',             [DocumentRequestController::class, 'index']);
+    Route::get('document-requests/badge-count', DocumentRequestBadgeController::class);
+    Route::get('document-requests/{id}',        [DocumentRequestController::class, 'show']);
 
-// ✅ ICI
-Route::get('document-requests/badge-count', DocumentRequestBadgeController::class);
+    // ── Fichiers secrétaire ───────────────────────────────────────────────────
+    Route::post('document-requests/{id}/secretary-files',                  [DocumentRequestController::class, 'uploadSecretaryFiles']);
+    Route::patch('document-requests/{id}/secretary-files/{fileId}',        [DocumentRequestController::class, 'updateSecretaryFileComment']);
+    Route::delete('document-requests/{id}/secretary-files/{fileId}',       [DocumentRequestController::class, 'deleteSecretaryFile']);
 
-Route::get('document-requests/{id}', [DocumentRequestController::class, 'show']);
     // ── Stats direction ───────────────────────────────────────────────────────
     Route::get('document-requests/stats',  DocumentRequestStatsController::class);
 
@@ -29,6 +32,6 @@ Route::get('document-requests/{id}', [DocumentRequestController::class, 'show'])
     Route::post('document-requests/{id}/transition', DocumentRequestTransitionController::class);
 
     // ── Historique ────────────────────────────────────────────────────────────
-    Route::get('document-requests/{id}/history',     [DocumentRequestHistoryController::class, 'index']);
+    Route::get('document-requests/{id}/history', [DocumentRequestHistoryController::class, 'index']);
 
 });
