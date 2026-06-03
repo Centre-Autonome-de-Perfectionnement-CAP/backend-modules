@@ -141,6 +141,7 @@ class Contrat extends Model
             'contrat_programs',
             'contrat_id',
             'course_element_professor_id'
-        )->with(['courseElement.teachingUnit', 'classGroup']);
+        ) 
+         ->with(['courseElement.teachingUnit', 'classGroup']);
     }
 }

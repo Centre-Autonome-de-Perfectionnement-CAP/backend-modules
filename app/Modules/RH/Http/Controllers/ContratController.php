@@ -185,15 +185,15 @@ class ContratController extends Controller
         return array_merge($c->toArray(), [
             'academic_year'             => $c->academicYear,
             'course_element_professors' => $c->courseElementProfessors->map(fn($p) => [
-                'id'             => $p->id,
-                'is_primary'     => $p->is_primary ?? false,
-                'label'          => $p->label ?? ($p->courseElement->name ?? ''),
-                'hours'          => $p->pivot->hours ?? 0,
+                'id'              => $p->id,
+                'is_primary'      => $p->is_primary ?? false,
+                'label'           => $p->label ?? ($p->courseElement->name ?? ''),
+                'hours'           => $p->pivot->hours ?? 0,
+                'amount_per_hour' => $p->pivot->amount_per_hour ?? null,
                 'course_element' => $p->courseElement ? [
                     'id'           => $p->courseElement->id,
                     'name'         => $p->courseElement->name,
                     'code'         => $p->courseElement->code,
-                    'hours'        => $p->courseElement->hours ?? 0,
                     'teaching_unit' => $p->courseElement->teachingUnit ? [
                         'id'   => $p->courseElement->teachingUnit->id,
                         'name' => $p->courseElement->teachingUnit->name,
@@ -245,6 +245,8 @@ class ContratController extends Controller
             'notes'                          => 'nullable|string',
             'course_element_professor_ids'   => 'nullable|array',
             'course_element_professor_ids.*' => 'integer',
+            'program_amounts'                => 'nullable|array',
+            'program_amounts.*'              => 'nullable|numeric|min:0',
         ]);
 
         // Génération du numéro de contrat
@@ -261,11 +263,21 @@ class ContratController extends Controller
 
         $validated['status'] = 'pending';
 
+        $programAmounts = $validated['program_amounts'] ?? [];
+        unset($validated['program_amounts'], $validated['course_element_professor_ids']);
+
         $contrat = Contrat::create($validated);
 
-        // Attachement des programmes
-        if (!empty($validated['course_element_professor_ids'])) {
-            $contrat->courseElementProfessors()->sync($validated['course_element_professor_ids']);
+        // Attachement des programmes avec montant/heure en pivot
+        $ids = $request->input('course_element_professor_ids', []);
+        if (!empty($ids)) {
+            $syncData = [];
+            foreach ($ids as $id) {
+                $syncData[$id] = [
+                    'amount_per_hour' => isset($programAmounts[$id]) ? (float) $programAmounts[$id] : null,
+                ];
+            }
+            $contrat->courseElementProfessors()->sync($syncData);
         }
 
         return response()->json([
@@ -313,7 +325,13 @@ class ContratController extends Controller
             'status'                         => 'sometimes|string|in:pending,transfered,signed,ongoing,completed,cancelled,resiliated',
             'course_element_professor_ids'   => 'nullable|array',
             'course_element_professor_ids.*' => 'integer',
+            'program_amounts'                => 'nullable|array',
+            'program_amounts.*'              => 'nullable|numeric|min:0',
         ]);
+
+        $programAmounts = $validated['program_amounts'] ?? [];
+        $programIds     = $validated['course_element_professor_ids'] ?? null;
+        unset($validated['program_amounts'], $validated['course_element_professor_ids']);
 
         $contrat->update($validated);
 
@@ -326,8 +344,14 @@ class ContratController extends Controller
             ]);
         }
 
-        if (array_key_exists('course_element_professor_ids', $validated)) {
-            $contrat->courseElementProfessors()->sync($validated['course_element_professor_ids'] ?? []);
+        if ($programIds !== null) {
+            $syncData = [];
+            foreach ($programIds as $id) {
+                $syncData[$id] = [
+                    'amount_per_hour' => isset($programAmounts[$id]) ? (float) $programAmounts[$id] : null,
+                ];
+            }
+            $contrat->courseElementProfessors()->sync($syncData);
         }
 
         return response()->json([
@@ -585,6 +609,7 @@ class ContratController extends Controller
                 'id'             => $p->id,
                 'is_primary'     => $p->is_primary ?? false,
                 'label'          => $p->courseElement->name ?? '',
+                  'hours'      => $p->courseElement->hours ?? null,
                 'course_element' => $p->courseElement ? [
                     'id'           => $p->courseElement->id,
                     'name'         => $p->courseElement->name,
