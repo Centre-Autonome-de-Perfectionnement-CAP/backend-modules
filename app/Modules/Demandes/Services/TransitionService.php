@@ -80,11 +80,12 @@ class TransitionService
         }
 
         match ($mailTrigger) {
-            'rejected'               => $this->notificationService->sendRejected($fresh, $payload['motif'] ?? ''),
-            'ready_for_pickup'       => $this->notificationService->sendReady($fresh),
-            'picked_up'              => $this->notificationService->sendDelivered($fresh),
-            'direction_transmission' => $this->notificationService->notifySecretaryOfDirectionTransmission($fresh),
-            default                  => null,
+            'rejected'                          => $this->notificationService->sendRejected($fresh, $payload['motif'] ?? ''),
+            'ready_for_pickup'                  => $this->notificationService->sendReady($fresh),
+            'picked_up'                         => $this->notificationService->sendDelivered($fresh),
+            'direction_transmission'            => $this->notificationService->notifySecretaryOfDirectionTransmission($fresh),
+            'directeur_signed_notify_secretaire'=> $this->notificationService->notifySecretaireAfterDirecteurSign($fresh),
+            default                             => null,
         };
 
         if ($newStatus) {
@@ -188,6 +189,12 @@ class TransitionService
             $mail = 'picked_up';
         }
 
+        // ── FINALISATION SECRÉTAIRE (après signature Directeur) ───────────────
+        elseif ($action === 'secretaire_mark_ready') {
+            $update['status'] = 'ready_for_pickup';
+            $mail = 'ready_for_pickup';
+        }
+
         // ═════════════════════════════════════════════════════════════════════
         // COMPTABLE
         // ═════════════════════════════════════════════════════════════════════
@@ -242,24 +249,21 @@ class TransitionService
 
         // ═════════════════════════════════════════════════════════════════════
         // CHEF CAP
+        // Le Chef CAP ne paraphe ni ne signe plus directement.
+        // Il valide simplement → transmission vers Sec. Dir. Adjointe (circuit Direction).
+        // Les anciens slugs chef_cap_sign / chef_cap_sign_flagged sont conservés
+        // pour compatibilité avec l'historique existant mais redirigent vers Direction.
         // ═════════════════════════════════════════════════════════════════════
 
-        elseif (in_array($action, ['chef_cap_sign', 'chef_cap_sign_flagged'])) {
-            $sigType                  = $p['signature_type'] ?? 'signature';
-            $update['signature_type'] = $sigType;
+        elseif (in_array($action, ['chef_cap_validate', 'chef_cap_validate_flagged',
+                                    'chef_cap_sign',    'chef_cap_sign_flagged'])) {
+            // Toujours vers le circuit Direction (Sec. Dir. Adjointe)
+            $newStatus        = 'deputy_director_secretary_review';
+            $update['status'] = $newStatus;
+            $mail             = 'direction_transmission';
 
             if ($isFlagged) {
                 $update['has_flag'] = true;
-                $mail = 'sous_reserve';
-            }
-
-            if ($sigType === 'paraphe') {
-                $newStatus        = 'deputy_director_secretary_review';
-                $update['status'] = $newStatus;
-                $mail = 'direction_transmission';
-            } else {
-                $update['status'] = 'ready_for_pickup';
-                $mail = 'ready_for_pickup';
             }
         }
 
@@ -348,12 +352,17 @@ class TransitionService
 
         // ═════════════════════════════════════════════════════════════════════
         // DIRECTEUR
+        // Après signature, le dossier revient à la secrétaire pour finalisation
+        // (secretary_final_review). La secrétaire déclenche ensuite
+        // secretaire_mark_ready → ready_for_pickup.
         // ═════════════════════════════════════════════════════════════════════
 
         elseif (in_array($action, ['directeur_sign', 'directeur_sign_flagged'])) {
             $update['signature_type'] = $p['signature_type'] ?? 'signature';
-            $update['status']         = 'ready_for_pickup';
-            $mail = 'ready_for_pickup';
+            // NOUVEAU : retour secrétaire pour finalisation (plus de ready_for_pickup direct)
+            $newStatus        = 'secretary_final_review';
+            $update['status'] = $newStatus;
+            $mail             = 'directeur_signed_notify_secretaire';
 
             if ($isFlagged) {
                 $update['has_flag'] = true;

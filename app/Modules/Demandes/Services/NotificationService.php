@@ -310,6 +310,65 @@ class NotificationService
     }
 
     /**
+     * Notifie la secrétaire que le Directeur a signé et que le dossier
+     * est en attente de finalisation (secretary_final_review).
+     * Déclenche : email + WhatsApp à chaque secrétaire.
+     */
+    public function notifySecretaireAfterDirecteurSign(object $demande): void
+    {
+        $secretaires  = $this->findUsersWithRole('secretaire', null);
+        $typeLabel    = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $etudiantInfo = $this->fetchEtudiantInfo($demande->id);
+        $etudiantNom  = $this->buildNom($etudiantInfo);
+        $matricule    = $etudiantInfo->matricule ?? '';
+
+        foreach ($secretaires as $sec) {
+            // ── Email ─────────────────────────────────────────────────────────
+            try {
+                Mail::send(
+                    'core::emails.dossier-transmis',
+                    [
+                        'destinataireNom'   => $sec->name,
+                        'destinataireRole'  => 'Secrétaire',
+                        'expediteurNom'     => 'Directeur',
+                        'expediteurRole'    => 'Directeur',
+                        'reference'         => $demande->reference,
+                        'typeDocument'      => $typeLabel,
+                        'etudiantNom'       => $etudiantNom,
+                        'etudiantMatricule' => $matricule,
+                        'dateTransmission'  => now()->format('d/m/Y à H:i'),
+                        'commentaire'       => "Le Directeur a signé ce dossier. Veuillez préparer le document et le marquer comme prêt à retirer.",
+                        'urlEspace'         => config('app.url') . '/dashboard',
+                        'etablissement'     => config('app.name', 'CAP-EPAC'),
+                    ],
+                    fn($m) => $m->to($sec->email, $sec->name)
+                               ->subject("✅ Dossier signé par le Directeur — À finaliser — Réf : {$demande->reference}")
+                );
+            } catch (\Exception $e) {
+                Log::error('[Notification] Erreur email secrétaire après signature directeur', [
+                    'error' => $e->getMessage(),
+                    'ref'   => $demande->reference,
+                ]);
+            }
+
+            // ── WhatsApp ──────────────────────────────────────────────────────
+            if (!empty($sec->phone)) {
+                $this->whatsApp->send(
+                    $sec->phone,
+                    $this->whatsApp->templateDirecteurSigne(
+                        destinataireNom: $sec->name,
+                        nomEtudiant:     $etudiantNom,
+                        reference:       $demande->reference,
+                        typeDocument:    $typeLabel,
+                        matricule:       $matricule,
+                    ),
+                    "directeur-signe-secretaire:{$demande->reference}"
+                );
+            }
+        }
+    }
+
+    /**
      * Notifie la secrétaire qu'un dossier entre en Direction.
      */
     public function notifySecretaryOfDirectionTransmission(object $demande): void

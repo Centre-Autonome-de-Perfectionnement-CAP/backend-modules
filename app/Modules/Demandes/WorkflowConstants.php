@@ -34,15 +34,19 @@ final class WorkflowConstants
         'secretaire_reject_final'        => 'Rejet définitif',
         'secretaire_resend'              => 'Renvoi',
         'secretaire_deliver'             => 'Remise',
+        'secretaire_mark_ready'          => 'Document prêt (finalisation)',
         'comptable_validate'             => 'Validation',
         'comptable_validate_flagged'     => 'Validation avec réserve',
         'comptable_reject'               => 'Rejet',
         'chef_division_validate'         => 'Validation',
         'chef_division_validate_flagged' => 'Validation avec réserve',
         'chef_division_reject'           => 'Rejet',
-        'chef_cap_sign'                  => 'Signature / Paraphe',
-        'chef_cap_sign_flagged'          => 'Signature avec réserve',
+        'chef_cap_validate'              => 'Validation — Transmission Direction',
+        'chef_cap_validate_flagged'      => 'Validation avec réserve — Transmission Direction',
         'chef_cap_reject'                => 'Rejet',
+        // Anciens slugs conservés pour compatibilité historique (ne déclenchent plus de nouvelle transition)
+        'chef_cap_sign'                  => 'Signature / Paraphe (obsolète)',
+        'chef_cap_sign_flagged'          => 'Signature avec réserve (obsolète)',
         'sec_da_transmit'                => 'Transmission',
         'sec_da_transmit_flagged'        => 'Transmission avec réserve',
         'sec_da_reject'                  => 'Rejet',
@@ -63,6 +67,10 @@ final class WorkflowConstants
     //
     // CORRECTION BUG 3 : 'pending' ajouté pour notifier la secrétaire
     // à chaque nouvelle soumission de demande ou de complément de dossier.
+    //
+    // NOUVEAU WORKFLOW : après signature du Directeur, le dossier passe en
+    // 'secretary_final_review' — la secrétaire est notifiée et doit finaliser
+    // (marquer le document prêt via secretaire_mark_ready → ready_for_pickup).
 
     public const STATUS_TO_ROLE = [
         'submitted'                          => 'secretaire',       // ← AJOUT (Bug 3)
@@ -74,6 +82,7 @@ final class WorkflowConstants
         'director_secretary_review'          => 'sec-dir',
         'director_review'                    => 'directeur',
         'secretary_correction'               => 'secretaire',
+        'secretary_final_review'             => 'secretaire',       // ← NOUVEAU : après signature DG
     ];
 
     // ── Matrice d'autorisation ────────────────────────────────────────────────
@@ -85,6 +94,7 @@ final class WorkflowConstants
             'secretaire_resend'       => ['secretary_correction'],
             'secretaire_reject_final' => ['secretary_correction'],
             'secretaire_deliver'      => ['ready_for_pickup'],
+            'secretaire_mark_ready'   => ['secretary_final_review'],  // ← NOUVEAU
             'clear_flag'              => [],
         ],
         'comptable' => [
@@ -100,10 +110,14 @@ final class WorkflowConstants
             'return_to_secretaire'           => ['division_manager_review'],
         ],
         'chef-cap' => [
-            'chef_cap_sign'         => ['cap_manager_review'],
-            'chef_cap_sign_flagged' => ['cap_manager_review'],
-            'chef_cap_reject'       => ['cap_manager_review'],
-            'return_to_secretaire'  => ['cap_manager_review'],
+            // Nouveaux slugs : le Chef CAP valide simplement (transmission vers Direction)
+            'chef_cap_validate'         => ['cap_manager_review'],
+            'chef_cap_validate_flagged' => ['cap_manager_review'],
+            'chef_cap_reject'           => ['cap_manager_review'],
+            'return_to_secretaire'      => ['cap_manager_review'],
+            // Anciens slugs conservés pour compatibilité (historique existant)
+            'chef_cap_sign'             => ['cap_manager_review'],
+            'chef_cap_sign_flagged'     => ['cap_manager_review'],
         ],
         'sec-da' => [
             'sec_da_transmit'         => ['deputy_director_secretary_review'],
@@ -140,6 +154,10 @@ final class WorkflowConstants
     //   correction, elle change le statut vers leur statut normal (ex: chef_division_review)
     //   avec is_in_correction_circuit = true. C'est ce flag qui change leur interface,
     //   pas le statut.
+    //
+    // NOUVEAU STATUT 'secretary_final_review' :
+    //   Après signature du Directeur, le dossier revient à la secrétaire pour finalisation.
+    //   Seule la secrétaire voit ce statut et peut déclencher secretaire_mark_ready.
 
     public const VISIBLE_STATUSES = [
         'secretaire' => [
@@ -147,6 +165,7 @@ final class WorkflowConstants
             'accounting_review', 'division_manager_review', 'cap_manager_review',
             'deputy_director_secretary_review', 'deputy_director_review',
             'director_secretary_review', 'director_review',
+            'secretary_final_review',                                   // ← NOUVEAU
             'ready_for_pickup', 'picked_up', 'rejected',
         ],
         // Chaque acteur voit UNIQUEMENT son statut propre.

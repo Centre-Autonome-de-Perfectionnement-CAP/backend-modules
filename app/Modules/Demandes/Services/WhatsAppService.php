@@ -267,4 +267,30 @@ class WhatsAppService
             "Merci de préparer et d'acheminer le dossier physique correspondant.",
         ]);
     }
+
+    /**
+     * Template WhatsApp : notification secrétaire après signature du Directeur.
+     * Le dossier est en secretary_final_review — la secrétaire doit le finaliser.
+     */
+    public function templateDirecteurSigne(
+        string $destinataireNom,
+        string $nomEtudiant,
+        string $reference,
+        string $typeDocument,
+        string $matricule = '',
+    ): string {
+        return implode("\n", [
+            "*Signature Directeur — Action Requise — CAP-EPAC*",
+            self::DIVIDER,
+            "Bonjour *{$destinataireNom}*,",
+            "",
+            "Le *Directeur* vient de signer le dossier suivant :",
+            "",
+            "Étudiant : *{$nomEtudiant}*" . ($matricule ? " ({$matricule})" : ''),
+            "Document : *{$typeDocument}*",
+            "Référence : *{$reference}*",
+            "",
+            "Veuillez préparer le document et le marquer comme *prêt à retirer* dans le portail.",
+        ]);
+    }
 }
