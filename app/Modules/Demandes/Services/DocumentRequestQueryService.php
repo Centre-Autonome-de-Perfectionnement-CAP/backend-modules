@@ -49,7 +49,7 @@ class DocumentRequestQueryService
         'dr.rejected_by',
         'dr.signature_type',
         'dr.department_name',
-        'dr.chef_division_type',
+        'dr.responsable_division_type',
         'dr.is_in_correction_circuit',
         'dr.correction_origin_role',
         'dr.correction_origin_status',
@@ -92,7 +92,7 @@ class DocumentRequestQueryService
               AND h.actor_role = 'chef-division'
               AND h.comment IS NOT NULL
             ORDER BY h.created_at DESC LIMIT 1
-        ), NULL) AS chef_division_comment",
+        ), NULL) AS responsable_division_comment",
 
         // Horodatages — dernière action de chaque rôle
         "(SELECT h.created_at FROM document_request_histories h
@@ -105,7 +105,7 @@ class DocumentRequestQueryService
           WHERE h.document_request_id = dr.id
             AND h.actor_role = 'chef-division'
           ORDER BY h.created_at DESC LIMIT 1
-        ) AS chef_division_reviewed_at",
+        ) AS responsable_division_reviewed_at",
 
         "(SELECT h.created_at FROM document_request_histories h
           WHERE h.document_request_id = dr.id
@@ -175,9 +175,9 @@ class DocumentRequestQueryService
             $query->whereIn('dr.status', $visibleStatuses);
         }
 
-        // Responsable Division : filtrer par son type (utilise l'index dr_chef_division_type_idx)
-        if ($role === 'chef-division' && $user->chef_division_type) {
-            $query->where('dr.chef_division_type', $user->chef_division_type);
+        // Responsable Division : filtrer par son type (utilise l'index dr_responsable_division_type_idx)
+        if ($role === 'chef-division' && $user->responsable_division_type) {
+            $query->where('dr.responsable_division_type', $user->responsable_division_type);
         }
 
         // Filtres utilisateur

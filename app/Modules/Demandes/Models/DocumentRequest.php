@@ -29,7 +29,7 @@ class DocumentRequest extends Model
         'rejected_reason',
         'rejected_by',
         'signature_type',
-        'chef_division_type',
+        'responsable_division_type',
 
         // Circuit de correction
         'is_in_correction_circuit',

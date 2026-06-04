@@ -437,7 +437,7 @@ class NotificationService
         string  $newStatus,
         object  $expediteurUser,
         ?string $expediteurRole,
-        ?string $chefDivisionType = null,
+        ?string $responsableDivisionType = null,
         ?string $commentaire      = null,
     ): void {
         $targetRoleSlug = WorkflowConstants::STATUS_TO_ROLE[$newStatus] ?? null;
@@ -445,7 +445,7 @@ class NotificationService
             return;
         }
 
-        $destinataires = $this->findUsersWithRole($targetRoleSlug, $chefDivisionType);
+        $destinataires = $this->findUsersWithRole($targetRoleSlug, $responsableDivisionType);
 
         if ($destinataires->isEmpty()) {
             Log::warning('[Notification] Aucun utilisateur pour le rôle', [
@@ -555,7 +555,7 @@ class NotificationService
         }
     }
 
-    private function findUsersWithRole(string $roleSlug, ?string $chefDivisionType): \Illuminate\Support\Collection
+    private function findUsersWithRole(string $roleSlug, ?string $responsableDivisionType): \Illuminate\Support\Collection
     {
         $query = DB::table('users as u')
             ->join('role_user as ru', 'ru.user_id', '=', 'u.id')
@@ -568,11 +568,11 @@ class NotificationService
                 DB::raw("CONCAT(u.first_name, ' ', u.last_name) as name"),
                 'u.email',
                 'u.phone',
-                'u.chef_division_type'
+                'u.responsable_division_type'
             );
 
-        if ($roleSlug === 'chef-division' && $chefDivisionType) {
-            $query->where('u.chef_division_type', $chefDivisionType);
+        if ($roleSlug === 'chef-division' && $responsableDivisionType) {
+            $query->where('u.responsable_division_type', $responsableDivisionType);
         }
 
         return $query->get();

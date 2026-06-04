@@ -17,17 +17,17 @@ class AdministrationService
      */
     public function getAdminUsers(array $filters = []): \Illuminate\Support\Collection
     {
-        $adminRoles = ['chef_cap', 'chef_division', 'chef_division_continue', 'chef_division_distance', 'comptable', 'secretaire'];
+        $adminRoles = ['chef-cap', 'responsable-division', 'comptable', 'secretaire'];
         
         $query = User::whereHas('roles', function ($q) use ($adminRoles) {
-            $q->whereIn('name', $adminRoles);
+            $q->whereIn('slug', $adminRoles);
         })->with(['roles' => function ($query) {
             $query->select('roles.id', 'roles.name', 'roles.slug');
         }]);
 
         if (!empty($filters['role'])) {
             $query->whereHas('roles', function ($q) use ($filters) {
-                $q->where('name', $filters['role']);
+                $q->where('slug', $filters['role']);
             });
         }
 
@@ -51,7 +51,7 @@ class AdministrationService
     public function getSoutienInformatique(): \Illuminate\Support\Collection
     {
         return User::whereHas('roles', function ($query) {
-            $query->where('name', 'soutien_informatique');
+            $query->where('slug', 'soutien-informatique');
         })
         ->with(['roles' => function ($query) {
             $query->select('roles.id', 'roles.name', 'roles.slug');

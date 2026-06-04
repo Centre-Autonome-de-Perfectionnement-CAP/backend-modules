@@ -12,7 +12,7 @@ final class WorkflowConstants
     public const ROLE_LABELS = [
         'secretaire'          => 'Secrétaire',
         'comptable'           => 'Comptable',
-        'chef-division'       => 'Responsable Division',
+        'responsable-division'=> 'Responsable Division',
         'chef-cap'            => 'Chef CAP',
         'sec-da'              => 'Secrétaire Directrice Adjointe',
         'directrice-adjointe' => 'Directrice Adjointe',
@@ -38,9 +38,9 @@ final class WorkflowConstants
         'comptable_validate'             => 'Validation',
         'comptable_validate_flagged'     => 'Validation avec réserve',
         'comptable_reject'               => 'Rejet',
-        'chef_division_validate'         => 'Validation',
-        'chef_division_validate_flagged' => 'Validation avec réserve',
-        'chef_division_reject'           => 'Rejet',
+        'responsable_division_validate'         => 'Validation',
+        'responsable_division_validate_flagged' => 'Validation avec réserve',
+        'responsable_division_reject'           => 'Rejet',
         'chef_cap_validate'              => 'Validation — Transmission Direction',
         'chef_cap_validate_flagged'      => 'Validation avec réserve — Transmission Direction',
         'chef_cap_reject'                => 'Rejet',
@@ -75,7 +75,7 @@ final class WorkflowConstants
     public const STATUS_TO_ROLE = [
         'submitted'                          => 'secretaire',       // ← AJOUT (Bug 3)
         'accounting_review'                  => 'comptable',
-        'division_manager_review'            => 'chef-division',
+        'division_manager_review'            => 'responsable-division',
         'cap_manager_review'                 => 'chef-cap',
         'deputy_director_secretary_review'   => 'sec-da',
         'deputy_director_review'             => 'directrice-adjointe',
@@ -103,11 +103,11 @@ final class WorkflowConstants
             'comptable_reject'           => ['accounting_review'],
             'return_to_secretaire'       => ['accounting_review'],
         ],
-        'chef-division' => [
-            'chef_division_validate'         => ['division_manager_review'],
-            'chef_division_validate_flagged' => ['division_manager_review'],
-            'chef_division_reject'           => ['division_manager_review'],
-            'return_to_secretaire'           => ['division_manager_review'],
+        'responsable-division' => [
+            'responsable_division_validate'         => ['division_manager_review'],
+            'responsable_division_validate_flagged' => ['division_manager_review'],
+            'responsable_division_reject'           => ['division_manager_review'],
+            'return_to_secretaire'                  => ['division_manager_review'],
         ],
         'chef-cap' => [
             // Nouveaux slugs : le Chef CAP valide simplement (transmission vers Direction)
@@ -171,7 +171,7 @@ final class WorkflowConstants
         // Chaque acteur voit UNIQUEMENT son statut propre.
         // secretaire_correction est retiré intentionnellement.
         'comptable'           => ['accounting_review'],
-        'chef-division'       => ['division_manager_review'],
+        'responsable-division'=> ['division_manager_review'],
         'chef-cap'            => ['cap_manager_review'],
         'sec-da'              => ['deputy_director_secretary_review'],
         'directrice-adjointe' => ['deputy_director_review'],

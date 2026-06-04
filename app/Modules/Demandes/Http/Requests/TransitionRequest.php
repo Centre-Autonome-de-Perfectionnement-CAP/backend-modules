@@ -14,12 +14,11 @@ class TransitionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'action'             => 'required|string|max:64',
-            'motif'              => 'nullable|string|max:1000',
-            'comment'            => 'nullable|string|max:1000',
-            'signature_type'     => 'nullable|in:paraphe,signature',
-            'chef_division_type' => 'nullable|in:formation_distance,formation_continue',
-            'resend_to'          => 'nullable|string|max:32',
+            'action'         => 'required|string|max:64',
+            'motif'          => 'nullable|string|max:1000',
+            'comment'        => 'nullable|string|max:1000',
+            'signature_type' => 'nullable|in:paraphe,signature',
+            'resend_to'      => 'nullable|string|max:32',
         ];
     }
 

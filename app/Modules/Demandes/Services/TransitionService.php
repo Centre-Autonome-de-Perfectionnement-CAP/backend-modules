@@ -90,12 +90,12 @@ class TransitionService
 
         if ($newStatus) {
             $this->notificationService->notifyNextActor(
-                demande:          $fresh,
-                newStatus:        $newStatus,
-                expediteurUser:   $user,
-                expediteurRole:   $role,
-                chefDivisionType: $update['chef_division_type'] ?? ($demande->chef_division_type ?? null),
-                commentaire:      $payload['motif'] ?? $payload['comment'] ?? null,
+                demande:                 $fresh,
+                newStatus:               $newStatus,
+                expediteurUser:          $user,
+                expediteurRole:          $role,
+                responsableDivisionType: $update['responsable_division_type'] ?? ($demande->responsable_division_type ?? null),
+                commentaire:             $payload['motif'] ?? $payload['comment'] ?? null,
             );
         }
 
@@ -117,7 +117,7 @@ class TransitionService
 
         $roleToStatus = [
             'comptable'           => 'accounting_review',
-            'chef-division'       => 'division_manager_review',
+            'responsable-division'=> 'division_manager_review',
             'chef-cap'            => 'cap_manager_review',
             'sec-da'              => 'deputy_director_secretary_review',
             'directrice-adjointe' => 'deputy_director_review',
@@ -177,8 +177,9 @@ class TransitionService
                 $update['status']                   = $newStatus;
                 $update['is_in_correction_circuit'] = true;
 
-                if ($resendTo === 'chef-division' && !empty($p['chef_division_type'])) {
-                    $update['chef_division_type'] = $p['chef_division_type'];
+                // Auto-détection du Responsable Division lors du renvoi en circuit
+                if ($resendTo === 'responsable-division') {
+                    $update['responsable_division_type'] = $this->resolveResponsableDivisionType($demande->id);
                 }
             }
         }
@@ -200,12 +201,12 @@ class TransitionService
         // ═════════════════════════════════════════════════════════════════════
 
         elseif (in_array($action, ['comptable_validate', 'comptable_validate_flagged'])) {
-            if (empty($p['chef_division_type'])) {
-                abort(422, 'Vous devez sélectionner le Responsable Division.');
-            }
-            $newStatus                    = 'division_manager_review';
-            $update['status']             = $newStatus;
-            $update['chef_division_type'] = $p['chef_division_type'];
+            // Auto-détection du Responsable Division selon le cycle de l'étudiant :
+            //   Licence Professionnelle → formation_distance
+            //   Tout autre cycle        → formation_continue
+            $newStatus                             = 'division_manager_review';
+            $update['status']                      = $newStatus;
+            $update['responsable_division_type']   = $this->resolveResponsableDivisionType($demande->id);
 
             if ($isFlagged) {
                 $update['has_flag'] = true;
@@ -224,10 +225,10 @@ class TransitionService
         }
 
         // ═════════════════════════════════════════════════════════════════════
-        // CHEF DIVISION
+        // RESPONSABLE DIVISION
         // ═════════════════════════════════════════════════════════════════════
 
-        elseif (in_array($action, ['chef_division_validate', 'chef_division_validate_flagged'])) {
+        elseif (in_array($action, ['responsable_division_validate', 'responsable_division_validate_flagged'])) {
             $newStatus        = 'cap_manager_review';
             $update['status'] = $newStatus;
 
@@ -236,7 +237,7 @@ class TransitionService
             }
         }
 
-        elseif ($action === 'chef_division_reject') {
+        elseif ($action === 'responsable_division_reject') {
             $this->requireMotif($p);
             $newStatus                          = 'secretary_correction';
             $update['status']                   = $newStatus;
@@ -395,6 +396,29 @@ class TransitionService
         }
 
         return [$update, $newStatus, $mail];
+    }
+
+    // ── Auto-détection du Responsable Division ────────────────────────────────
+
+    /**
+     * Détermine automatiquement le type de Responsable Division
+     * en fonction du cycle de formation de l'étudiant.
+     *
+     * Règle métier :
+     *   Cycle "Licence Professionnelle" → formation_distance
+     *   Tout autre cycle                → formation_continue
+     */
+    private function resolveResponsableDivisionType(int $demandeId): string
+    {
+        $cycleName = DB::table('document_requests as dr')
+            ->join('student_pending_student as sps', 'dr.student_pending_student_id', '=', 'sps.id')
+            ->join('pending_students as ps', 'sps.pending_student_id', '=', 'ps.id')
+            ->join('departments as dept', 'ps.department_id', '=', 'dept.id')
+            ->join('cycles as c', 'dept.cycle_id', '=', 'c.id')
+            ->where('dr.id', $demandeId)
+            ->value('c.name');
+
+        return ($cycleName === 'Licence Professionnelle') ? 'formation_distance' : 'formation_continue';
     }
 
     // ── Assertions ────────────────────────────────────────────────────────────
