@@ -3,13 +3,14 @@
 namespace App\Modules\Attestation\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Demandes\Services\DocumentStorageService;
 use App\Modules\Demandes\Services\NotificationService;
 use App\Modules\Demandes\Services\WhatsAppService;
 use App\Modules\Inscription\Models\{Student, StudentPendingStudent};
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{DB, Log, Storage};
+use Illuminate\Support\Facades\{DB, Log};
 use Illuminate\Support\Str;
 
 /**
@@ -19,18 +20,19 @@ use Illuminate\Support\Str;
  * POST /api/attestations/bulletins → storeBulletinDemande (bulletins)
  * GET  /api/attestations/demandes/suivi
  *
- * WhatsApp est obligatoire à la soumission.
- * Le numéro est normalisé côté backend (WhatsAppService::normalizePhone)
- * avant d'être stocké — le frontend envoie le numéro brut, le backend
- * garantit le format E.164 en base.
+ * Structure de stockage (via DocumentStorageService) :
+ *   storage/app/public/demandes/{type-slug}/{reference}/
+ *     ├── demande/       ← fichiers initiaux
+ *     ├── complement/    ← compléments (jamais écrasés)
+ *     └── secretaire/    ← fichiers ajoutés par la secrétaire
  *
- * Notifications déclenchées automatiquement :
- *  → Étudiant   : email + WhatsApp (accusé de réception)
- *  → Secrétaire : email + WhatsApp (nouveau dossier à traiter)
+ * Vérification doublon actif :
+ *   Une demande est considérée active si son statut n'est ni 'rejected' ni 'picked_up'.
+ *   (picked_up = statut terminal de délivrance, rejected = seul cas permettant resoumission)
  */
 class DemandeController extends Controller
 {
-    // ── Constantes ────────────────────────────────────────────────────────────
+    // ── Types d'attestations acceptés ─────────────────────────────────────────
 
     private const ATTESTATION_TYPES = [
         'attestation_passage',
@@ -38,17 +40,15 @@ class DemandeController extends Controller
         'attestation_inscription',
     ];
 
-    private const TYPE_TO_FOLDER = [
-        'attestation_definitive'  => 'definitive',
-        'attestation_inscription' => 'inscription',
-        'attestation_passage'     => 'passage',
-    ];
+    // ── Pièces requises par type ──────────────────────────────────────────────
 
     private const ATTESTATION_FILES = [
         'attestation_definitive'  => ['demande_manuscrite', 'acte_naissance', 'attestation_succes_file', 'quittance'],
         'attestation_inscription' => ['demande_manuscrite', 'recu_paiement', 'quittance'],
         'attestation_passage'     => ['demande_manuscrite', 'acte_naissance', 'recu_paiement', 'bulletin', 'quittance'],
     ];
+
+    // ── Libellés pour la quittance PDF ───────────────────────────────────────
 
     private const TYPE_LABELS = [
         'attestation_passage'     => 'Attestation de Passage',
@@ -62,25 +62,34 @@ class DemandeController extends Controller
         'attestation_inscription' => 2000,
     ];
 
+    // ── Statuts terminaux — la demande n'est plus considérée "active" ─────────
+    // rejected  = seul statut permettant la resoumission
+    // picked_up = document remis physiquement à l'étudiant (demande archivée)
+
+    private const INACTIVE_STATUSES = ['rejected', 'picked_up'];
+
     public function __construct(
-        protected NotificationService $notificationService,
-        protected WhatsAppService     $whatsAppService,
+        protected NotificationService    $notificationService,
+        protected WhatsAppService        $whatsAppService,
+        protected DocumentStorageService $storageService,
     ) {}
 
-    // ── POST /api/attestations/demandes ───────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    // POST /api/attestations/demandes
+    // ══════════════════════════════════════════════════════════════════════════
 
     public function storeDemande(Request $request): JsonResponse
     {
         $request->validate([
             'matricule'         => 'required|string',
-            'type'              => 'required|string',
+            'type'              => 'required|in:attestation_passage,attestation_definitive,attestation_inscription',
             'email'             => 'required|email',
             'whatsapp'          => 'required|string|max:30',
             'payment_method'    => 'nullable|in:manual,tresor_online',
             'payment_reference' => 'nullable|string|max:50',
         ]);
 
-        // Normaliser le numéro WhatsApp
+        // Normalisation WhatsApp
         $whatsappNormalized = $this->whatsAppService->normalizePhone($request->whatsapp);
         if (!$whatsappNormalized) {
             return response()->json([
@@ -105,44 +114,41 @@ class DemandeController extends Controller
             return response()->json(['message' => 'Inscription approuvée introuvable.'], 404);
         }
 
-        if (!in_array($request->type, self::ATTESTATION_TYPES)) {
-            return response()->json(['message' => "Type d'attestation invalide."], 422);
-        }
-
-        // Doublon actif
+        // Vérification doublon actif
+        // Une demande est "active" si son statut n'est ni rejected ni picked_up.
         $existing = DB::table('document_requests')
             ->where('student_pending_student_id', $link->id)
             ->where('type', $request->type)
-            ->whereNotIn('status', ['rejected', 'delivered'])
+            ->whereNotIn('status', self::INACTIVE_STATUSES)
             ->first();
 
         if ($existing) {
             return response()->json([
-                'message'   => 'Une demande active existe déjà pour ce type.',
+                'message'   => 'Une demande active existe déjà pour ce type d\'attestation.',
                 'reference' => $existing->reference,
+                'status'    => $existing->status,
             ], 409);
         }
 
-        // Upload fichiers
-        $folder    = self::TYPE_TO_FOLDER[$request->type] ?? 'divers';
-        $fileKeys  = self::ATTESTATION_FILES[$request->type] ?? [];
-        $filesData = [];
-
-        foreach ($fileKeys as $key) {
-            if ($request->hasFile($key)) {
-                $path            = $request->file($key)->store("demandes/{$folder}/{$key}", 'public');
-                $filesData[$key] = $path;
-            }
-        }
-
-        // Référence
         $reference = 'ATT-' . Str::upper(Str::random(4));
 
-        // Paiement + quittance PDF
+        // Création de la structure de dossiers normalisée
+        $this->storageService->ensureStructure($request->type, $reference);
+
+        // Stockage des fichiers dans demande/
+        $fileKeys     = self::ATTESTATION_FILES[$request->type] ?? [];
+        $filesToStore = [];
+        foreach ($fileKeys as $key) {
+            if ($request->hasFile($key)) {
+                $filesToStore[$key] = $request->file($key);
+            }
+        }
+        $filesData = $this->storageService->storeDemandeFiles($request->type, $reference, $filesToStore);
+
+        // Quittance Trésor Public en ligne (PDF généré)
         $paymentMethod    = $request->payment_method ?? 'manual';
         $paymentReference = $request->payment_reference;
         $montant          = self::MONTANTS_ATTESTATION[$request->type] ?? 2000;
-        $quittancePath    = null;
 
         if ($paymentMethod === 'tresor_online' && $paymentReference) {
             try {
@@ -157,25 +163,29 @@ class DemandeController extends Controller
                     'paymentReference' => $paymentReference,
                     'date'             => now()->format('d/m/Y à H:i'),
                 ]);
-                $quittancePath = "demandes/quittances/{$reference}.pdf";
-                Storage::disk('public')->put($quittancePath, $pdf->output());
+                $quittancePath = $this->storageService->storePdfContent(
+                    $request->type,
+                    $reference,
+                    'quittance-online.pdf',
+                    $pdf->output()
+                );
+                $filesData['quittance_online'] = $quittancePath;
             } catch (\Exception $e) {
-                Log::error('[DemandeController] Erreur génération quittance', ['error' => $e->getMessage()]);
+                Log::error('[DemandeController] Erreur génération quittance', [
+                    'error'     => $e->getMessage(),
+                    'reference' => $reference,
+                ]);
             }
         }
 
-        if ($quittancePath) {
-            $filesData['quittance_online'] = $quittancePath;
-        }
-
-        // INSERT
+        // Insertion en base
         $id = DB::table('document_requests')->insertGetId([
             'student_pending_student_id' => $link->id,
             'type'                       => $request->type,
             'reference'                  => $reference,
-            'status'                     => 'pending',
+            'status'                     => 'submitted',
             'email'                      => $request->email,
-            'demandeur_whatsapp'         => $whatsappNormalized,  // ← format E.164 garanti
+            'demandeur_whatsapp'         => $whatsappNormalized,
             'payment_method'             => $paymentMethod,
             'payment_reference'          => $paymentReference,
             'files'                      => json_encode($filesData),
@@ -186,9 +196,17 @@ class DemandeController extends Controller
 
         $demande = DB::table('document_requests')->where('id', $id)->first();
 
-        // ── Notifications (étudiant + secrétaire) ─────────────────────────────
-        // sendSoumission() gère les deux côtés en une seule méthode.
-        $this->notificationService->sendSoumission($demande);
+        // Notifications (email + WhatsApp) : ne doivent jamais faire échouer
+        // la réponse HTTP. La demande est déjà enregistrée en base à ce stade ;
+        // un incident de notification ne doit pas se traduire par un 500 côté client.
+        try {
+            $this->notificationService->sendSoumission($demande);
+        } catch (\Throwable $e) {
+            Log::error('[DemandeController] Erreur notification soumission (attestation)', [
+                'error'     => $e->getMessage(),
+                'reference' => $reference,
+            ]);
+        }
 
         return response()->json([
             'message'   => 'Demande soumise avec succès.',
@@ -196,20 +214,22 @@ class DemandeController extends Controller
         ], 201);
     }
 
-    // ── POST /api/attestations/bulletins ──────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    // POST /api/attestations/bulletins
+    // ══════════════════════════════════════════════════════════════════════════
 
     public function storeBulletinDemande(Request $request): JsonResponse
     {
         $request->validate([
             'link_id'           => 'required|integer|exists:student_pending_student,id',
-            'type'              => 'required|string|starts_with:bulletin_',
+            'type'              => 'required|in:bulletin_annuel',
             'email'             => 'required|email',
             'whatsapp'          => 'required|string|max:30',
             'payment_method'    => 'nullable|in:manual,tresor_online',
             'payment_reference' => 'nullable|string|max:50',
         ]);
 
-        // Normaliser le numéro WhatsApp
+        // Normalisation WhatsApp
         $whatsappNormalized = $this->whatsAppService->normalizePhone($request->whatsapp);
         if (!$whatsappNormalized) {
             return response()->json([
@@ -225,40 +245,46 @@ class DemandeController extends Controller
             return response()->json(['message' => 'Inscription introuvable ou non approuvée.'], 404);
         }
 
-        // Doublon actif
+        // Vérification doublon actif
+        // Un seul bulletin annuel autorisé par inscription tant qu'il n'est pas
+        // rejected (resoumission autorisée) ou picked_up (archive).
         $existing = DB::table('document_requests')
             ->where('student_pending_student_id', $link->id)
-            ->where('type', $request->type)
-            ->whereNotIn('status', ['rejected', 'delivered'])
+            ->where('type', 'bulletin_annuel')
+            ->whereNotIn('status', self::INACTIVE_STATUSES)
             ->first();
 
         if ($existing) {
             return response()->json([
-                'message'   => 'Une demande active existe déjà pour ce bulletin.',
+                'message'   => 'Une demande de bulletin est déjà en cours pour cette année académique.',
                 'reference' => $existing->reference,
+                'status'    => $existing->status,
             ], 409);
         }
 
-        // Upload fichiers
-        $filesData = [];
+        $reference = 'BUL-' . Str::upper(Str::random(4));
+
+        // Création de la structure de dossiers normalisée
+        $this->storageService->ensureStructure('bulletin_annuel', $reference);
+
+        // Stockage des fichiers dans demande/
+        $filesToStore = [];
         foreach (['demande_manuscrite', 'acte_naissance', 'quittance'] as $key) {
             if ($request->hasFile($key)) {
-                $path            = $request->file($key)->store("demandes/bulletins/{$key}", 'public');
-                $filesData[$key] = $path;
+                $filesToStore[$key] = $request->file($key);
             }
         }
+        $filesData = $this->storageService->storeDemandeFiles('bulletin_annuel', $reference, $filesToStore);
 
-        $reference     = 'BUL-' . Str::upper(Str::random(4));
         $paymentMethod = $request->payment_method ?? 'manual';
 
-        // INSERT
         $id = DB::table('document_requests')->insertGetId([
             'student_pending_student_id' => $link->id,
-            'type'                       => $request->type,
+            'type'                       => 'bulletin_annuel',
             'reference'                  => $reference,
-            'status'                     => 'pending',
+            'status'                     => 'submitted',
             'email'                      => $request->email,
-            'demandeur_whatsapp'         => $whatsappNormalized,  // ← format E.164 garanti
+            'demandeur_whatsapp'         => $whatsappNormalized,
             'payment_method'             => $paymentMethod,
             'payment_reference'          => $request->payment_reference ?? null,
             'files'                      => json_encode($filesData),
@@ -269,8 +295,16 @@ class DemandeController extends Controller
 
         $demande = DB::table('document_requests')->where('id', $id)->first();
 
-        // ── Notifications (étudiant + secrétaire) ─────────────────────────────
-        $this->notificationService->sendSoumission($demande);
+        // Notifications (email + WhatsApp) : ne doivent jamais faire échouer
+        // la réponse HTTP. La demande est déjà enregistrée en base à ce stade.
+        try {
+            $this->notificationService->sendSoumission($demande);
+        } catch (\Throwable $e) {
+            Log::error('[DemandeController] Erreur notification soumission (bulletin)', [
+                'error'     => $e->getMessage(),
+                'reference' => $reference,
+            ]);
+        }
 
         return response()->json([
             'message'   => 'Demande de bulletin soumise avec succès.',
@@ -278,13 +312,13 @@ class DemandeController extends Controller
         ], 201);
     }
 
-    // ── GET /api/attestations/demandes/suivi ──────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    // GET /api/attestations/demandes/suivi
+    // ══════════════════════════════════════════════════════════════════════════
 
     public function suiviDemande(Request $request): JsonResponse
     {
-        $request->validate([
-            'reference' => 'required|string',
-        ]);
+        $request->validate(['reference' => 'required|string']);
 
         $demande = DB::table('document_requests')
             ->where('reference', strtoupper(trim($request->reference)))
@@ -294,9 +328,7 @@ class DemandeController extends Controller
             return response()->json(['message' => 'Demande introuvable.'], 404);
         }
 
-        $statusPublic = $demande->status;
-
-        // Récupérer le motif de la réserve si le dossier est sous réserve
+        // Motif de réserve (has_flag)
         $flagReason = null;
         if (!empty($demande->has_flag)) {
             $history = DB::table('document_request_histories')
@@ -307,22 +339,27 @@ class DemandeController extends Controller
             $flagReason = $history ? $history->comment : 'Dossier validé sous réserve.';
         }
 
-        // Récupérer les infos de l'étudiant pour l'affichage public
+        // Infos publiques de l'étudiant
         $studentData = DB::table('student_pending_student')
-            ->join('students', 'student_pending_student.student_id', '=', 'students.id')
-            ->join('pending_students', 'student_pending_student.pending_student_id', '=', 'pending_students.id')
-            ->join('personal_information', 'pending_students.personal_information_id', '=', 'personal_information.id')
+            ->join('students',             'student_pending_student.student_id',       '=', 'students.id')
+            ->join('pending_students',     'student_pending_student.pending_student_id', '=', 'pending_students.id')
+            ->join('personal_information', 'pending_students.personal_information_id',  '=', 'personal_information.id')
             ->where('student_pending_student.id', $demande->student_pending_student_id)
-            ->select('personal_information.last_name', 'personal_information.first_names', 'students.student_id_number as matricule')
+            ->select(
+                'personal_information.last_name',
+                'personal_information.first_names',
+                'students.student_id_number as matricule'
+            )
             ->first();
 
         return response()->json([
             'reference'       => $demande->reference,
             'type'            => $demande->type,
-            'status'          => $statusPublic,
+            'status'          => $demande->status,
             'has_flag'        => !empty($demande->has_flag),
             'flag_reason'     => $flagReason,
-            'submitted_at'    => $demande->created_at,
+            'submitted_at'    => $demande->submitted_at,
+            // Motif de rejet exposé uniquement si le statut est rejected
             'rejected_reason' => $demande->status === 'rejected' ? $demande->rejected_reason : null,
             'student'         => $studentData ? [
                 'last_name'   => $studentData->last_name,

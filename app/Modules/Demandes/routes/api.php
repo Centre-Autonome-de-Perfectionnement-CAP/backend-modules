@@ -20,6 +20,10 @@ Route::prefix('api/attestations')->middleware('auth:sanctum')->group(function ()
     Route::get('document-requests/badge-count', DocumentRequestBadgeController::class);
     Route::get('document-requests/{id}',        [DocumentRequestController::class, 'show']);
 
+    // ── Aperçu / téléchargement d'une pièce jointe (visualiseur intégré) ───────
+    // Remplace l'ancien accès direct non authentifié via /storage/{path}.
+    Route::get('document-requests/{id}/files/{source}/{key}', [DocumentRequestController::class, 'previewFile']);
+
     // ── Fichiers secrétaire ───────────────────────────────────────────────────
     Route::post('document-requests/{id}/secretary-files',                  [DocumentRequestController::class, 'uploadSecretaryFiles']);
     Route::patch('document-requests/{id}/secretary-files/{fileId}',        [DocumentRequestController::class, 'updateSecretaryFileComment']);

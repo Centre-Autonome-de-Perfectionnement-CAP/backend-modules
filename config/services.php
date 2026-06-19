@@ -42,7 +42,7 @@ return [
     ],
 
     'whatsapp_bridge' => [
-        'url'     => env('WHATSAPP_BRIDGE_URL', 'http://localhost:3000'),
+        'url'     => env('WHATSAPP_BRIDGE_URL', 'http://localhost:3005'),
         'timeout' => env('WHATSAPP_BRIDGE_TIMEOUT', 30),
     ],
 

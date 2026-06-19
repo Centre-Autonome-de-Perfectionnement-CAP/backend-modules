@@ -3,14 +3,14 @@
 namespace App\Modules\Attestation\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Demandes\Services\DocumentStorageService;
 use App\Modules\Demandes\Services\NotificationService;
 use App\Modules\Demandes\Services\WhatsAppService;
 use App\Modules\Inscription\Models\{Student, StudentPendingStudent};
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{DB, Log, Storage};
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\{DB, Log};
 
 /**
  * Complément de dossier — site vitrine CAP-EPAC
@@ -18,12 +18,9 @@ use Illuminate\Support\Str;
  * GET  /api/attestations/demandes/complement/find
  * POST /api/attestations/demandes/complement
  *
- * WhatsApp est obligatoire à la soumission du complément.
- * Le numéro est normalisé côté backend avant stockage.
- *
- * Notifications déclenchées automatiquement :
- *  → Étudiant   : email + WhatsApp (accusé de réception)
- *  → Secrétaire : email + WhatsApp (nouveau complément à traiter)
+ * Les fichiers complémentaires sont stockés dans complement/
+ * sans jamais écraser demande/. La priorité de lecture est gérée
+ * par DocumentStorageService::resolveDocuments().
  */
 class ComplementDossierController extends Controller
 {
@@ -51,18 +48,13 @@ class ComplementDossierController extends Controller
         'attestation_passage'     => 'Attestation de Passage',
         'attestation_definitive'  => 'Attestation Définitive',
         'attestation_inscription' => "Attestation d'Inscription",
-        'bulletin_notes'          => 'Bulletin de Notes',
-    ];
-
-    private const TYPE_TO_FOLDER = [
-        'attestation_definitive'  => 'definitive',
-        'attestation_inscription' => 'inscription',
-        'attestation_passage'     => 'passage',
+        'bulletin_annuel'         => 'Bulletin de Notes',
     ];
 
     public function __construct(
-        protected NotificationService $notificationService,
-        protected WhatsAppService     $whatsAppService,
+        protected NotificationService    $notificationService,
+        protected WhatsAppService        $whatsAppService,
+        protected DocumentStorageService $storageService,
     ) {}
 
     // ── GET /api/attestations/demandes/complement/find ────────────────────────
@@ -80,7 +72,6 @@ class ComplementDossierController extends Controller
             ], 422);
         }
 
-        // Recherche par référence → résultat unique
         if ($request->filled('reference')) {
             $demande = DB::table('document_requests')
                 ->where('reference', strtoupper(trim($request->reference)))
@@ -96,7 +87,6 @@ class ComplementDossierController extends Controller
             ]);
         }
 
-        // Recherche par matricule → tableau
         $student = Student::where(
             'student_id_number', strtoupper(trim($request->matricule))
         )->first();
@@ -136,7 +126,6 @@ class ComplementDossierController extends Controller
             'piece_labels.*' => 'nullable|string|max:200',
         ]);
 
-        // Normaliser le numéro WhatsApp
         $whatsappNormalized = $this->whatsAppService->normalizePhone($request->whatsapp);
         if (!$whatsappNormalized) {
             return response()->json([
@@ -155,7 +144,7 @@ class ComplementDossierController extends Controller
             return response()->json(['message' => 'Référence introuvable.'], 404);
         }
 
-        // Infos étudiant
+        // Infos étudiant pour les notifications
         $link = StudentPendingStudent::with([
             'student',
             'pendingStudent.personalInformation',
@@ -167,74 +156,66 @@ class ComplementDossierController extends Controller
         ));
         $matricule  = $link?->student?->student_id_number ?? '—';
 
-        // Chemin du dossier
-        if (str_starts_with($reference, 'BUL-')) {
-            $baseFolder = "bulletins-demandes/{$reference}/complement";
-        } else {
-            $subFolder  = self::TYPE_TO_FOLDER[$demande->type] ?? 'autre';
-            $baseFolder = "attestation-demandes/{$subFolder}/{$reference}/complement";
-        }
+        // Récupérer l'existant en complement/
+        $existingComplement = is_string($demande->complement_files)
+            ? (json_decode($demande->complement_files, true) ?: [])
+            : ((array) ($demande->complement_files ?? []));
 
-        // Fusion avec l'existant
-        $existingComplement = [];
-        if ($demande->complement_files) {
-            $decoded = is_string($demande->complement_files)
-                ? json_decode($demande->complement_files, true)
-                : (array) $demande->complement_files;
-            $existingComplement = $decoded ?? [];
-        }
-
-        // Stockage des fichiers
+        // Valider et collecter les fichiers
         $uploadedFiles = $request->file('pieces') ?? [];
         if (empty($uploadedFiles)) {
             return response()->json(['message' => 'Aucun fichier reçu.'], 422);
         }
 
-        $pieceLabels = $request->input('piece_labels', []);
-        $newEntries  = [];
-        $savedLabels = [];
-
+        $filesToStore = [];
         foreach ($uploadedFiles as $key => $file) {
             if (!$file || !$file->isValid()) {
                 continue;
             }
-
             if ($file->getSize() > self::MAX_FILE_SIZE) {
                 return response()->json(['message' => "Le fichier « {$key} » dépasse 5 Mo."], 422);
             }
-
             if (!in_array($file->getMimeType(), self::ALLOWED_MIMES)) {
                 return response()->json(['message' => "Format non accepté pour « {$key} » (PDF, JPG, PNG uniquement)."], 422);
             }
-
-            $keyNorm  = Str::slug($key, '_');
-            $ext      = $file->getClientOriginalExtension() ?: $file->extension();
-            $fileName = "{$keyNorm}.{$ext}";
-
-            if (isset($existingComplement[$key])) {
-                Storage::disk('public')->delete($existingComplement[$key]);
-            }
-
-            $path = $file->storeAs($baseFolder, $fileName, 'public');
-
-            $newEntries[$key]  = $path;
-            $savedLabels[$key] = $pieceLabels[$key] ?? self::FILE_LABELS[$key] ?? $key;
+            $filesToStore[$key] = $file;
         }
+
+        if (empty($filesToStore)) {
+            return response()->json(['message' => 'Aucun fichier valide reçu.'], 422);
+        }
+
+        // Stocker dans complement/ — DocumentStorageService gère la structure
+        // et nomme les fichiers d'après leur clé métier
+        // S'assurer que la structure existe (rétrocompatibilité demandes anciennes)
+        $this->storageService->ensureStructure($demande->type, $reference);
+
+        $newEntries = $this->storageService->storeComplementFiles(
+            $demande->type,
+            $reference,
+            $filesToStore
+        );
 
         if (empty($newEntries)) {
             return response()->json(['message' => 'Aucun fichier valide enregistré.'], 422);
         }
 
+        // Fusion avec l'existant (les nouvelles clés écrasent les anciennes dans complement/)
         $mergedComplement = array_merge($existingComplement, $newEntries);
 
-        // Mettre à jour la BD — stocker aussi le WhatsApp si absent
+        // Libellés pour la notification
+        $pieceLabels = $request->input('piece_labels', []);
+        $savedLabels = [];
+        foreach (array_keys($newEntries) as $key) {
+            $savedLabels[$key] = $pieceLabels[$key] ?? self::FILE_LABELS[$key] ?? $key;
+        }
+
         $updateData = [
             'complement_files' => json_encode($mergedComplement),
             'complement_at'    => now(),
             'updated_at'       => now(),
         ];
 
-        // Si le demandeur_whatsapp n'était pas encore renseigné, on le sauvegarde
         if (empty($demande->demandeur_whatsapp)) {
             $updateData['demandeur_whatsapp'] = $whatsappNormalized;
         }
@@ -249,10 +230,6 @@ class ComplementDossierController extends Controller
 
         $piecesList = array_values($savedLabels);
 
-        // ── Notifications (email + WhatsApp) ──────────────────────────────────
-        // sendComplementSecretaire() gère en un appel :
-        //   - Email + WhatsApp → étudiant
-        //   - Email + WhatsApp → toutes les secrétaires
         $this->notificationService->sendComplementSecretaire(
             etudiantEmail:    $request->email,
             vars:             compact('nomComplet', 'matricule', 'reference', 'dateComplement', 'piecesList'),

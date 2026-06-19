@@ -13,6 +13,8 @@ class AttestationServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->loadRoutesFrom(__DIR__ . '/../routes/api.php');
+        $this->app['router']
+            ->middleware('api')          // ← applique le groupe API (CORS inclus)
+            ->group(__DIR__ . '/../routes/api.php');
     }
 }
