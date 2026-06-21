@@ -24,10 +24,19 @@ Route::middleware(['auth:sanctum'])->prefix('api/cahier-texte')->group(function 
     
     // Statistiques
     Route::get('/statistics/all', [TextbookEntryController::class, 'statistics']);
+
+    Route::get('/export/payment-excel', [TextbookEntryController::class, 'exportPaymentExcel']);
     
     // Comments
     Route::get('/{entryId}/comments', [TextbookCommentController::class, 'index']);
     Route::post('/{entryId}/comments', [TextbookCommentController::class, 'store']);
     Route::put('/{entryId}/comments/{commentId}', [TextbookCommentController::class, 'update']);
     Route::delete('/{entryId}/comments/{commentId}', [TextbookCommentController::class, 'destroy']);
+
+    Route::post(
+        '/professor-teaching-summary',
+        [TextbookEntryController::class, 'professorTeachingSummary']
+    );
+ 
+    
 });

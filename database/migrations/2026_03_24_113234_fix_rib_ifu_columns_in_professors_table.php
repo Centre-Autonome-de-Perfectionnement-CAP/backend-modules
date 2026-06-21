@@ -9,51 +9,65 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // 1. Désactiver les contraintes au niveau global
+        // Désactiver les contraintes FK
         Schema::disableForeignKeyConstraints();
 
-        // 2. Supprimer les clés étrangères physiquement
-        // On utilise try/catch pour éviter que ça plante si elles ont déjà été supprimées
+        // Supprimer les foreign keys si elles existent
         try {
             Schema::table('professors', function (Blueprint $table) {
                 $table->dropForeign('professors_rib_foreign');
                 $table->dropForeign('professors_ifu_foreign');
             });
         } catch (\Exception $e) {
-            // Si l'erreur est que la clé n'existe pas, on continue
+            // ignore si déjà supprimées
         }
 
-        // 3. Modifier les colonnes
-        Schema::table('professors', function (Blueprint $table) {
-            // Renommage statut -> status
-            if (Schema::hasColumn('professors', 'statut')) {
+        // Renommer colonne statut -> status
+        if (Schema::hasColumn('professors', 'statut')) {
+            Schema::table('professors', function (Blueprint $table) {
                 $table->renameColumn('statut', 'status');
-            }
+            });
+        }
 
-            // Changement des types en string (Maintenant possible car la FK est supprimée)
+        // Modifier rib et ifu en string
+        Schema::table('professors', function (Blueprint $table) {
             $table->string('rib')->nullable()->change();
             $table->string('ifu')->nullable()->change();
 
             if (!Schema::hasColumn('professors', 'rib_url')) {
                 $table->string('rib_url')->nullable()->after('rib');
             }
+
             if (!Schema::hasColumn('professors', 'ifu_url')) {
                 $table->string('ifu_url')->nullable()->after('ifu');
             }
         });
 
-        // 4. Modifier l'ENUM
-        DB::statement("ALTER TABLE professors MODIFY COLUMN status ENUM('active', 'inactive', 'suspended') DEFAULT 'active'");
+        // 🔥 Correction propre du ENUM (IMPORTANT)
+        DB::statement("
+            ALTER TABLE professors
+            MODIFY status ENUM('active','inactive','suspended')
+            NOT NULL
+            DEFAULT 'active'
+        ");
 
-        // 5. Réactiver les contraintes
+        // Réactiver les contraintes FK
         Schema::enableForeignKeyConstraints();
     }
 
     public function down(): void
     {
+        // Retour en arrière simple (adaptable selon ton ancien schéma)
         Schema::table('professors', function (Blueprint $table) {
             $table->unsignedBigInteger('rib')->nullable()->change();
             $table->unsignedBigInteger('ifu')->nullable()->change();
         });
+
+        DB::statement("
+            ALTER TABLE professors
+            MODIFY status ENUM('active','inactive')
+            NOT NULL
+            DEFAULT 'active'
+        ");
     }
 };
