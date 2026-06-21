@@ -313,6 +313,21 @@ class TextbookController extends Controller
             ], 422);
         }
 
+        // Empêcher une double saisie pour le même créneau du même jour.
+        $alreadyFilled = TextbookEntry::where('program_id', $programId)
+            ->where('session_date', $today->toDateString())
+            ->where('start_time', $scheduleSlot->start_time)
+            ->where('end_time', $scheduleSlot->end_time)
+            ->exists();
+
+        if ($alreadyFilled) {
+            return response()->json([
+                'error' => 'Saisie impossible',
+                'message' => 'Une entrée a déjà été saisie pour ce cours. Reprogrammez le cours pour saisir une nouvelle entrée.',
+                'reason' => 'already_filled',
+            ], 422);
+        }
+
         // Validation des données
         $validator = Validator::make($request->all(), [
             'session_title' => 'required|string|max:255',
@@ -481,6 +496,25 @@ class TextbookController extends Controller
                 'slot_end' => $slotEnd->format('H:i'),
                 'deadline' => $deadline->format('H:i'),
                 'now' => $now->format('H:i'),
+            ]);
+        }
+
+        // Vérifier qu'aucune entrée n'existe déjà pour ce créneau aujourd'hui.
+        // Un cours programmé ne peut recevoir qu'une seule saisie par occurrence.
+        $alreadyFilled = TextbookEntry::where('program_id', $programId)
+            ->where('session_date', $today->toDateString())
+            ->where('start_time', $scheduleSlot->start_time)
+            ->where('end_time', $scheduleSlot->end_time)
+            ->exists();
+
+        if ($alreadyFilled) {
+            return response()->json([
+                'can_add' => false,
+                'reason' => 'already_filled',
+                'slot_start' => $slotStart->format('H:i'),
+                'slot_end' => $slotEnd->format('H:i'),
+                'deadline' => $deadline->format('H:i'),
+                'message' => 'Une entrée a déjà été saisie pour ce cours. Reprogrammez le cours pour saisir une nouvelle entrée.',
             ]);
         }
 
