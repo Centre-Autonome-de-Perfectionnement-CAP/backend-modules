@@ -8,6 +8,7 @@ use App\Modules\RH\Models\Contrat;
 use App\Modules\Cours\Models\CourseElementProfessor;
 use App\Modules\RH\Http\Resources\ProfessorResource;
 use Illuminate\Support\Facades\Validator;
+use App\Modules\Cours\Models\Program;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -166,6 +167,7 @@ class ContratController extends Controller
                     'is_primary'          => $p->is_primary ?? false,
                     'label'               => $p->label ?? ($p->courseElement->name ?? ''),
                     'hours'               => $pivot->hours              ?? 0,
+                    'amount_program'      => $pivot->amount_program      ?? null,
                     'number_monographie'  => $pivot->number_monographie ?? null,
                     'amount_monographie'  => $pivot->amount_monographie  ?? null,
                     'course_element' => $p->courseElement ? [
@@ -218,11 +220,17 @@ class ContratController extends Controller
             'regroupement'                   => 'nullable|string',
             'start_date'                     => 'required|date',
             'end_date'                       => 'nullable|date|after_or_equal:start_date',
-            'amount'                         => 'required|numeric|min:100',
             'notes'                          => 'nullable|string',
             'course_element_professor_ids'   => 'nullable|array',
             'course_element_professor_ids.*' => 'integer',
+            'program_amounts'                => 'nullable|array',
+            'program_amounts.*'              => 'nullable|numeric|min:0',
         ]);
+
+        // Calcul automatique du montant total depuis program_amounts
+        $programAmounts = $request->input('program_amounts', []);
+        $totalAmount    = collect($programAmounts)->sum(fn($v) => (float) $v);
+        $validated['amount'] = $totalAmount > 0 ? $totalAmount : 0;
 
         // Génération du numéro de contrat
         $lastContrat = Contrat::latest('id')->first();
@@ -240,9 +248,21 @@ class ContratController extends Controller
 
         $contrat = Contrat::create($validated);
 
-        // Attachement des programmes
+        // Attachement des programmes avec amount_program et program_id par pivot
         if (!empty($validated['course_element_professor_ids'])) {
-            $contrat->courseElementProfessors()->sync($validated['course_element_professor_ids']);
+            // Charger les CourseElementProfessor pour récupérer leur program_id
+            $ceps = Program::whereIn('course_element_professor_id', $validated['course_element_professor_ids'])
+                ->pluck('id', 'id'); // [cep_id => program_id]
+
+            $syncData = [];
+            foreach ($validated['course_element_professor_ids'] as $cepId) {
+                $amt = isset($programAmounts[$cepId]) ? (float) $programAmounts[$cepId] : null;
+                $syncData[$cepId] = [
+                    'amount_program' => $amt,
+                    'program_id'     => $ceps[$cepId] ?? null,
+                ];
+            }
+            $contrat->courseElementProfessors()->sync($syncData);
         }
 
         return response()->json([
@@ -284,12 +304,18 @@ class ContratController extends Controller
             'regroupement'                   => 'nullable|string',
             'start_date'                     => 'required|date',
             'end_date'                       => 'nullable|date|after_or_equal:start_date',
-            'amount'                         => 'required|numeric|min:100',
             'notes'                          => 'nullable|string',
             'status'                         => 'sometimes|string|in:pending,transfered,signed,ongoing,completed,cancelled',
             'course_element_professor_ids'   => 'nullable|array',
             'course_element_professor_ids.*' => 'integer',
+            'program_amounts'                => 'nullable|array',
+            'program_amounts.*'              => 'nullable|numeric|min:0',
         ]);
+
+        // Calcul automatique du montant total depuis program_amounts
+        $programAmounts = $request->input('program_amounts', []);
+        $totalAmount    = collect($programAmounts)->sum(fn($v) => (float) $v);
+        $validated['amount'] = $totalAmount > 0 ? $totalAmount : ($contrat->amount ?? 0);
 
         $contrat->update($validated);
 
@@ -300,7 +326,22 @@ class ContratController extends Controller
         }
 
         if (array_key_exists('course_element_professor_ids', $validated)) {
-            $contrat->courseElementProfessors()->sync($validated['course_element_professor_ids'] ?? []);
+            $ids = $validated['course_element_professor_ids'] ?? [];
+
+            // Charger les CourseElementProfessor pour récupérer leur program_id
+            $ceps = $ids
+                ? Program::whereIn('id', $ids)->pluck('id', 'id')
+                : collect();
+
+            $syncData = [];
+            foreach ($ids as $cepId) {
+                $amt = isset($programAmounts[$cepId]) ? (float) $programAmounts[$cepId] : null;
+                $syncData[$cepId] = [
+                    'amount_program' => $amt,
+                    'program_id'     => $ceps[$cepId] ?? null,
+                ];
+            }
+            $contrat->courseElementProfessors()->sync($syncData);
         }
 
         return response()->json([

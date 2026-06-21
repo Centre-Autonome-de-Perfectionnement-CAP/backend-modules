@@ -31,6 +31,8 @@ class Contrat extends Model
         'status',
         'notes',
         'rejection_reason',
+        'program_id',
+        'amount_program',
         // ── Signature électronique ──────────────────────────────────────────
         'professor_signature_path',
         'professor_signature_type',  // 'drawn' | 'uploaded'
@@ -55,6 +57,7 @@ class Contrat extends Model
         'is_authorized'       => 'boolean',
         'amount'              => 'decimal:2',
          'factures_normalisees' => 'array',
+
     ];
 
 
