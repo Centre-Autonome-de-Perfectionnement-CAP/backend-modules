@@ -21,6 +21,55 @@ final class WorkflowConstants
         'admin'               => 'Administrateur',
     ];
 
+    // ── Alias de rôles ────────────────────────────────────────────────────────
+    //
+    // Certains environnements/seeds historiques utilisent encore l'ancien slug
+    // 'chef-division' à la place du slug canonique 'responsable-division'
+    // (qui est celui utilisé partout dans ROLE_LABELS, STATUS_TO_ROLE,
+    // ACTION_MATRIX et VISIBLE_STATUSES ci-dessous).
+    //
+    // Plutôt que de semer des comparaisons "OU" un peu partout dans le code,
+    // tout passage d'un rôle "brut" (venant d'Auth::user(), d'une colonne BD,
+    // ou d'un champ de formulaire) DOIT être normalisé via canonicalRole().
+    // Et toute recherche SQL par slug de rôle (roles.slug, actor_role,
+    // correction_origin_role...) DOIT chercher toutes les variantes via
+    // roleSlugVariants(), car on ne maîtrise pas quelle graphie est réellement
+    // stockée en base.
+    //
+    // Pour ajouter un futur alias, il suffit d'ajouter une ligne ici —
+    // aucune autre partie du code n'a besoin d'être modifiée.
+
+    public const ROLE_SLUG_ALIASES = [
+        'chef-division' => 'responsable-division',
+    ];
+
+    /**
+     * Normalise un slug de rôle brut vers le slug canonique utilisé par
+     * toutes les constantes du workflow. Transparent pour les rôles qui
+     * n'ont pas d'alias (retourne la valeur inchangée).
+     */
+    public static function canonicalRole(?string $role): ?string
+    {
+        if ($role === null) {
+            return null;
+        }
+
+        return self::ROLE_SLUG_ALIASES[$role] ?? $role;
+    }
+
+    /**
+     * Retourne toutes les variantes connues d'un slug canonique
+     * (lui-même + tous ses alias), pour les requêtes SQL qui doivent
+     * chercher en base sans savoir quelle graphie y est stockée.
+     */
+    public static function roleSlugVariants(string $canonicalRole): array
+    {
+        $variants = array_keys(self::ROLE_SLUG_ALIASES, $canonicalRole, true);
+        $variants[] = $canonicalRole;
+
+        return array_values(array_unique($variants));
+    }
+
     public const TYPE_LABELS = [
         'attestation_passage'     => 'Attestation de Passage',
         'attestation_definitive'  => 'Attestation Définitive',

@@ -24,7 +24,7 @@ class DocumentRequestBadgeController extends Controller
     public function __invoke(): JsonResponse
     {
         $user = Auth::user();
-        $role = $user->roles->first()?->slug ?? null;
+        $role = WorkflowConstants::canonicalRole($user->roles->first()?->slug ?? null);
 
         if (!$role || !array_key_exists($role, WorkflowConstants::VISIBLE_STATUSES)) {
             return $this->successResponse(['count' => 0]);

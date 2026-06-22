@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Demandes\Models\DocumentRequest;
 use App\Modules\Demandes\Services\DocumentRequestQueryService;
 use App\Modules\Demandes\Services\DocumentStorageService;
+use App\Modules\Demandes\WorkflowConstants;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -51,7 +52,7 @@ class DocumentRequestController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user    = Auth::user();
-        $role    = $user->roles->first()?->slug ?? null;
+        $role    = WorkflowConstants::canonicalRole($user->roles->first()?->slug ?? null);
         $filters = $request->only(['status', 'type', 'search']);
 
         $demandes = $this->queryService->listing($role, $user, $filters);

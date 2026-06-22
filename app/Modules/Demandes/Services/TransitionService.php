@@ -45,6 +45,10 @@ class TransitionService
 
     public function apply(int $id, string $action, array $payload, string $role): object
     {
+        // Défense en profondeur : même si l'appelant a déjà normalisé le rôle,
+        // on s'assure ici aussi qu'on travaille uniquement avec le slug canonique.
+        $role = WorkflowConstants::canonicalRole($role);
+
         $demande = DB::table('document_requests')->where('id', $id)->first();
         if (!$demande) {
             abort(404, 'Demande introuvable.');
@@ -149,12 +153,15 @@ class TransitionService
         }
 
         elseif ($action === 'secretaire_resend') {
-            $resendTo = $p['resend_to'] ?? '';
+            // resend_to vient d'un champ de formulaire : il peut porter l'une
+            // ou l'autre graphie du rôle → on normalise avant toute comparaison.
+            $resendTo = WorkflowConstants::canonicalRole($p['resend_to'] ?? '') ?? '';
 
             if ($resendTo === 'origin') {
                 // ── SORTIE DU CIRCUIT ─────────────────────────────────────────
+                $originRole   = WorkflowConstants::canonicalRole($demande->correction_origin_role);
                 $originStatus = $demande->correction_origin_status
-                    ?? ($roleToStatus[$demande->correction_origin_role] ?? null);
+                    ?? ($roleToStatus[$originRole] ?? null);
 
                 if (!$originStatus) {
                     abort(422, 'Impossible de déterminer le statut de retour.');

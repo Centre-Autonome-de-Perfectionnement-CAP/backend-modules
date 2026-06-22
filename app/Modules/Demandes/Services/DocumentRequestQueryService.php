@@ -67,70 +67,95 @@ class DocumentRequestQueryService
      *
      * Pattern : on récupère la dernière entrée pour chaque rôle,
      * ce qui correspond toujours à l'action la plus récente de ce rôle.
+     *
+     * Méthode (et non constante) car le rôle "Responsable Division" peut être
+     * enregistré sous deux graphies différentes dans actor_role
+     * ('responsable-division' ou l'ancien alias 'chef-division') selon
+     * l'historique de la base — on doit chercher les deux.
      */
-    private const HISTORY_SUBQUERIES = [
-        // Commentaires — dernière entrée avec comment non null pour chaque rôle
-        "COALESCE((
-            SELECT h.comment FROM document_request_histories h
-            WHERE h.document_request_id = dr.id
-              AND h.actor_role = 'secretaire'
-              AND h.comment IS NOT NULL
-            ORDER BY h.created_at DESC LIMIT 1
-        ), NULL) AS secretaire_comment",
+    private function historySubqueries(): array
+    {
+        $divisionRoles = $this->sqlInClause(
+            WorkflowConstants::roleSlugVariants('responsable-division')
+        );
 
-        "COALESCE((
-            SELECT h.comment FROM document_request_histories h
-            WHERE h.document_request_id = dr.id
-              AND h.actor_role = 'comptable'
-              AND h.comment IS NOT NULL
-            ORDER BY h.created_at DESC LIMIT 1
-        ), NULL) AS comptable_comment",
+        return [
+            // Commentaires — dernière entrée avec comment non null pour chaque rôle
+            "COALESCE((
+                SELECT h.comment FROM document_request_histories h
+                WHERE h.document_request_id = dr.id
+                  AND h.actor_role = 'secretaire'
+                  AND h.comment IS NOT NULL
+                ORDER BY h.created_at DESC LIMIT 1
+            ), NULL) AS secretaire_comment",
 
-        "COALESCE((
-            SELECT h.comment FROM document_request_histories h
-            WHERE h.document_request_id = dr.id
-              AND h.actor_role = 'chef-division'
-              AND h.comment IS NOT NULL
-            ORDER BY h.created_at DESC LIMIT 1
-        ), NULL) AS responsable_division_comment",
+            "COALESCE((
+                SELECT h.comment FROM document_request_histories h
+                WHERE h.document_request_id = dr.id
+                  AND h.actor_role = 'comptable'
+                  AND h.comment IS NOT NULL
+                ORDER BY h.created_at DESC LIMIT 1
+            ), NULL) AS comptable_comment",
 
-        // Horodatages — dernière action de chaque rôle
-        "(SELECT h.created_at FROM document_request_histories h
-          WHERE h.document_request_id = dr.id
-            AND h.actor_role = 'comptable'
-          ORDER BY h.created_at DESC LIMIT 1
-        ) AS comptable_reviewed_at",
+            "COALESCE((
+                SELECT h.comment FROM document_request_histories h
+                WHERE h.document_request_id = dr.id
+                  AND h.actor_role IN ({$divisionRoles})
+                  AND h.comment IS NOT NULL
+                ORDER BY h.created_at DESC LIMIT 1
+            ), NULL) AS responsable_division_comment",
 
-        "(SELECT h.created_at FROM document_request_histories h
-          WHERE h.document_request_id = dr.id
-            AND h.actor_role = 'chef-division'
-          ORDER BY h.created_at DESC LIMIT 1
-        ) AS responsable_division_reviewed_at",
+            // Horodatages — dernière action de chaque rôle
+            "(SELECT h.created_at FROM document_request_histories h
+              WHERE h.document_request_id = dr.id
+                AND h.actor_role = 'comptable'
+              ORDER BY h.created_at DESC LIMIT 1
+            ) AS comptable_reviewed_at",
 
-        "(SELECT h.created_at FROM document_request_histories h
-          WHERE h.document_request_id = dr.id
-            AND h.actor_role = 'chef-cap'
-          ORDER BY h.created_at DESC LIMIT 1
-        ) AS chef_cap_reviewed_at",
+            "(SELECT h.created_at FROM document_request_histories h
+              WHERE h.document_request_id = dr.id
+                AND h.actor_role IN ({$divisionRoles})
+              ORDER BY h.created_at DESC LIMIT 1
+            ) AS responsable_division_reviewed_at",
 
-        "(SELECT h.created_at FROM document_request_histories h
-          WHERE h.document_request_id = dr.id
-            AND h.actor_role = 'sec-da'
-          ORDER BY h.created_at DESC LIMIT 1
-        ) AS sec_da_reviewed_at",
+            "(SELECT h.created_at FROM document_request_histories h
+              WHERE h.document_request_id = dr.id
+                AND h.actor_role = 'chef-cap'
+              ORDER BY h.created_at DESC LIMIT 1
+            ) AS chef_cap_reviewed_at",
 
-        "(SELECT h.created_at FROM document_request_histories h
-          WHERE h.document_request_id = dr.id
-            AND h.actor_role = 'directrice-adjointe'
-          ORDER BY h.created_at DESC LIMIT 1
-        ) AS directrice_adjointe_reviewed_at",
+            "(SELECT h.created_at FROM document_request_histories h
+              WHERE h.document_request_id = dr.id
+                AND h.actor_role = 'sec-da'
+              ORDER BY h.created_at DESC LIMIT 1
+            ) AS sec_da_reviewed_at",
 
-        "(SELECT h.created_at FROM document_request_histories h
-          WHERE h.document_request_id = dr.id
-            AND h.actor_role = 'sec-dir'
-          ORDER BY h.created_at DESC LIMIT 1
-        ) AS sec_directeur_reviewed_at",
-    ];
+            "(SELECT h.created_at FROM document_request_histories h
+              WHERE h.document_request_id = dr.id
+                AND h.actor_role = 'directrice-adjointe'
+              ORDER BY h.created_at DESC LIMIT 1
+            ) AS directrice_adjointe_reviewed_at",
+
+            "(SELECT h.created_at FROM document_request_histories h
+              WHERE h.document_request_id = dr.id
+                AND h.actor_role = 'sec-dir'
+              ORDER BY h.created_at DESC LIMIT 1
+            ) AS sec_directeur_reviewed_at",
+        ];
+    }
+
+    /**
+     * Construit une clause IN(...) sûre à partir d'une liste fixe et interne
+     * de slugs de rôles (jamais d'entrée utilisateur) — pas de risque
+     * d'injection, ces valeurs viennent uniquement de WorkflowConstants.
+     */
+    private function sqlInClause(array $values): string
+    {
+        return "'" . implode("','", array_map(
+            fn($v) => str_replace("'", "''", $v),
+            $values
+        )) . "'";
+    }
 
     private const MATRICULE_SUBQUERY = "
         (SELECT s.student_id_number FROM students s
@@ -158,7 +183,7 @@ class DocumentRequestQueryService
     {
         return array_merge(
             self::BASE_COLUMNS,
-            array_map(fn($sq) => DB::raw($sq), self::HISTORY_SUBQUERIES),
+            array_map(fn($sq) => DB::raw($sq), $this->historySubqueries()),
             [DB::raw(self::MATRICULE_SUBQUERY)]
         );
     }
@@ -167,6 +192,12 @@ class DocumentRequestQueryService
 
     public function listing(string $role, $user, array $filters = []): \Illuminate\Support\Collection
     {
+        // Le rôle peut arriver sous l'une ou l'autre graphie (responsable-division /
+        // chef-division) selon ce qui est stocké en base pour cet utilisateur :
+        // on normalise systématiquement vers le slug canonique avant toute
+        // comparaison ou lookup dans WorkflowConstants.
+        $role = WorkflowConstants::canonicalRole($role);
+
         $query = $this->baseQuery()->select($this->buildListingSelect());
 
         // Filtrage par rôle
@@ -176,7 +207,7 @@ class DocumentRequestQueryService
         }
 
         // Responsable Division : filtrer par son type (utilise l'index dr_responsable_division_type_idx)
-        if ($role === 'chef-division' && $user->responsable_division_type) {
+        if ($role === 'responsable-division' && $user->responsable_division_type) {
             $query->where('dr.responsable_division_type', $user->responsable_division_type);
         }
 
@@ -208,7 +239,7 @@ class DocumentRequestQueryService
         // + infos étudiant + sous-requêtes histories
         $select = array_merge(
             ['dr.*', 'pi.birth_date', 'dept.name as department', 'ay.academic_year'],
-            array_map(fn($sq) => DB::raw($sq), self::HISTORY_SUBQUERIES),
+            array_map(fn($sq) => DB::raw($sq), $this->historySubqueries()),
             [
                 DB::raw(self::MATRICULE_SUBQUERY),
                 DB::raw('ps.level as study_level'),

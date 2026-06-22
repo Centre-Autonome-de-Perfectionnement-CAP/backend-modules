@@ -557,10 +557,15 @@ class NotificationService
 
     private function findUsersWithRole(string $roleSlug, ?string $responsableDivisionType): \Illuminate\Support\Collection
     {
+        // $roleSlug est toujours une valeur canonique (issue de WorkflowConstants),
+        // mais on ne sait pas quelle graphie est réellement stockée dans roles.slug
+        // (ex: 'chef-division' vs 'responsable-division') → on cherche toutes les variantes.
+        $slugVariants = WorkflowConstants::roleSlugVariants($roleSlug);
+
         $query = DB::table('users as u')
             ->join('role_user as ru', 'ru.user_id', '=', 'u.id')
             ->join('roles as r', 'r.id', '=', 'ru.role_id')
-            ->where('r.slug', $roleSlug)
+            ->whereIn('r.slug', $slugVariants)
             ->whereNotNull('u.email')
             ->whereNull('u.deleted_at')
             ->select(
@@ -568,10 +573,9 @@ class NotificationService
                 DB::raw("CONCAT(u.first_name, ' ', u.last_name) as name"),
                 'u.email',
                 'u.phone',
-                'u.responsable_division_type'
             );
 
-        if ($roleSlug === 'chef-division' && $responsableDivisionType) {
+        if ($roleSlug === 'responsable-division' && $responsableDivisionType) {
             $query->where('u.responsable_division_type', $responsableDivisionType);
         }
 

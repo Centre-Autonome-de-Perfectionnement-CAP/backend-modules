@@ -23,7 +23,7 @@ class DocumentRequestStatsController extends Controller
     public function __invoke(): JsonResponse
     {
         $user = Auth::user();
-        $role = $user->roles->first()?->slug ?? null;
+        $role = WorkflowConstants::canonicalRole($user->roles->first()?->slug ?? null);
 
         if (!in_array($role, WorkflowConstants::DIRECTION_ROLES) && $role !== 'admin') {
             return $this->unauthorizedResponse('Statistiques réservées aux rôles direction.');

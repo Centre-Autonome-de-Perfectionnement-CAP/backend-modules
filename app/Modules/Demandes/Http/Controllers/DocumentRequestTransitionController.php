@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Traits\ApiResponse;
 use App\Modules\Demandes\Http\Requests\TransitionRequest;
 use App\Modules\Demandes\Services\TransitionService;
+use App\Modules\Demandes\WorkflowConstants;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 
@@ -22,7 +23,7 @@ class DocumentRequestTransitionController extends Controller
 
     public function __invoke(TransitionRequest $request, int $id): JsonResponse
     {
-        $role    = Auth::user()->roles->first()?->slug ?? null;
+        $role    = WorkflowConstants::canonicalRole(Auth::user()->roles->first()?->slug ?? null);
         $action  = $request->validated()['action'];
         $payload = $request->validated();
 
