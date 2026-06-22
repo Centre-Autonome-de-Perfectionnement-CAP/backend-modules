@@ -75,9 +75,9 @@ class AttestationController extends Controller
      *   - absent de la liste   → non éligible (conditions non remplies)
      *
      * Logiques d'éligibilité :
-     *   attestation_passage     = isApproved && hasPayment && hasPass && studyLevel < yearsCount
-     *   attestation_definitive  = isApproved && hasPayment && hasPass && studyLevel >= yearsCount
-     *   attestation_inscription = isApproved && hasPayment
+     *   attestation_passage     = isApproved && hasPass && studyLevel < yearsCount
+     *   attestation_definitive  = isApproved && hasPass && studyLevel >= yearsCount
+     *   attestation_inscription = isApproved
      */
     public function getStatus(Request $request): JsonResponse
     {
@@ -119,17 +119,12 @@ class AttestationController extends Controller
         $hasPass    = $path
             && $path->year_decision === 'pass'
             && !empty($path->deliberation_date);
-        $hasPayment = DB::table('payments')
-            ->where('student_pending_student_id', $link->id)
-            ->where('status', 'approved')
-            ->whereNull('deleted_at')
-            ->exists();
         $isApproved = $pending->status === 'approved';
 
         $eligibility = [
-            'attestation_passage'     => $isApproved && $hasPayment && $hasPass && $yearsCount > 0 && $studyLevel < $yearsCount,
-            'attestation_definitive'  => $isApproved && $hasPayment && $hasPass && $yearsCount > 0 && $studyLevel >= $yearsCount,
-            'attestation_inscription' => $isApproved && $hasPayment,
+            'attestation_passage'     => $isApproved && $hasPass && $yearsCount > 0 && $studyLevel < $yearsCount,
+            'attestation_definitive'  => $isApproved && $hasPass && $yearsCount > 0 && $studyLevel >= $yearsCount,
+            'attestation_inscription' => $isApproved,
         ];
 
         // Construction de la liste des documents :
@@ -223,15 +218,7 @@ class AttestationController extends Controller
             $year = $link->pendingStudent->academicYear;
             if (!$year) continue;
 
-            // Condition 1 : paiement approuvé pour cette inscription
-            $hasPaid = DB::table('payments')
-                ->where('student_pending_student_id', $link->id)
-                ->where('status', 'approved')
-                ->whereNull('deleted_at')
-                ->exists();
-            if (!$hasPaid) continue;
-
-            // Condition 2 : parcours académique renseigné (niveau d'étude connu)
+            // Condition : parcours académique renseigné (niveau d'étude connu)
             $hasPath = AcademicPath::where('student_pending_student_id', $link->id)
                 ->whereNotNull('study_level')
                 ->exists();
