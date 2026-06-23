@@ -11,8 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('document_requests', function (Blueprint $table) {
-            $table->json('secretary_files')->nullable()->after('complement_files');
+        Schema::table('payments', function (Blueprint $table) {
+            // Supprimer la contrainte unique sur la colonne reference
+            $table->dropUnique(['reference']);
         });
     }
 
@@ -21,8 +22,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('document_requests', function (Blueprint $table) {
-            $table->dropColumn('secretary_files');
+        Schema::table('payments', function (Blueprint $table) {
+            // Remettre la contrainte unique sur la colonne reference
+            $table->unique('reference');
         });
     }
 };
