@@ -38,9 +38,8 @@ Route::prefix('attendance')->group(function () {
     // et calcule présent / retard léger / retard grave / absent
     Route::post('/scan',         [AttendanceController::class, 'scan']);
     Route::post('/close-course',       [AttendanceController::class, 'closeCourse']);
+    Route::get('/auto-close',            [AttendanceController::class, 'autoClose']);
     Route::get('/student-profile/{id}', [AttendanceController::class, 'studentProfile']);
-    Route::get('/live-stream',           [AttendanceController::class, 'liveStream']);
-    Route::get('/live-course',           [AttendanceController::class, 'liveCourse']);
 
     // Historique des scans d'un étudiant (debug / affichage détaillé)
     Route::get('/scan-history', [AttendanceController::class, 'scanHistory']);

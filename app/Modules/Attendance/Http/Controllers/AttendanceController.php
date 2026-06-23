@@ -199,10 +199,6 @@ class AttendanceController extends Controller
     }
 
     // ── SCAN depuis Arduino — entrée / sortie ─────────────────────────────────
-    // Format attendu : { fingerprint_index, date, time }
-    // "time" = heure exacte du scan ex: "18:07:23"
-    // Laravel détermine automatiquement entry ou exit
-    // et calcule le statut (présent / retard / absent)
     public function scan(Request $request): JsonResponse
     {
         $request->validate([
@@ -220,134 +216,35 @@ class AttendanceController extends Controller
         return response()->json($result, 200);
     }
 
-    // ── Historique des scans d'un étudiant pour une date ─────────────────────
-    // Utile pour debug ou affichage détaillé
+    // ── Auto-clôture des cours terminés (appelée en polling par le frontend) ──
+    public function autoClose(): JsonResponse
+    {
+        $result = $this->service->autoCloseFinishedCourses();
+        return response()->json(['success' => true, 'data' => $result]);
+    }
+
     // ── Profil étudiant — historique complet ─────────────────────────────────
-    // ── Server-Sent Events — pousse les nouveaux scans en temps réel ──────
-    public function liveStream(): void
-    {
-        header('Content-Type: text/event-stream');
-        header('Cache-Control: no-cache');
-        header('X-Accel-Buffering: no');
-        header('Connection: keep-alive');
-
-        $lastScanId = DB::table('attendance_scans')->max('id') ?? 0;
-
-        // Ping initial pour confirmer la connexion
-        echo "event: ping
-data: connected
-
-";
-        ob_flush(); flush();
-
-        $maxTime = time() + 55; // max 55s (avant timeout nginx/apache)
-
-        while (time() < $maxTime) {
-            // Chercher les nouveaux scans depuis le dernier ID connu
-            $newScans = DB::table('attendance_scans')
-                ->join('students',        'attendance_scans.student_id',        '=', 'students.id')
-                ->join('course_elements', 'attendance_scans.course_element_id', '=', 'course_elements.id')
-                ->where('attendance_scans.id', '>', $lastScanId)
-                ->select(
-                    'attendance_scans.id',
-                    'attendance_scans.student_id',
-                    'attendance_scans.scan_type',
-                    'attendance_scans.scan_time',
-                    'course_elements.name as matiere',
-                    DB::raw("CONCAT(students.first_name,' ',students.last_name) as student"),
-                )
-                ->get();
-
-            foreach ($newScans as $scan) {
-                // Récupérer le late_type depuis attendances
-                $att = DB::table('attendances')
-                    ->where('student_id',        $scan->student_id)
-                    ->where('course_element_id', DB::table('attendance_scans')->where('id',$scan->id)->value('course_element_id'))
-                    ->whereDate('date', now()->format('Y-m-d'))
-                    ->value('late_type');
-
-                $data = json_encode([
-                    'student_id' => $scan->student_id,
-                    'student'    => $scan->student,
-                    'scan_type'  => $scan->scan_type,
-                    'scan_time'  => $scan->scan_time,
-                    'matiere'    => $scan->matiere,
-                    'late_type'  => $att,
-                ]);
-
-                echo "event: scan
-data: {$data}
-
-";
-                ob_flush(); flush();
-                $lastScanId = max($lastScanId, $scan->id);
-            }
-
-            // Ping toutes les 5s pour maintenir la connexion
-            echo "event: ping
-data: ok
-
-";
-            ob_flush(); flush();
-
-            if (connection_aborted()) break;
-            sleep(3);
-        }
-    }
-
-    // ── Données du cours actif (pour LiveCourse.tsx) ───────────────────────
-    public function liveCourse(): JsonResponse
-    {
-        $sensor = $this->service->getSensorStatus();
-        if (!isset($sensor['active']) || !$sensor['active']) {
-            return response()->json(['success' => true, 'data' => []]);
-        }
-
-        $courseElementId = $sensor['course_element_id'];
-        $date = now()->format('Y-m-d');
-
-        $students = DB::table('attendances')
-            ->join('students', 'attendances.student_id', '=', 'students.id')
-            ->where('attendances.course_element_id', $courseElementId)
-            ->whereDate('attendances.date', $date)
-            ->select(
-                'students.id',
-                'students.matricule',
-                DB::raw("CONCAT(students.first_name,' ',students.last_name) as name"),
-                'attendances.status',
-                'attendances.late_type',
-                'attendances.first_entry',
-                'attendances.last_exit',
-                'attendances.total_minutes',
-            )
-            ->get()
-            ->map(fn($r) => (array)$r)
-            ->toArray();
-
-        return response()->json(['success' => true, 'data' => $students]);
-    }
-
     public function studentProfile(int $id): JsonResponse
     {
         $result = $this->service->getStudentProfile($id);
         return response()->json($result, $result['success'] ? 200 : 404);
     }
 
-    // ── Clôturer un cours manuellement (marquer absents les non-pointeurs) ──
+    // ── CORRIGÉ : Clôturer un cours manuellement (Absences ciblées - Option 1) ──
     public function closeCourse(Request $request): JsonResponse
     {
-        $courseElementId = $request->input('course_element_id');
-        $date            = $request->input('date', now()->format('Y-m-d'));
+        // On récupère les filtres envoyés par le bouton Option 1 du tableau de gestion
+        $filters = $request->only(['annee', 'filiere', 'niveau', 'matiere', 'heure']);
+        $date    = $request->input('date', now()->format('Y-m-d'));
 
-        if (!$courseElementId) {
-            return response()->json(['success' => false, 'message' => 'course_element_id requis'], 422);
-        }
-
-        $result = $this->service->closeCourseSession((int)$courseElementId, $date);
+        // On passe les filtres structurels directement au service pour générer les absences ciblées
+        $result = $this->service->closeCourseSessionWithFilters($filters, $date);
+        
         $status = $result['success'] ? 200 : 400;
         return response()->json($result, $status);
     }
 
+    // ── Historique des scans d'un étudiant pour une date ─────────────────────
     public function scanHistory(Request $request): JsonResponse
     {
         $request->validate([

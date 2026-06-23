@@ -112,7 +112,7 @@ class RealStudentsSeeder extends Seeder
             ['20265174', 'OGA',            'Tchekan Wifried',                  '0197328020', 'L1'],
         ];
 
-        // ── GÉNIE ÉLECTRIQUE (GE) — L1 — 27 étudiants ───────────────────────
+        // ── GÉNIE ÉLECTRIQUE (GE) — L1 — 29 étudiants ───────────────────────
         $etudiantsGE = [
             ['66414158', 'OBA',            'Chaffa Monboladji Marcellin',          '0166414158', 'L1'],
             ['20263273', 'ALLADASSI',      'Bignon Audrey',                        '0162414870', 'L1'],
@@ -141,6 +141,8 @@ class RealStudentsSeeder extends Seeder
             ['20266927', 'SEWAGNOUIN',     'Patrice',                              '0161224768', 'L1'],
             ['20269980', 'DEGBE',          'Credo Lionel',                         '0196842038', 'L1'],
             ['20265990', 'OGATCHOROUN',    'Daré Honoré Toundé Leader',            '0161549827', 'L1'],
+            ['60232STI24', 'TOHOUN',           'Elisabeth',                            '0196641753', 'L1'],
+            ['60232STI25', 'BIGUEZOTON',       'Mahougnon',                            '0157866357', 'L1'],
         ];
 
         // ── GÉNIE MÉCANIQUE ET ÉNERGÉTIQUE (GME) — L1 — 15 étudiants ────────

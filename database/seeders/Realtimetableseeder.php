@@ -12,31 +12,31 @@ use Carbon\Carbon;
  * Seeder basé sur les 3 vrais emplois du temps CAP-EPAC
  *
  * PDF 1 — GE & GME — 27/04/26 → 17/05/26
- *   LUN : Recherche Opérationnelle — Salle CAP 37 — 18h-22h
- *   MAR : Recherche Opérationnelle — Salle CAP 37 — 18h-22h
- *   MER : Analyse Numérique        — Salle CAP 37 — 18h-22h
- *   VEN : Analyse Numérique        — Salle CAP 37 — 18h-22h
- *   SAM : Recherche Opérationnelle — Salle CAP 37 — 08h-12h
+ * LUN : Recherche Opérationnelle — Salle CAP 37 — 08h-12h & 15h-19h
+ * MAR : Recherche Opérationnelle — Salle CAP 37 — 08h-12h & 15h-19h
+ * MER : Analyse Numérique        — Salle CAP 37 — 08h-12h & 15h-19h
+ * VEN : Analyse Numérique        — Salle CAP 37 — 08h-12h & 15h-19h
+ * SAM : Recherche Opérationnelle — Salle CAP 37 — 08h-12h
  *
  * PDF 2 — GC & TOPO — 27/04/26 → 17/05/26
- *   LUN : Initiation à l'Algorithmique — Amphi B — 18h-22h
- *   MAR : Initiation à l'Algorithmique — Amphi B — 18h-22h
- *   JEU : Mécanique des Fluides        — Amphi B — 18h-22h
- *   VEN : Mécanique des Fluides        — Amphi B — 18h-22h
- *   SAM : Mécanique des Fluides        — Amphi B — 08h-12h
+ * LUN : Initiation à l'Algorithmique — Amphi B — 08h-12h & 15h-19h
+ * MAR : Initiation à l'Algorithmique — Amphi B — 08h-12h & 15h-19h
+ * JEU : Mécanique des Fluides        — Amphi B — 08h-12h & 15h-19h
+ * VEN : Mécanique des Fluides        — Amphi B — 08h-12h & 15h-19h
+ * SAM : Mécanique des Fluides        — Amphi B — 08h-12h
  *
  * PDF 3 — GC & TOPO — 05/05/26 → 30/05/26
- *   LUN : Langage et Programmation — Amphi B — 18h-22h
- *   MAR : Langage et Programmation — Amphi B — 18h-22h
- *   JEU : Mécanique des Fluides    — Amphi B — 18h-22h
- *   VEN : Mécanique des Fluides    — Amphi B — 18h-22h
- *   SAM : Mécanique des Fluides    — Amphi B — 08h-12h
+ * LUN : Langage et Programmation — Amphi B — 08h-12h & 15h-19h
+ * MAR : Langage et Programmation — Amphi B — 08h-12h & 15h-19h
+ * JEU : Mécanique des Fluides    — Amphi B — 08h-12h & 15h-19h
+ * VEN : Mécanique des Fluides    — Amphi B — 08h-12h & 15h-19h
+ * SAM : Mécanique des Fluides    — Amphi B — 08h-12h
  *
  * Corrections appliquées :
- *  - recurrence_start_date ajoutée
- *  - late_type : 'retard' uniquement (pas de leger/grave)
- *  - flush final des présences garanti
- *  - résumé complet en fin d'exécution
+ * - recurrence_start_date ajoutée
+ * - late_type : 'retard' uniquement (pas de leger/grave)
+ * - flush final des présences garanti
+ * - résumé complet en fin d'exécution
  */
 class RealTimetableSeeder extends Seeder
 {
@@ -175,8 +175,6 @@ class RealTimetableSeeder extends Seeder
         ]);
 
         // ── Groupes de classe ─────────────────────────────────────────────────
-        // Pour GC/GT : cep_algo=Algo, cep_fluides=Fluides, cep_lang=Langage
-        // Pour GE/GME: cep_algo=Recherche, cep_fluides=Analyse, cep_lang=Recherche
         $groupDefs = [
             'GC'  => ['dept' => $depts['GC'],  'cep_algo' => $cepAlgo,     'cep_fluides' => $cepFluides,  'cep_lang' => $cepLangage],
             'GT'  => ['dept' => $depts['GT'],  'cep_algo' => $cepAlgo,     'cep_fluides' => $cepFluides,  'cep_lang' => $cepLangage],
@@ -202,28 +200,52 @@ class RealTimetableSeeder extends Seeder
         }
 
         // ── Définition des créneaux EDT ───────────────────────────────────────
-        // [filieres, course_key, course_element_id, room_id, day, start, end, date_from, date_to]
+        // Chaque créneau en semaine possède maintenant sa version Matin (08h-12h) et Après-midi (15h-19h)
         $edtEntries = [
 
             // ══ PDF 1 : GE & GME — 27/04/26 → 17/05/26 ══════════════════════
-            [['GE','GME'], 'recherche', $ceRecherche, $roomCAP37,  'monday',    '18:00:00','22:00:00','2026-04-27','2026-06-30'],
-            [['GE','GME'], 'recherche', $ceRecherche, $roomCAP37,  'tuesday',   '18:00:00','22:00:00','2026-04-27','2026-06-30'],
-            [['GE','GME'], 'analyse',   $ceAnalyse,   $roomCAP37,  'wednesday', '18:00:00','22:00:00','2026-04-27','2026-06-30'],
-            [['GE','GME'], 'analyse',   $ceAnalyse,   $roomCAP37,  'friday',    '18:00:00','22:00:00','2026-04-27','2026-06-30'],
+            [['GE','GME'], 'recherche', $ceRecherche, $roomCAP37,  'monday',    '08:00:00','12:00:00','2026-04-27','2026-06-30'],
+            [['GE','GME'], 'recherche', $ceRecherche, $roomCAP37,  'monday',    '15:00:00','19:00:00','2026-04-27','2026-06-30'],
+            
+            [['GE','GME'], 'recherche', $ceRecherche, $roomCAP37,  'tuesday',   '08:00:00','12:00:00','2026-04-27','2026-06-30'],
+            [['GE','GME'], 'recherche', $ceRecherche, $roomCAP37,  'tuesday',   '15:00:00','19:00:00','2026-04-27','2026-06-30'],
+            
+            [['GE','GME'], 'analyse',   $ceAnalyse,   $roomCAP37,  'wednesday', '08:00:00','12:00:00','2026-04-27','2026-06-30'],
+            [['GE','GME'], 'analyse',   $ceAnalyse,   $roomCAP37,  'wednesday', '15:00:00','19:00:00','2026-04-27','2026-06-30'],
+            
+            [['GE','GME'], 'analyse',   $ceAnalyse,   $roomCAP37,  'friday',    '08:00:00','12:00:00','2026-04-27','2026-06-30'],
+            [['GE','GME'], 'analyse',   $ceAnalyse,   $roomCAP37,  'friday',    '15:00:00','19:00:00','2026-04-27','2026-06-30'],
+            
             [['GE','GME'], 'recherche', $ceRecherche, $roomCAP37,  'saturday',  '08:00:00','12:00:00','2026-04-27','2026-06-30'],
 
             // ══ PDF 2 : GC & TOPO — 27/04/26 → 17/05/26 ═════════════════════
-            [['GC','GT'],  'algo',      $ceAlgo,      $roomAmphiB, 'monday',    '18:00:00','22:00:00','2026-04-27','2026-06-30'],
-            [['GC','GT'],  'algo',      $ceAlgo,      $roomAmphiB, 'tuesday',   '18:00:00','22:00:00','2026-04-27','2026-06-30'],
-            [['GC','GT'],  'fluides',   $ceFluides,   $roomAmphiB, 'thursday',  '18:00:00','22:00:00','2026-04-27','2026-06-30'],
-            [['GC','GT'],  'fluides',   $ceFluides,   $roomAmphiB, 'friday',    '18:00:00','22:00:00','2026-04-27','2026-06-30'],
+            [['GC','GT'],  'algo',      $ceAlgo,      $roomAmphiB, 'monday',    '08:00:00','12:00:00','2026-04-27','2026-06-30'],
+            [['GC','GT'],  'algo',      $ceAlgo,      $roomAmphiB, 'monday',    '15:00:00','19:00:00','2026-04-27','2026-06-30'],
+            
+            [['GC','GT'],  'algo',      $ceAlgo,      $roomAmphiB, 'tuesday',   '08:00:00','12:00:00','2026-04-27','2026-06-30'],
+            [['GC','GT'],  'algo',      $ceAlgo,      $roomAmphiB, 'tuesday',   '15:00:00','19:00:00','2026-04-27','2026-06-30'],
+            
+            [['GC','GT'],  'fluides',   $ceFluides,   $roomAmphiB, 'thursday',  '08:00:00','12:00:00','2026-04-27','2026-06-30'],
+            [['GC','GT'],  'fluides',   $ceFluides,   $roomAmphiB, 'thursday',  '15:00:00','19:00:00','2026-04-27','2026-06-30'],
+            
+            [['GC','GT'],  'fluides',   $ceFluides,   $roomAmphiB, 'friday',    '08:00:00','12:00:00','2026-04-27','2026-06-30'],
+            [['GC','GT'],  'fluides',   $ceFluides,   $roomAmphiB, 'friday',    '15:00:00','19:00:00','2026-04-27','2026-06-30'],
+            
             [['GC','GT'],  'fluides',   $ceFluides,   $roomAmphiB, 'saturday',  '08:00:00','12:00:00','2026-04-27','2026-06-30'],
 
             // ══ PDF 3 : GC & TOPO — 05/05/26 → 30/05/26 ═════════════════════
-            [['GC','GT'],  'langage',   $ceLangage,   $roomAmphiB, 'monday',    '18:00:00','22:00:00','2026-05-05','2026-06-30'],
-            [['GC','GT'],  'langage',   $ceLangage,   $roomAmphiB, 'tuesday',   '18:00:00','22:00:00','2026-05-05','2026-06-30'],
-            [['GC','GT'],  'fluides',   $ceFluides,   $roomAmphiB, 'thursday',  '18:00:00','22:00:00','2026-05-05','2026-06-30'],
-            [['GC','GT'],  'fluides',   $ceFluides,   $roomAmphiB, 'friday',    '18:00:00','22:00:00','2026-05-05','2026-06-30'],
+            [['GC','GT'],  'langage',   $ceLangage,   $roomAmphiB, 'monday',    '08:00:00','12:00:00','2026-05-05','2026-06-30'],
+            [['GC','GT'],  'langage',   $ceLangage,   $roomAmphiB, 'monday',    '15:00:00','19:00:00','2026-05-05','2026-06-30'],
+            
+            [['GC','GT'],  'langage',   $ceLangage,   $roomAmphiB, 'tuesday',   '08:00:00','12:00:00','2026-05-05','2026-06-30'],
+            [['GC','GT'],  'langage',   $ceLangage,   $roomAmphiB, 'tuesday',   '15:00:00','19:00:00','2026-05-05','2026-06-30'],
+            
+            [['GC','GT'],  'fluides',   $ceFluides,   $roomAmphiB, 'thursday',  '08:00:00','12:00:00','2026-05-05','2026-06-30'],
+            [['GC','GT'],  'fluides',   $ceFluides,   $roomAmphiB, 'thursday',  '15:00:00','19:00:00','2026-05-05','2026-06-30'],
+            
+            [['GC','GT'],  'fluides',   $ceFluides,   $roomAmphiB, 'friday',    '08:00:00','12:00:00','2026-05-05','2026-06-30'],
+            [['GC','GT'],  'fluides',   $ceFluides,   $roomAmphiB, 'friday',    '15:00:00','19:00:00','2026-05-05','2026-06-30'],
+            
             [['GC','GT'],  'fluides',   $ceFluides,   $roomAmphiB, 'saturday',  '08:00:00','12:00:00','2026-05-05','2026-06-30'],
         ];
 
@@ -236,17 +258,15 @@ class RealTimetableSeeder extends Seeder
                 $group  = $groups[$abbr];
                 $deptId = $group['dept']->id;
 
-                // Déterminer le bon CEP selon la matière et le groupe
                 $cepId = match($courseKey) {
                     'algo'      => $group['ceps']['cep_algo'],
                     'langage'   => $group['ceps']['cep_lang'],
                     'fluides'   => $group['ceps']['cep_fluides'],
-                    'recherche' => $group['ceps']['cep_algo'],    // GE/GME : cep_algo = cepRecherche
-                    'analyse'   => $group['ceps']['cep_fluides'], // GE/GME : cep_fluides = cepAnalyse
+                    'recherche' => $group['ceps']['cep_algo'],
+                    'analyse'   => $group['ceps']['cep_fluides'],
                     default     => $group['ceps']['cep_algo'],
                 };
 
-                // Créer le program si pas encore créé pour ce groupe+cep
                 $progKey = "{$group['id']}_{$cepId}";
                 if (!isset($programCache[$progKey])) {
                     $programCache[$progKey] = DB::table('programs')->insertGetId([
@@ -272,7 +292,7 @@ class RealTimetableSeeder extends Seeder
                     'start_time'             => $start,
                     'end_time'               => $end,
                     'is_recurring'           => 1,
-                    'recurrence_start_date'  => $dateFrom, // ✅ CORRIGÉ : date de début ajoutée
+                    'recurrence_start_date'  => $dateFrom,
                     'recurrence_end_date'    => $dateTo,
                     'excluded_dates'         => null,
                     'notes'                  => null,
@@ -289,7 +309,6 @@ class RealTimetableSeeder extends Seeder
         // ════════════════════════════════════════════════════════════════════
         //  GÉNÉRATION DES PRÉSENCES RÉALISTES
         //  Uniquement sur les dates passées (< aujourd'hui)
-        //  Taux : 90% présents · 10% absents · 12% de retards parmi présents
         // ════════════════════════════════════════════════════════════════════
         $this->command->info('📊 Génération des présences sur les dates passées...');
 
@@ -306,8 +325,8 @@ class RealTimetableSeeder extends Seeder
         }
 
         $today       = Carbon::today();
-        $absenceRate = 0.10; // 10% d'absents
-        $lateRate    = 0.12; // 12% de retards parmi présents
+        $absenceRate = 0.10;
+        $lateRate    = 0.12;
 
         $dayMap = [
             'monday'    => Carbon::MONDAY,
@@ -325,7 +344,6 @@ class RealTimetableSeeder extends Seeder
             $carbonDay = $dayMap[$day];
             $cursor    = Carbon::parse($dateFrom)->startOfDay();
 
-            // Avancer jusqu'au bon jour de la semaine
             if ($cursor->dayOfWeek !== $carbonDay) {
                 $cursor->next($carbonDay);
             }
@@ -361,12 +379,9 @@ class RealTimetableSeeder extends Seeder
                             'updated_at'        => now(),
                         ];
                     } else {
-                        // Déterminer présence, retard léger (16-30min) ou retard grave (>30min)
                         $isLate = (mt_rand(0, 99) / 100) < $lateRate;
 
                         if (!$isLate) {
-                            // À l'heure : entre 0 et 15min APRÈS le début du cours
-                            // On ne met pas d'offset négatif pour éviter des heures avant le cours
                             $entryOffset = mt_rand(0, 14);
                             $lateType    = null;
                             $onTime      = 1;
@@ -378,7 +393,7 @@ class RealTimetableSeeder extends Seeder
                         }
 
                         $entryMin = $courseStartMin + $entryOffset;
-                        $exitMin  = $courseEndMin + mt_rand(-5, 5);  // sortie autour de la fin du cours
+                        $exitMin  = $courseEndMin + mt_rand(-5, 5);
 
                         $entryH = intdiv($entryMin, 60) % 24;
                         $entryM = $entryMin % 60;
@@ -403,7 +418,6 @@ class RealTimetableSeeder extends Seeder
                         ];
                     }
 
-                    // Flush par batch pour éviter les timeouts mémoire
                     if (count($attendanceInserts) >= $batchSize) {
                         DB::table('attendances')->insert($attendanceInserts);
                         $attendanceInserts = [];
@@ -414,7 +428,6 @@ class RealTimetableSeeder extends Seeder
             }
         }
 
-        // ✅ Flush final garanti
         if (!empty($attendanceInserts)) {
             DB::table('attendances')->insert($attendanceInserts);
         }

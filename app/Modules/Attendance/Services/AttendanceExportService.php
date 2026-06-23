@@ -63,11 +63,14 @@ class AttendanceExportService
             ->leftJoin('rooms', 'attendances.room_id', '=', 'rooms.id')
             ->leftJoin('emploi_du_temps', function ($join) {
                 $join->on('emploi_du_temps.room_id', '=', 'attendances.room_id')
+                     // CORRECTION : Association stricte à la matière pour filtrer la bonne séance (matin vs après-midi)
+                     ->on('emploi_du_temps.course_element_id', '=', 'attendances.course_element_id')
                      ->whereRaw("emploi_du_temps.day_of_week = LOWER(DAYNAME(attendances.date))")
                      ->where('emploi_du_temps.is_cancelled', 0)
                      ->where('emploi_du_temps.is_active', 1);
             })
             ->select(
+                'attendances.id as attendance_id', // Sélection de l'id pour le groupement
                 'students.id',
                 DB::raw("CONCAT(students.first_name, ' ', students.last_name) as name"),
                 'students.matricule',
@@ -82,7 +85,7 @@ class AttendanceExportService
                 'rooms.name as salle',
                 'emploi_du_temps.day_of_week as edt_day',
                 'emploi_du_temps.start_time as edt_start',
-                'emploi_du_temps.end_time as edt_end',
+                'emploi_du_temps.end_time as edt_end'
             );
 
         if (!empty($filters['course_element_id'])) {
@@ -98,7 +101,10 @@ class AttendanceExportService
             $query->where('students.niveau', $filters['niveau']);
         }
 
-        $rows = $query->orderBy('students.last_name')->get()
+        // SÉCURITÉ ANTI-DOUBLON : GroupBy sur l'ID de la table des présences
+        $rows = $query->groupBy('attendances.id')
+            ->orderBy('students.last_name')
+            ->get()
             ->map(function ($row) use ($dayLabels) {
                 $heure = null;
                 if (!empty($row->edt_day)) {
@@ -171,11 +177,14 @@ class AttendanceExportService
             ->leftJoin('rooms', 'attendances.room_id', '=', 'rooms.id')
             ->leftJoin('emploi_du_temps', function ($join) {
                 $join->on('emploi_du_temps.room_id', '=', 'attendances.room_id')
+                     // CORRECTION : Association stricte à la matière ici aussi pour le tableau global de management
+                     ->on('emploi_du_temps.course_element_id', '=', 'attendances.course_element_id')
                      ->whereRaw("emploi_du_temps.day_of_week = LOWER(DAYNAME(attendances.date))")
                      ->where('emploi_du_temps.is_cancelled', 0)
                      ->where('emploi_du_temps.is_active', 1);
             })
             ->select(
+                'attendances.id as attendance_id', // Sélection de l'id pour le groupement
                 'students.id',
                 DB::raw("CONCAT(students.first_name, ' ', students.last_name) as name"),
                 'students.matricule',
@@ -189,7 +198,7 @@ class AttendanceExportService
                 'rooms.name as salle',
                 'emploi_du_temps.day_of_week as edt_day',
                 'emploi_du_temps.start_time as edt_start',
-                'emploi_du_temps.end_time as edt_end',
+                'emploi_du_temps.end_time as edt_end'
             );
 
         $annee = $filters['year'] ?? $filters['annee'] ?? null;
@@ -206,8 +215,12 @@ class AttendanceExportService
             }
         }
 
-        return $query->orderBy('attendances.date', 'desc')->orderBy('students.last_name')
-            ->limit(500)->get()
+        // SÉCURITÉ ANTI-DOUBLON : GroupBy sur l'ID de la table des présences
+        return $query->groupBy('attendances.id')
+            ->orderBy('attendances.date', 'desc')
+            ->orderBy('students.last_name')
+            ->limit(500)
+            ->get()
             ->map(function ($row) use ($dayLabels) {
                 $heure = null;
                 if (!empty($row->edt_day)) {
@@ -305,7 +318,7 @@ class AttendanceExportService
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    //  EXPORTS PAR SÉANCE / COURS  ← NOUVEAUX
+    //  EXPORTS PAR SÉANCE / COURS
     // ─────────────────────────────────────────────────────────────────────────
 
     public function exportCoursePdf(array $filters)
@@ -327,7 +340,6 @@ class AttendanceExportService
     public function exportCourseExcel(array $filters)
     {
         $data = $this->getCourseExportData($filters);
-        // On enrichit les filtres avec les méta pour l'en-tête Excel
         $enrichedFilters = array_merge($filters, [
             'matiere' => $data['meta']['matiere'],
             'filiere' => $data['meta']['filiere'],

@@ -8,6 +8,7 @@ use Carbon\Carbon;
 class AttendanceService
 {
     // =========================================================================
+   // =========================================================================
     //  CONSTANTES CAP-EPAC
     // =========================================================================
 
@@ -16,7 +17,7 @@ class AttendanceService
     // Fin du "retard léger" : 30 minutes après le début
     const GRACE_LATE_LIGHT_MINUTES = 30;
     // Durée minimale de présence : 70% du cours (240 min × 70% = 168 min)
-    const MIN_PRESENCE_MINUTES   = 168;
+    const MIN_PRESENCE_MINUTES   = 168; 
     // Ouverture du pointage : 60 min avant le cours
     const OPEN_BEFORE_MINUTES    = 60;
     // Fermeture du pointage : 15 min après la fin
@@ -49,6 +50,8 @@ class AttendanceService
             ->leftJoin('rooms',      'attendances.room_id',            '=', 'rooms.id')
             ->leftJoin('emploi_du_temps', function ($join) {
                 $join->on('emploi_du_temps.room_id', '=', 'attendances.room_id')
+                     // SÉCURITÉ MATIÈRE : Association stricte pour éviter les conflits matin/après-midi dans la même salle
+                     ->on('emploi_du_temps.course_element_id', '=', 'attendances.course_element_id')
                      ->whereRaw("emploi_du_temps.day_of_week = LOWER(DAYNAME(attendances.date))")
                      ->where('emploi_du_temps.is_cancelled', 0)
                      ->where('emploi_du_temps.is_active', 1);
@@ -89,12 +92,10 @@ class AttendanceService
             $heure = "{$day} {$start} - {$end}";
         }
 
-        // Label statut avec retard
         $statusLabel = match(true) {
-            $row->status === 'absent'                      => 'Absent',
-            
+            $row->status === 'absent' => 'Absent',
             $row->status === 'present' && ($row->late_type ?? null) !== null => 'Retard',
-            default                                        => 'Présent',
+            default => 'Présent',
         };
 
         return [
@@ -125,26 +126,29 @@ class AttendanceService
 
     public function getDashboardStats(array $filters): array
     {
-        $query = $this->applyFilters($this->baseQuery(), $filters);
+        // On s'assure de l'unicité de chaque fiche d'absence/présence
+        $query = $this->applyFilters($this->baseQuery(), $filters)->groupBy('attendances.id');
 
-        $total      = (clone $query)->count();
-        $present    = (clone $query)->where('attendances.status', 'present')->count();
-        $absent     = $total - $present;
-        $onTime     = (clone $query)->where('attendances.status', 'present')->whereNull('attendances.late_type')->count();
+        $total      = DB::table(DB::raw("({$query->toSql()}) as sub"))->mergeBindings($query)->count();
+        $present    = (clone $query)->where('attendances.status', 'present');
+        $totalPresences = DB::table(DB::raw("({$present->toSql()}) as sub"))->mergeBindings($present)->count();
         
+        $absent     = $total - $totalPresences;
         
-        $late = (clone $query)->where('attendances.status', 'present')->whereNotNull('attendances.late_type')->count();
+        $onTimeQuery = (clone $query)->where('attendances.status', 'present')->whereNull('attendances.late_type');
+        $onTime      = DB::table(DB::raw("({$onTimeQuery->toSql()}) as sub"))->mergeBindings($onTimeQuery)->count();
+        
+        $lateQuery   = (clone $query)->where('attendances.status', 'present')->whereNotNull('attendances.late_type');
+        $late        = DB::table(DB::raw("({$lateQuery->toSql()}) as sub"))->mergeBindings($lateQuery)->count();
 
-        // Les 3 taux sont calculés sur le MÊME dénominateur ($total)
-        // pour que présence + absence = 100% et que lateRate soit cohérent
-        $presenceRate = $total > 0 ? round(($present / $total) * 100, 1) : 0;
+        $presenceRate = $total > 0 ? round(($totalPresences / $total) * 100, 1) : 0;
         $absenceRate  = $total > 0 ? round(($absent  / $total) * 100, 1) : 0;
         $lateRate     = $total > 0 ? round(($late    / $total) * 100, 1) : 0;
 
         $monthlyPresence = $monthlyAbsence = $monthlyLate = array_fill(0, 12, 0);
 
-        $monthly = (clone $query)
-            ->selectRaw('MONTH(attendances.date) as month, attendances.status, attendances.late_type, COUNT(*) as cnt')
+        $monthly = $this->applyFilters($this->baseQuery(), $filters)
+            ->selectRaw('MONTH(attendances.date) as month, attendances.status, attendances.late_type, COUNT(DISTINCT attendances.id) as cnt')
             ->groupBy('month', 'attendances.status', 'attendances.late_type')
             ->get();
 
@@ -172,7 +176,7 @@ class AttendanceService
             'presence'       => $presenceRate,
             'absence'        => $absenceRate,
             'lateRate'       => $lateRate,
-            'totalPresences' => $present,
+            'totalPresences' => $totalPresences,
             'totalAbsences'  => $absent,
             'totalOnTime'    => $onTime,
             'totalLate'      => $late,
@@ -192,8 +196,8 @@ class AttendanceService
             'attendances.id',
             DB::raw("CONCAT(students.first_name,' ',students.last_name) as name"),
             'students.matricule', 'students.phone',
-            'students.fingerprint_index',  // ← nécessaire pour le bouton Pointer
-            'students.filiere_id',          // ← nécessaire pour identifier la classe
+            'students.fingerprint_index',
+            'students.filiere_id',
             'attendances.status', 'attendances.on_time', 'attendances.late_type',
             'attendances.first_entry', 'attendances.last_exit', 'attendances.total_minutes',
             'attendances.date',
@@ -203,12 +207,14 @@ class AttendanceService
             'rooms.name as salle',
             'emploi_du_temps.day_of_week as edt_day',
             'emploi_du_temps.start_time as edt_start',
-            'emploi_du_temps.end_time as edt_end',
+            'emploi_du_temps.end_time as edt_end'
         );
 
         $query = $this->applyFilters($query, $filters);
 
-        return $query->orderBy('attendances.date', 'desc')
+        // ANTI-DOUBLON : Regroupement par ID unique d'attendance
+        return $query->groupBy('attendances.id')
+            ->orderBy('attendances.date', 'desc')
             ->orderBy('students.last_name')
             ->get()->map(fn($r) => $this->mapRow($r))->toArray();
     }
@@ -223,8 +229,8 @@ class AttendanceService
             'attendances.id',
             DB::raw("CONCAT(students.first_name,' ',students.last_name) as name"),
             'students.matricule', 'students.phone',
-            'students.fingerprint_index',  // ← nécessaire pour le bouton Pointer
-            'students.filiere_id',          // ← nécessaire pour identifier la classe
+            'students.fingerprint_index',
+            'students.filiere_id',
             'attendances.status', 'attendances.on_time', 'attendances.late_type',
             'attendances.first_entry', 'attendances.last_exit', 'attendances.total_minutes',
             'attendances.date',
@@ -234,16 +240,16 @@ class AttendanceService
             'rooms.name as salle',
             'emploi_du_temps.day_of_week as edt_day',
             'emploi_du_temps.start_time as edt_start',
-            'emploi_du_temps.end_time as edt_end',
+            'emploi_du_temps.end_time as edt_end'
         );
 
         if (!empty($filters['course_element_id'])) $query->where('attendances.course_element_id', $filters['course_element_id']);
         if (!empty($filters['date']))              $query->whereDate('attendances.date', $filters['date']);
 
-        $rows    = $query->orderBy('students.last_name')->get()->map(fn($r) => $this->mapRow($r))->toArray();
+        // ANTI-DOUBLON : Regroupement par ID unique d'attendance
+        $rows    = $query->groupBy('attendances.id')->orderBy('students.last_name')->get()->map(fn($r) => $this->mapRow($r))->toArray();
         $total   = count($rows);
         $present = count(array_filter($rows, fn($r) => $r['status'] === 'present'));
-        $late    = count(array_filter($rows, fn($r) => $r['status'] === 'present' && $r['late_type'] !== null));
 
         return [
             'list'    => $rows,
@@ -268,7 +274,7 @@ class AttendanceService
             ->selectRaw('
                 DATE(attendances.date) as date,
                 course_elements.name as matiere,
-                COUNT(*) as total,
+                COUNT(DISTINCT attendances.id) as total,
                 SUM(attendances.status = "present") as presents,
                 SUM(attendances.status = "absent") as absents,
                 SUM(attendances.late_type IS NOT NULL) as retards
@@ -302,7 +308,7 @@ class AttendanceService
             ->where('emploi_du_temps.is_cancelled', 0)
             ->where('emploi_du_temps.is_active', 1)
             ->whereRaw("LOWER(DAYNAME(?)) = emploi_du_temps.day_of_week", [$now])
-            ->whereRaw("TIME(?) >= SUBTIME(emploi_du_temps.start_time, '01:00:00')", [$now->toTimeString()])
+            ->whereRaw("TIME(?) >= SUBTIME(emploi_du_temps.start_time, '00:15:00')", [$now->toTimeString()])
             ->whereRaw("TIME(?) <= ADDTIME(emploi_du_temps.end_time, '00:15:00')", [$now->toTimeString()])
             ->select(
                 'course_elements.id as course_element_id',
@@ -317,7 +323,7 @@ class AttendanceService
             $startCarbon = Carbon::today()->setTimeFromTimeString($active->start_time);
             $nowTime     = $now->copy();
 
-            $minutesLate = $nowTime->diffInMinutes($startCarbon, false); // négatif = après le début
+            $minutesLate = $nowTime->diffInMinutes($startCarbon, false);
             $minutesLate = abs($minutesLate) * ($nowTime->gt($startCarbon) ? 1 : -1);
 
             $isOnTime = $minutesLate <= self::GRACE_ON_TIME_MINUTES;
@@ -407,25 +413,15 @@ class AttendanceService
     }
 
     // =========================================================================
-    //  SCAN DEPUIS ARDUINO — LOGIQUE ENTRÉE / SORTIE
-    //
-    //  Arduino envoie : { fingerprint_index, date, time }
-    //  Laravel :
-    //    1. Retrouve l'étudiant via fingerprint_index
-    //    2. Vérifie que le cours est actif + dans la fenêtre de pointage
-    //    3. Détermine entry ou exit selon le dernier scan
-    //    4. Insère dans attendance_scans
-    //    5. Recalcule la session (total_minutes, status, late_type)
-    //    6. Upsert dans attendances
+    //  SCAN DEPUIS ARDUINO
     // =========================================================================
 
     public function recordAttendanceFromArduino(array $data): array
     {
         $fingerprintIndex = $data['fingerprint_index'];
-        $date             = $data['date'];           // "2026-05-19"
-        $scanTimeStr      = $data['time'];           // "18:07:23"
+        $date             = $data['date'];
+        $scanTimeStr      = $data['time'];
 
-        // 1. Retrouver l'étudiant
         $student = DB::table('students')
             ->where('fingerprint_index', $fingerprintIndex)
             ->where('fingerprint_status', true)
@@ -437,14 +433,13 @@ class AttendanceService
 
         $now = Carbon::parse($date.' '.$scanTimeStr);
 
-        // 2. Trouver le cours actif dans la fenêtre de pointage
         $course = DB::table('emploi_du_temps')
             ->join('course_elements', 'emploi_du_temps.course_element_id', '=', 'course_elements.id')
             ->leftJoin('rooms', 'emploi_du_temps.room_id', '=', 'rooms.id')
             ->where('emploi_du_temps.is_cancelled', 0)
             ->where('emploi_du_temps.is_active', 1)
             ->whereRaw("LOWER(DAYNAME(?)) = emploi_du_temps.day_of_week", [$now])
-            ->whereRaw("TIME(?) >= SUBTIME(emploi_du_temps.start_time, '01:00:00')", [$now->toTimeString()])
+            ->whereRaw("TIME(?) >= SUBTIME(emploi_du_temps.start_time, '00:15:00')", [$now->toTimeString()])
             ->whereRaw("TIME(?) <= ADDTIME(emploi_du_temps.end_time, '00:15:00')", [$now->toTimeString()])
             ->select(
                 'course_elements.id as course_element_id',
@@ -464,26 +459,21 @@ class AttendanceService
             ];
         }
 
-        // 3. Initialiser les absences de toute la classe au PREMIER pointage du cours
-        //    → Vérifier si c'est le tout premier scan de ce cours pour cette date
         $firstScanOfCourse = !DB::table('attendance_scans')
             ->where('course_element_id', $course->course_element_id)
             ->where('date', $date)
             ->exists();
 
         if ($firstScanOfCourse) {
-            // Récupérer tous les étudiants de la même filière/classe
-            // (même department que l'étudiant qui vient de pointer)
             $classmateIds = DB::table('students')
                 ->where('filiere_id',       $student->filiere_id)
                 ->where('academic_year_id', $student->academic_year_id)
-                ->where('id', '!=', $student->id) // on exclut celui qui pointe
+                ->where('id', '!=', $student->id)
                 ->pluck('id');
 
             $now_ts = now();
             $absentRows = [];
             foreach ($classmateIds as $classmateId) {
-                // Ne pas écraser une présence existante (cas re-pointage)
                 $alreadyExists = DB::table('attendances')
                     ->where('student_id',        $classmateId)
                     ->where('course_element_id', $course->course_element_id)
@@ -510,14 +500,12 @@ class AttendanceService
             }
 
             if (!empty($absentRows)) {
-                // Insérer par batch de 100 pour éviter les timeouts
                 foreach (array_chunk($absentRows, 100) as $chunk) {
                     DB::table('attendances')->insert($chunk);
                 }
             }
         }
 
-        // 4. Déterminer le type : entry ou exit
         $lastScan = DB::table('attendance_scans')
             ->where('student_id', $student->id)
             ->where('date', $date)
@@ -525,12 +513,11 @@ class AttendanceService
             ->orderByDesc('scan_time')
             ->first();
 
-        $scanType = 'entry'; // défaut
+        $scanType = 'entry'; 
         if ($lastScan) {
             $scanType = $lastScan->scan_type === 'entry' ? 'exit' : 'entry';
         }
 
-        // 5. Insérer le scan
         DB::table('attendance_scans')->insert([
             'student_id'        => $student->id,
             'course_element_id' => $course->course_element_id,
@@ -542,10 +529,8 @@ class AttendanceService
             'updated_at'        => now(),
         ]);
 
-        // 6. Recalculer la session
         $session = $this->computeSession($student->id, $course, $date);
 
-        // 7. Upsert dans attendances
         $existing = DB::table('attendances')
             ->where('student_id', $student->id)
             ->where('course_element_id', $course->course_element_id)
@@ -590,8 +575,7 @@ class AttendanceService
     }
 
     // =========================================================================
-    //  CALCUL DE SESSION
-    //  Additionne toutes les plages entry→exit pour obtenir le temps réel
+    //  CALCUL DE SÉANCE
     // =========================================================================
 
     private function computeSession(int $studentId, object $course, string $date): array
@@ -628,12 +612,7 @@ class AttendanceService
             }
         }
 
-        // Si l'étudiant est encore "entré" sans sortie enregistrée → on ne compte pas encore
-        // (la session se fermera quand il repointe pour sortir)
-
-        // Calculer le statut selon les règles CAP-EPAC
         $courseStart = Carbon::parse($date.' '.$course->start_time);
-
         $lateType = null;
         $onTime   = false;
         $status   = 'absent';
@@ -641,25 +620,18 @@ class AttendanceService
         if ($firstEntry) {
             $firstEntryCarbon = Carbon::parse($date.' '.$firstEntry);
             $minutesAfterStart = $courseStart->diffInMinutes($firstEntryCarbon, false);
-            // positif = après le début, négatif = avant le début
 
             if ($minutesAfterStart <= self::GRACE_ON_TIME_MINUTES) {
-                // Arrivé dans la grâce → à l'heure
                 $lateType = null;
                 $onTime   = true;
-            } elseif ($minutesAfterStart <= self::GRACE_LATE_LIGHT_MINUTES) {
-                $lateType = 'retard';
-                $onTime   = false;
             } else {
                 $lateType = 'retard';
                 $onTime   = false;
             }
 
-            // Statut final basé sur le temps de présence
             if ($totalMinutes >= self::MIN_PRESENCE_MINUTES) {
                 $status = 'present';
             } else {
-                // Pas assez de temps → absent (comme demandé : pas de "partiel")
                 $status   = 'absent';
                 $lateType = null;
                 $onTime   = false;
@@ -677,11 +649,86 @@ class AttendanceService
     }
 
     // =========================================================================
-    //  PROFIL ÉTUDIANT — historique complet
+    //  CLÔTURE AUTOMATIQUE
     // =========================================================================
+    
+    public function autoCloseFinishedCourses(): array
+    {
+        $now  = Carbon::now();
+        $date = $now->format('Y-m-d');
+        $dayEn = strtolower($now->englishDayOfWeek);
+
+        $coursTermines = DB::table('emploi_du_temps')
+            ->join('course_elements', 'emploi_du_temps.course_element_id', '=', 'course_elements.id')
+            ->join('departments',     'emploi_du_temps.department_id',     '=', 'departments.id')
+            ->where('emploi_du_temps.is_active',    1)
+            ->where('emploi_du_temps.is_cancelled', 0)
+            ->where('emploi_du_temps.day_of_week',  $dayEn)
+            ->whereRaw("TIME(?) > ADDTIME(emploi_du_temps.end_time, '00:15:00')", [$now->toTimeString()])
+            ->where(function($q) use ($date) {
+                $q->whereNull('emploi_du_temps.recurrence_start_date')
+                  ->orWhere('emploi_du_temps.recurrence_start_date', '<=', $date);
+            })
+            ->where(function($q) use ($date) {
+                $q->whereNull('emploi_du_temps.recurrence_end_date')
+                  ->orWhere('emploi_du_temps.recurrence_end_date', '>=', $date);
+            })
+            ->select(
+                'emploi_du_temps.course_element_id',
+                'emploi_du_temps.department_id',
+                'emploi_du_temps.room_id',
+                'course_elements.name as matiere',
+                'departments.abbreviation as filiere',
+            )
+            ->get();
+
+        $totalAbsents = 0;
+
+        foreach ($coursTermines as $cours) {
+            $yearId = DB::table('academic_years')->orderByDesc('id')->value('id');
+
+            $students = DB::table('students')
+                ->where('filiere_id',       $cours->department_id)
+                ->where('academic_year_id', $yearId)
+                ->pluck('id');
+
+            $now_ts = now();
+            foreach ($students as $studentId) {
+                $existing = DB::table('attendances')
+                    ->where('student_id',        $studentId)
+                    ->where('course_element_id', $cours->course_element_id)
+                    ->whereDate('date',           $date)
+                    ->first();
+
+                if (!$existing) {
+                    DB::table('attendances')->insert([
+                        'student_id'        => $studentId,
+                        'course_element_id' => $cours->course_element_id,
+                        'room_id'           => $cours->room_id,
+                        'date'              => $date,
+                        'status'            => 'absent',
+                        'on_time'           => 0,
+                        'late_type'         => null,
+                        'first_entry'       => null,
+                        'last_exit'         => null,
+                        'total_minutes'     => 0,
+                        'created_at'        => $now_ts,
+                        'updated_at'        => $now_ts,
+                    ]);
+                    $totalAbsents++;
+                }
+            }
+        }
+
+        return ['closed' => count($coursTermines), 'absents_marques' => $totalAbsents];
+    }
+
+    // =========================================================================
+    //  PROFIL ÉTUDIANT
+    // =========================================================================
+    
     public function getStudentProfile(int $studentId): array
     {
-        // Infos de l'étudiant
         $student = DB::table('students')
             ->join('departments',    'students.filiere_id',       '=', 'departments.id')
             ->join('academic_years', 'students.academic_year_id', '=', 'academic_years.id')
@@ -702,7 +749,6 @@ class AttendanceService
 
         if (!$student) return ['success' => false, 'message' => 'Étudiant introuvable'];
 
-        // Historique complet de ses présences
         $history = DB::table('attendances')
             ->join('course_elements', 'attendances.course_element_id', '=', 'course_elements.id')
             ->where('attendances.student_id', $studentId)
@@ -733,26 +779,21 @@ class AttendanceService
 
     // =========================================================================
     //  CLÔTURER UN COURS MANUELLEMENT
-    //  Marque absents tous les étudiants sans pointage pour ce cours/date
     // =========================================================================
+    
     public function closeCourseSession(int $courseElementId, string $date): array
     {
-        // Récupérer les infos du cours
         $course = DB::table('course_elements')->where('id', $courseElementId)->first();
         if (!$course) return ['success' => false, 'message' => 'Cours introuvable'];
 
-        // Récupérer la filière associée à ce cours via l'emploi du temps
         $edt = DB::table('emploi_du_temps')
             ->where('course_element_id', $courseElementId)
             ->where('is_active', 1)
             ->first();
         if (!$edt) return ['success' => false, 'message' => 'Emploi du temps introuvable'];
 
-        // Récupérer l'année académique active
-        $yearId = DB::table('academic_years')
-            ->orderByDesc('id')->value('id');
+        $yearId = DB::table('academic_years')->orderByDesc('id')->value('id');
 
-        // Tous les étudiants de la filière
         $students = DB::table('students')
             ->where('filiere_id',       $edt->department_id)
             ->where('academic_year_id', $yearId)
@@ -770,7 +811,6 @@ class AttendanceService
                 ->first();
 
             if (!$existing) {
-                // Pas de pointage → ABSENT
                 DB::table('attendances')->insert([
                     'student_id'        => $studentId,
                     'course_element_id' => $courseElementId,
@@ -802,7 +842,6 @@ class AttendanceService
         ];
     }
 
-    // Message LCD pour l'Arduino
     private function buildScanMessage(string $scanType, array $session, object $student): string
     {
         $name = $student->first_name.' '.$student->last_name;
