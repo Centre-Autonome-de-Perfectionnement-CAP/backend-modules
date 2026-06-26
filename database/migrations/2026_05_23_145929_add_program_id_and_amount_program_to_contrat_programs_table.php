@@ -9,106 +9,68 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Vérifier que la table existe
-        if (!Schema::hasTable('contrat_programs')) {
-            return;
+        // Ajouter program_id s'il n'existe pas
+        if (!Schema::hasColumn('contrat_programs', 'program_id')) {
+            Schema::table('contrat_programs', function (Blueprint $table) {
+                $table->unsignedBigInteger('program_id')->nullable();
+            });
+        } else {
+            // Le rendre nullable s'il existe déjà
+            Schema::table('contrat_programs', function (Blueprint $table) {
+                $table->unsignedBigInteger('program_id')->nullable()->change();
+            });
         }
 
-        // 1. Rendre program_id nullable si la colonne existe
-        if (Schema::hasColumn('contrat_programs', 'program_id')) {
-            try {
-                Schema::table('contrat_programs', function (Blueprint $table) {
-                    $table->unsignedBigInteger('program_id')
-                        ->nullable()
-                        ->change();
-                });
-            } catch (\Throwable $e) {
-                // Ignorer l'erreur si le changement est impossible
-            }
+        // Nettoyer les références invalides
+        DB::statement("
+            UPDATE contrat_programs
+            SET program_id = NULL
+            WHERE program_id IS NOT NULL
+            AND program_id NOT IN (SELECT id FROM programs)
+        ");
+
+        // Ajouter la clé étrangère si elle n'existe pas
+        $fkExists = DB::table('information_schema.TABLE_CONSTRAINTS')
+            ->where('TABLE_SCHEMA', DB::raw('DATABASE()'))
+            ->where('TABLE_NAME', 'contrat_programs')
+            ->where('CONSTRAINT_NAME', 'contrat_programs_program_id_foreign')
+            ->exists();
+
+        if (!$fkExists) {
+            Schema::table('contrat_programs', function (Blueprint $table) {
+                $table->foreign('program_id')
+                    ->references('id')
+                    ->on('programs')
+                    ->cascadeOnDelete();
+            });
         }
 
-        // 2. Nettoyer les données invalides
-        if (
-            Schema::hasColumn('contrat_programs', 'program_id') &&
-            Schema::hasTable('programs')
-        ) {
-            try {
-                DB::statement("
-                    UPDATE contrat_programs
-                    SET program_id = NULL
-                    WHERE program_id IS NOT NULL
-                    AND program_id NOT IN (SELECT id FROM programs)
-                ");
-            } catch (\Throwable $e) {
-                // Ignorer
-            }
-        }
-
-        // 3. Ajouter la FK uniquement si nécessaire
-        if (
-            Schema::hasColumn('contrat_programs', 'program_id') &&
-            Schema::hasTable('programs')
-        ) {
-            try {
-                $fkExists = DB::table('information_schema.TABLE_CONSTRAINTS')
-                    ->where('TABLE_SCHEMA', DB::raw('DATABASE()'))
-                    ->where('TABLE_NAME', 'contrat_programs')
-                    ->where('CONSTRAINT_NAME', 'contrat_programs_program_id_foreign')
-                    ->exists();
-
-                if (!$fkExists) {
-                    Schema::table('contrat_programs', function (Blueprint $table) {
-                        $table->foreign('program_id')
-                            ->references('id')
-                            ->on('programs')
-                            ->cascadeOnDelete();
-                    });
-                }
-            } catch (\Throwable $e) {
-                // Ignorer
-            }
-        }
-
-        // 4. Ajouter amount_program si absent
+        // Ajouter amount_program s'il n'existe pas
         if (!Schema::hasColumn('contrat_programs', 'amount_program')) {
-            try {
-                Schema::table('contrat_programs', function (Blueprint $table) {
-                    $table->decimal('amount_program', 15, 2)
-                        ->nullable()
-                        ->after('program_id');
-                });
-            } catch (\Throwable $e) {
-                // Ignorer
-            }
+            Schema::table('contrat_programs', function (Blueprint $table) {
+                $table->decimal('amount_program', 15, 2)
+                    ->nullable();
+            });
         }
     }
 
     public function down(): void
     {
-        if (!Schema::hasTable('contrat_programs')) {
-            return;
-        }
+        Schema::table('contrat_programs', function (Blueprint $table) {
 
-        // Supprimer la FK si elle existe
-        if (Schema::hasColumn('contrat_programs', 'program_id')) {
-            try {
-                Schema::table('contrat_programs', function (Blueprint $table) {
-                    $table->dropForeign('contrat_programs_program_id_foreign');
-                });
-            } catch (\Throwable $e) {
-                // Ignorer
+            if (Schema::hasColumn('contrat_programs', 'amount_program')) {
+                $table->dropColumn('amount_program');
             }
-        }
 
-        // Supprimer amount_program si elle existe
-        if (Schema::hasColumn('contrat_programs', 'amount_program')) {
             try {
-                Schema::table('contrat_programs', function (Blueprint $table) {
-                    $table->dropColumn('amount_program');
-                });
+                $table->dropForeign(['program_id']);
             } catch (\Throwable $e) {
-                // Ignorer
+                // Ignore si la FK n'existe pas
             }
-        }
+
+            if (Schema::hasColumn('contrat_programs', 'program_id')) {
+                $table->dropColumn('program_id');
+            }
+        });
     }
 };

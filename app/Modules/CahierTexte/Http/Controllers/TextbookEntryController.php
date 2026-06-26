@@ -34,13 +34,13 @@ class TextbookEntryController extends Controller{
         $this->textbookEntryService = $textbookEntryService;
     }
 
- 
 
-    
+
+
     public function index(Request $request) {
         $perPage = $request->integer('per_page', 15);
         try {
-    
+
             $query = TextbookEntry::with([
                 'program.classGroup.department.cycle',  // Charger les relations imbriquées
                 'program.courseElementProfessor.courseElement',
@@ -72,11 +72,11 @@ class TextbookEntryController extends Controller{
                 $course = $cep?->courseElement;
                 $professor = $cep?->professor;
                 $classGroup = $program?->classGroup;
-                
+
                 // Récupérer le département et le cycle pour formater la classe
                 $department = $classGroup?->department;
                 $cycle = $department?->cycle;
-                
+
                 // Formater le nom de la classe: Department.name - Cycle.years_count - ClassGroup.group_name
                 $formattedClassName = null;
                 if ($classGroup) {
@@ -85,7 +85,7 @@ class TextbookEntryController extends Controller{
                     $groupName = $classGroup->group_name ?? '';
                     $abs_dep = $department?->abbreviation ?? '';
                     $abs = $abs_dep." ". $cycleYears ." ". $groupName;
-                    
+
                     $parts = array_filter([$departmentName, $cycleYears, $groupName]);
                     $formattedClassName = !empty($parts) ? implode(' - ', $parts) : $groupName;
 
@@ -113,7 +113,7 @@ class TextbookEntryController extends Controller{
                         'email' => $professor->email ?? '',
                         'phone' => $professor->phone ?? '',
                         'rib_number' => $professor->rib_number ?? '',
-                        
+
                     ] : null,
 
                     'class_group' => $classGroup ? [
@@ -183,7 +183,7 @@ class TextbookEntryController extends Controller{
                 'success' => false,
                 'message' => 'Entrée non trouvée',
                 'error' => $e->getMessage(),
-            ], 404); 
+            ], 404);
         }
     }
 
@@ -274,7 +274,7 @@ class TextbookEntryController extends Controller{
         }
     }
 
-    
+
     public function validateEntry(Request $request, $id) {
         try {
             $entry = $this->textbookEntryService->validate($id, $request->user());
@@ -642,7 +642,7 @@ class TextbookEntryController extends Controller{
                 'data' => array_values($result)
             ]);
 
-        } 
+        }
         catch (\Throwable $e) {
 
             return response()->json([
@@ -652,7 +652,7 @@ class TextbookEntryController extends Controller{
             ], 500);
         }
     }
-    
+
     public function exportPaymentExcel(Request $request){
         $request->validate([
             'academic_year_id' => 'required|integer|exists:academic_years,id',
@@ -902,7 +902,7 @@ class TextbookEntryController extends Controller{
                     $department = $departments[$contract->cycle_id] ?? null;
 
                     $hoursEffectuees = (float) ($hoursByProgram[$cp->program_id]->total_hours ?? 0);
-                    $hoursPlanned    = (float) ($program->quota_hours ?? 0);
+                    $hoursPlanned    = (float) ($courseElements[$cep->hours] ?? 0);
                     $tauxHoraire     = (float) ($professor->hourly_rate ?? 6000);
 
                     $montantHeures = $hoursEffectuees * $tauxHoraire;
@@ -936,7 +936,7 @@ class TextbookEntryController extends Controller{
                         'filiere'              => $department->abbreviation
                             ?? $department->name
                             ?? '',
-                        'hours_planned'        => $hoursPlanned,
+                        'hours_planned'        => $course->hours ?? 00,
                         'hours_done'           => $hoursEffectuees,
                         'taux_horaire'         => $tauxHoraire,
                         'montant_heures'       => $montantHeures,
@@ -1263,7 +1263,7 @@ class TextbookEntryController extends Controller{
             // FIN DE SECTION — le code original reprend ici avec DB::commit();
             // ─────────────────────────────────────────────────────────────────
 
-    
+
 
             Log::info('Export Excel généré avec succès', [
                 'academic_year_id' => $academicYear->id,
@@ -1346,7 +1346,7 @@ class TextbookEntryController extends Controller{
             ], 500);
         }
     }
-    
-    
+
+
 
 }
