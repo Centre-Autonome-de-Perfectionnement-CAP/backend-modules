@@ -516,7 +516,7 @@ class TextbookEntryController extends Controller{
                 ->get([
                     'id',
                     'name',
-                    'hours'
+                    'hours',
                 ])
                 ->keyBy('id');
 
@@ -836,7 +836,8 @@ class TextbookEntryController extends Controller{
                 ->get([
                     'id',
                     'name',
-                    'code'
+                    'code',
+                    'hours',
                 ])
                 ->keyBy('id');
 
@@ -902,7 +903,7 @@ class TextbookEntryController extends Controller{
                     $department = $departments[$contract->cycle_id] ?? null;
 
                     $hoursEffectuees = (float) ($hoursByProgram[$cp->program_id]->total_hours ?? 0);
-                    $hoursPlanned    = (float) ($courseElements[$cep->hours] ?? 0);
+                    $hoursPlanned = (float) ($course?->hours ?? 0);
                     $tauxHoraire     = (float) ($professor->hourly_rate ?? 6000);
 
                     $montantHeures = $hoursEffectuees * $tauxHoraire;
@@ -930,13 +931,18 @@ class TextbookEntryController extends Controller{
                             'montant_total' => 0,
                         ];
                     }
+                    Log::info('DEBUG course object', [
+    'course' => $course ? $course->toArray() : null,
+    'cep'    => $cep ? $cep->toArray() : null,
+    'program'=> $program ? $program->toArray() : null,
+]);
 
                     $rows[$profKey]['courses'][] = [
                         'course_name'          => $course->name ?? '',
                         'filiere'              => $department->abbreviation
                             ?? $department->name
                             ?? '',
-                        'hours_planned'        => $course->hours ?? 00,
+                        'hours_planned' => (float) ($course?->hours ?? 0),
                         'hours_done'           => $hoursEffectuees,
                         'taux_horaire'         => $tauxHoraire,
                         'montant_heures'       => $montantHeures,
