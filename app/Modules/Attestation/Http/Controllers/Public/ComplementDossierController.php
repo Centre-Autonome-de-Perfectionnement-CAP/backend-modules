@@ -16,6 +16,7 @@ use Illuminate\Support\Str;
  * Complément de dossier — site vitrine CAP-EPAC
  *
  * GET  /api/attestations/demandes/complement/find
+<<<<<<< HEAD
  * POST /api/attestations/demandes/complement
  *
  * WhatsApp est obligatoire à la soumission du complément.
@@ -24,6 +25,21 @@ use Illuminate\Support\Str;
  * Notifications déclenchées automatiquement :
  *  → Étudiant   : email + WhatsApp (accusé de réception)
  *  → Secrétaire : email + WhatsApp (nouveau complément à traiter)
+=======
+ *      → Retrouve une document_request par référence OU matricule
+ *      → Par matricule : retourne TOUTES les demandes liées (l'étudiant choisit)
+ *      → Par référence : retourne la demande unique
+ *      → Retourne infos basiques : référence, type, date soumission, étudiant
+ *
+ * POST /api/attestations/demandes/complement
+ *      → Enregistre les fichiers dans le dossier existant de la demande
+ *      → Stratégie : ÉCRASEMENT par clé (une nouvelle version remplace l'ancienne)
+ *      → Stockage : storage/app/public/attestation-demandes/{type}/{REFERENCE}/complement/{key}.{ext}
+ *      →           storage/app/public/bulletins-demandes/{REFERENCE}/complement/{key}.{ext}
+ *      → Met à jour complement_at sur la demande
+ *      → Envoie un mail de confirmation au demandeur
+ *      → Envoie une notification au secrétariat
+>>>>>>> 11c3939 (Complément dossier)
  */
 class ComplementDossierController extends Controller
 {
@@ -54,17 +70,27 @@ class ComplementDossierController extends Controller
         'bulletin_notes'          => 'Bulletin de Notes',
     ];
 
+<<<<<<< HEAD
+=======
+    /**
+     * Correspond exactement à TYPE_TO_FOLDER dans DemandeController,
+     * pour reconstituer le chemin du dossier existant de la demande.
+     */
+>>>>>>> 11c3939 (Complément dossier)
     private const TYPE_TO_FOLDER = [
         'attestation_definitive'  => 'definitive',
         'attestation_inscription' => 'inscription',
         'attestation_passage'     => 'passage',
     ];
 
+<<<<<<< HEAD
     public function __construct(
         protected NotificationService $notificationService,
         protected WhatsAppService     $whatsAppService,
     ) {}
 
+=======
+>>>>>>> 11c3939 (Complément dossier)
     // ── GET /api/attestations/demandes/complement/find ────────────────────────
 
     public function find(Request $request): JsonResponse
@@ -80,13 +106,22 @@ class ComplementDossierController extends Controller
             ], 422);
         }
 
+<<<<<<< HEAD
         // Recherche par référence → résultat unique
+=======
+        // ── Recherche par référence → résultat unique ─────────────────────────
+
+>>>>>>> 11c3939 (Complément dossier)
         if ($request->filled('reference')) {
             $demande = DB::table('document_requests')
                 ->where('reference', strtoupper(trim($request->reference)))
                 ->first();
 
+<<<<<<< HEAD
             if (!$demande) {
+=======
+            if (! $demande) {
+>>>>>>> 11c3939 (Complément dossier)
                 return response()->json(['message' => 'Aucune demande trouvée pour cette référence.'], 404);
             }
 
@@ -96,12 +131,21 @@ class ComplementDossierController extends Controller
             ]);
         }
 
+<<<<<<< HEAD
         // Recherche par matricule → tableau
+=======
+        // ── Recherche par matricule → tableau de toutes les demandes ──────────
+
+>>>>>>> 11c3939 (Complément dossier)
         $student = Student::where(
             'student_id_number', strtoupper(trim($request->matricule))
         )->first();
 
+<<<<<<< HEAD
         if (!$student) {
+=======
+        if (! $student) {
+>>>>>>> 11c3939 (Complément dossier)
             return response()->json(['message' => 'Aucun étudiant trouvé avec ce matricule.'], 404);
         }
 
@@ -167,7 +211,15 @@ class ComplementDossierController extends Controller
         ));
         $matricule  = $link?->student?->student_id_number ?? '—';
 
+<<<<<<< HEAD
         // Chemin du dossier
+=======
+        // ── Chemin du dossier ─────────────────────────────────────────────────
+        //
+        // Stratégie : on stocke directement sous {key}.{ext} (pas d'horodatage).
+        // Déposer un nouveau fichier pour la même clé écrase l'ancienne version.
+        //
+>>>>>>> 11c3939 (Complément dossier)
         if (str_starts_with($reference, 'BUL-')) {
             $baseFolder = "bulletins-demandes/{$reference}/complement";
         } else {
@@ -175,7 +227,11 @@ class ComplementDossierController extends Controller
             $baseFolder = "attestation-demandes/{$subFolder}/{$reference}/complement";
         }
 
+<<<<<<< HEAD
         // Fusion avec l'existant
+=======
+        // Fusion avec le JSON existant
+>>>>>>> 11c3939 (Complément dossier)
         $existingComplement = [];
         if ($demande->complement_files) {
             $decoded = is_string($demande->complement_files)
@@ -209,8 +265,16 @@ class ComplementDossierController extends Controller
 
             $keyNorm  = Str::slug($key, '_');
             $ext      = $file->getClientOriginalExtension() ?: $file->extension();
+<<<<<<< HEAD
             $fileName = "{$keyNorm}.{$ext}";
 
+=======
+
+            // Nom de fichier stable : {key}.{ext} — écrase l'ancienne version
+            $fileName = "{$keyNorm}.{$ext}";
+
+            // Supprimer l'ancienne version si elle existe (extension différente possible)
+>>>>>>> 11c3939 (Complément dossier)
             if (isset($existingComplement[$key])) {
                 Storage::disk('public')->delete($existingComplement[$key]);
             }
@@ -218,13 +282,23 @@ class ComplementDossierController extends Controller
             $path = $file->storeAs($baseFolder, $fileName, 'public');
 
             $newEntries[$key]  = $path;
+<<<<<<< HEAD
             $savedLabels[$key] = $pieceLabels[$key] ?? self::FILE_LABELS[$key] ?? $key;
+=======
+            $savedLabels[$key] = $pieceLabels[$key]
+                ?? self::FILE_LABELS[$key]
+                ?? $key;
+>>>>>>> 11c3939 (Complément dossier)
         }
 
         if (empty($newEntries)) {
             return response()->json(['message' => 'Aucun fichier valide enregistré.'], 422);
         }
 
+<<<<<<< HEAD
+=======
+        // Merge + sauvegarde BD
+>>>>>>> 11c3939 (Complément dossier)
         $mergedComplement = array_merge($existingComplement, $newEntries);
 
         // Mettre à jour la BD — stocker aussi le WhatsApp si absent
@@ -249,6 +323,7 @@ class ComplementDossierController extends Controller
 
         $piecesList = array_values($savedLabels);
 
+<<<<<<< HEAD
         // ── Notifications (email + WhatsApp) ──────────────────────────────────
         // sendComplementSecretaire() gère en un appel :
         //   - Email + WhatsApp → étudiant
@@ -257,6 +332,22 @@ class ComplementDossierController extends Controller
             etudiantEmail:    $request->email,
             vars:             compact('nomComplet', 'matricule', 'reference', 'dateComplement', 'piecesList'),
             whatsappEtudiant: $whatsappNormalized,
+=======
+        // Mail étudiant
+        $this->sendMail(
+            $request->email,
+            "Complément de dossier reçu — Réf : {$reference}",
+            'core::emails.complement-confirmation',
+            compact('nomComplet', 'reference', 'dateComplement', 'piecesList')
+        );
+
+        // Notification secrétariat
+        $this->sendMail(
+            self::SECRETARIAT_EMAIL,
+            "Nouveau complément — Réf : {$reference}",
+            'core::emails.complement-notification-secretariat',
+            compact('nomComplet', 'reference', 'dateComplement', 'piecesList') + ['email' => $request->email]
+>>>>>>> 11c3939 (Complément dossier)
         );
 
         return response()->json([
@@ -272,6 +363,7 @@ class ComplementDossierController extends Controller
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+<<<<<<< HEAD
     private function formatDemande(object $demande): array
     {
         $link = StudentPendingStudent::with([
@@ -300,5 +392,48 @@ class ComplementDossierController extends Controller
                 'academic_year' => $link?->pendingStudent?->academicYear?->academic_year ?? '—',
             ],
         ];
+=======
+    /**
+     * Formate une demande pour la réponse publique.
+     * N'expose PAS le statut ni les dates internes de traitement.
+     */
+    private function formatDemande(object $demande): array
+    {
+        $link = StudentPendingStudent::with([
+            'student',
+            'pendingStudent.personalInformation',
+            'pendingStudent.department',
+            'pendingStudent.academicYear',
+        ])->find($demande->student_pending_student_id);
+
+        $personal  = $link?->pendingStudent?->personalInformation;
+        $matricule = $link?->student?->student_id_number ?? '—';
+
+        return [
+            'reference'    => $demande->reference,
+            'type'         => $demande->type,
+            'type_label'   => self::TYPE_LABELS[$demande->type] ?? $demande->type,
+            'submitted_at' => $demande->submitted_at
+                ? Carbon::parse($demande->submitted_at)->format('d/m/Y à H:i')
+                : '—',
+            'student' => [
+                'last_name'     => $personal?->last_name   ?? '—',
+                'first_names'   => $personal?->first_names ?? '—',
+                'matricule'     => $matricule,
+                'level'         => $link?->pendingStudent?->level ?? '—',
+                'department'    => $link?->pendingStudent?->department?->name ?? '—',
+                'academic_year' => $link?->pendingStudent?->academicYear?->academic_year ?? '—',
+            ],
+        ];
+    }
+
+    private function sendMail(string $to, string $subject, string $view, array $vars): void
+    {
+        try {
+            Mail::send($view, $vars, fn($m) => $m->to($to)->subject($subject));
+        } catch (\Exception $e) {
+            Log::error("ComplementDossier — mail [{$to}] : " . $e->getMessage());
+        }
+>>>>>>> 11c3939 (Complément dossier)
     }
 }

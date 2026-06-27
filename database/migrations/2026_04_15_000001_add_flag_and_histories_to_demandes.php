@@ -8,11 +8,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // ── 1. Colonne has_flag sur document_requests ─────────────────────────
-        Schema::table('document_requests', function (Blueprint $table) {
-            $table->boolean('has_flag')->default(false)->after('status');
-        });
-
         // ── 2. Table historique ───────────────────────────────────────────────
         Schema::create('document_request_histories', function (Blueprint $table) {
             $table->id();
@@ -37,8 +32,5 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('document_request_histories');
-        Schema::table('document_requests', function (Blueprint $table) {
-            $table->dropColumn('has_flag');
-        });
     }
 };
