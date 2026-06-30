@@ -207,8 +207,10 @@ class DocumentRequestQueryService
         }
 
         // Responsable Division : filtrer par son type (utilise l'index dr_responsable_division_type_idx)
-        if ($role === 'responsable-division' && $user->responsable_division_type) {
-            $query->where('dr.responsable_division_type', $user->responsable_division_type);
+        // La colonne sur l'utilisateur s'appelle chef_division_type (nom historique en BD).
+        // La colonne sur le dossier s'appelle responsable_division_type.
+        if ($role === 'responsable-division' && $user->chef_division_type) {
+            $query->where('dr.responsable_division_type', $user->chef_division_type);
         }
 
         // Filtres utilisateur

@@ -573,10 +573,15 @@ class NotificationService
                 DB::raw("CONCAT(u.first_name, ' ', u.last_name) as name"),
                 'u.email',
                 'u.phone',
+                'u.chef_division_type',  // nécessaire pour le filtrage responsable-division
             );
 
+        // La colonne sur users s'appelle chef_division_type (nom historique en BD).
+        // La colonne sur document_requests s'appelle responsable_division_type.
+        // On filtre l'utilisateur par son chef_division_type pour trouver
+        // le bon responsable selon le cycle de l'étudiant.
         if ($roleSlug === 'responsable-division' && $responsableDivisionType) {
-            $query->where('u.responsable_division_type', $responsableDivisionType);
+            $query->where('u.chef_division_type', $responsableDivisionType);
         }
 
         return $query->get();

@@ -30,17 +30,17 @@ class DocumentRequestBadgeController extends Controller
             return $this->successResponse(['count' => 0]);
         }
 
-        $count = $this->countForRole($role);
+        $count = $this->countForRole($role, $user);
 
         return $this->successResponse(['count' => $count]);
     }
 
-    private function countForRole(string $role): int
+    private function countForRole(string $role, object $user): int
     {
         // ── Secrétaire : cas spécial — deux groupes de statuts ───────────────
         //
-        // 'pending'               → nouvelles demandes à valider
-        // 'secretaire_correction' → dossiers revenus en navette/correction
+        // 'submitted'              → nouvelles demandes à valider
+        // 'secretary_correction'   → dossiers revenus en navette/correction
         //
         // Ces deux groupes forment le badge "action requise de la secrétaire".
         // Les autres statuts (en circulation chez les autres acteurs) ne font
@@ -73,8 +73,18 @@ class DocumentRequestBadgeController extends Controller
             return 0;
         }
 
-        return (int) DB::table('document_requests')
-            ->whereIn('status', array_values($actionableStatuses))
-            ->count();
+        $query = DB::table('document_requests')
+            ->whereIn('status', array_values($actionableStatuses));
+
+        // Responsable Division : le badge ne doit compter que les dossiers
+        // de son périmètre (formation_continue OU formation_distance).
+        // La colonne sur l'utilisateur s'appelle chef_division_type (nom historique en BD).
+        // Le rôle peut arriver sous le slug 'chef-division' ou 'responsable-division' —
+        // canonicalRole() a déjà normalisé vers 'responsable-division' avant cet appel.
+        if ($role === 'responsable-division' && !empty($user->chef_division_type)) {
+            $query->where('responsable_division_type', $user->chef_division_type);
+        }
+
+        return (int) $query->count();
     }
 }

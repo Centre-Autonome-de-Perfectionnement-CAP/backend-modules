@@ -32,7 +32,10 @@ class DocumentRequestHistoryService
             'document_request_id' => $documentRequestId,
             'actor_id'            => $user->id,
             'actor_name'          => $user->name ?? trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
-            'actor_role'          => $user->roles->first()?->slug ?? 'inconnu',
+            // Normalisation obligatoire : en BD live le slug est 'chef-division',
+            // en BD de dev il est 'responsable-division'. canonicalRole() unifie
+            // les deux → on stocke toujours le slug canonique dans l'historique.
+            'actor_role'          => WorkflowConstants::canonicalRole($user->roles->first()?->slug) ?? 'inconnu',
             'action_type'         => $this->resolveActionType($action),
             'action_label'        => WorkflowConstants::ACTION_LABELS[$action] ?? $action,
             'status_before'       => $statusBefore,
@@ -69,7 +72,7 @@ class DocumentRequestHistoryService
             'document_request_id' => $documentRequestId,
             'actor_id'            => $user?->id,
             'actor_name'          => $user?->name ?? 'Système',
-            'actor_role'          => $user?->roles->first()?->slug ?? 'système',
+            'actor_role'          => WorkflowConstants::canonicalRole($user?->roles->first()?->slug) ?? 'système',
             'action_type'         => 'message_envoye',
             'action_label'        => 'Email envoyé',
             'status_before'       => '',
