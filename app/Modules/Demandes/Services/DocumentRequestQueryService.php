@@ -6,6 +6,21 @@ use App\Modules\Demandes\WorkflowConstants;
 use Illuminate\Support\Facades\DB;
 
 /**
+ * CORRECTIF (v2) — Base inchangée par rapport au service réel.
+ *
+ * Seul ajout (B3.2) : paginatedListing(), une méthode additive qui
+ * réutilise exactement les mêmes colonnes et filtres que listing(),
+ * mais avec ->paginate() au lieu de ->get(). Aucune méthode existante
+ * n'est modifiée — listing(), findOrFail() et statsForDirectionUser()
+ * restent identiques à l'original.
+ *
+ * B2.2 — Les index suivants sont nécessaires pour que ce service reste
+ * performant à mesure que document_requests grossit (voir migration
+ * jointe dans ce sprint) :
+ *   - (student_pending_student_id) : déjà couvert par la FK
+ *   - (status, created_at)         : pour le tri + filtre par statut du listing
+ *   - (type, status)               : pour le filtre combiné type+statut
+ *
  * Toutes les lectures DB pour les demandes (index, show, stats).
  * Aucune écriture ici.
  *
@@ -231,6 +246,47 @@ class DocumentRequestQueryService
 
         // Tri par ordre d'arrivée chronologique (du plus ancien en haut au plus nouveau en bas)
         return $query->orderBy('dr.created_at', 'asc')->get();
+    }
+
+    // ── AJOUT (B3.2) — Listing paginé ─────────────────────────────────────────
+    //
+    // Reproduit exactement la même construction de requête que listing()
+    // ci-dessus (même colonnes, même filtrage par rôle, mêmes filtres
+    // utilisateur), avec paginate() au lieu de get(). Utilisée par le
+    // nouvel endpoint GET /document-requests/paginated, qui coexiste
+    // avec l'ancien endpoint non paginé pour ne rien casser côté frontend.
+
+    public function paginatedListing(string $role, $user, array $filters = [], int $perPage = 25): \Illuminate\Pagination\LengthAwarePaginator
+    {
+        $role = WorkflowConstants::canonicalRole($role);
+
+        $query = $this->baseQuery()->select($this->buildListingSelect());
+
+        $visibleStatuses = WorkflowConstants::VISIBLE_STATUSES[$role] ?? ['pending'];
+        if (!empty($visibleStatuses)) {
+            $query->whereIn('dr.status', $visibleStatuses);
+        }
+
+        if ($role === 'responsable-division' && $user->chef_division_type) {
+            $query->where('dr.responsable_division_type', $user->chef_division_type);
+        }
+
+        if (!empty($filters['status'])) {
+            $query->where('dr.status', $filters['status']);
+        }
+        if (!empty($filters['type'])) {
+            $query->where('dr.type', $filters['type']);
+        }
+        if (!empty($filters['search'])) {
+            $s = '%' . $filters['search'] . '%';
+            $query->where(function ($q) use ($s) {
+                $q->where('pi.last_name', 'like', $s)
+                  ->orWhere('pi.first_names', 'like', $s)
+                  ->orWhere('dr.reference', 'like', $s);
+            });
+        }
+
+        return $query->orderBy('dr.created_at', 'asc')->paginate($perPage);
     }
 
     // ── Détail ─────────────────────────────────────────────────────────────────

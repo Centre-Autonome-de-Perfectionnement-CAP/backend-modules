@@ -3,30 +3,29 @@
 namespace App\Modules\Demandes\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Demandes\Http\Resources\DocumentRequestListResource;
 use App\Modules\Demandes\Models\DocumentRequest;
 use App\Modules\Demandes\Services\DocumentRequestQueryService;
 use App\Modules\Demandes\Services\DocumentStorageService;
+use App\Modules\Demandes\Services\SecretaryFileService;
 use App\Modules\Demandes\WorkflowConstants;
+use App\Exceptions\BusinessException;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{Auth, Storage};
 
 /**
- * Lecture : liste, détail et gestion des pièces jointes d'une demande.
+ * CORRECTIF (v2) — B3.1 + B3.2, basé sur le DocumentRequestController réel
  *
- * Endpoint fichiers :
- *   GET  /api/attestations/document-requests/{id}/files/{source}/{key}
- *     source = initial | complement | active | secretary
- *     - initial    : fichier dans demande/
- *     - complement : fichier dans complement/
- *     - active     : version prioritaire (complement > demande)  ← NOUVEAU
- *     - secretary  : fichier ajouté par la secrétaire
- *
- * Fichiers secrétaire :
- *   POST   /api/attestations/document-requests/{id}/secretary-files
- *   PATCH  /api/attestations/document-requests/{id}/secretary-files/{fileId}
- *   DELETE /api/attestations/document-requests/{id}/secretary-files/{fileId}
+ * - index() : INCHANGÉ — retourne toujours la collection brute (pas de
+ *   Resource), pour ne rien casser côté frontend qui consomme déjà ce
+ *   format exact.
+ * - indexPaginated() : NOUVEAU endpoint additif (B3.2), qui lui utilise
+ *   DocumentRequestListResource pour un format stable et documenté.
+ * - Tout le reste (show, previewFile, fichiers secrétaire) reproduit
+ *   fidèlement le contrôleur réel, avec la même extraction de
+ *   SecretaryFileService que dans B1.
  */
 class DocumentRequestController extends Controller
 {
@@ -45,9 +44,10 @@ class DocumentRequestController extends Controller
     public function __construct(
         protected DocumentRequestQueryService $queryService,
         protected DocumentStorageService      $storageService,
+        protected SecretaryFileService        $secretaryFileService,
     ) {}
 
-    // ── Listing ───────────────────────────────────────────────────────────────
+    // ── Listing (INCHANGÉ — format brut conservé) ─────────────────────────────
 
     public function index(Request $request): JsonResponse
     {
@@ -64,20 +64,47 @@ class DocumentRequestController extends Controller
         ]);
     }
 
-    // ── Détail ────────────────────────────────────────────────────────────────
+    // ── AJOUT (B3.2) — Listing paginé ──────────────────────────────────────────
+
+    public function indexPaginated(Request $request): JsonResponse
+    {
+        $request->validate([
+            'page'     => 'nullable|integer|min:1',
+            'per_page' => 'nullable|integer|min:5|max:100',
+        ]);
+
+        $user    = Auth::user();
+        $role    = WorkflowConstants::canonicalRole($user->roles->first()?->slug ?? null);
+        $filters = $request->only(['status', 'type', 'search']);
+        $perPage = (int) $request->input('per_page', 25);
+
+        $paginator = $this->queryService->paginatedListing($role, $user, $filters, $perPage);
+
+        return response()->json([
+            'success' => true,
+            'data'    => DocumentRequestListResource::collection($paginator->items()),
+            'meta'    => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+            ],
+            'role' => $role,
+        ]);
+    }
+
+    // ── Détail (INCHANGÉ) ──────────────────────────────────────────────────────
 
     public function show(int $id): JsonResponse
     {
         try {
             $demande = $this->queryService->findOrFail($id);
 
-            // Enrichir la réponse avec la résolution de priorité des documents
             $resolved = $this->storageService->resolveDocuments(
-                $demande->files,
-                $demande->complement_files
+                $demande->files, $demande->complement_files
             );
 
-            $result          = (array) $demande;
+            $result                      = (array) $demande;
             $result['documents_resolus'] = $resolved;
 
             return $this->successResponse((object) $result);
@@ -86,19 +113,8 @@ class DocumentRequestController extends Controller
         }
     }
 
-    // ── Aperçu / téléchargement d'une pièce jointe ───────────────────────────
+    // ── Aperçu / téléchargement (INCHANGÉ) ─────────────────────────────────────
 
-    /**
-     * GET /api/attestations/document-requests/{id}/files/{source}/{key}
-     *
-     * source :
-     *   - initial    → lit dans files (demande/)
-     *   - complement → lit dans complement_files (complement/)
-     *   - active     → lit la version prioritaire via resolveActiveFile()
-     *   - secretary  → lit dans secretary_files (secretaire/)
-     *
-     * ?download=1 → Content-Disposition: attachment (défaut : inline)
-     */
     public function previewFile(Request $request, int $id, string $source, string $key)
     {
         try {
@@ -107,55 +123,13 @@ class DocumentRequestController extends Controller
             return $this->notFoundResponse($e->getMessage());
         }
 
-        $path        = null;
-        $displayName = null;
+        [$path, $displayName, $error] = $this->resolveFilePath($demande, $source, $key);
 
-        if ($source === 'initial') {
-            $decoded = $this->decodeJson($demande->files);
-            if (!array_key_exists($key, $decoded)) {
-                return $this->notFoundResponse('Fichier introuvable.');
-            }
-            $path        = $decoded[$key];
-            $displayName = $this->buildDisplayName($key, $path);
-
-        } elseif ($source === 'complement') {
-            $decoded = $this->decodeJson($demande->complement_files);
-            if (!array_key_exists($key, $decoded)) {
-                return $this->notFoundResponse('Fichier introuvable.');
-            }
-            $path        = $decoded[$key];
-            $displayName = $this->buildDisplayName($key, $path);
-
-        } elseif ($source === 'active') {
-            // Version prioritaire : complement > demande
-            $resolved = $this->storageService->resolveActiveFile(
-                $demande->files,
-                $demande->complement_files,
-                $key
-            );
-            if (!$resolved['path']) {
-                return $this->notFoundResponse('Fichier introuvable.');
-            }
-            $path        = $resolved['path'];
-            $displayName = $this->buildDisplayName($key, $path);
-
-        } elseif ($source === 'secretary') {
-            $decoded = $this->decodeJson($demande->secretary_files);
-            $found   = null;
-            foreach ($decoded as $file) {
-                if (($file['id'] ?? '') === $key) {
-                    $found = $file;
-                    break;
-                }
-            }
-            if (!$found) {
-                return $this->notFoundResponse('Fichier introuvable.');
-            }
-            $path        = $found['path'] ?? null;
-            $displayName = $found['original_name'] ?? basename((string) $path);
-
-        } else {
+        if ($error === 'invalid_source') {
             return $this->errorResponse('Source de fichier invalide. Valeurs : initial, complement, active, secretary.', 422);
+        }
+        if ($error === 'not_found') {
+            return $this->notFoundResponse('Fichier introuvable.');
         }
 
         if (!$path || !Storage::disk('public')->exists($path)) {
@@ -163,28 +137,15 @@ class DocumentRequestController extends Controller
         }
 
         $disposition = $request->boolean('download') ? 'attachment' : 'inline';
-
         return Storage::disk('public')->response($path, $displayName, [], $disposition);
     }
 
-    // ── Fichiers secrétaire ───────────────────────────────────────────────────
+    // ── Fichiers secrétaire (extraits vers SecretaryFileService — B1.1) ───────
 
     public function uploadSecretaryFiles(Request $request, int $id): JsonResponse
     {
-        $user = Auth::user();
-        if ($user->roles->first()?->slug !== 'secretaire') {
-            return $this->errorResponse('Action non autorisée. Seule la secrétaire peut ajouter des fichiers.', 403);
-        }
-
-        try {
-            $demande = DocumentRequest::findOrFail($id);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return $this->notFoundResponse('Demande introuvable.');
-        }
-
-        if (!in_array($demande->status, ['submitted', 'secretary_correction'])) {
-            return $this->errorResponse("Le statut actuel du dossier ne permet pas l'ajout de fichiers.", 403);
-        }
+        $demande = DocumentRequest::findOrFail($id);
+        $this->authorize('manageSecretaryFiles', $demande);
 
         $request->validate([
             'files'           => 'required|array|min:1',
@@ -193,75 +154,28 @@ class DocumentRequestController extends Controller
             'files.*.comment' => 'nullable|string|max:1000',
         ]);
 
-        $secretaryFiles = $demande->secretary_files ?? [];
-        $newFiles       = [];
-
-        foreach ($request->input('files', []) as $index => $fileData) {
-            $file = $request->file("files.{$index}.file");
-            if (!$file || !$file->isValid()) continue;
-
-            $fileId = uniqid('sec_');
-
-            // Stockage dans secretaire/ via le service
-            $path = $this->storageService->storeSecretaireFile(
-                $demande->type,
-                $demande->reference,
-                $file,
-                $fileId
-            );
-
-            $newFile = [
-                'id'            => $fileId,
-                'path'          => $path,
-                'original_name' => strip_tags($fileData['name']),
-                'comment'       => isset($fileData['comment']) ? strip_tags($fileData['comment']) : null,
-                'uploaded_at'   => now()->toIso8601String(),
-            ];
-
-            $secretaryFiles[] = $newFile;
-            $newFiles[]       = $newFile;
+        try {
+            $result = $this->secretaryFileService->upload($demande, $request->input('files', []), $request);
+        } catch (BusinessException $e) {
+            return $this->errorResponse($e->getMessage(), $e->getStatusCode());
         }
 
-        $demande->update(['secretary_files' => $secretaryFiles]);
-
-        return $this->successResponse([
-            'message'         => 'Fichiers ajoutés avec succès.',
-            'secretary_files' => $secretaryFiles,
-            'new_files'       => $newFiles,
-        ]);
+        return $this->successResponse(array_merge(
+            ['message' => 'Fichiers ajoutés avec succès.'], $result
+        ));
     }
 
     public function updateSecretaryFileComment(Request $request, int $id, string $fileId): JsonResponse
     {
-        $user = Auth::user();
-        if ($user->roles->first()?->slug !== 'secretaire') {
-            return $this->errorResponse('Action non autorisée.', 403);
-        }
-
         $demande = DocumentRequest::findOrFail($id);
-
-        if (!in_array($demande->status, ['submitted', 'secretary_correction'])) {
-            return $this->errorResponse('Le statut actuel du dossier ne permet pas de modifier un commentaire.', 403);
-        }
-
+        $this->authorize('manageSecretaryFiles', $demande);
         $request->validate(['comment' => 'nullable|string|max:1000']);
 
-        $secretaryFiles = $demande->secretary_files ?? [];
-        $found          = false;
-
-        foreach ($secretaryFiles as &$file) {
-            if (($file['id'] ?? '') === $fileId) {
-                $file['comment'] = strip_tags($request->input('comment'));
-                $found           = true;
-                break;
-            }
+        try {
+            $secretaryFiles = $this->secretaryFileService->updateComment($demande, $fileId, $request->input('comment'));
+        } catch (BusinessException $e) {
+            return $this->errorResponse($e->getMessage(), $e->getStatusCode());
         }
-
-        if (!$found) {
-            return $this->errorResponse('Fichier introuvable.', 404);
-        }
-
-        $demande->update(['secretary_files' => $secretaryFiles]);
 
         return $this->successResponse([
             'message'         => 'Commentaire mis à jour.',
@@ -271,46 +185,60 @@ class DocumentRequestController extends Controller
 
     public function deleteSecretaryFile(int $id, string $fileId): JsonResponse
     {
-        $user = Auth::user();
-        if ($user->roles->first()?->slug !== 'secretaire') {
-            return $this->errorResponse('Action non autorisée.', 403);
-        }
-
         $demande = DocumentRequest::findOrFail($id);
+        $this->authorize('manageSecretaryFiles', $demande);
 
-        if (!in_array($demande->status, ['submitted', 'secretary_correction'])) {
-            return $this->errorResponse("Le statut actuel du dossier ne permet pas de supprimer un fichier.", 403);
+        try {
+            $secretaryFiles = $this->secretaryFileService->delete($demande, $fileId);
+        } catch (BusinessException $e) {
+            return $this->errorResponse($e->getMessage(), $e->getStatusCode());
         }
-
-        $secretaryFiles = $demande->secretary_files ?? [];
-        $newFiles       = [];
-        $fileToDelete   = null;
-
-        foreach ($secretaryFiles as $file) {
-            if (($file['id'] ?? '') === $fileId) {
-                $fileToDelete = $file;
-            } else {
-                $newFiles[] = $file;
-            }
-        }
-
-        if (!$fileToDelete) {
-            return $this->errorResponse('Fichier introuvable.', 404);
-        }
-
-        if (!empty($fileToDelete['path'])) {
-            $this->storageService->deleteFile($fileToDelete['path']);
-        }
-
-        $demande->update(['secretary_files' => $newFiles]);
 
         return $this->successResponse([
             'message'         => 'Fichier supprimé.',
-            'secretary_files' => $newFiles,
+            'secretary_files' => $secretaryFiles,
         ]);
     }
 
-    // ── Helpers privés ────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    // HELPERS PRIVÉS (INCHANGÉ)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private function resolveFilePath(object $demande, string $source, string $key): array
+    {
+        return match ($source) {
+            'initial' => (function () use ($demande, $key) {
+                $decoded = $this->decodeJson($demande->files);
+                if (!array_key_exists($key, $decoded)) return [null, null, 'not_found'];
+                return [$decoded[$key], $this->buildDisplayName($key, $decoded[$key]), null];
+            })(),
+
+            'complement' => (function () use ($demande, $key) {
+                $decoded = $this->decodeJson($demande->complement_files);
+                if (!array_key_exists($key, $decoded)) return [null, null, 'not_found'];
+                return [$decoded[$key], $this->buildDisplayName($key, $decoded[$key]), null];
+            })(),
+
+            'active' => (function () use ($demande, $key) {
+                $resolved = $this->storageService->resolveActiveFile($demande->files, $demande->complement_files, $key);
+                if (!$resolved['path']) return [null, null, 'not_found'];
+                return [$resolved['path'], $this->buildDisplayName($key, $resolved['path']), null];
+            })(),
+
+            'secretary' => (function () use ($demande, $key) {
+                $decoded = $this->decodeJson($demande->secretary_files);
+                foreach ($decoded as $file) {
+                    if (($file['id'] ?? '') === $key) {
+                        $path = $file['path'] ?? null;
+                        return [$path, $file['original_name'] ?? basename((string) $path), null];
+                    }
+                }
+                return [null, null, 'not_found'];
+            })(),
+
+            default => [null, null, 'invalid_source'],
+        };
+    }
 
     private function decodeJson(mixed $raw): array
     {
@@ -321,7 +249,7 @@ class DocumentRequestController extends Controller
 
     private function buildDisplayName(string $key, ?string $path): string
     {
-        $ext  = $path ? (pathinfo($path, PATHINFO_EXTENSION) ?: 'pdf') : 'pdf';
+        $ext = $path ? (pathinfo($path, PATHINFO_EXTENSION) ?: 'pdf') : 'pdf';
         return (self::FILE_LABELS[$key] ?? $key) . '.' . $ext;
     }
 }

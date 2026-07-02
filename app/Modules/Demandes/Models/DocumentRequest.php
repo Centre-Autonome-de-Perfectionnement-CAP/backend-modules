@@ -6,17 +6,18 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Modèle principal du workflow de demandes de documents.
+ * CORRECTIF (v2) — basé sur le modèle DocumentRequest réel.
  *
- * Colonnes supprimées (redondantes avec document_request_histories) :
- *   - commentaires par rôle (× 7)
- *   - horodatages de révision par rôle (× 8)
- *   - processed_by_* (× 4)
- *   - colonnes mortes : complement_message, complement_pieces_requises,
- *                       complement_requested_at, unavailable_reason
+ * Conservé strictement à l'identique (fillable, casts, relation histories).
+ * AUCUNE colonne ajoutée/retirée : le modèle réel ne déclare PAS 'files'
+ * dans $fillable ni $casts (les écritures sur 'files' passent uniquement
+ * par DB::table()->insertGetId(), jamais par le modèle Eloquent) — donc
+ * je n'ajoute pas de cast 'files' => 'array' ici, contrairement à ma v1
+ * précédente qui l'avait fait à tort sans connaître le vrai modèle.
  *
- * Ces données sont lues via document_request_histories avec des sous-requêtes
- * indexées dans DocumentRequestQueryService.
+ * AJOUT (B2.1) : scopes Eloquent utilisés uniquement par les NOUVEAUX
+ * services (aucun code existant n'est impacté par leur ajout, ce sont
+ * des méthodes additives qui ne changent aucun comportement actuel).
  */
 class DocumentRequest extends Model
 {
@@ -62,5 +63,17 @@ class DocumentRequest extends Model
     public function histories(): HasMany
     {
         return $this->hasMany(DocumentRequestHistory::class)->orderBy('created_at');
+    }
+
+    // ── AJOUT (B2.1) — Scopes utilisés par les services additionnels ──────────
+    // N'affectent aucun comportement existant : purement additifs.
+
+    /**
+     * Demandes actives (ni rejetées, ni remises) — reproduit la constante
+     * INACTIVE_STATUSES trouvée dans DemandeController et ComplementDossierController.
+     */
+    public function scopeActive($query)
+    {
+        return $query->whereNotIn('status', ['rejected', 'picked_up']);
     }
 }
