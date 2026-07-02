@@ -7,15 +7,21 @@ use App\Traits\ApiResponse;
 use App\Modules\Demandes\WorkflowConstants;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Badge de notification — compteur de dossiers en attente pour l'acteur connecté.
+ * Badge-count avec cache 30s.
  *
- * GET /api/attestations/document-requests/badge-count
+ * AVANT : COUNT(*) SQL à chaque poll frontend.
+ *         60 VUs × poll toutes les 5s = 720 COUNT/min sur MySQL.
  *
- * Répond uniquement au rôle authentifié, sans paramètre.
- * Ultra-léger : une seule requête COUNT par appel.
+ * APRÈS : Cache::remember(30s) par clé (rôle + type division).
+ *         Quel que soit le nombre de VUs, 1 COUNT toutes les 30s par rôle.
+ *         Cache invalidé automatiquement dans DocumentRequestTransitionController
+ *         après chaque transition.
+ *
+ * Toute la logique countForRole() est IDENTIQUE à l'original.
  */
 class DocumentRequestBadgeController extends Controller
 {
@@ -30,32 +36,26 @@ class DocumentRequestBadgeController extends Controller
             return $this->successResponse(['count' => 0]);
         }
 
-        $count = $this->countForRole($role, $user);
+        // Clé de cache unique par rôle (+ type division pour Responsable Division)
+        $cacheKey = 'badge_' . $role;
+        if ($role === 'responsable-division' && !empty($user->chef_division_type)) {
+            $cacheKey .= '_' . $user->chef_division_type;
+        }
+
+        $count = Cache::remember($cacheKey, 30, fn () => $this->countForRole($role, $user));
 
         return $this->successResponse(['count' => $count]);
     }
 
+    // ── INCHANGÉ vs original ───────────────────────────────────────────────────
+
     private function countForRole(string $role, object $user): int
     {
-        // ── Secrétaire : cas spécial — deux groupes de statuts ───────────────
-        //
-        // 'submitted'              → nouvelles demandes à valider
-        // 'secretary_correction'   → dossiers revenus en navette/correction
-        //
-        // Ces deux groupes forment le badge "action requise de la secrétaire".
-        // Les autres statuts (en circulation chez les autres acteurs) ne font
-        // PAS partie du badge — la secrétaire ne peut rien faire dessus.
-
         if ($role === 'secretaire') {
             return (int) DB::table('document_requests')
                 ->whereIn('status', ['submitted', 'secretary_correction'])
                 ->count();
         }
-
-        // ── Tous les autres rôles : uniquement leur statut propre ─────────────
-        //
-        // Chaque acteur ne peut agir que sur son statut de file d'attente.
-        // VISIBLE_STATUSES pour ces rôles contient un seul statut.
 
         $statuses = WorkflowConstants::VISIBLE_STATUSES[$role] ?? [];
 
@@ -63,9 +63,7 @@ class DocumentRequestBadgeController extends Controller
             return 0;
         }
 
-        // Pour les rôles non-secrétaire, on filtre sur les statuts actionnables
-        // (on exclut 'ready', 'delivered', 'rejected' qui ne nécessitent pas d'action)
-        $actionableStatuses = array_filter($statuses, fn($s) => !in_array($s, [
+        $actionableStatuses = array_filter($statuses, fn ($s) => !in_array($s, [
             'ready_for_pickup', 'picked_up', 'rejected',
         ]));
 
@@ -76,11 +74,6 @@ class DocumentRequestBadgeController extends Controller
         $query = DB::table('document_requests')
             ->whereIn('status', array_values($actionableStatuses));
 
-        // Responsable Division : le badge ne doit compter que les dossiers
-        // de son périmètre (formation_continue OU formation_distance).
-        // La colonne sur l'utilisateur s'appelle chef_division_type (nom historique en BD).
-        // Le rôle peut arriver sous le slug 'chef-division' ou 'responsable-division' —
-        // canonicalRole() a déjà normalisé vers 'responsable-division' avant cet appel.
         if ($role === 'responsable-division' && !empty($user->chef_division_type)) {
             $query->where('responsable_division_type', $user->chef_division_type);
         }
