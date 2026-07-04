@@ -9,8 +9,16 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('amounts', function (Blueprint $table) {
-            $table->dropForeign(['program_id']);
-            $table->dropColumn(['program_id', 'level', 'sponsored_amount']);
+            if (Schema::hasColumn('amounts', 'program_id')) {
+                $table->dropForeign(['program_id']);
+                $table->dropColumn('program_id');
+            }
+            if (Schema::hasColumn('amounts', 'level')) {
+                $table->dropColumn('level');
+            }
+            if (Schema::hasColumn('amounts', 'sponsored_amount')) {
+                $table->dropColumn('sponsored_amount');
+            }
         });
     }
 

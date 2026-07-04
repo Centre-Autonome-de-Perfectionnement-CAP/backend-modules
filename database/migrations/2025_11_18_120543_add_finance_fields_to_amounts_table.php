@@ -9,12 +9,24 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('amounts', function (Blueprint $table) {
-            $table->string('type')->default('scolarite')->after('id');
-            $table->string('libelle')->nullable()->after('type');
-            $table->boolean('is_active')->default(true)->after('sponsored_amount');
-            $table->decimal('penalty_amount', 10, 2)->nullable()->after('is_active');
-            $table->enum('penalty_type', ['fixed', 'percentage'])->default('fixed')->after('penalty_amount');
-            $table->boolean('penalty_active')->default(false)->after('penalty_type');
+            if (!Schema::hasColumn('amounts', 'type')) {
+                $table->string('type')->default('scolarite')->after('id');
+            }
+            if (!Schema::hasColumn('amounts', 'libelle')) {
+                $table->string('libelle')->nullable()->after('type');
+            }
+            if (!Schema::hasColumn('amounts', 'is_active')) {
+                $table->boolean('is_active')->default(true);
+            }
+            if (!Schema::hasColumn('amounts', 'penalty_amount')) {
+                $table->decimal('penalty_amount', 10, 2)->nullable();
+            }
+            if (!Schema::hasColumn('amounts', 'penalty_type')) {
+                $table->enum('penalty_type', ['fixed', 'percentage'])->default('fixed');
+            }
+            if (!Schema::hasColumn('amounts', 'penalty_active')) {
+                $table->boolean('penalty_active')->default(false);
+            }
         });
     }
 
