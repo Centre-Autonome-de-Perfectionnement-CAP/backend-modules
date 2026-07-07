@@ -1,0 +1,67 @@
+name: 🚀 Deploy backend-modules (mirco-dev-secure)
+
+on:
+  push:
+    branches:
+      - mirco-dev-secure
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🚀 Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.CAP_VPS_HOST }}
+          username: ${{ secrets.CAP_VPS_USER }}
+          key: ${{ secrets.CAP_VPS_SSH_KEY }}
+          port: 22
+          script_stop: true
+          script: |
+            set -e
+            
+            echo "🚀 Déploiement backend-modules sur mirco-dev-secure..."
+            
+            cd /var/www/progi-cap.the-haute-societyy.com
+            
+            # Mode maintenance
+            php artisan down --retry=10 || true
+            
+            # Pull latest code
+            git fetch origin mirco-dev-secure
+            git reset --hard origin/mirco-dev-secure
+            
+            # Dépendances Composer (Update pour résoudre le conflit PHP 8.4 vs 8.3 du VPS)
+            composer update --no-dev --optimize-autoloader --no-interaction
+            
+            # Migrations
+            #php artisan migrate --force
+            
+            # Nettoyer et recréer caches
+            php artisan config:clear
+            php artisan cache:clear
+            php artisan view:clear
+            php artisan route:clear
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            
+            # Storage link
+            php artisan storage:link || true
+            
+            # Permissions
+            sudo chown -R ths:www-data storage bootstrap/cache 2>/dev/null || true
+            sudo chmod -R 775 storage bootstrap/cache 2>/dev/null || true
+            
+            # Restart queue workers (si applicable)
+            php artisan queue:restart || true
+            
+            # Sortir maintenance
+            php artisan up
+            
+            echo "✅ backend-modules déployé avec succès !"
