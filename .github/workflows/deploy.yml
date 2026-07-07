@@ -40,7 +40,7 @@ jobs:
             composer update --no-dev --optimize-autoloader --no-interaction
             
             # Migrations
-            php artisan migrate --force
+            #php artisan migrate --force
             
             # Nettoyer et recréer caches
             php artisan config:clear
