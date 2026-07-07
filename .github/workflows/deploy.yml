@@ -27,7 +27,7 @@ jobs:
             
             echo "🚀 Déploiement backend-modules sur mirco-dev-secure..."
             
-            cd /var/www/progi-cap.the-haute-societyy.com
+            cd /var/www/api.the-haute-societyy.com
             
             # Mode maintenance
             php artisan down --retry=10 || true
