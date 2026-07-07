@@ -32,8 +32,8 @@ class WhatsAppService
 {
     // ── Liens (à adapter au vrai domaine de production) ─────────────────────
     // Un seul endroit à modifier après déploiement.
-    private const URL_SUIVI      = 'https://votre-domaine.com/suivi';
-    private const URL_COMPLEMENT = 'https://votre-domaine.com/complement';
+    private const URL_SUIVI      = 'https://domaine.com/suivi';
+    private const URL_COMPLEMENT = 'https://domaine.com/complement';
 
     public function __construct(
         private WhatsAppBridgeClient $bridge,

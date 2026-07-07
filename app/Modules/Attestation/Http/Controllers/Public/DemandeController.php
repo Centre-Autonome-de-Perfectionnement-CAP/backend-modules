@@ -29,12 +29,18 @@ class DemandeController extends Controller
     public function storeDemande(Request $request): JsonResponse
     {
         $request->validate([
-            'matricule'         => 'required|string',
+            'matricule'         => 'required|string|regex:/^[a-zA-Z0-9\-]+$/',
             'type'              => 'required|in:attestation_passage,attestation_definitive,attestation_inscription',
-            'email'             => 'required|email',
-            'whatsapp'          => 'required|string|max:30',
+            'email'             => 'required|email|max:150',
+            'whatsapp'          => 'required|string|max:30|regex:/^[0-9\+\s\-]+$/',
             'payment_method'    => 'nullable|in:manual,tresor_online',
-            'payment_reference' => 'nullable|string|max:50',
+            'payment_reference' => 'nullable|string|max:50|regex:/^[a-zA-Z0-9\-]+$/',
+            'demande_manuscrite'=> 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
+            'acte_naissance'    => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
+            'attestation_succes_file' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
+            'quittance'         => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
+            'recu_paiement'     => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
+            'bulletin'          => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
         ]);
 
         try {
@@ -60,10 +66,13 @@ class DemandeController extends Controller
         $request->validate([
             'link_id'           => 'required|integer|exists:student_pending_student,id',
             'type'              => 'required|in:bulletin_annuel',
-            'email'             => 'required|email',
-            'whatsapp'          => 'required|string|max:30',
+            'email'             => 'required|email|max:150',
+            'whatsapp'          => 'required|string|max:30|regex:/^[0-9\+\s\-]+$/',
             'payment_method'    => 'nullable|in:manual,tresor_online',
-            'payment_reference' => 'nullable|string|max:50',
+            'payment_reference' => 'nullable|string|max:50|regex:/^[a-zA-Z0-9\-]+$/',
+            'demande_manuscrite'=> 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
+            'acte_naissance'    => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
+            'quittance'         => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
         ]);
 
         try {
