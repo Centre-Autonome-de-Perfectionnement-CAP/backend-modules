@@ -27,10 +27,10 @@
 <body>
   <div class="wrapper">
     <div class="header">
-      <h1>{{ config('app.name', 'CAP-EPAC') }}</h1>
+      <h1>CAP-EPAC</h1>
     </div>
     <div class="body">
-      <p class="greeting">Bonjour,</p>
+      <p class="greeting">Bonjour{{ !empty($nomEtudiant) ? ' ' . $nomEtudiant : '' }},</p>
       <p class="text">
         Nous avons le plaisir de vous informer que votre demande de document a été traitée avec succès.
       </p>
@@ -57,7 +57,7 @@
     </div>
     <div class="footer">
       <p>Cet e-mail a été généré automatiquement. Merci de ne pas y répondre.</p>
-      <p style="margin-top:8px;">Le Secrétariat du {{ config('app.name', 'CAP-EPAC') }}</p>
+      <p style="margin-top:8px;">Le Secrétariat du CAP-EPAC</p>
     </div>
   </div>
 </body>
