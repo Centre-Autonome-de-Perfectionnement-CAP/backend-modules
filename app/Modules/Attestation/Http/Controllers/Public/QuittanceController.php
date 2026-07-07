@@ -53,7 +53,12 @@ class QuittanceController extends Controller
                 $link = \App\Modules\Inscription\Models\StudentPendingStudent::where('student_id', $student->id)->with('pendingStudent.personalInformation')->latest('id')->first();
                 $phone = $link?->pendingStudent?->personalInformation?->phone;
                 if ($phone) {
-                    $this->whatsApp->sendQuittanceNotification($phone, $request->quittanceNumber, $request->referenceDemande);
+                    $this->whatsApp->sendQuittanceNotification(
+                        $phone,
+                        $request->quittanceNumber,
+                        $request->referenceDemande,
+                        $request->nomEtudiant,
+                    );
                 }
             }
 

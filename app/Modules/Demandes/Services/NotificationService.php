@@ -113,7 +113,7 @@ class NotificationService
                 $this->whatsApp->templateSoumission(
                     $demande->reference,
                     $typeLabel,
-                    $demande->email ?? ''
+                    $etudiantNom
                 ),
                 "soumission:{$demande->reference}",
             );
@@ -167,7 +167,9 @@ class NotificationService
      */
     public function sendRejected(object $demande, string $motif): void
     {
-        $typeLabel = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $typeLabel    = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $etudiantInfo = $this->fetchEtudiantInfo($demande->id);
+        $etudiantNom  = $this->buildNom($etudiantInfo);
 
         $this->email(
             to:      $demande->email ?? '',
@@ -185,7 +187,7 @@ class NotificationService
         if (!empty($demande->demandeur_whatsapp)) {
             $this->wa(
                 $demande->demandeur_whatsapp,
-                $this->whatsApp->templateRejete($demande->reference, $typeLabel, $motif),
+                $this->whatsApp->templateRejete($demande->reference, $typeLabel, $motif, $etudiantNom),
                 "rejet:{$demande->reference}",
             );
         }
@@ -197,7 +199,9 @@ class NotificationService
      */
     public function sendSousReserve(object $demande, string $motif): void
     {
-        $typeLabel = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $typeLabel    = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $etudiantInfo = $this->fetchEtudiantInfo($demande->id);
+        $etudiantNom  = $this->buildNom($etudiantInfo);
 
         $this->email(
             to:      $demande->email ?? '',
@@ -215,7 +219,7 @@ class NotificationService
         if (!empty($demande->demandeur_whatsapp)) {
             $this->wa(
                 $demande->demandeur_whatsapp,
-                $this->whatsApp->templateSousReserve($demande->reference, $typeLabel, $motif),
+                $this->whatsApp->templateSousReserve($demande->reference, $typeLabel, $motif, $etudiantNom),
                 "sous-reserve:{$demande->reference}",
             );
         }
@@ -227,7 +231,9 @@ class NotificationService
      */
     public function sendReady(object $demande): void
     {
-        $typeLabel = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $typeLabel    = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $etudiantInfo = $this->fetchEtudiantInfo($demande->id);
+        $etudiantNom  = $this->buildNom($etudiantInfo);
 
         $this->email(
             to:      $demande->email ?? '',
@@ -244,7 +250,7 @@ class NotificationService
         if (!empty($demande->demandeur_whatsapp)) {
             $this->wa(
                 $demande->demandeur_whatsapp,
-                $this->whatsApp->templatePret($demande->reference, $typeLabel),
+                $this->whatsApp->templatePret($demande->reference, $typeLabel, $etudiantNom),
                 "pret:{$demande->reference}",
             );
         }
@@ -256,7 +262,9 @@ class NotificationService
      */
     public function sendDelivered(object $demande): void
     {
-        $typeLabel = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $typeLabel    = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $etudiantInfo = $this->fetchEtudiantInfo($demande->id);
+        $etudiantNom  = $this->buildNom($etudiantInfo);
 
         $this->email(
             to:      $demande->email ?? '',
@@ -273,7 +281,7 @@ class NotificationService
         if (!empty($demande->demandeur_whatsapp)) {
             $this->wa(
                 $demande->demandeur_whatsapp,
-                $this->whatsApp->templateRemis($demande->reference, $typeLabel),
+                $this->whatsApp->templateRemis($demande->reference, $typeLabel, $etudiantNom),
                 "remis:{$demande->reference}",
             );
         }
@@ -310,7 +318,7 @@ class NotificationService
         if (!empty($whatsappEtudiant)) {
             $this->wa(
                 $whatsappEtudiant,
-                $this->whatsApp->templateComplementEtudiant($reference, $piecesList),
+                $this->whatsApp->templateComplementEtudiant($reference, $piecesList, $nomComplet),
                 "complement-etudiant:{$reference}",
             );
         }
@@ -410,7 +418,6 @@ class NotificationService
                 if ($targetRoleSlug === 'secretaire' && $isCorrection) {
                     $message = $this->whatsApp->templateCorrectionCircuit(
                         destinataireNom: $dest->name,
-                        expediteurNom:   $expediteurUser->name ?? 'Acteur',
                         expediteurRole:  $expediteurNomRole,
                         reference:       $demande->reference,
                         typeDocument:    $typeDocument,
@@ -420,15 +427,13 @@ class NotificationService
                     );
                 } else {
                     $message = $this->whatsApp->templateActeurDossier(
-                        destinataireNom:  $dest->name,
-                        destinataireRole: $destinataireRole,
-                        expediteurNom:    $expediteurUser->name ?? 'Acteur',
-                        expediteurRole:   $expediteurNomRole,
-                        reference:        $demande->reference,
-                        typeDocument:     $typeDocument,
-                        etudiantNom:      $etudiantNom,
-                        matricule:        $matricule,
-                        commentaire:      $commentaire,
+                        destinataireNom: $dest->name,
+                        expediteurRole:  $expediteurNomRole,
+                        reference:       $demande->reference,
+                        typeDocument:    $typeDocument,
+                        etudiantNom:     $etudiantNom,
+                        matricule:       $matricule,
+                        commentaire:     $commentaire,
                     );
                 }
 
