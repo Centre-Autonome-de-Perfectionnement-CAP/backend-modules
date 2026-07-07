@@ -36,8 +36,8 @@ jobs:
             git fetch origin mirco-dev-secure
             git reset --hard origin/mirco-dev-secure
             
-            # Dépendances Composer
-            composer install --no-dev --optimize-autoloader --no-interaction
+            # Dépendances Composer (Update pour résoudre le conflit PHP 8.4 vs 8.3 du VPS)
+            composer update --no-dev --optimize-autoloader --no-interaction
             
             # Migrations
             php artisan migrate --force
