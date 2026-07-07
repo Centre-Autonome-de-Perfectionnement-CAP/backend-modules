@@ -7,28 +7,14 @@ on:
 
 jobs:
   deploy:
-    name: Build & Deploy to Production
+    name: Deploy to Production
     runs-on: ubuntu-latest
     
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      - name: ⚙️ Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: 📦 Install dependencies
-        run: npm ci
-
-      - name: 🔨 Build production
-        run: npm run build
-        env:
-          NODE_ENV: production
-
-      - name: 🚀 Deploy build via SSH
+      - name: 🚀 Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.CAP_VPS_HOST }}
@@ -38,29 +24,44 @@ jobs:
           script_stop: true
           script: |
             set -e
-            echo "📦 Préparation du répertoire de déploiement..."
-            mkdir -p /var/www/progi-cap.the-haute-societyy.com
-            echo "✅ Prêt pour la réception du build"
-
-      - name: 📤 Upload build files
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.CAP_VPS_HOST }}
-          username: ${{ secrets.CAP_VPS_USER }}
-          key: ${{ secrets.CAP_VPS_SSH_KEY }}
-          port: 22
-          source: "dist/*"
-          target: "/var/www/progi-cap.the-haute-societyy.com"
-          strip_components: 1
-          rm: true
-
-      - name: ✅ Post-deploy verification
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.CAP_VPS_HOST }}
-          username: ${{ secrets.CAP_VPS_USER }}
-          key: ${{ secrets.CAP_VPS_SSH_KEY }}
-          port: 22
-          script: |
-            echo "✅ backend-modules (progi-cap) déployé !"
-            ls -la /var/www/progi-cap.the-haute-societyy.com/ | head -10
+            
+            echo "🚀 Déploiement backend-modules sur mirco-dev-secure..."
+            
+            cd /var/www/progi-cap.the-haute-societyy.com
+            
+            # Mode maintenance
+            php artisan down --retry=10 || true
+            
+            # Pull latest code
+            git fetch origin mirco-dev-secure
+            git reset --hard origin/mirco-dev-secure
+            
+            # Dépendances Composer
+            composer install --no-dev --optimize-autoloader --no-interaction
+            
+            # Migrations
+            php artisan migrate --force
+            
+            # Nettoyer et recréer caches
+            php artisan config:clear
+            php artisan cache:clear
+            php artisan view:clear
+            php artisan route:clear
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            
+            # Storage link
+            php artisan storage:link || true
+            
+            # Permissions
+            sudo chown -R ths:www-data storage bootstrap/cache 2>/dev/null || true
+            sudo chmod -R 775 storage bootstrap/cache 2>/dev/null || true
+            
+            # Restart queue workers (si applicable)
+            php artisan queue:restart || true
+            
+            # Sortir maintenance
+            php artisan up
+            
+            echo "✅ backend-modules déployé avec succès !"
