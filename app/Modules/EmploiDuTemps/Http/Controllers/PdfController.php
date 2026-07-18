@@ -250,7 +250,7 @@ class PdfController extends Controller
         ])->deleteFileAfterSend(true);
     }
 
- 
+
     private function toUtf8(string $str): string
     {
         if (mb_detect_encoding($str, 'UTF-8', true)) {
