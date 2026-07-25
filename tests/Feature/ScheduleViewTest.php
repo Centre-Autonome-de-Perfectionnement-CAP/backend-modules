@@ -27,7 +27,7 @@ class ScheduleViewTest extends TestCase
             'teaching_unit_id' => $teachingUnit->id,
         ]);
         $professor = $professor ?? Professor::factory()->create();
-        
+
         $courseElementProfessor = CourseElementProfessor::create([
             'course_element_id' => $courseElement->id,
             'professor_id' => $professor->id,
@@ -62,7 +62,7 @@ class ScheduleViewTest extends TestCase
 
         $response = $this->getJson("/api/emploi-temps/schedule/class-group/{$classGroup->id}");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson(['success' => true])
             ->assertJsonStructure([
                 'success',
@@ -101,7 +101,7 @@ class ScheduleViewTest extends TestCase
 
         $response = $this->getJson("/api/emploi-temps/schedule/professor/{$professor->id}");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson(['success' => true])
             ->assertJsonStructure([
                 'data' => [
@@ -136,7 +136,7 @@ class ScheduleViewTest extends TestCase
 
         $response = $this->getJson("/api/emploi-temps/schedule/room/{$room->id}");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson(['success' => true])
             ->assertJsonStructure([
                 'data' => [
@@ -183,7 +183,7 @@ class ScheduleViewTest extends TestCase
 
         $response = $this->getJson("/api/emploi-temps/schedule/class-group/{$classGroup->id}?start_date={$startDate}&end_date={$endDate}");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson(['success' => true])
             ->assertJsonCount(1, 'data');
     }
@@ -221,7 +221,7 @@ class ScheduleViewTest extends TestCase
 
         $response = $this->getJson("/api/emploi-temps/schedule/class-group/{$classGroup->id}");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonCount(1, 'data');
     }
 
@@ -235,7 +235,7 @@ class ScheduleViewTest extends TestCase
 
         $response = $this->getJson("/api/emploi-temps/schedule/class-group/{$classGroup->id}");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson([
                 'success' => true,
                 'data' => [],
@@ -267,7 +267,7 @@ class ScheduleViewTest extends TestCase
 
         $response = $this->getJson("/api/emploi-temps/schedule/class-group/{$classGroup->id}");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonCount(3, 'data');
     }
 
@@ -293,7 +293,7 @@ class ScheduleViewTest extends TestCase
 
         $response = $this->getJson("/api/emploi-temps/schedule/class-group/{$classGroup->id}");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'data' => [
                     '*' => [

@@ -18,31 +18,31 @@ class DecisionService
     public function preparePVFinAnneeData(int $academicYearId, int $departmentId, ?string $level, ?string $cohort, float $validationAverage = 12): array
     {
         \Log::info('DecisionService: Préparation données PV Fin Année', compact('academicYearId', 'departmentId', 'level', 'cohort'));
-        
+
         $academicYear = AcademicYear::find($academicYearId);
         $department = Department::with('cycle')->find($departmentId);
-        
+
         $academicPathQuery = AcademicPath::where('academic_year_id', $academicYearId)
             ->where('study_level', $level);
-        
+
         if ($cohort) {
             $academicPathQuery->where('cohort', $cohort);
         }
-        
+
         $studentPendingStudentIds = $academicPathQuery->pluck('student_pending_student_id')->toArray();
-        
+
         $studentIds = \App\Modules\Inscription\Models\StudentPendingStudent::whereIn('id', $studentPendingStudentIds)
             ->pluck('student_id')->toArray();
-        
+
         $classGroupIds = \App\Modules\Inscription\Models\StudentGroup::whereIn('student_id', $studentIds)
             ->pluck('class_group_id')->unique()->toArray();
-        
+
         $classGroupIds = \App\Modules\Inscription\Models\ClassGroup::whereIn('id', $classGroupIds)
             ->where('academic_year_id', $academicYearId)
             ->where('department_id', $departmentId)
             ->where('study_level', $level)
             ->pluck('id')->toArray();
-        
+
         $programsSem1 = Program::whereIn('class_group_id', $classGroupIds)
             ->where('semester', 1)
             ->with('courseElementProfessor.courseElement')
@@ -63,7 +63,7 @@ class DecisionService
         if ($hasSem1 || $hasSem2) {
             $etudiants = $this->getStudentsForYear($academicYearId, $departmentId, $level, $cohort, $uniqueProgramsSem1, $uniqueProgramsSem2, $hasSem1, $hasSem2, $validationAverage);
         }
-        
+
         return [
             'annee' => $academicYear ? $academicYear->academic_year : '2024-2025',
             'filiere' => $department ? $department->name : 'N/A',
@@ -94,7 +94,7 @@ class DecisionService
             if ($courseId) {
                 $weighting = is_array($p->weighting) ? $p->weighting : [];
                 $hasWeighting = count($weighting) > 0;
-                
+
                 if (!isset($uniquePrograms[$courseId]) || (!$uniquePrograms[$courseId]->hasWeighting && $hasWeighting)) {
                     $uniquePrograms[$courseId] = (object)[
                         'id' => $p->id,
@@ -118,19 +118,19 @@ class DecisionService
     {
         $academicPathQuery = AcademicPath::where('academic_year_id', $academicYearId)
             ->where('study_level', $level);
-        
+
         if ($cohort) {
             $academicPathQuery->where('cohort', $cohort);
         }
-        
+
         $studentPendingStudentIds = $academicPathQuery->pluck('student_pending_student_id')->toArray();
-        
+
         $studentIds = \App\Modules\Inscription\Models\StudentPendingStudent::whereIn('id', $studentPendingStudentIds)
             ->pluck('student_id')->toArray();
-        
+
         $classGroupIds = \App\Modules\Inscription\Models\StudentGroup::whereIn('student_id', $studentIds)
             ->pluck('class_group_id')->unique()->toArray();
-        
+
         $classGroupIds = \App\Modules\Inscription\Models\ClassGroup::whereIn('id', $classGroupIds)
             ->where('academic_year_id', $academicYearId)
             ->where('department_id', $departmentId)
@@ -155,7 +155,7 @@ class DecisionService
         }
 
         $academicPaths = $query->get();
-        
+
         $allProgramsSem1 = [];
         if ($hasSem1) {
             $allProgramsSem1 = Program::whereIn('class_group_id', $classGroupIds)
@@ -163,7 +163,7 @@ class DecisionService
                 ->with('courseElementProfessor.courseElement')
                 ->get();
         }
-        
+
         $allProgramsSem2 = [];
         if ($hasSem2) {
             $allProgramsSem2 = Program::whereIn('class_group_id', $classGroupIds)
@@ -186,7 +186,7 @@ class DecisionService
                 foreach ($programsSem1 as $program) {
                     $courseId = $program->matiere_professeur->matiere->code ?? null;
                     $grade = null;
-                    
+
                     foreach ($allProgramsSem1 as $p) {
                         $pCourseId = $p->courseElementProfessor->courseElement->code ?? null;
                         if ($courseId === $pCourseId) {
@@ -200,7 +200,7 @@ class DecisionService
                             }
                         }
                     }
-                    
+
                     $avg = $grade ? ($grade->average ?? 0) : 0;
                     $moyennesSem1[] = $avg > 0 ? $avg : '-';
                     if ($avg > 0) {
@@ -222,7 +222,7 @@ class DecisionService
                 foreach ($programsSem2 as $program) {
                     $courseId = $program->matiere_professeur->matiere->code ?? null;
                     $grade = null;
-                    
+
                     foreach ($allProgramsSem2 as $p) {
                         $pCourseId = $p->courseElementProfessor->courseElement->code ?? null;
                         if ($courseId === $pCourseId) {
@@ -236,7 +236,7 @@ class DecisionService
                             }
                         }
                     }
-                    
+
                     $avg = $grade ? ($grade->average ?? 0) : 0;
                     $moyennesSem2[] = $avg > 0 ? $avg : '-';
                     if ($avg > 0) {
@@ -280,12 +280,12 @@ class DecisionService
     public function preparePVDeliberationData(int $academicYearId, int $departmentId, ?string $level, ?string $cohort, int $semester): array
     {
         \Log::info('DecisionService: Préparation données PV Délibération', compact('academicYearId', 'departmentId', 'level', 'cohort', 'semester'));
-        
+
         $academicYear = AcademicYear::find($academicYearId);
         $department = Department::find($departmentId);
-        
+
         $etudiants = $this->getStudentsBySemester($academicYearId, $departmentId, $level, $cohort, $semester);
-        
+
         return [
             'annee' => $academicYear->libelle ?? '2024-2025',
             'filiere' => $department->name ?? 'N/A',
@@ -322,33 +322,33 @@ class DecisionService
     public function prepareRecapNotesData(int $academicYearId, int $departmentId, ?string $level, ?string $cohort, int $semester): array
     {
         \Log::info('DecisionService: Préparation données Récap Notes', compact('academicYearId', 'departmentId', 'level', 'cohort', 'semester'));
-        
+
         $academicYear = AcademicYear::find($academicYearId);
         $department = Department::with('cycle')->find($departmentId);
-        
+
         $etudiants = $this->getStudentsBySemesterOldSystem($academicYearId, $departmentId, $level, $cohort, $semester);
-        
+
         $academicPathQuery = AcademicPath::where('academic_year_id', $academicYearId)
             ->where('study_level', $level);
-        
+
         if ($cohort) {
             $academicPathQuery->where('cohort', $cohort);
         }
-        
+
         $studentPendingStudentIds = $academicPathQuery->pluck('student_pending_student_id')->toArray();
-        
+
         $studentIds = \App\Modules\Inscription\Models\StudentPendingStudent::whereIn('id', $studentPendingStudentIds)
             ->pluck('student_id')->toArray();
-        
+
         $classGroupIds = \App\Modules\Inscription\Models\StudentGroup::whereIn('student_id', $studentIds)
             ->pluck('class_group_id')->unique()->toArray();
-        
+
         $classGroupIds = \App\Modules\Inscription\Models\ClassGroup::whereIn('id', $classGroupIds)
             ->where('academic_year_id', $academicYearId)
             ->where('department_id', $departmentId)
             ->where('study_level', $level)
             ->pluck('id')->toArray();
-        
+
         $programsQuery = Program::whereIn('class_group_id', $classGroupIds)
             ->where('semester', $semester)
             ->with('courseElementProfessor.courseElement')
@@ -364,13 +364,13 @@ class DecisionService
                 $programsByCourse[$courseId][] = $p;
             }
         }
-        
+
         $uniquePrograms = [];
         $programsById = [];
         foreach ($programsByCourse as $courseId => $coursePrograms) {
             $maxWeightCount = 0;
             $selectedProgram = $coursePrograms[0];
-            
+
             foreach ($coursePrograms as $p) {
                 $weighting = is_array($p->weighting) ? $p->weighting : [];
                 $weightCount = count($weighting);
@@ -379,7 +379,7 @@ class DecisionService
                     $selectedProgram = $p;
                 }
             }
-            
+
             if ($selectedProgram) {
                 $maxWeightCount = max($maxWeightCount, 0);
                 $weighting = is_array($selectedProgram->weighting) ? $selectedProgram->weighting : [];
@@ -403,7 +403,7 @@ class DecisionService
             }
         }
         $programs = collect(array_values($uniquePrograms));
-        
+
         \Log::info('Programs with weighting', ['programs' => $programs->map(fn($p) => ['id' => $p->id, 'code' => $p->code, 'weighting' => $p->weighting, 'maxWeightCount' => $p->maxWeightCount, 'allProgramIds' => $p->allProgramIds])->toArray()]);
 
         $nt = [];
@@ -412,11 +412,11 @@ class DecisionService
             $nt[$i] = [];
             $moyennes[$i] = [];
             \Log::info('Processing student', ['index' => $i, 'nom' => $etudiant->nom, 'gradeDetailsKeys' => array_keys($etudiant->gradeDetails)]);
-            
+
             foreach ($programs as $program) {
                 $gradeData = null;
                 \Log::info('Processing program', ['code' => $program->code, 'allProgramIds' => $program->allProgramIds, 'maxWeightCount' => $program->maxWeightCount]);
-                
+
                 foreach ($program->allProgramIds as $progId) {
                     if (isset($etudiant->gradeDetails[$progId])) {
                         $tempGradeData = $etudiant->gradeDetails[$progId];
@@ -430,9 +430,9 @@ class DecisionService
                         }
                     }
                 }
-                
+
                 $maxWeightCount = $program->maxWeightCount;
-                
+
                 if ($gradeData && isset($gradeData['grades']) && is_array($gradeData['grades']) && count($gradeData['grades']) > 0) {
                     $studentGrades = $gradeData['grades'];
                     \Log::info('Adding student grades', ['grades' => $studentGrades, 'count' => count($studentGrades)]);
@@ -453,7 +453,7 @@ class DecisionService
             }
             \Log::info('Final nt for student', ['index' => $i, 'nt' => $nt[$i], 'moyennes' => $moyennes[$i]]);
         }
-        
+
         return [
             'annee' => $academicYear ? $academicYear->academic_year : '2024-2025',
             'filiere' => $department ? $department->name : 'N/A',
@@ -486,36 +486,36 @@ class DecisionService
     public function getStudentsBySemester(int $academicYearId, int $departmentId, ?string $level, ?string $cohort, int $semester): array
     {
         \Log::info('DecisionService: Récupération étudiants semestre', compact('academicYearId', 'departmentId', 'level', 'cohort', 'semester'));
-        
+
         $academicPathQuery = AcademicPath::where('academic_year_id', $academicYearId)
             ->where('study_level', $level);
-        
+
         if ($cohort) {
             $academicPathQuery->where('cohort', $cohort);
         }
-        
+
         $studentPendingStudentIds = $academicPathQuery->pluck('student_pending_student_id')->toArray();
-        
+
         if (empty($studentPendingStudentIds)) {
             return [];
         }
-        
+
         $studentIds = \App\Modules\Inscription\Models\StudentPendingStudent::whereIn('id', $studentPendingStudentIds)
             ->pluck('student_id')->toArray();
-        
+
         $classGroupIds = \App\Modules\Inscription\Models\StudentGroup::whereIn('student_id', $studentIds)
             ->pluck('class_group_id')->unique()->toArray();
-        
+
         $classGroupIds = \App\Modules\Inscription\Models\ClassGroup::whereIn('id', $classGroupIds)
             ->where('academic_year_id', $academicYearId)
             ->where('department_id', $departmentId)
             ->where('study_level', $level)
             ->pluck('id')->toArray();
-        
+
         if (empty($classGroupIds)) {
             return [];
         }
-        
+
         $programsData = Program::whereIn('class_group_id', $classGroupIds)
             ->where('semester', $semester)
             ->with('courseElementProfessor.courseElement')
@@ -571,7 +571,7 @@ class DecisionService
                     ];
                     $moyenneSum += ($grade->average ?? 0);
                     $programCount++;
-                    
+
                     if ($grade->validated) {
                         $earnedCredits += 3;
                     }
@@ -604,12 +604,12 @@ class DecisionService
     public function getStudentsByYear(int $academicYearId, int $departmentId, ?string $level, ?string $cohort): array
     {
         \Log::info('DecisionService: Récupération étudiants année', compact('academicYearId', 'departmentId', 'level', 'cohort'));
-        
+
         $sem1Students = $this->getStudentsBySemester($academicYearId, $departmentId, $level, $cohort, 1);
         $sem2Students = $this->getStudentsBySemester($academicYearId, $departmentId, $level, $cohort, 2);
 
         $studentsById = [];
-        
+
         foreach ($sem1Students as $student) {
             $studentsById[$student['id']] = [
                 'id' => $student['id'],
@@ -656,36 +656,36 @@ class DecisionService
     public function getStudentsBySemesterOldSystem(int $academicYearId, int $departmentId, ?string $level, ?string $cohort, int $semester): array
     {
         \Log::info('DecisionService: Récupération étudiants semestre (Old System)', compact('academicYearId', 'departmentId', 'level', 'cohort', 'semester'));
-        
+
         $academicPathQuery = AcademicPath::where('academic_year_id', $academicYearId)
             ->where('study_level', $level);
-        
+
         if ($cohort) {
             $academicPathQuery->where('cohort', $cohort);
         }
-        
+
         $studentPendingStudentIds = $academicPathQuery->pluck('student_pending_student_id')->toArray();
-        
+
         if (empty($studentPendingStudentIds)) {
             return [];
         }
-        
+
         $studentIds = \App\Modules\Inscription\Models\StudentPendingStudent::whereIn('id', $studentPendingStudentIds)
             ->pluck('student_id')->toArray();
-        
+
         $classGroupIds = \App\Modules\Inscription\Models\StudentGroup::whereIn('student_id', $studentIds)
             ->pluck('class_group_id')->unique()->toArray();
-        
+
         $classGroupIds = \App\Modules\Inscription\Models\ClassGroup::whereIn('id', $classGroupIds)
             ->where('academic_year_id', $academicYearId)
             ->where('department_id', $departmentId)
             ->where('study_level', $level)
             ->pluck('id')->toArray();
-        
+
         if (empty($classGroupIds)) {
             return [];
         }
-        
+
         $programsData = Program::whereIn('class_group_id', $classGroupIds)
             ->where('semester', $semester)
             ->with('courseElementProfessor.courseElement')
@@ -768,7 +768,7 @@ class DecisionService
         foreach ($decisions as $decision) {
             $academicPath = AcademicPath::where('student_pending_student_id', $decision['student_pending_student_id'])
                 ->first();
-            
+
             if ($academicPath) {
                 $academicPath->semester_decision = $decision['semester_decision'];
                 $academicPath->save();
@@ -782,11 +782,11 @@ class DecisionService
     {
         $count = 0;
         $dateToUse = $deliberationDate ? \Carbon\Carbon::parse($deliberationDate) : now();
-        
+
         foreach ($decisions as $decision) {
             $academicPath = AcademicPath::where('student_pending_student_id', $decision['student_pending_student_id'])
                 ->first();
-            
+
             if ($academicPath) {
                 $academicPath->year_decision = $decision['year_decision'];
                 $academicPath->deliberation_date = $dateToUse;
@@ -800,7 +800,7 @@ class DecisionService
     public function processYearDeliberationAndProgression(int $academicYearId, int $departmentId, ?string $level, ?string $cohort, float $validationAverage = 12, ?string $deliberationDate = null, array $studentData = []): array
     {
         \Log::info('=== DEBUT processYearDeliberationAndProgression ===', compact('academicYearId', 'departmentId', 'level', 'cohort', 'validationAverage'));
-        
+
         $dateToUse = $deliberationDate ? \Carbon\Carbon::parse($deliberationDate) : now();
         \Log::info('Date de délibération', ['date' => $dateToUse->format('Y-m-d')]);
 
@@ -815,7 +815,7 @@ class DecisionService
         \Log::info('Type de filière', ['department_name' => $department?->name, 'is_prepa' => $isPrepa]);
 
         // Rechercher l'année académique suivante
-        $nextYear = \App\Modules\Inscription\Models\AcademicYear::where('year_start', '>', 
+        $nextYear = \App\Modules\Inscription\Models\AcademicYear::where('year_start', '>',
             \App\Modules\Inscription\Models\AcademicYear::find($academicYearId)->year_start)
             ->orderBy('year_start', 'asc')
             ->first();
@@ -824,7 +824,7 @@ class DecisionService
         $academicPathQuery = AcademicPath::with(['studentPendingStudent.pendingStudent.department', 'studentPendingStudent.student'])
             ->where('academic_year_id', $academicYearId)
             ->where('study_level', $level);
-        
+
         if ($cohort) {
             $academicPathQuery->where('cohort', $cohort);
         }
@@ -832,16 +832,16 @@ class DecisionService
         $academicPaths = $academicPathQuery->get();
         \Log::info('Nombre de parcours académiques trouvés', ['count' => $academicPaths->count()]);
         \Log::info('Données étudiants reçues', ['count' => count($studentData)]);
-        
+
         $updated = 0;
         $progressed = 0;
 
         foreach ($academicPaths as $index => $academicPath) {
             $studentId = $academicPath->studentPendingStudent?->student?->id;
             \Log::info("Traitement étudiant $index", ['student_id' => $studentId, 'academic_path_id' => $academicPath->id]);
-            
+
             $studentInfo = collect($studentData)->firstWhere('id', $studentId);
-            
+
             if (!$studentInfo) {
                 \Log::warning('Étudiant non trouvé dans les données', ['student_id' => $studentId]);
                 continue;
@@ -868,7 +868,7 @@ class DecisionService
             if (!$isPrepa && $decision === 'pass' && $nextYear) {
                 $newStudyLevel = $academicPath->study_level + 1;
                 $newCohort = ($academicPath->cohort && $academicPath->cohort != 1) ? 1 : $academicPath->cohort;
-                
+
                 $newPath = AcademicPath::create([
                     'student_pending_student_id' => $academicPath->student_pending_student_id,
                     'academic_year_id' => $nextYear->id,
@@ -879,7 +879,7 @@ class DecisionService
                     'year_decision' => null,
                     'deliberation_date' => null,
                 ]);
-                
+
                 $progressed++;
                 \Log::info('Progression automatique créée', [
                     'new_path_id' => $newPath->id,
@@ -893,7 +893,7 @@ class DecisionService
         }
 
         \Log::info('=== FIN processYearDeliberationAndProgression ===', ['updated' => $updated, 'progressed' => $progressed]);
-        
+
         return [
             'updated' => $updated,
             'progressed' => $progressed,

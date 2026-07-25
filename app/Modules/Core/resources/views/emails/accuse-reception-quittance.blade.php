@@ -60,7 +60,7 @@
     @endif
 
     <div style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0;">
-        <p style="margin: 0;"><strong>⏳ Statut :</strong> En cours de vérification</p>
+        <p style="margin: 0;"><strong>⏳ status :</strong> En cours de vérification</p>
     </div>
 
     <h3>Prochaines étapes :</h3>

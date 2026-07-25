@@ -15,7 +15,7 @@ use App\Modules\Stockage\Http\Controllers\DocumentController;
 |
 */
 
-Route::prefix('api/stockage')->group(function () {
+Route::prefix('stockage')->group(function () {
 
 // Routes publiques (fichiers publics et partages)
 Route::prefix('files')->group(function () {

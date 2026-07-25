@@ -16,7 +16,7 @@ class ProfessorSeeder extends Seeder
                 'last_name' => 'KOUASSI',
                 'email' => 'j.kouassi@cap.edu',
                 'phone' => '+225 07 00 00 01',
-                'specialty' => 'Informatique',
+                'speciality' => 'Informatique',
                 'status' => 'active',
             ],
             [
@@ -24,7 +24,7 @@ class ProfessorSeeder extends Seeder
                 'last_name' => 'KONE',
                 'email' => 'm.kone@cap.edu',
                 'phone' => '+225 07 00 00 02',
-                'specialty' => 'Mathématiques',
+                'speciality' => 'Mathématiques',
                 'status' => 'active',
             ],
             [
@@ -32,7 +32,7 @@ class ProfessorSeeder extends Seeder
                 'last_name' => 'YAO',
                 'email' => 'p.yao@cap.edu',
                 'phone' => '+225 07 00 00 03',
-                'specialty' => 'Électronique',
+                'speciality' => 'Électronique',
                 'status' => 'active',
             ],
             [
@@ -40,7 +40,7 @@ class ProfessorSeeder extends Seeder
                 'last_name' => 'TRAORE',
                 'email' => 'f.traore@cap.edu',
                 'phone' => '+225 07 00 00 04',
-                'specialty' => 'Physique',
+                'speciality' => 'Physique',
                 'status' => 'active',
             ],
             [
@@ -48,7 +48,7 @@ class ProfessorSeeder extends Seeder
                 'last_name' => 'BAMBA',
                 'email' => 'a.bamba@cap.edu',
                 'phone' => '+225 07 00 00 05',
-                'specialty' => 'Génie Civil',
+                'speciality' => 'Génie Civil',
                 'status' => 'active',
             ],
         ];

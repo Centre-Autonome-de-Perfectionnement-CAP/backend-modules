@@ -13,7 +13,7 @@ class StudentIdTest extends TestCase
     {
         $response = $this->postJson('/api/inscription/students/lookup-id', []);
 
-        $response->assertStatus(422)
+        $response->assertstatus(422)
             ->assertJsonStructure([
                 'message',
                 'errors',
@@ -44,7 +44,7 @@ class StudentIdTest extends TestCase
     {
         $response = $this->postJson('/api/inscription/students/assign-id', []);
 
-        $response->assertStatus(422)
+        $response->assertstatus(422)
             ->assertJsonStructure([
                 'message',
                 'errors',
@@ -106,7 +106,7 @@ class StudentIdTest extends TestCase
             'birth_place' => 'Paris',
         ]);
 
-        $response->assertStatus(422)
+        $response->assertstatus(422)
             ->assertJsonValidationErrors(['birth_date']);
     }
 }

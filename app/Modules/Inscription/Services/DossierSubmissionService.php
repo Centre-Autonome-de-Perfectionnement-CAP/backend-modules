@@ -89,14 +89,14 @@ class DossierSubmissionService
                     'birth_place' => $request->birth_place ?? null,
                     'birth_country' => $request->birth_country ?? 'Bénin',
                     'gender' => $request->gender,
-                    'contacts' => $request->contacts, 
+                    'contacts' => $request->contacts,
                 ]);
             } else {
                 $student = Student::where('student_id_number', $request->student_id_number)->firstOrFail();
                 $studentPendingStudent = StudentPendingStudent::where('student_id', $student->id)
                     ->with('pendingStudent.personalInformation')
                     ->firstOrFail();
-                    
+
                 $personalInformation = $studentPendingStudent->pendingStudent->personalInformation;
             }
 
@@ -137,7 +137,7 @@ class DossierSubmissionService
                 'cuo_opinion' => null,
                 'rejection_reason' => null,
                 'cuco_mail_sent' => false,
-                'documents' => $documents, 
+                'documents' => $documents,
                 'level' => $request->study_level,
                 'entry_diploma_id' => $request->entry_diploma_id ?? null,
                 'photo' => $photoPath,
@@ -269,9 +269,9 @@ class DossierSubmissionService
 
             $existingDocuments = $pendingStudent->documents ?? [];
             $mergedDocuments = array_merge((array) $existingDocuments, $documents);
-            
+
             $pendingStudent->update([
-                'documents' => $mergedDocuments, 
+                'documents' => $mergedDocuments,
             ]);
             $department = Department::findOrFail($pendingStudent->department_id);
             $personalInformation = $pendingStudent->personalInformation;
@@ -315,7 +315,7 @@ class DossierSubmissionService
                 ->where('status', 'approved');
             })
             ->exists();
-            
+
         if (!$existsPrepa) {
             throw new BusinessException(
                 message: 'Vous devez avoir complété et validé les Classes Préparatoires pour vous inscrire en Spécialité',

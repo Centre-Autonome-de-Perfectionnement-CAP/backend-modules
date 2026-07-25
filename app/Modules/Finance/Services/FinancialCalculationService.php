@@ -40,7 +40,7 @@ class FinancialCalculationService
         foreach ($amounts as $amount) {
             $baseAmount = $isExonerated ? ($amount->sponsored_amount ?? 0) : $amount->amount;
             $finalAmount = $this->exonerationService->calculateExoneratedAmount($baseAmount, $exoneration);
-            
+
             $penalty = $this->calculatePenalty($amount, $academicYearId);
             $finalAmount += $penalty;
 
@@ -90,12 +90,12 @@ class FinancialCalculationService
         // TEMPORAIRE : Montant fixe en dur pour solution immédiate
         // TODO : Remplacer par la logique dynamique basée sur la table amounts quand les tarifs seront configurés
         $totalDue = 425000; // Montant total à payer (inscription + frais de formation)
-        
+
         /* ANCIENNE LOGIQUE (à réactiver plus tard) :
         $due = $this->calculateTotalDue($studentPendingStudentId, $academicYearId);
         $totalDue = $due['total'];
         */
-        
+
         // Récupérer uniquement les paiements APPROUVÉS pour cet étudiant
         $paid = Paiement::where('student_pending_student_id', $studentPendingStudentId)
             ->where('status', 'approved')

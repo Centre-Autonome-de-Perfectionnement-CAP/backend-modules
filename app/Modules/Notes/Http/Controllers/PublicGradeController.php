@@ -57,7 +57,7 @@ class PublicGradeController extends Controller
             }
 
             $personalInfo = $student->pendingStudent->personalInformation;
-            
+
             if (!$personalInfo) {
                 return $this->errorResponse('Informations personnelles introuvables', 404);
             }
@@ -122,13 +122,13 @@ class PublicGradeController extends Controller
 
             // Vérifier si l'étudiant a soldé sa scolarité
             // On vérifie uniquement les paiements APPROUVÉS pour cette année académique
-            $financialStatus = $this->financialService->calculateBalance($studentId, $academicYearId);
-            
+            $financialstatus = $this->financialService->calculateBalance($studentId, $academicYearId);
+
             // L'étudiant doit avoir un solde de 0 ou négatif (trop payé) pour accéder aux résultats
-            if ($financialStatus['balance'] > 0) {
+            if ($financialstatus['balance'] > 0) {
                 return $this->errorResponse(
-                    'Vous devez être en règle avec la scolarité pour consulter vos résultats. ' . 
-                    'Solde restant : ' . number_format($financialStatus['balance'], 0, ',', ' ') . ' FCFA. ' .
+                    'Vous devez être en règle avec la scolarité pour consulter vos résultats. ' .
+                    'Solde restant : ' . number_format($financialstatus['balance'], 0, ',', ' ') . ' FCFA. ' .
                     'Veuillez attendre la validation de votre quittance par le service financier.',
                     403
                 );
@@ -153,10 +153,10 @@ class PublicGradeController extends Controller
             // Traiter les notes LMD
             foreach ($lmdGrades as $grade) {
                 if (!$grade->program || !$grade->program->courseElementProfessor) continue;
-                
+
                 $courseElement = $grade->program->courseElementProfessor->courseElement;
                 $professor = $grade->program->courseElementProfessor->professor;
-                
+
                 $finalAverage = $grade->average;
                 if (isset($grade->retake_average) && $grade->retake_average !== null) {
                     $finalAverage = min($grade->retake_average, 12);
@@ -192,10 +192,10 @@ class PublicGradeController extends Controller
             // Traiter les notes ancien système
             foreach ($oldGrades as $grade) {
                 if (!$grade->program || !$grade->program->courseElementProfessor) continue;
-                
+
                 $courseElement = $grade->program->courseElementProfessor->courseElement;
                 $professor = $grade->program->courseElementProfessor->professor;
-                
+
                 $finalAverage = $grade->average;
                 $credits = $courseElement->credits ?? 0;
                 $coefficient = $courseElement->coefficient ?? 1;

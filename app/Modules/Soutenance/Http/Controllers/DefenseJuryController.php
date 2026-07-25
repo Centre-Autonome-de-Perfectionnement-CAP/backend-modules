@@ -122,7 +122,7 @@ class DefenseJuryController extends Controller
         return $this->successResponse($suggestions, 'Suggestions récupérées avec succès');
     }
 
-    public function checkStatus(Request $request)
+    public function checkstatus(Request $request)
     {
         $submissions = \App\Modules\Soutenance\Models\DefenseSubmission::with('juryMembers')
             ->whereHas('period', function ($q) use ($request) {
@@ -148,7 +148,7 @@ class DefenseJuryController extends Controller
             'all_complete' => $total > 0 && $complete === $total,
             'complete_count' => $complete,
             'total_count' => $total
-        ], 'Statut des jurys récupéré avec succès');
+        ], 'status des jurys récupéré avec succès');
     }
 
     public function store(Request $request, int $submissionId): JsonResponse

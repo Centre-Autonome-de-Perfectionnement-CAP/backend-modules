@@ -38,7 +38,7 @@ class CourseRetakeService
         });
     }
 
-    public function updateRetakeStatus(int $retakeId, string $status, ?float $finalGrade = null): bool
+    public function updateRetakestatus(int $retakeId, string $status, ?float $finalGrade = null): bool
     {
         $retake = StudentCourseRetake::findOrFail($retakeId);
         $retake->status = $status;
@@ -51,7 +51,7 @@ class CourseRetakeService
     public function processYearEndRetakes(int $academicYearId, int $classGroupId): array
     {
         $created = [];
-        
+
         $grades = LmdSystemGrade::whereHas('program.classGroup', function ($q) use ($classGroupId, $academicYearId) {
                 $q->where('id', $classGroupId)
                   ->where('academic_year_id', $academicYearId);

@@ -27,10 +27,10 @@ class StudentFinanceController extends Controller
     public function getFinancialState(Request $request, int $studentPendingStudentId)
     {
         $academicYearId = $request->input('academic_year_id');
-        
+
         $balance = $this->calculationService->calculateBalance($studentPendingStudentId, $academicYearId);
         $transactions = $this->transactionService->getStudentTransactions($studentPendingStudentId);
-        
+
         $payments = Paiement::where('student_pending_student_id', $studentPendingStudentId)
             ->orderBy('created_at', 'desc')
             ->get();
@@ -55,7 +55,7 @@ class StudentFinanceController extends Controller
                     $exists = Paiement::where('reference', $value)
                         ->whereIn('status', ['pending', 'approved'])
                         ->exists();
-                    
+
                     if ($exists) {
                         $fail('Cette référence existe déjà dans le système.');
                     }

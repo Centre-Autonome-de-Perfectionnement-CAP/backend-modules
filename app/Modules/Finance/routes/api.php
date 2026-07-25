@@ -15,7 +15,7 @@ use App\Modules\Finance\Http\Controllers\AcademicLevelFeeController;
 
 // Routes for Finance module
 
-Route::prefix('api/finance')->group(function () {
+Route::prefix('finance')->group(function () {
     // Dashboard
     Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
     Route::get('/dashboard/pending-payments', [DashboardController::class, 'getPendingPayments']);

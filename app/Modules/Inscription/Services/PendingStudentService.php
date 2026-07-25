@@ -48,7 +48,7 @@ class PendingStudentService
                 ->distinct()
                 ->orderBy('start_date')
                 ->get();
-            
+
             // Trouver la période correspondant à la cohorte demandée
             $cohortIndex = (int)$filters['cohort'] - 1;
             if (isset($periods[$cohortIndex])) {
@@ -214,34 +214,34 @@ class PendingStudentService
     }
 
     /**
-     * Changer le statut d'un étudiant en attente
+     * Changer le status d'un étudiant en attente
      */
-    public function changeStatus(PendingStudent $pendingStudent, string $status): PendingStudent
+    public function changestatus(PendingStudent $pendingStudent, string $status): PendingStudent
     {
         return DB::transaction(function () use ($pendingStudent, $status) {
-            $oldStatus = $pendingStudent->status;
+            $oldstatus = $pendingStudent->status;
 
-            Log::info('=== CHANGE STATUS START ===', [
+            Log::info('=== CHANGE status START ===', [
                 'pending_student_id' => $pendingStudent->id,
-                'old_status' => $oldStatus,
+                'old_status' => $oldstatus,
                 'new_status' => $status,
             ]);
 
             $pendingStudent->update(['status' => $status]);
 
-            // Si le statut passe à "approved", créer l'étudiant officiel
-            if ($status === 'approved' && $oldStatus !== 'approved') {
-                Log::info('Status changed to approved, checking if student should be created');
-                
+            // Si le status passe à "approved", créer l'étudiant officiel
+            if ($status === 'approved' && $oldstatus !== 'approved') {
+                Log::info('status changed to approved, checking if student should be created');
+
                 // Vérifier le cycle et le nom du département
                 $department = $pendingStudent->department;
                 $cycle = $department ? strtolower($department->cycle->name ?? '') : '';
                 $departmentName = $department ? strtolower($department->name ?? '') : '';
-                
+
                 // Prépa = cycle Ingénierie ET nom contient "prepa"
-                $isPrepa = (str_contains($cycle, 'ingénierie') || str_contains($cycle, 'ingenierie')) && 
+                $isPrepa = (str_contains($cycle, 'ingénierie') || str_contains($cycle, 'ingenierie')) &&
                            (str_contains($departmentName, 'prépa') || str_contains($departmentName, 'prepa'));
-                
+
                 Log::info('Department and cycle info', [
                     'department_id' => $department?->id,
                     'department_name' => $department?->name,
@@ -250,9 +250,9 @@ class PendingStudentService
                     'cuca_opinion' => $pendingStudent->cuca_opinion,
                     'cuo_opinion' => $pendingStudent->cuo_opinion,
                 ]);
-                
+
                 $canCreateStudent = false;
-                
+
                 if ($isPrepa) {
                     // Prépa: seule CUCA décide
                     $canCreateStudent = true;
@@ -265,7 +265,7 @@ class PendingStudentService
                         'canCreateStudent' => $canCreateStudent,
                     ]);
                 }
-                
+
                 if ($canCreateStudent) {
                     Log::info('Creating official student');
                     $this->createOfficialStudent($pendingStudent);
@@ -274,7 +274,7 @@ class PendingStudentService
                 }
             }
 
-            Log::info('=== CHANGE STATUS END ===');
+            Log::info('=== CHANGE status END ===');
 
             return $pendingStudent->fresh();
         });
@@ -353,7 +353,7 @@ class PendingStudentService
         if (!$fee) {
             $department = $pendingStudent->department;
             $departmentName = $department ? $department->name : 'inconnue';
-            
+
             Log::error('Impossible de créer l\'étudiant: aucun tarif défini', [
                 'pending_student_id' => $pendingStudent->id,
                 'academic_year_id' => $pendingStudent->academic_year_id,
@@ -361,7 +361,7 @@ class PendingStudentService
                 'level' => $pendingStudent->level,
                 'department_name' => $departmentName,
             ]);
-            
+
             throw new \Exception(
                 "Impossible d'accepter cet étudiant. Aucun tarif actif n'est défini pour le niveau {$pendingStudent->level} " .
                 "de la filière {$departmentName}. Veuillez configurer les tarifs dans le module Finance avant d'accepter des étudiants."
@@ -375,7 +375,7 @@ class PendingStudentService
         Log::info('Recherche d\'un Student existant via personal_information_id', [
             'personal_information_id' => $pendingStudent->personal_information_id,
         ]);
-        
+
         $existingStudentPendingStudent = \App\Modules\Inscription\Models\StudentPendingStudent::whereHas('pendingStudent', function($q) use ($pendingStudent) {
             $q->where('personal_information_id', $pendingStudent->personal_information_id);
         })->with('student')->first();
@@ -408,12 +408,12 @@ class PendingStudentService
             'student_id' => $student->id,
             'pending_student_id' => $pendingStudent->id,
         ]);
-        
+
         $studentPendingStudent = \App\Modules\Inscription\Models\StudentPendingStudent::create([
             'student_id' => $student->id,
             'pending_student_id' => $pendingStudent->id,
         ]);
-        
+
         Log::info('✅ StudentPendingStudent créé', [
             'student_pending_student_id' => $studentPendingStudent->id,
         ]);
@@ -421,31 +421,31 @@ class PendingStudentService
         // Déterminer la cohorte basée sur la période de dépôt
         $cohort = $this->determineCohort($pendingStudent);
         Log::info('Cohorte déterminée', ['cohort' => $cohort]);
-        
+
         // Récupérer le role_id étudiant
         $studentRoleId = DB::table('roles')->where('name', 'etudiant')->value('id');
         Log::info('Role étudiant récupéré', ['role_id' => $studentRoleId]);
-        
+
         // Créer l'entrée dans academic_paths pour l'année académique actuelle
-        $financialStatus = $pendingStudent->exonere ? 'Exonéré' : 'Non exonéré';
+        $financialstatus = $pendingStudent->exonere ? 'Exonéré' : 'Non exonéré';
         Log::info('Création de AcademicPath', [
             'student_pending_student_id' => $studentPendingStudent->id,
             'academic_year_id' => $pendingStudent->academic_year_id,
             'study_level' => $pendingStudent->level,
             'cohort' => $cohort,
             'role_id' => $studentRoleId,
-            'financial_status' => $financialStatus,
+            'financial_status' => $financialstatus,
         ]);
-        
+
         $academicPath = \App\Modules\Inscription\Models\AcademicPath::create([
             'student_pending_student_id' => $studentPendingStudent->id,
             'academic_year_id' => $pendingStudent->academic_year_id,
             'study_level' => $pendingStudent->level,
             'cohort' => $cohort,
             'role_id' => $studentRoleId,
-            'financial_status' => $financialStatus,
+            'financial_status' => $financialstatus,
         ]);
-        
+
         Log::info('✅ AcademicPath créé', [
             'academic_path_id' => $academicPath->id,
         ]);
@@ -474,28 +474,28 @@ class PendingStudentService
             ->groupBy('start_date', 'end_date')
             ->orderBy('start_date', 'asc')
             ->get();
-        
+
         if ($periods->isEmpty()) {
             return '1'; // Par défaut cohorte 1
         }
-        
+
         // Trouver dans quelle période le pending_student a été créé
         $createdAt = $pendingStudent->created_at;
         $cohortNumber = 1;
-        
+
         foreach ($periods as $index => $period) {
             $startDate = \Carbon\Carbon::parse($period->start_date);
             $endDate = \Carbon\Carbon::parse($period->end_date);
-            
+
             if ($createdAt->between($startDate, $endDate)) {
                 $cohortNumber = $index + 1;
                 break;
             }
         }
-        
+
         return (string)$cohortNumber;
     }
-    
+
     /**
      * Générer un numéro d'étudiant unique
      */

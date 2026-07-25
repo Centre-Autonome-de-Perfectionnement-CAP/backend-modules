@@ -76,4 +76,8 @@ class Student extends Authenticatable
             'id'
         );
     }
+
+    public function personalInformation() {
+        return $this->hasOne(PersonalInformation::class);
+    }
 }

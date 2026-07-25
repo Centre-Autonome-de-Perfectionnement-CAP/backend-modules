@@ -13,7 +13,7 @@ class CourseElementSeeder extends Seeder
     public function run(): void
     {
         $teachingUnits = TeachingUnit::limit(15)->get();
-        
+
         if ($teachingUnits->isEmpty()) {
             $this->command->warn('⚠️  Aucune UE trouvée. Exécutez TeachingUnitSeeder d\'abord.');
             return;
@@ -25,10 +25,10 @@ class CourseElementSeeder extends Seeder
 
         foreach ($teachingUnits as $ue) {
             $numElements = rand(2, 3);
-            
+
             for ($i = 0; $i < $numElements; $i++) {
                 $type = $courseTypes[$i % count($courseTypes)];
-                
+
                 $courseElement = CourseElement::updateOrCreate(
                     [
                         'code' => $ue->code . '-' . $type,

@@ -15,8 +15,8 @@ class PendingStudentResource extends JsonResource
         // Extraire le phone depuis le JSON contacts si disponible
         $phone = null;
         if ($this->personalInformation && $this->personalInformation->contacts) {
-            $contacts = is_array($this->personalInformation->contacts) 
-                ? $this->personalInformation->contacts 
+            $contacts = is_array($this->personalInformation->contacts)
+                ? $this->personalInformation->contacts
                 : json_decode($this->personalInformation->contacts, true);
             
             // Contacts peut être un array de numéros ou un objet avec clé 'phone'
@@ -37,7 +37,7 @@ class PendingStudentResource extends JsonResource
                 // Gérer le format objet {url, custom_name} ou string
                 $url = is_array($value) ? ($value['url'] ?? '') : $value;
                 $customName = is_array($value) ? ($value['custom_name'] ?? null) : null;
-                
+
                 $path = str_starts_with($url, 'public/') ? $url : 'public/' . $url;
                 $documents[$name] = [
                     'url' => url("/api/inscription/files/legacy?path=" . urlencode($path)),
@@ -46,7 +46,7 @@ class PendingStudentResource extends JsonResource
             }
         }
 
-        // Utiliser le statut réel de la base de données
+        // Utiliser le status réel de la base de données
         $status = $this->status ?? 'pending';
 
         return [

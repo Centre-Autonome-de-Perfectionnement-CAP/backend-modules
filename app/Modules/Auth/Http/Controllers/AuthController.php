@@ -9,14 +9,8 @@ use App\Modules\Auth\Services\AuthService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
 
-/**
- * @OA\Tag(
- *     name="Authentication",
- *     description="Gestion de l'authentification (login, register, logout, me)"
- * )
- */
-class AuthController extends Controller
-{
+
+class AuthController extends Controller{
     use ApiResponse;
 
     public function __construct(
@@ -49,8 +43,7 @@ class AuthController extends Controller
      *     @OA\Response(response=422, description="Données invalides ou identifiants incorrects")
      * )
      */
-    public function login(LoginRequest $request)
-    {
+    public function login(LoginRequest $request) {
         $result = $this->authService->login($request->validated());
         return $this->successResponse($result, 'Connexion réussie');
     }

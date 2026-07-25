@@ -14,12 +14,13 @@ use App\Modules\Inscription\Http\Controllers\DashboardController;
 use App\Modules\Inscription\Http\Controllers\ClassGroupController;
 use App\Modules\Inscription\Http\Controllers\StudentController;
 use App\Modules\Inscription\Http\Controllers\PendingStudentExportController;
-
-
+use App\Modules\Inscription\Http\Controllers\ResponsableController;
 use App\Modules\Inscription\Http\Controllers\StudentBroadcastController;
+use App\Modules\Inscription\Http\Controllers\TextbookController;
 
 
-Route::prefix('api/inscription')->group(function () {
+Route::prefix('inscription')->group(function () {
+
 
     Route::prefix('pending-students')->group(function () {
         Route::middleware('auth:sanctum')->group(function () {
@@ -28,19 +29,20 @@ Route::prefix('api/inscription')->group(function () {
             Route::put('/{pendingStudent}', [PendingStudentController::class, 'update']);
             Route::delete('/{pendingStudent}', [PendingStudentController::class, 'destroy']);
             Route::get('/{pendingStudent}/documents', [PendingStudentController::class, 'getDocuments']);
-            Route::patch('/{pendingStudent}/financial-status', [PendingStudentController::class, 'updateStatus']);
+            Route::patch('/{pendingStudent}/financial-statut', [PendingStudentController::class, 'updatestatut']);
             Route::patch('/{pendingStudent}/level', [PendingStudentController::class, 'updateLevel']);
             Route::patch('/{pendingStudent}/pieces/rename', [PendingStudentController::class, 'renamePiece']);
         });
         Route::post('/', [PendingStudentController::class, 'store']);
         Route::post('/{pendingStudent}/documents', [PendingStudentController::class, 'submitDocuments']);
+
     });
 
     Route::prefix('submissions')->group(function () {
         Route::get('/active-periods', [SubmissionController::class, 'getActiveSubmissionPeriods']);
         Route::get('/active-reclamation-periods', [SubmissionController::class, 'getActiveReclamationPeriods']);
-        Route::post('/check-status', [SubmissionController::class, 'checkSubmissionStatus']);
-        Route::post('/check-reclamation-status', [SubmissionController::class, 'checkReclamationStatus']);
+        Route::post('/check-statut', [SubmissionController::class, 'checkSubmissionstatut']);
+        Route::post('/check-reclamation-statut', [SubmissionController::class, 'checkReclamationstatut']);
 
         // Admin-only CRUD for submission periods
         Route::middleware('auth:sanctum')->group(function () {
@@ -81,6 +83,8 @@ Route::prefix('api/inscription')->group(function () {
     Route::prefix('students')->group(function () {
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('/', [StudentController::class, 'index']);
+            Route::post('/{id}/assign-class-responsible', [StudentController::class, 'assignClassResponsible']);
+            Route::post('/{id}/remove-class-responsible', [StudentController::class, 'removeClassResponsible']);
             Route::get('/export/fiche-presence', [StudentController::class, 'exportFichePresence']);
             Route::get('/export/fiche-emargement', [StudentController::class, 'exportFicheEmargement']);
             Route::get('/{id}', [StudentController::class, 'show']);
@@ -149,11 +153,29 @@ Route::prefix('api/inscription')->group(function () {
         });
     });
 
-    Route::middleware('auth:sanctum')->group(function () {
-        Route::get('export/pdf', [PendingStudentExportController::class, 'exportPdf']);
-        Route::get('export/excel', [PendingStudentExportController::class, 'exportExcel']);
-        Route::get('export/word', [PendingStudentExportController::class, 'exportWord']);
-        Route::get('export/emails', [PendingStudentExportController::class, 'exportEmails']);
-    });
-
 }); // Fin du groupe api/inscription
+
+
+
+Route::prefix('inscription/responsable')->middleware('auth:sanctum')->group(function () {
+
+    // ── Routes existantes ──────────────────────────────────────────────────
+    Route::get('/dashboard', [\App\Modules\Inscription\Http\Controllers\ResponsableController::class, 'dashboard']);
+    Route::get('/classes',   [\App\Modules\Inscription\Http\Controllers\ResponsableController::class, 'getClasses']);
+
+    // ── Nouvelles routes : programmes d'une classe ─────────────────────────
+    Route::get('/classes/{classGroupId}/programs', [TextbookController::class, 'getClassPrograms']);
+
+    // ── Nouvelles routes : étudiants d'une classe ─────────────────────────
+    Route::get('/classes/{classGroupId}/students', [\App\Modules\Inscription\Http\Controllers\ResponsableController::class, 'getStudentsByClass']);
+
+    // ── Nouvelles routes : cahier de texte ────────────────────────────────
+    // Vérification anticipée (fenêtre de saisie)
+    Route::get('/programs/{programId}/textbook/can-add', [TextbookController::class, 'canAdd']);
+
+    // CRUD des entrées
+    Route::get('/programs/{programId}/textbook',    [TextbookController::class, 'index']);
+    Route::post('/programs/{programId}/textbook',   [TextbookController::class, 'store']);
+    Route::put('/textbook/{entryId}',               [TextbookController::class, 'update']);
+    Route::delete('/textbook/{entryId}',            [TextbookController::class, 'destroy']);
+});

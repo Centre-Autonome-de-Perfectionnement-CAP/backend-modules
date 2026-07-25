@@ -13,7 +13,7 @@ class PendingStudentSimpleTest extends TestCase
     {
         $response = $this->getJson('/api/inscription/pending-students');
 
-        $response->assertStatus(401);
+        $response->assertstatus(401);
     }
 
     /**
@@ -25,7 +25,7 @@ class PendingStudentSimpleTest extends TestCase
 
         $response = $this->getJson('/api/inscription/pending-students');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -42,7 +42,7 @@ class PendingStudentSimpleTest extends TestCase
 
         // Peut retourner 422 (validation) ou 500 (erreur serveur sans données)
         $this->assertContains($response->status(), [422, 500]);
-        
+
         if ($response->status() === 422) {
             $response->assertJsonStructure(['message', 'errors']);
         }
@@ -57,7 +57,7 @@ class PendingStudentSimpleTest extends TestCase
             'status' => 'approved',
         ]);
 
-        $response->assertStatus(401);
+        $response->assertstatus(401);
     }
 
     /**
@@ -67,6 +67,6 @@ class PendingStudentSimpleTest extends TestCase
     {
         $response = $this->deleteJson('/api/inscription/pending-students/1');
 
-        $response->assertStatus(401);
+        $response->assertstatus(401);
     }
 }
