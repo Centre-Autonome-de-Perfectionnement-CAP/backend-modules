@@ -38,9 +38,6 @@ class DashboardService
     public function getGraphData($academicYearId = null): array {
         $currentYear = null;
 
-       
-
-        // Nettoyer l'ID si c'est la chaîne 'null'
         if ($academicYearId === 'null' || $academicYearId === '') {
             $academicYearId = null;
         }
@@ -48,25 +45,11 @@ class DashboardService
         if (!$academicYearId) {
             $currentYear = AcademicYear::where('is_current', true)->first();
             $academicYearId = $currentYear ? $currentYear->id : null;
-        } 
-        elseif (is_string($academicYearId) && preg_match('/^\d{4}-\d{4}$/', $academicYearId)) {
+        } elseif (is_string($academicYearId) && preg_match('/^\d{4}-\d{4}$/', $academicYearId)) {
             $currentYear = AcademicYear::where('academic_year', $academicYearId)->first();
-
-
-
-
-        // Si l'ID ressemble à une année académique (ex: "2026-2027"), chercher par academic_year
-        if (is_string($academicYearId) && preg_match('/^\d{4}-\d{4}$/', $academicYearId)) {
-            $currentYear = AcademicYear::where('academic_year', $academicYearId)->first();
-
-
             $academicYearId = $currentYear ? $currentYear->id : null;
-        } 
-        else {
+        } else {
             $academicYearId = DatabaseAdapter::sanitizeId($academicYearId);
-
-
-
             if ($academicYearId) {
                 $currentYear = AcademicYear::find($academicYearId);
             } else {
