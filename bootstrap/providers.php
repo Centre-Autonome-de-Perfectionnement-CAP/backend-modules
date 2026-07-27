@@ -17,5 +17,4 @@ return [
     App\Modules\Alumni\Providers\AlumniServiceProvider::class,
     App\Modules\Demandes\Providers\DemandesServiceProvider::class,
     App\Modules\Attendance\Providers\AttendanceServiceProvider::class,
-    App\Modules\Attendance\Providers\SeanceServiceProvider::class,
 ];
