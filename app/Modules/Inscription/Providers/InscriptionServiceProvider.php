@@ -21,9 +21,10 @@ class InscriptionServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Charger les routes avec le middleware API
-        Route::middleware('api')
+        Route::prefix('api')
+            ->middleware('api')
             ->group(__DIR__.'/../routes/api.php');
-            
+
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'inscription');
     }

@@ -3,6 +3,7 @@
 namespace App\Modules\CahierTexte\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Route;
 
 class CahierTexteServiceProvider extends ServiceProvider
 {
@@ -20,6 +21,8 @@ class CahierTexteServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Charger les routes API
-        $this->loadRoutesFrom(__DIR__ . '/../routes/api.php');
+        Route::prefix('api')
+            ->middleware('api')
+            ->group(__DIR__.'/../routes/api.php');
     }
 }

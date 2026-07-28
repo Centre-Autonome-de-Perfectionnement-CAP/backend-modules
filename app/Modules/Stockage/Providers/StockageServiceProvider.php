@@ -3,6 +3,7 @@
 namespace App\Modules\Stockage\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Gate;
 use App\Modules\Stockage\Models\File;
 use App\Modules\Stockage\Policies\FilePolicy;
@@ -37,7 +38,9 @@ class StockageServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Charger les routes
-        $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
+        Route::prefix('api')
+            ->middleware('api')
+            ->group(__DIR__.'/../routes/api.php');
         
         // Charger les migrations
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');

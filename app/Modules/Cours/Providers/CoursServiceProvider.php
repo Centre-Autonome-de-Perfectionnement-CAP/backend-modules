@@ -3,6 +3,7 @@
 namespace App\Modules\Cours\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Route;
 
 class CoursServiceProvider extends ServiceProvider
 {
@@ -23,6 +24,8 @@ class CoursServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
 
         // Charger les routes
-        $this->loadRoutesFrom(__DIR__ . '/../routes/api.php');
+        Route::prefix('api')
+            ->middleware('api')
+            ->group(__DIR__.'/../routes/api.php');
     }
 }

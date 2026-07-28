@@ -21,10 +21,8 @@ class EmploiDuTempsServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Charger les routes avec le middleware API
-        Route::middleware('api')
+        Route::prefix('api')
+            ->middleware('api')
             ->group(__DIR__.'/../routes/api.php');
-            
-        // Charger les migrations depuis le dossier database/migrations global
-        // (Les migrations ont été placées dans database/migrations au lieu de app/Modules/EmploiDuTemps/database/migrations)
     }
 }
