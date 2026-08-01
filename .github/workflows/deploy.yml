@@ -102,13 +102,13 @@ jobs:
             # Restart queue workers if supervisor is configured
             if command -v supervisorctl &> /dev/null; then
               echo "👷 Restarting queue workers..."
-              sudo supervisorctl restart laravel-worker:* || true
+              sudo supervisorctl restart laravel-worker:* || echo "⚠️  Queue workers not configured"
             fi
             
             # Keep only last 5 releases
             echo "🧹 Cleaning old releases..."
             cd $DEPLOY_PATH/releases
-            ls -t | tail -n +6 | xargs -r rm -rf
+            ls -t | tail -n +6 | xargs -r rm -rf || echo "⚠️  Some old releases could not be removed (permission issue)"
             
             echo "✅ Deployment completed successfully!"
           ENDSSH
