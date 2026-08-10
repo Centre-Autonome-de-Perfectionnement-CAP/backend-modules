@@ -1,4 +1,3 @@
-```yaml
 name: Deploy to VPS
 
 on:
@@ -82,4 +81,3 @@ jobs:
             php artisan up
 
             echo "✅ backend-modules déployé avec succès !"
-```
