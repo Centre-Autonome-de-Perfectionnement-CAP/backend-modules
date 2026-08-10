@@ -13,9 +13,11 @@ return new class extends Migration
                 $table->dropForeign(['program_id']);
                 $table->dropColumn('program_id');
             }
+
             if (Schema::hasColumn('amounts', 'level')) {
                 $table->dropColumn('level');
             }
+
             if (Schema::hasColumn('amounts', 'sponsored_amount')) {
                 $table->dropColumn('sponsored_amount');
             }

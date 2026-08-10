@@ -146,17 +146,35 @@
                     <strong>ℹ️ Prochaines étapes</strong>
                 </p>
                 <p style="margin: 10px 0 0 0; color: #856404;">
-                    Votre quittance sera vérifiée par nos services dans les plus brefs délais. 
+                    Votre quittance sera vérifiée par nos services dans les plus brefs délais (24-48h ouvrables). 
                     Vous recevrez une notification par email une fois le paiement validé ou en cas de besoin de rectification.
                 </p>
             </div>
 
+            <div style="background-color: #e7f3ff; border-left: 4px solid #2196F3; padding: 15px; margin: 20px 0; border-radius: 5px;">
+                <p style="margin: 0; color: #0d47a1;">
+                    <strong>🔍 Suivre l'évolution de votre paiement</strong>
+                </p>
+                <p style="margin: 10px 0; color: #0d47a1;">
+                    Utilisez votre référence <strong style="font-size: 16px; color: #1976d2;">{{ $reference }}</strong> pour consulter le statut de traitement en temps réel.
+                </p>
+                <div style="text-align: center; margin-top: 15px;">
+                    <a href="{{ config('app.frontend_url') }}/student-services?type=suivi-paiement" 
+                       style="display: inline-block; padding: 12px 30px; background-color: #2196F3; color: #ffffff; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
+                        📊 Suivre mon paiement
+                    </a>
+                </div>
+                <p style="margin: 10px 0 0 0; font-size: 12px; color: #666; text-align: center;">
+                    Ou copiez ce lien : {{ config('app.frontend_url') }}/student-services?type=suivi-paiement
+                </p>
+            </div>
+
             <p style="margin-top: 20px;">
-                <strong>💡 Astuce :</strong> Conservez précieusement votre référence <strong>{{ $reference }}</strong> 
-                pour suivre l'état de votre paiement.
+                <strong>💡 Important :</strong> Conservez précieusement votre référence <strong>{{ $reference }}</strong>. 
+                Elle vous sera demandée pour toute réclamation ou question concernant ce paiement.
             </p>
 
-            <p>Pour toute question concernant votre paiement, n'hésitez pas à contacter le service financier en mentionnant votre référence.</p>
+            <p>Pour toute question, contactez le service financier en mentionnant votre référence.</p>
         </div>
         <div class="footer">
             <p>Merci de votre confiance,<br><strong>Service Financier</strong></p>

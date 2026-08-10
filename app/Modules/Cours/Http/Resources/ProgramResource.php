@@ -22,7 +22,7 @@ class ProgramResource extends JsonResource
             'academic_year' => $this->whenLoaded('academicYear', function () {
                 return [
                     'id' => $this->academicYear->id,
-                    'name' => $this->academicYear->name,
+                    'name' => $this->academicYear->libelle ?? $this->academicYear->academic_year,
                     'is_current' => $this->academicYear->is_current,
                 ];
             }),
@@ -38,12 +38,12 @@ class ProgramResource extends JsonResource
                     'study_level' => $this->classGroup->study_level,
                     'academic_year' => $this->classGroup->academicYear ? [
                         'id' => $this->classGroup->academicYear->id,
-                        'name' => $this->classGroup->academicYear->name,
+                        'name' => $this->classGroup->academicYear->libelle ?? $this->classGroup->academicYear->academic_year,
                     ] : null,
                     'department' => $this->classGroup->department ? [
                         'id' => $this->classGroup->department->id,
                         'name' => $this->classGroup->department->name,
-                        'code' => $this->classGroup->department->code,
+                        'code' => $this->classGroup->department->abbreviation,
                     ] : null,
                 ];
             }),

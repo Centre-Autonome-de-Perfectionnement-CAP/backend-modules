@@ -16,4 +16,5 @@ return [
     App\Modules\CahierTexte\Providers\CahierTexteServiceProvider::class,
     App\Modules\Demandes\Providers\DemandesServiceProvider::class,
     App\Modules\AdminDb\Providers\AdminDbServiceProvider::class,
+    App\Modules\Alumni\Providers\AlumniServiceProvider::class,
 ];

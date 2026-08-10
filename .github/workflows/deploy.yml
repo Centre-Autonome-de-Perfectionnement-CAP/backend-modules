@@ -1,4 +1,5 @@
-name: 🚀 Deploy backend-modules (mirco-dev-secure)
+```yaml
+name: Deploy to VPS
 
 on:
   push:
@@ -9,7 +10,7 @@ jobs:
   deploy:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
@@ -24,44 +25,61 @@ jobs:
           script_stop: true
           script: |
             set -e
-            
+
             echo "🚀 Déploiement backend-modules sur mirco-dev-secure..."
-            
+
             cd /var/www/api.the-haute-societyy.com
-            
+
             # Mode maintenance
+            echo "🔧 Activation du mode maintenance..."
             php artisan down --retry=10 || true
-            
+
             # Pull latest code
+            echo "📥 Récupération du dernier code..."
             git fetch origin mirco-dev-secure
             git reset --hard origin/mirco-dev-secure
-            
-            # Dépendances Composer (Update pour résoudre le conflit PHP 8.4 vs 8.3 du VPS)
-            composer update --no-dev --optimize-autoloader --no-interaction
-            
+
+            # Composer
+            echo "📚 Installation des dépendances Composer..."
+            composer install \
+              --no-dev \
+              --optimize-autoloader \
+              --no-interaction \
+              --prefer-dist
+
             # Migrations
-            #php artisan migrate --force
-            
-            # Nettoyer et recréer caches
+            echo "🗄️ Migrations..."
+            # php artisan migrate --force
+
+            # Nettoyage des caches
+            echo "🧹 Nettoyage des caches..."
             php artisan config:clear
             php artisan cache:clear
             php artisan view:clear || true
             php artisan route:clear
+
+            # Recréation des caches
+            echo "⚡ Recréation des caches..."
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache || true
-            
+
             # Storage link
+            echo "🔗 Storage link..."
             php artisan storage:link || true
-            
+
             # Permissions
+            echo "🔐 Correction des permissions..."
             sudo chown -R ths:www-data storage bootstrap/cache 2>/dev/null || true
             sudo chmod -R 775 storage bootstrap/cache 2>/dev/null || true
-            
-            # Restart queue workers (si applicable)
+
+            # Restart queue workers
+            echo "👷 Redémarrage des workers..."
             php artisan queue:restart || true
-            
-            # Sortir maintenance
+
+            # Sortie maintenance
+            echo "🚀 Désactivation du mode maintenance..."
             php artisan up
-            
+
             echo "✅ backend-modules déployé avec succès !"
+```

@@ -15,8 +15,8 @@ class TextbookEntryService
     {
         $query = TextbookEntry::query()
             ->with([
-                'program.courseElementProfessor.courseElement',
-                'program.courseElementProfessor.professor',
+                'program.courseElement',
+                'program.professor',
                 'program.classGroup',
                 'scheduledCourse',
             ])
@@ -66,8 +66,8 @@ class TextbookEntryService
     public function getById(int $id)
     {
         return TextbookEntry::with([
-            'program.courseElementProfessor.courseElement',
-            'program.courseElementProfessor.professor',
+            'program.courseElement',
+            'program.professor',
             'program.classGroup',
             'scheduledCourse',
             'validator',
@@ -91,8 +91,8 @@ class TextbookEntryService
             ]);
 
             return $entry->load([
-                'program.courseElementProfessor.courseElement',
-                'program.courseElementProfessor.professor',
+                'program.courseElement',
+                'program.professor',
                 'program.classGroup',
             ]);
         } catch (\Exception $e) {
@@ -118,8 +118,8 @@ class TextbookEntryService
             ]);
 
             return $entry->load([
-                'program.courseElementProfessor.courseElement',
-                'program.courseElementProfessor.professor',
+                'program.courseElement',
+                'program.professor',
                 'program.classGroup',
             ]);
         } catch (\Exception $e) {
@@ -209,8 +209,9 @@ class TextbookEntryService
         $query = TextbookEntry::query()
             ->byClassGroup($classGroupId)
             ->with([
-                'program.courseElementProfessor.courseElement',
-                'program.courseElementProfessor.professor',
+                'program.courseElement',
+                'program.professor',
+                'program.classGroup',
             ])
             ->withCount('comments');
 
@@ -236,7 +237,8 @@ class TextbookEntryService
         $query = TextbookEntry::query()
             ->byProfessor($professorId)
             ->with([
-                'program.courseElementProfessor.courseElement',
+                'program.courseElement',
+                'program.professor',
                 'program.classGroup',
             ])
             ->withCount('comments');

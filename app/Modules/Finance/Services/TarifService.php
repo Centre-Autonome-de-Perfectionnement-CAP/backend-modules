@@ -14,20 +14,18 @@ class TarifService
     public function getAllTarifs()
     {
         return Amount::with(['academicYear'])
+            ->withCount('classGroups')
             ->get()
             ->map(function($amount) {
                 $classes = DB::table('amount_class_groups')
                     ->join('departments', 'amount_class_groups.department_id', '=', 'departments.id')
                     ->where('amount_id', $amount->id)
                     ->select('departments.name', 'amount_class_groups.study_level')
-                    ->get();
+                    ->get()
+                    ->map(fn($c) => $c->name . '-' . $c->study_level)
+                    ->join(', ');
                 
-                $classesList = $classes->map(function($c) {
-                    return $c->name . '-' . $c->study_level;
-                })->toArray();
-                
-                $amount->classes_list = implode(', ', $classesList);
-                $amount->class_groups_count = count($classesList);
+                $amount->classes_list = $classes;
                 return $amount;
             });
     }

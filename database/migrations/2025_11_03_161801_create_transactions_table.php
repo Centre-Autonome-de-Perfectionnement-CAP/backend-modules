@@ -15,7 +15,11 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->string('transaction_id')->unique();
-            $table->foreignId('paiement_id')->constrained('payments')->onDelete('cascade');
+
+            $table->foreignId('paiement_id')
+                ->constrained('paiements')
+                ->onDelete('cascade');
+
             $table->decimal('amount', 10, 2);
             $table->enum('type', ['credit', 'debit', 'refund'])->default('credit');
             $table->enum('status', ['pending', 'completed', 'failed'])->default('pending');
@@ -25,7 +29,7 @@ return new class extends Migration
             $table->timestamp('processed_at')->nullable();
             $table->timestamps();
             $table->softDeletes();
-            
+
             $table->index('transaction_id');
             $table->index('paiement_id');
             $table->index('status');
