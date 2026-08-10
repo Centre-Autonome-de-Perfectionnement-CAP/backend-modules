@@ -2,225 +2,148 @@
 
 namespace App\Modules\Demandes\Services;
 
-use Illuminate\Support\Facades\Log;
-use Twilio\Rest\Client as TwilioClient;
+use App\Modules\Core\Services\WhatsAppBridgeClient;
 
 /**
- * Service d'envoi de messages WhatsApp via Twilio.
+ * Service WhatsApp du module Demandes.
  *
- * Règles :
- *  - Jamais bloquant : tout échec est loggué silencieusement
- *  - Jamais d'exception propagée vers le workflow
- *  - Normalise automatiquement les numéros béninois (+229)
- *  - Journalise chaque envoi (succès + échec)
- *  - Aucun emoji — mise en forme WhatsApp (*gras*, _italique_)
+ * Adaptateur de haut niveau :
+ *   - Expose les templates métier (soumission, rejet, prêt…)
+ *   - Délègue l'envoi réel au WhatsAppBridgeClient (micro-service Node.js / Baileys)
  *
- * Formats acceptés en entrée :
- *   XXXXXXXX           → +22901XXXXXXXX  (8 chiffres → nouveau format béninois)
- *   01XXXXXXXX         → +22901XXXXXXXX  (10 chiffres commençant par 01)
- *   229XXXXXXXX        → +229XXXXXXXX    (11 chiffres, ancien format)
- *   22901XXXXXXXX      → +22901XXXXXXXX  (13 chiffres, nouveau format sans +)
- *   0022901XXXXXXXX    → +22901XXXXXXXX  (préfixe 00)
- *   00229XXXXXXXX      → +229XXXXXXXX    (préfixe 00, ancien format)
- *   +229XXXXXXXX       → inchangé
- *   +22901XXXXXXXX     → inchangé
- *   Séparateurs (espaces, tirets, points) tolérés entre chiffres.
+ * REFONTE (v3) :
+ *   - Suppression des séparateurs visuels (――――) dans tous les templates.
+ *   - Ajout d'un accueil personnalisé ("Bonjour {nomEtudiant},") sur les
+ *     messages destinés à l'étudiant.
+ *   - Aucun émoji. Mise en forme WhatsApp conservée (*gras*, _italique_).
+ *   - Liens de suivi/complément externalisés dans des constantes en tête
+ *     de fichier (URL_SUIVI / URL_COMPLEMENT) pour pouvoir changer le
+ *     domaine après déploiement sans toucher aux templates.
+ *   - templateActeurDossier() / templateCorrectionCircuit() : le nom de
+ *     l'expéditeur n'est plus affiché, seul son rôle l'est (libellé
+ *     WorkflowConstants::ROLE_LABELS, déjà résolu par l'appelant).
  *
- * NOTE SANDBOX TWILIO :
- *   Le sandbox Twilio WhatsApp distingue +229XXXXXXXX et +22901XXXXXXXX
- *   comme deux numéros différents. Si un destinataire a fait "join" depuis
- *   son ancien numéro (+229XXXXXXXX) mais que le formulaire envoie le nouveau
- *   format (+22901XXXXXXXX), le message sera rejeté (error 63015).
- *   → Solution définitive : passer en production Twilio (WhatsApp Business API).
- *   → Solution temporaire sandbox : les destinataires doivent "join" depuis le
- *     numéro EXACTEMENT tel qu'il sera envoyé (format normalisé affiché dans le form).
+ * AJOUT (v2) : isConnected() — exposé pour SendNotificationJob.
+ *         Délègue à WhatsAppBridgeClient::isConnected() qui existe déjà.
+ *         Le Job l'appelle avant d'envoyer pour éviter de brûler une tentative
+ *         si le bridge est temporairement déconnecté.
  */
 class WhatsAppService
 {
-    private ?TwilioClient $client = null;
+    // ── Liens (à adapter au vrai domaine de production) ─────────────────────
+    // Un seul endroit à modifier après déploiement.
+    private const URL_SUIVI      = 'http://cap.the-haute-societyy.com/student-services?type=suivi';
+    private const URL_COMPLEMENT = 'http://cap.the-haute-societyy.com/student-services?type=complement-dossier';
 
-    private const DIVIDER = '――――――――――――――――――';
+    public function __construct(
+        private WhatsAppBridgeClient $bridge,
+    ) {}
 
     // ── Envoi principal ───────────────────────────────────────────────────────
 
     public function send(string $phone, string $message, string $context = ''): bool
     {
-        $normalized = $this->normalizePhone($phone);
-
-        if (!$normalized) {
-            Log::warning('[WhatsApp] Numéro invalide ou absent', [
-                'phone'   => $phone,
-                'context' => $context,
-            ]);
-            return false;
-        }
-
-        try {
-            $this->client()->messages->create(
-                "whatsapp:{$normalized}",
-                [
-                    'from' => config('services.twilio.whatsapp_from'),
-                    'body' => $message,
-                ]
-            );
-
-            Log::info('[WhatsApp] Message envoyé', [
-                'to'      => $normalized,
-                'context' => $context,
-            ]);
-
-            return true;
-
-        } catch (\Exception $e) {
-            Log::error('[WhatsApp] Échec envoi', [
-                'to'      => $normalized,
-                'context' => $context,
-                'error'   => $e->getMessage(),
-            ]);
-            return false;
-        }
+        return $this->bridge->send($phone, $message, $context);
     }
-
-    // ── Normalisation numéro ──────────────────────────────────────────────────
 
     public function normalizePhone(string $phone): ?string
     {
-        // Supprimer séparateurs (espaces, tirets, points, parenthèses)
-        $clean   = preg_replace('/[\s\-.()\t]/', '', trim($phone));
-        $digits  = preg_replace('/\D/', '', $clean);
-
-        if (strlen($digits) < 8) {
-            return null;
-        }
-
-        // Préfixe 00 → enlever les deux zéros
-        if (str_starts_with($digits, '00')) {
-            $digits = substr($digits, 2);
-        }
-
-        return $this->normalizeDigits($digits);
+        return $this->bridge->normalizePhone($phone);
     }
 
-    private function normalizeDigits(string $digits): ?string
+    // ── AJOUT : statut bridge ─────────────────────────────────────────────────
+
+    /**
+     * Vérifie si le bridge WhatsApp est connecté.
+     * Utilisé par SendNotificationJob::handleWhatsApp() avant chaque envoi.
+     * WhatsAppBridgeClient::isConnected() met le résultat en cache 10s
+     * pour ne pas saturer le bridge de pings.
+     */
+    public function isConnected(): bool
     {
-        return match (strlen($digits)) {
-            8 => '+229' . $digits,                                         // XXXXXXXX → nouveau format béninois
-            10 => str_starts_with($digits, '01') ? '+229' . $digits : null,  // 01XXXXXXXX → +22901XXXXXXXX
-            11 => str_starts_with($digits, '229') ? '+' . $digits : null,    // 229XXXXXXXX → +229XXXXXXXX (ancien)
-            13 => str_starts_with($digits, '22901') ? '+' . $digits : null,  // 22901XXXXXXXX → +22901XXXXXXXX
-            default => null,
-        };
+        return $this->bridge->isConnected();
     }
 
-    // ── Client Twilio (lazy) ──────────────────────────────────────────────────
-
-    private function client(): TwilioClient
-    {
-        if (!$this->client) {
-            $this->client = new TwilioClient(
-                config('services.twilio.sid'),
-                config('services.twilio.token')
-            );
-        }
-        return $this->client;
-    }
-
-    // ═════════════════════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════════════════
     // TEMPLATES — ÉTUDIANT
-    // ═════════════════════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════════════════
 
-    public function templateSoumission(string $reference, string $typeLabel, string $email): string
+    public function templateSoumission(string $reference, string $typeLabel, string $nomEtudiant): string
     {
-        $suiviUrl = config('app.url') . '/app-cap/student-services?ref=' . $reference;
         return implode("\n", [
-            "✅ *Demande Reçue*",
-            "",
-            "Votre demande de *{$typeLabel}* (Réf: {$reference}) a bien été enregistrée.",
-            "",
-            "Votre dossier est en cours d'examen. Vous serez notifié(e) à chaque étape.",
-            "",
-            "Suivez l'avancement ici : {$suiviUrl}"
+            '*CAP-EPAC — Demande enregistrée*',
+            "Bonjour {$nomEtudiant},",
+            "Votre demande de *{$typeLabel}* a bien été enregistrée sous la référence *{$reference}*.",
+            'Veuillez conserver cette référence : elle vous sera utile pour tout suivi ou réclamation.',
+            "Vous serez notifié(e) en temps réel sur l'état de votre demande.",
+            '',
+            'Suivi de votre dossier sur : ' . self::URL_SUIVI . "?ref={$reference}",
         ]);
     }
 
-    public function templateComplementEtudiant(string $reference, array $piecesList): string
+    public function templateComplementEtudiant(string $reference, array $piecesList, string $nomEtudiant): string
     {
-        $nb = count($piecesList);
-        $label = $nb <= 1 ? 'pièce complémentaire reçue' : 'pièces complémentaires reçues';
-        $suiviUrl = config('app.url') . '/app-cap/student-services?ref=' . $reference;
-
+        $nb    = count($piecesList);
+        $label = $nb > 1 ? 'pièces complémentaires' : 'pièce complémentaire';
         $lines = [
-            "📎 *Complément Reçu*",
-            "",
-            "Pour votre demande (Réf: {$reference}), nous avons bien reçu {$nb} {$label} :",
+            '*CAP-EPAC — Complément reçu*',
+            "Bonjour {$nomEtudiant},",
+            "Nous avons bien reçu {$nb} {$label} pour votre dossier (Réf : *{$reference}*) :",
         ];
-
         foreach ($piecesList as $piece) {
-            $lines[] = "- {$piece}";
+            $lines[] = "• {$piece}";
         }
-
-        $lines[] = "";
-        $lines[] = "Elles ont été transmises au secrétariat pour vérification.";
-        $lines[] = "";
-        $lines[] = "Suivez l'avancement ici : {$suiviUrl}";
-
+        $lines[] = 'Elles ont été transmises au secrétariat pour vérification.';
+        $lines[] = '';
+        $lines[] = 'Suivi de votre dossier sur : ' . self::URL_SUIVI . "?ref={$reference}";
         return implode("\n", $lines);
     }
 
-    public function templatePret(string $reference, string $typeLabel): string
+    public function templatePret(string $reference, string $typeLabel, string $nomEtudiant): string
     {
         return implode("\n", [
-            "🎉 *Document Prêt*",
-            "",
-            "Votre demande de *{$typeLabel}* (Réf: {$reference}) a été traitée avec succès.",
-            "",
-            "Vous pouvez venir récupérer votre document au secrétariat durant les heures d'ouverture.",
+            '*CAP-EPAC — Document prêt*',
+            "Bonjour {$nomEtudiant},",
+            "Votre *{$typeLabel}* (Réf : *{$reference}*) est prêt.",
+            "Vous pouvez venir le récupérer au secrétariat durant les heures d'ouverture.",
         ]);
     }
 
-    public function templateRejete(string $reference, string $typeLabel, string $motif): string
+    public function templateRejete(string $reference, string $typeLabel, string $motif, string $nomEtudiant): string
     {
         return implode("\n", [
-            "❌ *Demande Rejetée*",
-            "",
-            "Votre demande de *{$typeLabel}* (Réf: {$reference}) n'a pas pu aboutir.",
-            "",
-            "*Motif :* {$motif}",
-            "",
-            "Veuillez corriger ces éléments ou vous rapprocher du secrétariat.",
+            '*CAP-EPAC — Demande rejetée*',
+            "Bonjour {$nomEtudiant},",
+            "Votre demande de *{$typeLabel}* (Réf : *{$reference}*) n'a pas pu aboutir.",
+            "Motif : {$motif}",
+            'Rapprochez-vous du secrétariat pour plus d\'informations.',
         ]);
     }
 
-    public function templateSousReserve(string $reference, string $typeLabel, string $motif): string
+    public function templateSousReserve(string $reference, string $typeLabel, string $motif, string $nomEtudiant): string
     {
-        $suiviUrl = config('app.url') . '/app-cap/student-services?ref=' . $reference;
         return implode("\n", [
-            "⚠️ *Dossier Sous Réserve*",
-            "",
-            "Votre demande de *{$typeLabel}* (Réf: {$reference}) est en cours de traitement mais nécessite votre attention.",
-            "",
-            "*Motif :* {$motif}",
-            "",
-            "Veuillez régulariser la situation en soumettant un complément de dossier en ligne.",
-            "",
-            "Suivez l'avancement et complétez ici : {$suiviUrl}"
+            '*CAP-EPAC — Action requise*',
+            "Bonjour {$nomEtudiant},",
+            "Votre demande de *{$typeLabel}* (Réf : *{$reference}*) nécessite un complément.",
+            "Motif : {$motif}",
+            'Merci de soumettre les pièces manquantes via ce lien : ' . self::URL_COMPLEMENT . "?ref={$reference}",
         ]);
     }
 
-    public function templateRemis(string $reference, string $typeLabel): string
+    public function templateRemis(string $reference, string $typeLabel, string $nomEtudiant): string
     {
         return implode("\n", [
-            "🤝 *Document Retiré*",
-            "",
-            "Votre document *{$typeLabel}* (Réf: {$reference}) vous a été remis avec succès.",
-            "",
-            "Merci de votre confiance et bonne continuation !",
+            '*CAP-EPAC — Document remis*',
+            "Bonjour {$nomEtudiant},",
+            "Votre *{$typeLabel}* (Réf : *{$reference}*) vous a bien été remis.",
+            'Merci de votre confiance.',
         ]);
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // TEMPLATES — ACTEURS INTERNES
-    // ═════════════════════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════════════════
+    // TEMPLATES — PERSONNEL (STAFF)
+    // ══════════════════════════════════════════════════════════════════════════
 
     public function templateNouvelleDemandeSecretaire(
         string $destinataireNom,
@@ -230,12 +153,11 @@ class WhatsAppService
         string $matricule,
     ): string {
         return implode("\n", [
-            "📥 *Nouvelle Demande Reçue*",
-            "",
-            "Bonjour *{$destinataireNom}*,",
-            "Une nouvelle demande de *{$typeDocument}* a été soumise par *{$nomEtudiant}* (Réf: {$reference}).",
-            "",
-            "Veuillez vérifier et initier le traitement du dossier.",
+            '*CAP-EPAC — Nouvelle demande*',
+            "Bonjour {$destinataireNom},",
+            "L'étudiant(e) *{$nomEtudiant}*" . ($matricule ? " ({$matricule})" : '') . " a soumis une demande de *{$typeDocument}*.",
+            "Référence : *{$reference}*",
+            'Merci d\'initier le traitement depuis votre tableau de bord.',
         ]);
     }
 
@@ -245,70 +167,95 @@ class WhatsAppService
         string $nomEtudiant,
         int    $nbPieces,
     ): string {
-        $label = $nbPieces <= 1 ? 'pièce complémentaire' : 'pièces complémentaires';
+        $label = $nbPieces > 1 ? 'pièces complémentaires' : 'pièce complémentaire';
         return implode("\n", [
-            "📎 *Complément de Dossier*",
-            "",
-            "Bonjour *{$destinataireNom}*,",
-            "L'étudiant(e) *{$nomEtudiant}* (Réf: {$reference}) vient de déposer {$nbPieces} {$label}.",
-            "",
-            "Veuillez vérifier les nouveaux documents.",
+            '*CAP-EPAC — Complément déposé*',
+            "Bonjour {$destinataireNom},",
+            "*{$nomEtudiant}* a déposé {$nbPieces} {$label} pour le dossier *{$reference}*.",
+            'Merci de vérifier ces nouveaux éléments.',
         ]);
     }
 
+    /**
+     * Transmission d'un dossier à un acteur du circuit.
+     * Le rôle affiché ({$expediteurRole}) est déjà le libellé résolu via
+     * WorkflowConstants::ROLE_LABELS par l'appelant (NotificationService) —
+     * aucun nom d'expéditeur n'apparaît dans le message.
+     */
     public function templateActeurDossier(
         string  $destinataireNom,
-        string  $destinataireRole,
-        string  $expediteurNom,
         string  $expediteurRole,
         string  $reference,
         string  $typeDocument,
         string  $etudiantNom,
-        string  $matricule = '',
-        ?string $commentaire = null,
+        string  $matricule,
+        ?string $commentaire,
     ): string {
+        $etudiantAffiche = $etudiantNom . ($matricule ? " ({$matricule})" : '');
         $lines = [
-            "📁 *Nouveau Dossier à Traiter*",
-            "",
-            "Bonjour *{$destinataireNom}*,",
-            "*[{$expediteurRole}] {$expediteurNom}* vient de vous transmettre la demande de *{$etudiantNom}* (Réf: {$reference} - {$typeDocument}).",
-            "",
+            '*CAP-EPAC — Dossier à traiter*',
+            "Bonjour {$destinataireNom},",
+            "*[{$expediteurRole}]* vous a transmis le dossier *{$reference}* (*{$typeDocument}* — {$etudiantAffiche}).",
         ];
-
         if ($commentaire) {
-            $lines[] = "*Note :* {$commentaire}";
-            $lines[] = "";
+            $lines[] = "Note : {$commentaire}";
         }
-
-        $lines[] = "Veuillez vous connecter pour traiter ce dossier.";
-
+        $lines[] = 'Merci de vous connecter pour le traiter.';
         return implode("\n", $lines);
     }
 
+    /**
+     * Retour de dossier pour correction.
+     * Même règle que templateActeurDossier() : rôle seul, pas de nom.
+     */
     public function templateCorrectionCircuit(
         string  $destinataireNom,
-        string  $expediteurNom,
         string  $expediteurRole,
         string  $reference,
         string  $typeDocument,
         string  $etudiantNom,
-        string  $matricule = '',
-        ?string $commentaire = null,
+        string  $matricule,
+        ?string $commentaire,
     ): string {
+        $etudiantAffiche = $etudiantNom . ($matricule ? " ({$matricule})" : '');
         $lines = [
-            "⚠️ *Dossier Renvoyé pour Correction*",
-            "",
-            "Bonjour *{$destinataireNom}*,",
-            "Le dossier de *{$etudiantNom}* (Réf: {$reference}) vous a été renvoyé par *[{$expediteurRole}] {$expediteurNom}*.",
-            "",
+            '*CAP-EPAC — Retour pour correction*',
+            "Bonjour {$destinataireNom},",
+            "Le dossier *{$reference}* ({$etudiantAffiche}) vous a été renvoyé par *[{$expediteurRole}]*.",
         ];
-
         if ($commentaire) {
-            $lines[] = "*Motif :* {$commentaire}";
+            $lines[] = "Motif : {$commentaire}";
         }
-
-        $lines[] = "Veuillez vous connecter pour corriger la demande.";
-
+        $lines[] = 'Merci de corriger et renvoyer la demande.';
         return implode("\n", $lines);
+    }
+
+    public function templateDossierDirection(
+        string $destinataireNom,
+        string $nomEtudiant,
+        string $reference,
+    ): string {
+        return implode("\n", [
+            '*CAP-EPAC — Dossier en Direction*',
+            "Bonjour {$destinataireNom},",
+            "Le dossier de *{$nomEtudiant}* (Réf : *{$reference}*) est en cours de signature à la Direction.",
+            'Merci de préparer et acheminer le document physique correspondant.',
+        ]);
+    }
+
+    public function templateDirecteurSigne(
+        string $destinataireNom,
+        string $nomEtudiant,
+        string $reference,
+        string $typeDocument,
+        string $matricule,
+    ): string {
+        $etudiantAffiche = $nomEtudiant . ($matricule ? " ({$matricule})" : '');
+        return implode("\n", [
+            '*CAP-EPAC — Signature validée*',
+            "Bonjour {$destinataireNom},",
+            "Le *Directeur* a signé le dossier *{$reference}* (*{$typeDocument}* — {$etudiantAffiche}).",
+            'Merci de préparer le document final et de le marquer "prêt" dans le système.',
+        ]);
     }
 }

@@ -12,7 +12,7 @@ final class WorkflowConstants
     public const ROLE_LABELS = [
         'secretaire'          => 'Secrétaire',
         'comptable'           => 'Comptable',
-        'chef-division'       => 'Responsable Division',
+        'responsable-division'=> 'Responsable Division',
         'chef-cap'            => 'Chef CAP',
         'sec-da'              => 'Secrétaire Directrice Adjointe',
         'directrice-adjointe' => 'Directrice Adjointe',
@@ -20,6 +20,55 @@ final class WorkflowConstants
         'directeur'           => 'Directeur',
         'admin'               => 'Administrateur',
     ];
+
+    // ── Alias de rôles ────────────────────────────────────────────────────────
+    //
+    // Certains environnements/seeds historiques utilisent encore l'ancien slug
+    // 'chef-division' à la place du slug canonique 'responsable-division'
+    // (qui est celui utilisé partout dans ROLE_LABELS, STATUS_TO_ROLE,
+    // ACTION_MATRIX et VISIBLE_STATUSES ci-dessous).
+    //
+    // Plutôt que de semer des comparaisons "OU" un peu partout dans le code,
+    // tout passage d'un rôle "brut" (venant d'Auth::user(), d'une colonne BD,
+    // ou d'un champ de formulaire) DOIT être normalisé via canonicalRole().
+    // Et toute recherche SQL par slug de rôle (roles.slug, actor_role,
+    // correction_origin_role...) DOIT chercher toutes les variantes via
+    // roleSlugVariants(), car on ne maîtrise pas quelle graphie est réellement
+    // stockée en base.
+    //
+    // Pour ajouter un futur alias, il suffit d'ajouter une ligne ici —
+    // aucune autre partie du code n'a besoin d'être modifiée.
+
+    public const ROLE_SLUG_ALIASES = [
+        'chef-division' => 'responsable-division',
+    ];
+
+    /**
+     * Normalise un slug de rôle brut vers le slug canonique utilisé par
+     * toutes les constantes du workflow. Transparent pour les rôles qui
+     * n'ont pas d'alias (retourne la valeur inchangée).
+     */
+    public static function canonicalRole(?string $role): ?string
+    {
+        if ($role === null) {
+            return null;
+        }
+
+        return self::ROLE_SLUG_ALIASES[$role] ?? $role;
+    }
+
+    /**
+     * Retourne toutes les variantes connues d'un slug canonique
+     * (lui-même + tous ses alias), pour les requêtes SQL qui doivent
+     * chercher en base sans savoir quelle graphie y est stockée.
+     */
+    public static function roleSlugVariants(string $canonicalRole): array
+    {
+        $variants = array_keys(self::ROLE_SLUG_ALIASES, $canonicalRole, true);
+        $variants[] = $canonicalRole;
+
+        return array_values(array_unique($variants));
+    }
 
     public const TYPE_LABELS = [
         'attestation_passage'     => 'Attestation de Passage',
@@ -34,15 +83,19 @@ final class WorkflowConstants
         'secretaire_reject_final'        => 'Rejet définitif',
         'secretaire_resend'              => 'Renvoi',
         'secretaire_deliver'             => 'Remise',
+        'secretaire_mark_ready'          => 'Document prêt (finalisation)',
         'comptable_validate'             => 'Validation',
         'comptable_validate_flagged'     => 'Validation avec réserve',
         'comptable_reject'               => 'Rejet',
-        'chef_division_validate'         => 'Validation',
-        'chef_division_validate_flagged' => 'Validation avec réserve',
-        'chef_division_reject'           => 'Rejet',
-        'chef_cap_sign'                  => 'Signature / Paraphe',
-        'chef_cap_sign_flagged'          => 'Signature avec réserve',
+        'responsable_division_validate'         => 'Validation',
+        'responsable_division_validate_flagged' => 'Validation avec réserve',
+        'responsable_division_reject'           => 'Rejet',
+        'chef_cap_validate'              => 'Validation — Transmission Direction',
+        'chef_cap_validate_flagged'      => 'Validation avec réserve — Transmission Direction',
         'chef_cap_reject'                => 'Rejet',
+        // Anciens slugs conservés pour compatibilité historique (ne déclenchent plus de nouvelle transition)
+        'chef_cap_sign'                  => 'Signature / Paraphe (obsolète)',
+        'chef_cap_sign_flagged'          => 'Signature avec réserve (obsolète)',
         'sec_da_transmit'                => 'Transmission',
         'sec_da_transmit_flagged'        => 'Transmission avec réserve',
         'sec_da_reject'                  => 'Rejet',
@@ -63,71 +116,81 @@ final class WorkflowConstants
     //
     // CORRECTION BUG 3 : 'pending' ajouté pour notifier la secrétaire
     // à chaque nouvelle soumission de demande ou de complément de dossier.
+    //
+    // NOUVEAU WORKFLOW : après signature du Directeur, le dossier passe en
+    // 'secretary_final_review' — la secrétaire est notifiée et doit finaliser
+    // (marquer le document prêt via secretaire_mark_ready → ready_for_pickup).
 
     public const STATUS_TO_ROLE = [
-        'pending'                    => 'secretaire',       // ← AJOUT (Bug 3)
-        'comptable_review'           => 'comptable',
-        'chef_division_review'       => 'chef-division',
-        'chef_cap_review'            => 'chef-cap',
-        'sec_dir_adjointe_review'    => 'sec-da',
-        'directrice_adjointe_review' => 'directrice-adjointe',
-        'sec_directeur_review'       => 'sec-dir',
-        'directeur_review'           => 'directeur',
-        'secretaire_correction'      => 'secretaire',
+        'submitted'                          => 'secretaire',       // ← AJOUT (Bug 3)
+        'accounting_review'                  => 'comptable',
+        'division_manager_review'            => 'responsable-division',
+        'cap_manager_review'                 => 'chef-cap',
+        'deputy_director_secretary_review'   => 'sec-da',
+        'deputy_director_review'             => 'directrice-adjointe',
+        'director_secretary_review'          => 'sec-dir',
+        'director_review'                    => 'directeur',
+        'secretary_correction'               => 'secretaire',
+        'secretary_final_review'             => 'secretaire',       // ← NOUVEAU : après signature DG
     ];
 
     // ── Matrice d'autorisation ────────────────────────────────────────────────
 
     public const ACTION_MATRIX = [
         'secretaire' => [
-            'secretaire_validate'     => ['pending'],
-            'secretaire_reject'       => ['pending'],
-            'secretaire_resend'       => ['secretaire_correction'],
-            'secretaire_reject_final' => ['secretaire_correction'],
-            'secretaire_deliver'      => ['ready'],
+            'secretaire_validate'     => ['submitted'],
+            'secretaire_reject'       => ['submitted'],
+            'secretaire_resend'       => ['secretary_correction'],
+            'secretaire_reject_final' => ['secretary_correction'],
+            'secretaire_deliver'      => ['ready_for_pickup'],
+            'secretaire_mark_ready'   => ['secretary_final_review'],  // ← NOUVEAU
             'clear_flag'              => [],
         ],
         'comptable' => [
-            'comptable_validate'         => ['comptable_review'],
-            'comptable_validate_flagged' => ['comptable_review'],
-            'comptable_reject'           => ['comptable_review'],
-            'return_to_secretaire'       => ['comptable_review'],
+            'comptable_validate'         => ['accounting_review'],
+            'comptable_validate_flagged' => ['accounting_review'],
+            'comptable_reject'           => ['accounting_review'],
+            'return_to_secretaire'       => ['accounting_review'],
         ],
-        'chef-division' => [
-            'chef_division_validate'         => ['chef_division_review'],
-            'chef_division_validate_flagged' => ['chef_division_review'],
-            'chef_division_reject'           => ['chef_division_review'],
-            'return_to_secretaire'           => ['chef_division_review'],
+        'responsable-division' => [
+            'responsable_division_validate'         => ['division_manager_review'],
+            'responsable_division_validate_flagged' => ['division_manager_review'],
+            'responsable_division_reject'           => ['division_manager_review'],
+            'return_to_secretaire'                  => ['division_manager_review'],
         ],
         'chef-cap' => [
-            'chef_cap_sign'         => ['chef_cap_review'],
-            'chef_cap_sign_flagged' => ['chef_cap_review'],
-            'chef_cap_reject'       => ['chef_cap_review'],
-            'return_to_secretaire'  => ['chef_cap_review'],
+            // Nouveaux slugs : le Chef CAP valide simplement (transmission vers Direction)
+            'chef_cap_validate'         => ['cap_manager_review'],
+            'chef_cap_validate_flagged' => ['cap_manager_review'],
+            'chef_cap_reject'           => ['cap_manager_review'],
+            'return_to_secretaire'      => ['cap_manager_review'],
+            // Anciens slugs conservés pour compatibilité (historique existant)
+            'chef_cap_sign'             => ['cap_manager_review'],
+            'chef_cap_sign_flagged'     => ['cap_manager_review'],
         ],
         'sec-da' => [
-            'sec_da_transmit'         => ['sec_dir_adjointe_review'],
-            'sec_da_transmit_flagged' => ['sec_dir_adjointe_review'],
-            'sec_da_reject'           => ['sec_dir_adjointe_review'],
-            'return_to_secretaire'    => ['sec_dir_adjointe_review'],
+            'sec_da_transmit'         => ['deputy_director_secretary_review'],
+            'sec_da_transmit_flagged' => ['deputy_director_secretary_review'],
+            'sec_da_reject'           => ['deputy_director_secretary_review'],
+            'return_to_secretaire'    => ['deputy_director_secretary_review'],
         ],
         'directrice-adjointe' => [
-            'directrice_adjointe_sign'         => ['directrice_adjointe_review'],
-            'directrice_adjointe_sign_flagged' => ['directrice_adjointe_review'],
-            'directrice_adjointe_reject'       => ['directrice_adjointe_review'],
-            'return_to_secretaire'             => ['directrice_adjointe_review'],
+            'directrice_adjointe_sign'         => ['deputy_director_review'],
+            'directrice_adjointe_sign_flagged' => ['deputy_director_review'],
+            'directrice_adjointe_reject'       => ['deputy_director_review'],
+            'return_to_secretaire'             => ['deputy_director_review'],
         ],
         'sec-dir' => [
-            'sec_directeur_transmit'         => ['sec_directeur_review'],
-            'sec_directeur_transmit_flagged' => ['sec_directeur_review'],
-            'sec_directeur_reject'           => ['sec_directeur_review'],
-            'return_to_secretaire'           => ['sec_directeur_review'],
+            'sec_directeur_transmit'         => ['director_secretary_review'],
+            'sec_directeur_transmit_flagged' => ['director_secretary_review'],
+            'sec_directeur_reject'           => ['director_secretary_review'],
+            'return_to_secretaire'           => ['director_secretary_review'],
         ],
         'directeur' => [
-            'directeur_sign'         => ['directeur_review'],
-            'directeur_sign_flagged' => ['directeur_review'],
-            'directeur_reject'       => ['directeur_review'],
-            'return_to_secretaire'   => ['directeur_review'],
+            'directeur_sign'         => ['director_review'],
+            'directeur_sign_flagged' => ['director_review'],
+            'directeur_reject'       => ['director_review'],
+            'return_to_secretaire'   => ['director_review'],
         ],
     ];
 
@@ -140,24 +203,29 @@ final class WorkflowConstants
     //   correction, elle change le statut vers leur statut normal (ex: chef_division_review)
     //   avec is_in_correction_circuit = true. C'est ce flag qui change leur interface,
     //   pas le statut.
+    //
+    // NOUVEAU STATUT 'secretary_final_review' :
+    //   Après signature du Directeur, le dossier revient à la secrétaire pour finalisation.
+    //   Seule la secrétaire voit ce statut et peut déclencher secretaire_mark_ready.
 
     public const VISIBLE_STATUSES = [
         'secretaire' => [
-            'pending', 'secretaire_correction',
-            'comptable_review', 'chef_division_review', 'chef_cap_review',
-            'sec_dir_adjointe_review', 'directrice_adjointe_review',
-            'sec_directeur_review', 'directeur_review',
-            'ready', 'delivered', 'rejected',
+            'submitted', 'secretary_correction',
+            'accounting_review', 'division_manager_review', 'cap_manager_review',
+            'deputy_director_secretary_review', 'deputy_director_review',
+            'director_secretary_review', 'director_review',
+            'secretary_final_review',                                   // ← NOUVEAU
+            'ready_for_pickup', 'picked_up', 'rejected',
         ],
         // Chaque acteur voit UNIQUEMENT son statut propre.
         // secretaire_correction est retiré intentionnellement.
-        'comptable'           => ['comptable_review'],
-        'chef-division'       => ['chef_division_review'],
-        'chef-cap'            => ['chef_cap_review'],
-        'sec-da'              => ['sec_dir_adjointe_review'],
-        'directrice-adjointe' => ['directrice_adjointe_review'],
-        'sec-dir'             => ['sec_directeur_review'],
-        'directeur'           => ['directeur_review'],
+        'comptable'           => ['accounting_review'],
+        'responsable-division'=> ['division_manager_review'],
+        'chef-cap'            => ['cap_manager_review'],
+        'sec-da'              => ['deputy_director_secretary_review'],
+        'directrice-adjointe' => ['deputy_director_review'],
+        'sec-dir'             => ['director_secretary_review'],
+        'directeur'           => ['director_review'],
         'admin'               => [],
     ];
 

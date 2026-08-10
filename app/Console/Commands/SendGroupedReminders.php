@@ -42,7 +42,7 @@ class SendGroupedReminders extends Command
         $seuil = now()->subHours(36);
 
         // Statuts ignorés car ne nécessitant pas d'action (ou clos)
-        $ignoredStatuses = ['pending', 'ready', 'delivered', 'rejected'];
+        $ignoredStatuses = ['submitted', 'ready_for_pickup', 'picked_up', 'rejected'];
 
         // On récupère toutes les demandes non traitées depuis > 36h
         $demandes = DB::table('document_requests as dr')
@@ -57,7 +57,7 @@ class SendGroupedReminders extends Command
                 'dr.type',
                 'dr.status',
                 'dr.updated_at',
-                'dr.chef_division_type',
+                'dr.responsable_division_type',
                 'pi.first_names',
                 'pi.last_name'
             )
@@ -77,7 +77,7 @@ class SendGroupedReminders extends Command
                 continue;
             }
 
-            $users = $this->findUsersWithRole($targetRoleSlug, $demande->chef_division_type);
+            $users = $this->findUsersWithRole($targetRoleSlug, $demande->responsable_division_type);
 
             foreach ($users as $user) {
                 if (!isset($actorDemandes[$user->id])) {
@@ -131,7 +131,7 @@ class SendGroupedReminders extends Command
         $this->info("Fin de la relance.");
     }
 
-    private function findUsersWithRole(string $roleSlug, ?string $chefDivisionType): \Illuminate\Support\Collection
+    private function findUsersWithRole(string $roleSlug, ?string $responsableDivisionType): \Illuminate\Support\Collection
     {
         $query = DB::table('users as u')
             ->join('role_user as ru', 'ru.user_id', '=', 'u.id')
@@ -146,8 +146,8 @@ class SendGroupedReminders extends Command
                 'u.phone'
             );
 
-        if ($roleSlug === 'chef-division' && $chefDivisionType) {
-            $query->where('u.chef_division_type', $chefDivisionType);
+        if ($roleSlug === 'chef-division' && $responsableDivisionType) {
+            $query->where('u.responsable_division_type', $responsableDivisionType);
         }
 
         return $query->get();

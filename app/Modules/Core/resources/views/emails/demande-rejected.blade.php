@@ -23,18 +23,17 @@
     .motif-box { background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:16px; color:#991b1b; font-size:14px; margin-bottom:24px; }
     .motif-title { font-weight:600; margin-bottom:4px; display:block; }
     .cta-container { text-align:center; margin:32px 0; }
-    .cta-button { display:inline-block; background-color:#1e293b; color:#ffffff !important; text-decoration:none; padding:12px 28px; border-radius:6px; font-weight:600; font-size:15px; transition:background-color 0.2s; }
-    .cta-button:hover { background-color:#0f172a; }
+    .cta-button { display:inline-block; background-color:#1e293b; color:#ffffff !important; text-decoration:none; padding:12px 28px; border-radius:6px; font-weight:600; font-size:15px; }
     .footer { background:#f8fafc; padding:20px 32px; text-align:center; font-size:13px; color:#64748b; border-top:1px solid #e2e8f0; }
   </style>
 </head>
 <body>
   <div class="wrapper">
     <div class="header">
-      <h1>{{ config('app.name', 'CAP-EPAC') }}</h1>
+      <h1>CAP-EPAC</h1>
     </div>
     <div class="body">
-      <p class="greeting">Bonjour,</p>
+      <p class="greeting">Bonjour{{ !empty($nomEtudiant) ? ' ' . $nomEtudiant : '' }},</p>
       <p class="text">
         Après vérification de votre dossier, nous vous informons que votre demande de document n'a pas pu aboutir en l'état.
       </p>
@@ -51,7 +50,7 @@
       </div>
 
       <div class="motif-box">
-        <span class="motif-title">Motif du rejet / correction requise :</span>
+        <span class="motif-title">Motif du rejet :</span>
         {{ $motif }}
       </div>
 
@@ -68,7 +67,7 @@
     </div>
     <div class="footer">
       <p>Cet e-mail a été généré automatiquement. Merci de ne pas y répondre.</p>
-      <p style="margin-top:8px;">Le Secrétariat du {{ config('app.name', 'CAP-EPAC') }}</p>
+      <p style="margin-top:8px;">Le Secrétariat du CAP-EPAC</p>
     </div>
   </div>
 </body>

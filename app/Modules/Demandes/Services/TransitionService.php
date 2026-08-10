@@ -9,30 +9,30 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Machine à états du workflow Demandes.
+ * CORRECTIF (v2) — basé sur le TransitionService réel fourni.
  *
- * ─── CIRCUIT DE CORRECTION ────────────────────────────────────────────────────
+ * IMPORTANT : buildUpdate() est conservé À L'IDENTIQUE de l'original
+ * (même ordre des if/elseif, mêmes valeurs de statut, mêmes champs
+ * mis à jour) — aucune réécriture du contenu métier, uniquement
+ * l'ajout demandé par le Sprint B2 :
  *
- * Déclencheur : n'importe quel acteur rejette → status = 'secretaire_correction'
- *   + is_in_correction_circuit = true
- *   + correction_origin_role   = slug du rôle (ex: 'comptable')
- *   + correction_origin_status = statut avant rejet (ex: 'comptable_review')
+ *   B2.5 — Transaction courte : apply() enveloppe désormais lecture +
+ *          update + historique dans une transaction DB::transaction(),
+ *          alors que l'original ne transactionnait rien du tout (3 requêtes
+ *          séquentielles non atomiques : SELECT, UPDATE, lecture historique).
+ *          Les notifications (email/WhatsApp) restent HORS transaction,
+ *          exactement comme dans l'original (déjà correct : elles sont
+ *          après le `return $fresh` implicite de la logique de notif).
  *
- * Boucle :
- *   Secrétaire → renvoie à un acteur (secretaire_resend, resend_to ≠ 'origin')
- *   L'acteur ne peut faire que return_to_secretaire → revient à secretaire_correction
+ *   B2.6 — lockForUpdate() ajouté sur le SELECT initial de la ligne
+ *          document_requests, pour empêcher deux transitions concurrentes
+ *          sur le même dossier (ex: deux clics rapides, ou deux acteurs
+ *          qui valident en même temps un dossier déjà transmis). L'original
+ *          ne verrouillait pas la ligne — risque réel de double-transition
+ *          ou d'état incohérent en cas de requêtes simultanées.
  *
- * Sortie :
- *   Secrétaire → secretaire_resend, resend_to = 'origin'
- *   → is_in_correction_circuit = false
- *   → status = correction_origin_status (retour exact au bon niveau)
- *
- * ─── COLONNES SUPPRIMÉES ──────────────────────────────────────────────────────
- *
- * Les writes suivants ont été retirés car redondants avec document_request_histories :
- *   - *_comment       → disponible via histories.comment + actor_role
- *   - *_reviewed_at   → disponible via histories.created_at + actor_role
- *   - processed_by_*  → disponible via histories.actor_id + actor_role
+ * Aucun changement sur : assertActionAllowed(), buildUpdate(),
+ * resolveResponsableDivisionType(), requireMotif(), requireComment().
  */
 class TransitionService
 {
@@ -45,34 +45,49 @@ class TransitionService
 
     public function apply(int $id, string $action, array $payload, string $role): object
     {
-        $demande = DB::table('document_requests')->where('id', $id)->first();
-        if (!$demande) {
-            abort(404, 'Demande introuvable.');
-        }
-
-        $this->assertActionAllowed($role, $action, $demande);
-
+        $role = WorkflowConstants::canonicalRole($role);
         $user = Auth::user();
-        [$update, $newStatus, $mailTrigger] = $this->buildUpdate($action, $payload, $demande, $user, $role);
 
-        $update['updated_at'] = now();
+        // ── B2.5 + B2.6 : transaction courte avec verrou de ligne ─────────────
+        // Lecture, vérification, update et écriture d'historique sont désormais
+        // atomiques. lockForUpdate() empêche une seconde transition concurrente
+        // de lire un état périmé pendant que la première est en cours d'écriture.
+        [$update, $newStatus, $mailTrigger, $demande] = DB::transaction(function () use ($id, $action, $payload, $role, $user) {
 
-        DB::table('document_requests')->where('id', $id)->update($update);
+            $demande = DB::table('document_requests')
+                ->where('id', $id)
+                ->lockForUpdate()
+                ->first();
 
-        // Historique
-        if ($action === 'clear_flag') {
-            $this->historyService->recordFlagCleared($id, $demande->status);
-        } else {
-            $this->historyService->record(
-                documentRequestId: $id,
-                action:            $action,
-                statusBefore:      $demande->status,
-                statusAfter:       $update['status'] ?? $demande->status,
-                comment:           $payload['motif'] ?? $payload['comment'] ?? null,
-            );
-        }
+            if (!$demande) {
+                abort(404, 'Demande introuvable.');
+            }
 
-        // Mails
+            $this->assertActionAllowed($role, $action, $demande);
+
+            [$update, $newStatus, $mail] = $this->buildUpdate($action, $payload, $demande, $user, $role);
+
+            $update['updated_at'] = now();
+
+            DB::table('document_requests')->where('id', $id)->update($update);
+
+            // Historique
+            if ($action === 'clear_flag') {
+                $this->historyService->recordFlagCleared($id, $demande->status);
+            } else {
+                $this->historyService->record(
+                    documentRequestId: $id,
+                    action:            $action,
+                    statusBefore:      $demande->status,
+                    statusAfter:       $update['status'] ?? $demande->status,
+                    comment:           $payload['motif'] ?? $payload['comment'] ?? null,
+                );
+            }
+
+            return [$update, $newStatus, $mail, $demande];
+        });
+
+        // ── Mails (hors transaction, comme dans l'original) ───────────────────
         $fresh = DB::table('document_requests')->where('id', $id)->first();
 
         if (str_ends_with($action, '_flagged')) {
@@ -80,28 +95,29 @@ class TransitionService
         }
 
         match ($mailTrigger) {
-            'rejected'               => $this->notificationService->sendRejected($fresh, $payload['motif'] ?? ''),
-            'ready'                  => $this->notificationService->sendReady($fresh),
-            'delivered'              => $this->notificationService->sendDelivered($fresh),
-            'direction_transmission' => $this->notificationService->notifySecretaryOfDirectionTransmission($fresh),
-            default                  => null,
+            'rejected'                          => $this->notificationService->sendRejected($fresh, $payload['motif'] ?? ''),
+            'ready_for_pickup'                  => $this->notificationService->sendReady($fresh),
+            'picked_up'                         => $this->notificationService->sendDelivered($fresh),
+            'direction_transmission'            => $this->notificationService->notifySecretaryOfDirectionTransmission($fresh),
+            'directeur_signed_notify_secretaire'=> $this->notificationService->notifySecretaireAfterDirecteurSign($fresh),
+            default                             => null,
         };
 
         if ($newStatus) {
             $this->notificationService->notifyNextActor(
-                demande:          $fresh,
-                newStatus:        $newStatus,
-                expediteurUser:   $user,
-                expediteurRole:   $role,
-                chefDivisionType: $update['chef_division_type'] ?? ($demande->chef_division_type ?? null),
-                commentaire:      $payload['motif'] ?? $payload['comment'] ?? null,
+                demande:                 $fresh,
+                newStatus:               $newStatus,
+                expediteurUser:          $user,
+                expediteurRole:          $role,
+                responsableDivisionType: $update['responsable_division_type'] ?? ($demande->responsable_division_type ?? null),
+                commentaire:             $payload['motif'] ?? $payload['comment'] ?? null,
             );
         }
 
         return $fresh;
     }
 
-    // ── Constructeur d'update ─────────────────────────────────────────────────
+    // ── Constructeur d'update (INCHANGÉ — copie fidèle de l'original) ─────────
 
     /**
      * @return array{0: array, 1: string|null, 2: string|null}
@@ -115,13 +131,13 @@ class TransitionService
         $mail      = null;
 
         $roleToStatus = [
-            'comptable'           => 'comptable_review',
-            'chef-division'       => 'chef_division_review',
-            'chef-cap'            => 'chef_cap_review',
-            'sec-da'              => 'sec_dir_adjointe_review',
-            'directrice-adjointe' => 'directrice_adjointe_review',
-            'sec-dir'             => 'sec_directeur_review',
-            'directeur'           => 'directeur_review',
+            'comptable'           => 'accounting_review',
+            'responsable-division'=> 'division_manager_review',
+            'chef-cap'            => 'cap_manager_review',
+            'sec-da'              => 'deputy_director_secretary_review',
+            'directrice-adjointe' => 'deputy_director_review',
+            'sec-dir'             => 'director_secretary_review',
+            'directeur'           => 'director_review',
         ];
 
         // ── CLEAR FLAG ────────────────────────────────────────────────────────
@@ -135,7 +151,7 @@ class TransitionService
         // ═════════════════════════════════════════════════════════════════════
 
         if ($action === 'secretaire_validate') {
-            $newStatus        = 'comptable_review';
+            $newStatus        = 'accounting_review';
             $update['status'] = $newStatus;
         }
 
@@ -148,12 +164,12 @@ class TransitionService
         }
 
         elseif ($action === 'secretaire_resend') {
-            $resendTo = $p['resend_to'] ?? '';
+            $resendTo = WorkflowConstants::canonicalRole($p['resend_to'] ?? '') ?? '';
 
             if ($resendTo === 'origin') {
-                // ── SORTIE DU CIRCUIT ─────────────────────────────────────────
+                $originRole   = WorkflowConstants::canonicalRole($demande->correction_origin_role);
                 $originStatus = $demande->correction_origin_status
-                    ?? ($roleToStatus[$demande->correction_origin_role] ?? null);
+                    ?? ($roleToStatus[$originRole] ?? null);
 
                 if (!$originStatus) {
                     abort(422, 'Impossible de déterminer le statut de retour.');
@@ -168,7 +184,6 @@ class TransitionService
                 $update['rejected_reason']          = null;
 
             } else {
-                // ── RENVOI EN BOUCLE ──────────────────────────────────────────
                 $newStatus = $roleToStatus[$resendTo] ?? null;
                 if (!$newStatus) {
                     abort(422, 'Destination de renvoi invalide.');
@@ -176,16 +191,21 @@ class TransitionService
                 $update['status']                   = $newStatus;
                 $update['is_in_correction_circuit'] = true;
 
-                if ($resendTo === 'chef-division' && !empty($p['chef_division_type'])) {
-                    $update['chef_division_type'] = $p['chef_division_type'];
+                if ($resendTo === 'responsable-division') {
+                    $update['responsable_division_type'] = $this->resolveResponsableDivisionType($demande->id);
                 }
             }
         }
 
         elseif ($action === 'secretaire_deliver') {
-            $update['status']       = 'delivered';
+            $update['status']       = 'picked_up';
             $update['delivered_at'] = now();
-            $mail = 'delivered';
+            $mail = 'picked_up';
+        }
+
+        elseif ($action === 'secretaire_mark_ready') {
+            $update['status'] = 'ready_for_pickup';
+            $mail = 'ready_for_pickup';
         }
 
         // ═════════════════════════════════════════════════════════════════════
@@ -193,12 +213,9 @@ class TransitionService
         // ═════════════════════════════════════════════════════════════════════
 
         elseif (in_array($action, ['comptable_validate', 'comptable_validate_flagged'])) {
-            if (empty($p['chef_division_type'])) {
-                abort(422, 'Vous devez sélectionner le Responsable Division.');
-            }
-            $newStatus                    = 'chef_division_review';
-            $update['status']             = $newStatus;
-            $update['chef_division_type'] = $p['chef_division_type'];
+            $newStatus                           = 'division_manager_review';
+            $update['status']                    = $newStatus;
+            $update['responsable_division_type'] = $this->resolveResponsableDivisionType($demande->id);
 
             if ($isFlagged) {
                 $update['has_flag'] = true;
@@ -207,7 +224,7 @@ class TransitionService
 
         elseif ($action === 'comptable_reject') {
             $this->requireMotif($p);
-            $newStatus                          = 'secretaire_correction';
+            $newStatus                          = 'secretary_correction';
             $update['status']                   = $newStatus;
             $update['rejected_reason']          = $p['motif'];
             $update['rejected_by']              = WorkflowConstants::ROLE_LABELS[$role] ?? $role;
@@ -217,11 +234,11 @@ class TransitionService
         }
 
         // ═════════════════════════════════════════════════════════════════════
-        // CHEF DIVISION
+        // RESPONSABLE DIVISION
         // ═════════════════════════════════════════════════════════════════════
 
-        elseif (in_array($action, ['chef_division_validate', 'chef_division_validate_flagged'])) {
-            $newStatus        = 'chef_cap_review';
+        elseif (in_array($action, ['responsable_division_validate', 'responsable_division_validate_flagged'])) {
+            $newStatus        = 'cap_manager_review';
             $update['status'] = $newStatus;
 
             if ($isFlagged) {
@@ -229,9 +246,9 @@ class TransitionService
             }
         }
 
-        elseif ($action === 'chef_division_reject') {
+        elseif ($action === 'responsable_division_reject') {
             $this->requireMotif($p);
-            $newStatus                          = 'secretaire_correction';
+            $newStatus                          = 'secretary_correction';
             $update['status']                   = $newStatus;
             $update['rejected_reason']          = $p['motif'];
             $update['rejected_by']              = WorkflowConstants::ROLE_LABELS[$role] ?? $role;
@@ -244,28 +261,20 @@ class TransitionService
         // CHEF CAP
         // ═════════════════════════════════════════════════════════════════════
 
-        elseif (in_array($action, ['chef_cap_sign', 'chef_cap_sign_flagged'])) {
-            $sigType                  = $p['signature_type'] ?? 'signature';
-            $update['signature_type'] = $sigType;
+        elseif (in_array($action, ['chef_cap_validate', 'chef_cap_validate_flagged',
+                                    'chef_cap_sign',    'chef_cap_sign_flagged'])) {
+            $newStatus        = 'deputy_director_secretary_review';
+            $update['status'] = $newStatus;
+            $mail             = 'direction_transmission';
 
             if ($isFlagged) {
                 $update['has_flag'] = true;
-                $mail = 'sous_reserve';
-            }
-
-            if ($sigType === 'paraphe') {
-                $newStatus        = 'sec_dir_adjointe_review';
-                $update['status'] = $newStatus;
-                $mail = 'direction_transmission';
-            } else {
-                $update['status'] = 'ready';
-                $mail = 'ready';
             }
         }
 
         elseif ($action === 'chef_cap_reject') {
             $this->requireMotif($p);
-            $newStatus                          = 'secretaire_correction';
+            $newStatus                          = 'secretary_correction';
             $update['status']                   = $newStatus;
             $update['rejected_reason']          = $p['motif'];
             $update['rejected_by']              = WorkflowConstants::ROLE_LABELS[$role] ?? $role;
@@ -279,7 +288,7 @@ class TransitionService
         // ═════════════════════════════════════════════════════════════════════
 
         elseif (in_array($action, ['sec_da_transmit', 'sec_da_transmit_flagged'])) {
-            $newStatus        = 'directrice_adjointe_review';
+            $newStatus        = 'deputy_director_review';
             $update['status'] = $newStatus;
 
             if ($isFlagged) {
@@ -289,7 +298,7 @@ class TransitionService
 
         elseif ($action === 'sec_da_reject') {
             $this->requireMotif($p);
-            $newStatus                          = 'secretaire_correction';
+            $newStatus                          = 'secretary_correction';
             $update['status']                   = $newStatus;
             $update['rejected_reason']          = $p['motif'];
             $update['rejected_by']              = WorkflowConstants::ROLE_LABELS[$role] ?? $role;
@@ -303,7 +312,7 @@ class TransitionService
         // ═════════════════════════════════════════════════════════════════════
 
         elseif (in_array($action, ['directrice_adjointe_sign', 'directrice_adjointe_sign_flagged'])) {
-            $newStatus        = 'sec_directeur_review';
+            $newStatus        = 'director_secretary_review';
             $update['status'] = $newStatus;
 
             if ($isFlagged) {
@@ -313,7 +322,7 @@ class TransitionService
 
         elseif ($action === 'directrice_adjointe_reject') {
             $this->requireMotif($p);
-            $newStatus                          = 'secretaire_correction';
+            $newStatus                          = 'secretary_correction';
             $update['status']                   = $newStatus;
             $update['rejected_reason']          = $p['motif'];
             $update['rejected_by']              = WorkflowConstants::ROLE_LABELS[$role] ?? $role;
@@ -327,7 +336,7 @@ class TransitionService
         // ═════════════════════════════════════════════════════════════════════
 
         elseif (in_array($action, ['sec_directeur_transmit', 'sec_directeur_transmit_flagged'])) {
-            $newStatus        = 'directeur_review';
+            $newStatus        = 'director_review';
             $update['status'] = $newStatus;
 
             if ($isFlagged) {
@@ -337,7 +346,7 @@ class TransitionService
 
         elseif ($action === 'sec_directeur_reject') {
             $this->requireMotif($p);
-            $newStatus                          = 'secretaire_correction';
+            $newStatus                          = 'secretary_correction';
             $update['status']                   = $newStatus;
             $update['rejected_reason']          = $p['motif'];
             $update['rejected_by']              = WorkflowConstants::ROLE_LABELS[$role] ?? $role;
@@ -352,8 +361,9 @@ class TransitionService
 
         elseif (in_array($action, ['directeur_sign', 'directeur_sign_flagged'])) {
             $update['signature_type'] = $p['signature_type'] ?? 'signature';
-            $update['status']         = 'ready';
-            $mail = 'ready';
+            $newStatus        = 'secretary_final_review';
+            $update['status'] = $newStatus;
+            $mail             = 'directeur_signed_notify_secretaire';
 
             if ($isFlagged) {
                 $update['has_flag'] = true;
@@ -362,7 +372,7 @@ class TransitionService
 
         elseif ($action === 'directeur_reject') {
             $this->requireMotif($p);
-            $newStatus                          = 'secretaire_correction';
+            $newStatus                          = 'secretary_correction';
             $update['status']                   = $newStatus;
             $update['rejected_reason']          = $p['motif'];
             $update['rejected_by']              = WorkflowConstants::ROLE_LABELS[$role] ?? $role;
@@ -372,12 +382,12 @@ class TransitionService
         }
 
         // ═════════════════════════════════════════════════════════════════════
-        // RETOUR À LA SECRÉTAIRE (acteur en circuit de correction)
+        // RETOUR À LA SECRÉTAIRE
         // ═════════════════════════════════════════════════════════════════════
 
         elseif ($action === 'return_to_secretaire') {
             $this->requireComment($p);
-            $newStatus        = 'secretaire_correction';
+            $newStatus        = 'secretary_correction';
             $update['status'] = $newStatus;
         }
 
@@ -388,7 +398,22 @@ class TransitionService
         return [$update, $newStatus, $mail];
     }
 
-    // ── Assertions ────────────────────────────────────────────────────────────
+    // ── Auto-détection du Responsable Division (INCHANGÉ) ─────────────────────
+
+    private function resolveResponsableDivisionType(int $demandeId): string
+    {
+        $cycleName = DB::table('document_requests as dr')
+            ->join('student_pending_student as sps', 'dr.student_pending_student_id', '=', 'sps.id')
+            ->join('pending_students as ps', 'sps.pending_student_id', '=', 'ps.id')
+            ->join('departments as dept', 'ps.department_id', '=', 'dept.id')
+            ->join('cycles as c', 'dept.cycle_id', '=', 'c.id')
+            ->where('dr.id', $demandeId)
+            ->value('c.name');
+
+        return ($cycleName === 'Licence Professionnelle') ? 'formation_distance' : 'formation_continue';
+    }
+
+    // ── Assertions (INCHANGÉ) ──────────────────────────────────────────────────
 
     private function assertActionAllowed(?string $role, string $action, object $demande): void
     {

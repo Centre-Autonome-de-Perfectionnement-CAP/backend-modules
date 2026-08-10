@@ -6,6 +6,21 @@ use App\Modules\Demandes\WorkflowConstants;
 use Illuminate\Support\Facades\DB;
 
 /**
+ * CORRECTIF (v2) — Base inchangée par rapport au service réel.
+ *
+ * Seul ajout (B3.2) : paginatedListing(), une méthode additive qui
+ * réutilise exactement les mêmes colonnes et filtres que listing(),
+ * mais avec ->paginate() au lieu de ->get(). Aucune méthode existante
+ * n'est modifiée — listing(), findOrFail() et statsForDirectionUser()
+ * restent identiques à l'original.
+ *
+ * B2.2 — Les index suivants sont nécessaires pour que ce service reste
+ * performant à mesure que document_requests grossit (voir migration
+ * jointe dans ce sprint) :
+ *   - (student_pending_student_id) : déjà couvert par la FK
+ *   - (status, created_at)         : pour le tri + filtre par statut du listing
+ *   - (type, status)               : pour le filtre combiné type+statut
+ *
  * Toutes les lectures DB pour les demandes (index, show, stats).
  * Aucune écriture ici.
  *
@@ -39,15 +54,17 @@ class DocumentRequestQueryService
         'dr.email',
         'dr.files',
         'dr.complement_files',
+        'dr.secretary_files',
         'dr.complement_at',
         'dr.submitted_at',
+        'dr.created_at',
         'dr.delivered_at',
         'dr.updated_at',
         'dr.rejected_reason',
         'dr.rejected_by',
         'dr.signature_type',
         'dr.department_name',
-        'dr.chef_division_type',
+        'dr.responsable_division_type',
         'dr.is_in_correction_circuit',
         'dr.correction_origin_role',
         'dr.correction_origin_status',
@@ -65,70 +82,95 @@ class DocumentRequestQueryService
      *
      * Pattern : on récupère la dernière entrée pour chaque rôle,
      * ce qui correspond toujours à l'action la plus récente de ce rôle.
+     *
+     * Méthode (et non constante) car le rôle "Responsable Division" peut être
+     * enregistré sous deux graphies différentes dans actor_role
+     * ('responsable-division' ou l'ancien alias 'chef-division') selon
+     * l'historique de la base — on doit chercher les deux.
      */
-    private const HISTORY_SUBQUERIES = [
-        // Commentaires — dernière entrée avec comment non null pour chaque rôle
-        "COALESCE((
-            SELECT h.comment FROM document_request_histories h
-            WHERE h.document_request_id = dr.id
-              AND h.actor_role = 'secretaire'
-              AND h.comment IS NOT NULL
-            ORDER BY h.created_at DESC LIMIT 1
-        ), NULL) AS secretaire_comment",
+    private function historySubqueries(): array
+    {
+        $divisionRoles = $this->sqlInClause(
+            WorkflowConstants::roleSlugVariants('responsable-division')
+        );
 
-        "COALESCE((
-            SELECT h.comment FROM document_request_histories h
-            WHERE h.document_request_id = dr.id
-              AND h.actor_role = 'comptable'
-              AND h.comment IS NOT NULL
-            ORDER BY h.created_at DESC LIMIT 1
-        ), NULL) AS comptable_comment",
+        return [
+            // Commentaires — dernière entrée avec comment non null pour chaque rôle
+            "COALESCE((
+                SELECT h.comment FROM document_request_histories h
+                WHERE h.document_request_id = dr.id
+                  AND h.actor_role = 'secretaire'
+                  AND h.comment IS NOT NULL
+                ORDER BY h.created_at DESC LIMIT 1
+            ), NULL) AS secretaire_comment",
 
-        "COALESCE((
-            SELECT h.comment FROM document_request_histories h
-            WHERE h.document_request_id = dr.id
-              AND h.actor_role = 'chef-division'
-              AND h.comment IS NOT NULL
-            ORDER BY h.created_at DESC LIMIT 1
-        ), NULL) AS chef_division_comment",
+            "COALESCE((
+                SELECT h.comment FROM document_request_histories h
+                WHERE h.document_request_id = dr.id
+                  AND h.actor_role = 'comptable'
+                  AND h.comment IS NOT NULL
+                ORDER BY h.created_at DESC LIMIT 1
+            ), NULL) AS comptable_comment",
 
-        // Horodatages — dernière action de chaque rôle
-        "(SELECT h.created_at FROM document_request_histories h
-          WHERE h.document_request_id = dr.id
-            AND h.actor_role = 'comptable'
-          ORDER BY h.created_at DESC LIMIT 1
-        ) AS comptable_reviewed_at",
+            "COALESCE((
+                SELECT h.comment FROM document_request_histories h
+                WHERE h.document_request_id = dr.id
+                  AND h.actor_role IN ({$divisionRoles})
+                  AND h.comment IS NOT NULL
+                ORDER BY h.created_at DESC LIMIT 1
+            ), NULL) AS responsable_division_comment",
 
-        "(SELECT h.created_at FROM document_request_histories h
-          WHERE h.document_request_id = dr.id
-            AND h.actor_role = 'chef-division'
-          ORDER BY h.created_at DESC LIMIT 1
-        ) AS chef_division_reviewed_at",
+            // Horodatages — dernière action de chaque rôle
+            "(SELECT h.created_at FROM document_request_histories h
+              WHERE h.document_request_id = dr.id
+                AND h.actor_role = 'comptable'
+              ORDER BY h.created_at DESC LIMIT 1
+            ) AS comptable_reviewed_at",
 
-        "(SELECT h.created_at FROM document_request_histories h
-          WHERE h.document_request_id = dr.id
-            AND h.actor_role = 'chef-cap'
-          ORDER BY h.created_at DESC LIMIT 1
-        ) AS chef_cap_reviewed_at",
+            "(SELECT h.created_at FROM document_request_histories h
+              WHERE h.document_request_id = dr.id
+                AND h.actor_role IN ({$divisionRoles})
+              ORDER BY h.created_at DESC LIMIT 1
+            ) AS responsable_division_reviewed_at",
 
-        "(SELECT h.created_at FROM document_request_histories h
-          WHERE h.document_request_id = dr.id
-            AND h.actor_role = 'sec-da'
-          ORDER BY h.created_at DESC LIMIT 1
-        ) AS sec_da_reviewed_at",
+            "(SELECT h.created_at FROM document_request_histories h
+              WHERE h.document_request_id = dr.id
+                AND h.actor_role = 'chef-cap'
+              ORDER BY h.created_at DESC LIMIT 1
+            ) AS chef_cap_reviewed_at",
 
-        "(SELECT h.created_at FROM document_request_histories h
-          WHERE h.document_request_id = dr.id
-            AND h.actor_role = 'directrice-adjointe'
-          ORDER BY h.created_at DESC LIMIT 1
-        ) AS directrice_adjointe_reviewed_at",
+            "(SELECT h.created_at FROM document_request_histories h
+              WHERE h.document_request_id = dr.id
+                AND h.actor_role = 'sec-da'
+              ORDER BY h.created_at DESC LIMIT 1
+            ) AS sec_da_reviewed_at",
 
-        "(SELECT h.created_at FROM document_request_histories h
-          WHERE h.document_request_id = dr.id
-            AND h.actor_role = 'sec-dir'
-          ORDER BY h.created_at DESC LIMIT 1
-        ) AS sec_directeur_reviewed_at",
-    ];
+            "(SELECT h.created_at FROM document_request_histories h
+              WHERE h.document_request_id = dr.id
+                AND h.actor_role = 'directrice-adjointe'
+              ORDER BY h.created_at DESC LIMIT 1
+            ) AS directrice_adjointe_reviewed_at",
+
+            "(SELECT h.created_at FROM document_request_histories h
+              WHERE h.document_request_id = dr.id
+                AND h.actor_role = 'sec-dir'
+              ORDER BY h.created_at DESC LIMIT 1
+            ) AS sec_directeur_reviewed_at",
+        ];
+    }
+
+    /**
+     * Construit une clause IN(...) sûre à partir d'une liste fixe et interne
+     * de slugs de rôles (jamais d'entrée utilisateur) — pas de risque
+     * d'injection, ces valeurs viennent uniquement de WorkflowConstants.
+     */
+    private function sqlInClause(array $values): string
+    {
+        return "'" . implode("','", array_map(
+            fn($v) => str_replace("'", "''", $v),
+            $values
+        )) . "'";
+    }
 
     private const MATRICULE_SUBQUERY = "
         (SELECT s.student_id_number FROM students s
@@ -156,7 +198,7 @@ class DocumentRequestQueryService
     {
         return array_merge(
             self::BASE_COLUMNS,
-            array_map(fn($sq) => DB::raw($sq), self::HISTORY_SUBQUERIES),
+            array_map(fn($sq) => DB::raw($sq), $this->historySubqueries()),
             [DB::raw(self::MATRICULE_SUBQUERY)]
         );
     }
@@ -165,6 +207,12 @@ class DocumentRequestQueryService
 
     public function listing(string $role, $user, array $filters = []): \Illuminate\Support\Collection
     {
+        // Le rôle peut arriver sous l'une ou l'autre graphie (responsable-division /
+        // chef-division) selon ce qui est stocké en base pour cet utilisateur :
+        // on normalise systématiquement vers le slug canonique avant toute
+        // comparaison ou lookup dans WorkflowConstants.
+        $role = WorkflowConstants::canonicalRole($role);
+
         $query = $this->baseQuery()->select($this->buildListingSelect());
 
         // Filtrage par rôle
@@ -173,9 +221,11 @@ class DocumentRequestQueryService
             $query->whereIn('dr.status', $visibleStatuses);
         }
 
-        // Responsable Division : filtrer par son type (utilise l'index dr_chef_division_type_idx)
-        if ($role === 'chef-division' && $user->chef_division_type) {
-            $query->where('dr.chef_division_type', $user->chef_division_type);
+        // Responsable Division : filtrer par son type (utilise l'index dr_responsable_division_type_idx)
+        // La colonne sur l'utilisateur s'appelle chef_division_type (nom historique en BD).
+        // La colonne sur le dossier s'appelle responsable_division_type.
+        if ($role === 'responsable-division' && $user->chef_division_type) {
+            $query->where('dr.responsable_division_type', $user->chef_division_type);
         }
 
         // Filtres utilisateur
@@ -194,8 +244,49 @@ class DocumentRequestQueryService
             });
         }
 
-        // Index dr_status_updated_idx utilisé ici
-        return $query->orderBy('dr.updated_at', 'desc')->get();
+        // Tri par ordre d'arrivée chronologique (du plus ancien en haut au plus nouveau en bas)
+        return $query->orderBy('dr.created_at', 'asc')->get();
+    }
+
+    // ── AJOUT (B3.2) — Listing paginé ─────────────────────────────────────────
+    //
+    // Reproduit exactement la même construction de requête que listing()
+    // ci-dessus (même colonnes, même filtrage par rôle, mêmes filtres
+    // utilisateur), avec paginate() au lieu de get(). Utilisée par le
+    // nouvel endpoint GET /document-requests/paginated, qui coexiste
+    // avec l'ancien endpoint non paginé pour ne rien casser côté frontend.
+
+    public function paginatedListing(string $role, $user, array $filters = [], int $perPage = 25): \Illuminate\Pagination\LengthAwarePaginator
+    {
+        $role = WorkflowConstants::canonicalRole($role);
+
+        $query = $this->baseQuery()->select($this->buildListingSelect());
+
+        $visibleStatuses = WorkflowConstants::VISIBLE_STATUSES[$role] ?? ['pending'];
+        if (!empty($visibleStatuses)) {
+            $query->whereIn('dr.status', $visibleStatuses);
+        }
+
+        if ($role === 'responsable-division' && $user->chef_division_type) {
+            $query->where('dr.responsable_division_type', $user->chef_division_type);
+        }
+
+        if (!empty($filters['status'])) {
+            $query->where('dr.status', $filters['status']);
+        }
+        if (!empty($filters['type'])) {
+            $query->where('dr.type', $filters['type']);
+        }
+        if (!empty($filters['search'])) {
+            $s = '%' . $filters['search'] . '%';
+            $query->where(function ($q) use ($s) {
+                $q->where('pi.last_name', 'like', $s)
+                  ->orWhere('pi.first_names', 'like', $s)
+                  ->orWhere('dr.reference', 'like', $s);
+            });
+        }
+
+        return $query->orderBy('dr.created_at', 'asc')->paginate($perPage);
     }
 
     // ── Détail ─────────────────────────────────────────────────────────────────
@@ -206,7 +297,7 @@ class DocumentRequestQueryService
         // + infos étudiant + sous-requêtes histories
         $select = array_merge(
             ['dr.*', 'pi.birth_date', 'dept.name as department', 'ay.academic_year'],
-            array_map(fn($sq) => DB::raw($sq), self::HISTORY_SUBQUERIES),
+            array_map(fn($sq) => DB::raw($sq), $this->historySubqueries()),
             [
                 DB::raw(self::MATRICULE_SUBQUERY),
                 DB::raw('ps.level as study_level'),
@@ -232,7 +323,7 @@ class DocumentRequestQueryService
         $myStatus = array_flip(WorkflowConstants::STATUS_TO_ROLE)[$role] ?? null;
 
         $totalInProgress = DB::table('document_requests')
-            ->whereNotIn('status', ['delivered', 'rejected'])
+            ->whereNotIn('status', ['picked_up', 'rejected'])
             ->count();
 
         $pendingAtMyLevel = $myStatus

@@ -19,6 +19,10 @@ use Illuminate\Support\Facades\{Log, Mail};
  */
 class QuittanceController extends Controller
 {
+    public function __construct(
+        private readonly \App\Modules\Attestation\Services\WhatsAppNotificationService $whatsApp
+    ) {}
+
     public function generateAndSendQuittance(Request $request): JsonResponse
     {
         $request->validate([
@@ -42,6 +46,21 @@ class QuittanceController extends Controller
             $pdfFilename = 'quittance-' . $request->quittanceNumber . '.pdf';
 
             $this->sendQuittanceEmail($request, $pdfContent, $pdfFilename, $datePaiement);
+
+            // WhatsApp notification
+            $student = \App\Modules\Inscription\Models\Student::where('student_id_number', strtoupper(trim($request->matricule)))->first();
+            if ($student) {
+                $link = \App\Modules\Inscription\Models\StudentPendingStudent::where('student_id', $student->id)->with('pendingStudent.personalInformation')->latest('id')->first();
+                $phone = $link?->pendingStudent?->personalInformation?->phone;
+                if ($phone) {
+                    $this->whatsApp->sendQuittanceNotification(
+                        $phone,
+                        $request->quittanceNumber,
+                        $request->referenceDemande,
+                        $request->nomEtudiant,
+                    );
+                }
+            }
 
             return response()->json([
                 'success' => true,

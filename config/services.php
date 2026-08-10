@@ -41,19 +41,9 @@ return [
         ],
     ],
 
-    'twilio' => [
-
-    // Account SID → console.twilio.com → "Account Info"
-    'sid' => env('TWILIO_ACCOUNT_SID'),
-
-    // Auth Token → console.twilio.com → "Account Info"
-    'token' => env('TWILIO_AUTH_TOKEN'),
-
-    // Numéro expéditeur WhatsApp
-    // Sandbox Twilio (tests) : whatsapp:+14155238886
-    // Production (numéro approuvé) : whatsapp:+229XXXXXXXX
-    'whatsapp_from' => env('TWILIO_WHATSAPP_FROM', 'whatsapp:+14155238886'),
-
-],
+    'whatsapp_bridge' => [
+        'url'     => env('WHATSAPP_BRIDGE_URL', 'http://localhost:3005'),
+        'timeout' => env('WHATSAPP_BRIDGE_TIMEOUT', 30),
+    ],
 
 ];
