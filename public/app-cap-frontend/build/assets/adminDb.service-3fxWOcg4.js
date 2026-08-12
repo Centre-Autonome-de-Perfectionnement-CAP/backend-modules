@@ -1,1 +1,0 @@
-import{H as a}from"./index-akJXhAqm.js";const r="admin-db/tables";class s{getTables=async()=>a.get(r);getTableData=async(e,t=1)=>a.get(`${r}/${e}`,{params:{page:t}});createRow=async(e,t)=>a.post(`${r}/${e}`,t);updateRow=async(e,t,n)=>a.put(`${r}/${e}/${t}`,n);deleteRow=async(e,t)=>a.delete(`${r}/${e}/${t}`)}const o=new s;export{o as a};
