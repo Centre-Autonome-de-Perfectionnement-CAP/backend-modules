@@ -15,11 +15,11 @@ function returnIndexHtml($path = 'index.html') {
 // ========== ROUTES STATIQUES (fichiers stockés) - DOIVENT ÊTRE AVANT ==========
 Route::get('/stockage/{path}', function ($path) {
     $fullPath = storage_path('app/public/' . $path);
-    
+
     if (!file_exists($fullPath)) {
         abort(404, 'Fichier non trouvé : ' . $path);
     }
-    
+
     return response()->file($fullPath);
 })->where('path', '.*');
 

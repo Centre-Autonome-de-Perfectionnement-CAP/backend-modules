@@ -136,6 +136,7 @@ Route::prefix('api/inscription')->group(function () {
     });
 
 
+ 
 
 }); // Fin du groupe api/inscription
 
@@ -163,3 +164,29 @@ Route::prefix('api/inscription/responsable')->middleware('auth:sanctum')->group(
     Route::put('/textbook/{entryId}',               [TextbookController::class, 'update']);
     Route::delete('/textbook/{entryId}',            [TextbookController::class, 'destroy']);
 });
+ 
+    // ─── Corrections d'informations personnelles ──────────────────────────────
+
+    Route::prefix('corrections')->group(function () {
+        // Routes publiques (site vitrine)
+        Route::post('/lookup', [\App\Modules\Inscription\Http\Controllers\InformationCorrectionController::class, 'lookup']);
+        Route::post('/', [\App\Modules\Inscription\Http\Controllers\InformationCorrectionController::class, 'store']);
+        Route::get('/status/{matricule}', [\App\Modules\Inscription\Http\Controllers\InformationCorrectionController::class, 'studentStatus']);
+
+        // Routes admin (protégées Sanctum)
+        Route::middleware('auth:sanctum')->group(function () {
+            Route::get('/', [\App\Modules\Inscription\Http\Controllers\InformationCorrectionController::class, 'index']);
+            Route::patch('/{id}/approve', [\App\Modules\Inscription\Http\Controllers\InformationCorrectionController::class, 'approve']);
+            Route::patch('/{id}/reject', [\App\Modules\Inscription\Http\Controllers\InformationCorrectionController::class, 'reject']);
+        });
+    });
+
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('export/pdf', [PendingStudentExportController::class, 'exportPdf']);
+        Route::get('export/excel', [PendingStudentExportController::class, 'exportExcel']);
+        Route::get('export/word', [PendingStudentExportController::class, 'exportWord']);
+        Route::get('export/emails', [PendingStudentExportController::class, 'exportEmails']);
+    });
+
+ 
+ 

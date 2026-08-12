@@ -146,7 +146,11 @@
                     <strong>ℹ️ Prochaines étapes</strong>
                 </p>
                 <p style="margin: 10px 0 0 0; color: #856404;">
+<<<<<<< HEAD
                     Votre quittance sera vérifiée par nos services dans les plus brefs délais (24-48h ouvrables).
+=======
+                    Votre quittance sera vérifiée par nos services dans les plus brefs délais (24-48h ouvrables). 
+>>>>>>> cc06ae56466116d4734c6cc1ff33ad0d0a94b42b
                     Vous recevrez une notification par email une fois le paiement validé ou en cas de besoin de rectification.
                 </p>
             </div>
@@ -156,10 +160,17 @@
                     <strong>🔍 Suivre l'évolution de votre paiement</strong>
                 </p>
                 <p style="margin: 10px 0; color: #0d47a1;">
+<<<<<<< HEAD
                     Utilisez votre référence <strong style="font-size: 16px; color: #1976d2;">{{ $reference }}</strong> pour consulter le status de traitement en temps réel.
                 </p>
                 <div style="text-align: center; margin-top: 15px;">
                     <a href="{{ config('app.frontend_url') }}/student-services?type=suivi-paiement"
+=======
+                    Utilisez votre référence <strong style="font-size: 16px; color: #1976d2;">{{ $reference }}</strong> pour consulter le statut de traitement en temps réel.
+                </p>
+                <div style="text-align: center; margin-top: 15px;">
+                    <a href="{{ config('app.frontend_url') }}/student-services?type=suivi-paiement" 
+>>>>>>> cc06ae56466116d4734c6cc1ff33ad0d0a94b42b
                        style="display: inline-block; padding: 12px 30px; background-color: #2196F3; color: #ffffff; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
                         📊 Suivre mon paiement
                     </a>
@@ -170,7 +181,11 @@
             </div>
 
             <p style="margin-top: 20px;">
+<<<<<<< HEAD
                 <strong>💡 Important :</strong> Conservez précieusement votre référence <strong>{{ $reference }}</strong>.
+=======
+                <strong>💡 Important :</strong> Conservez précieusement votre référence <strong>{{ $reference }}</strong>. 
+>>>>>>> cc06ae56466116d4734c6cc1ff33ad0d0a94b42b
                 Elle vous sera demandée pour toute réclamation ou question concernant ce paiement.
             </p>
 

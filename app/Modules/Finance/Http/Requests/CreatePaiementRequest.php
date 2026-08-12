@@ -46,7 +46,11 @@ class CreatePaiementRequest extends FormRequest
                     $exists = \App\Modules\Finance\Models\Paiement::where('reference', $value)
                         ->whereIn('status', ['pending', 'approved'])
                         ->exists();
+<<<<<<< HEAD
 
+=======
+                    
+>>>>>>> cc06ae56466116d4734c6cc1ff33ad0d0a94b42b
                     if ($exists) {
                         $fail('Cette référence existe déjà dans le système.');
                     }

@@ -18,12 +18,16 @@ class ValidationController extends Controller
     }
 
     /**
+<<<<<<< HEAD
      * Liste les paiements selon le status
+=======
+     * Liste les paiements en attente de validation
+>>>>>>> cc06ae56466116d4734c6cc1ff33ad0d0a94b42b
      */
     public function getPendingPayments(Request $request)
     {
         try {
-            $filters = $request->only(['search', 'page', 'per_page', 'status']);
+            $filters = $request->only(['search', 'page', 'per_page']);
             $payments = $this->validationService->getPendingPayments($filters);
 
             return response()->json([

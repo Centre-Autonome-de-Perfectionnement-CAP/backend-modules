@@ -9,7 +9,10 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
+<<<<<<< HEAD
     
+=======
+>>>>>>> cc06ae56466116d4734c6cc1ff33ad0d0a94b42b
     public function up(): void
     {
         Schema::table('payments', function (Blueprint $table) {

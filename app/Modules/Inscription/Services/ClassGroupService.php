@@ -215,7 +215,7 @@ class ClassGroupService
                 ->join('academic_paths', 'student_pending_student.id', '=', 'academic_paths.student_pending_student_id')
                 ->join('pending_students', 'student_pending_student.pending_student_id', '=', 'pending_students.id')
                 ->where('academic_paths.academic_year_id', $academicYearId)
-                ->where('academic_paths.cohort', $cohort)
+                // ->where('academic_paths.cohort', $cohort)
                 ->where('academic_paths.study_level', $studyLevel)
                 ->where('pending_students.department_id', $departmentId)
                 ->select('students.id')

@@ -15,9 +15,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 
-class SendPendingStudentMailJob
+class SendPendingStudentMailJob implements ShouldQueue
 {
-    use Dispatchable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     protected $studentData;
 

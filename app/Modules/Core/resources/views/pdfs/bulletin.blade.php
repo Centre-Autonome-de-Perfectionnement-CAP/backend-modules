@@ -5,30 +5,33 @@
 @section('custom-header')
 <div class="header">
     @php
-        $epacLogo = public_path("assets/epac.png");
-        $capLogo = public_path("assets/cap.png");
+        $epacLogo = storage_path("images/epac.png");
+        $capLogo = storage_path("images/cap.png");
+        $epacBase64 = file_exists($epacLogo) && filesize($epacLogo) > 0 ? 'data:image/png;base64,' . base64_encode(file_get_contents($epacLogo)) : '';
+        $capBase64 = file_exists($capLogo) && filesize($capLogo) > 0 ? 'data:image/png;base64,' . base64_encode(file_get_contents($capLogo)) : '';
     @endphp
-    @if(file_exists($epacLogo) && filesize($epacLogo) > 0)
-    <img src='{{ $epacLogo }}' alt="logo-epac" class="logo-header epac">
-    @endif
-    @if(file_exists($capLogo) && filesize($capLogo) > 0)
-    <img src='{{ $capLogo }}' alt="logo-cap"  class="logo-header">
-    @endif
+     @if($epacBase64)
+        <img src='{{ $epacBase64 }}' alt="logo-epac" class="logo-header epac">
+        @endif
+        @if($capBase64)
+        <img src='{{ $capBase64 }}' alt="logo-cap"  class="logo-header">
+        @endif
     <h3 style="margin:0px">Université d'Abomey-Calavi</h3>
     @php
-        $bannerImg = public_path("assets/banner.png");
+        $bannerImg = storage_path("images/banner.png");
         $hasBanner = file_exists($bannerImg) && filesize($bannerImg) > 0;
+        $bannerBase64 = $hasBanner ? 'data:image/png;base64,' . base64_encode(file_get_contents($bannerImg)) : '';
     @endphp
-    @if($hasBanner)
-    <img src='{{ $bannerImg }}' alt="header-separator-img" style="margin:0px">
+    @if($bannerBase64)
+    <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
     @else
-    <hr style="margin: 5px 0;">
+    <hr style="margin: 2px 0;">
     @endif
     <h2 style="margin:0">Ecole Polytechnique d'Abomey-Calavi</h2>
-    @if($hasBanner)
-    <img src='{{ $bannerImg }}' alt="header-separator-img" style="margin:0px">
+    @if($bannerBase64)
+    <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
     @else
-    <hr style="margin: 5px 0;">
+    <hr style="margin: 2px 0;">
     @endif
     <h1 style="margin:0;">Centre Autonome de Perfectionnement</h1>
     <p>
@@ -39,6 +42,7 @@
 @endsection
 
 @section('content')
+<<<<<<< HEAD
 <div class="main" style="position: relative;">
     <div style="position: absolute; top: 0px; left: 0; margin-bottom: 10px;">
         @if(isset($etudiant->photo) && $etudiant->photo && file_exists($etudiant->photo))
@@ -51,9 +55,31 @@
             @endif
         @endif
     </div>
+=======
+<div class="main" style="position: relative; top: 10px;">
+>>>>>>> cc06ae56466116d4734c6cc1ff33ad0d0a94b42b
     <div style="text-align: center; font-weight: bold; margin-bottom: 7px; font-size: 25px;">BULLETIN DE NOTES</div>
     <div style="text-align: center; font-weight: bold; margin-bottom: 20px; font-size: 15px;">Année Académique: {{ $annee }}</div>
-    <div style="position: absolute; top: -5px; right: 0;">
+    
+    <div style="position: absolute; top: 170px; left: 0; margin-bottom: 10px;">
+        @php
+            if(isset($etudiant->photo) && $etudiant->photo && file_exists($etudiant->photo)) {
+                $photoPath = $etudiant->photo;
+                $photoBase64 = 'data:image/png;base64,' . base64_encode(file_get_contents($photoPath));
+            } else {
+                if(ucfirst($etudiant->genre) == 'Masculin') {
+                    $avatarPath = storage_path('avatars/homme.png');
+                } else {
+                    $avatarPath = storage_path('avatars/femme.png');
+                }
+                $photoBase64 = file_exists($avatarPath) ? 'data:image/png;base64,' . base64_encode(file_get_contents($avatarPath)) : '';
+            }
+        @endphp
+        @if(isset($photoBase64) && $photoBase64)
+        <img src="{{ $photoBase64 }}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 5px;" alt="Photo étudiant">
+        @endif
+    </div>
+    <div style="position: absolute; top: 170px; right: 0;">
         <img src="data:image/svg+xml;base64,{{ $qrcode }}" width="100px" height="100px" class="qrcode" alt="Code QR">
     </div>
 

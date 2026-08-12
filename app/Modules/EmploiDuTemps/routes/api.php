@@ -13,20 +13,20 @@ use App\Modules\EmploiDuTemps\Http\Controllers\TextbookProfessorController;
 
 // Routes pour le professeur (cahier de texte)
 Route::middleware(['auth:sanctum'])->prefix('api/notes/professor/textbook')->group(function () {
-    
-    // Entrées pour un programme spécifique
+
+    // EntrÃ©es pour un programme spÃ©cifique
     Route::get('/entries/{programId}', [TextbookProfessorController::class, 'entries']);
-    
-    // Publier/Dépublier une entrée
+
+    // Publier/DÃ©publier une entrÃ©e
     Route::put('/publish/{entryId}', [TextbookProfessorController::class, 'publish']);
     Route::put('/unpublish/{entryId}', [TextbookProfessorController::class, 'unpublish']);
 });
 
 Route::prefix('api/emploi-temps')->group(function () {
 
-    // ════════════════════════════════════════════════════════════
-    // SELECTS — données de référence pour les formulaires
-    // ════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // SELECTS â€” donnÃ©es de rÃ©fÃ©rence pour les formulaires
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     Route::prefix('selects')->group(function () {
         Route::get('academic-years',              [SelectController::class, 'academicYears']);
         Route::get('departments',                 [SelectController::class, 'departments']);
@@ -37,47 +37,57 @@ Route::prefix('api/emploi-temps')->group(function () {
         Route::get('rooms-by-building/{buildingId}', [SelectController::class, 'roomsByBuilding']);
     });
 
-    // ════════════════════════════════════════════════════════════
-    // PDF — Génération et téléchargement
-    // POST /api/emploi-temps/pdf/download
-    // ════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // PDF â€” GÃ©nÃ©ration et tÃ©lÃ©chargement
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     Route::prefix('pdf')->group(function () {
         Route::post('download', [PdfController::class, 'download']);
         Route::get('preview',  [PdfController::class, 'preview']);
     });
 
-    // ════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // Buildings
-    // ════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     Route::apiResource('buildings', BuildingController::class);
 
-    // ════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // Rooms
-    // ════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     Route::apiResource('rooms', RoomController::class);
     Route::get('rooms-available', [RoomController::class, 'getAvailable']);
 
-    // ════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // Time Slots
-    // ════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     Route::apiResource('time-slots', TimeSlotController::class);
     Route::get('time-slots/day/{day}', [TimeSlotController::class, 'getByDay']);
 
-    // ════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // Scheduled Courses
-    // ════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     Route::apiResource('scheduled-courses', ScheduledCourseController::class);
-    Route::post('scheduled-courses/check-conflicts',          [ScheduledCourseController::class, 'checkConflicts']);
+
+    Route::post('scheduled-courses/bulk-create', [ScheduledCourseController::class, 'bulkCreate']);
+    Route::post('scheduled-courses/check-conflicts', [ScheduledCourseController::class, 'checkConflicts']);
+    Route::post('scheduled-courses/renew-schedule', [ScheduledCourseController::class, 'renewSchedule']);
+    Route::post('scheduled-courses/generate-schedule', [ScheduledCourseController::class, 'generateSchedule']);
+
     Route::post('scheduled-courses/{scheduledCourse}/cancel', [ScheduledCourseController::class, 'cancel']);
     Route::post('scheduled-courses/{scheduledCourse}/update-hours', [ScheduledCourseController::class, 'updateHours']);
     Route::post('scheduled-courses/{scheduledCourse}/exclude-date', [ScheduledCourseController::class, 'excludeDate']);
     Route::get('scheduled-courses/{scheduledCourse}/occurrences', [ScheduledCourseController::class, 'getOccurrences']);
 
-    // Schedule Views
+    // Schedule Views (Vues d'emploi du temps)
     Route::get('schedule/class-group/{classGroupId}', [ScheduledCourseController::class, 'getByClassGroup']);
     Route::get('schedule/professor/{professorId}',    [ScheduledCourseController::class, 'getByProfessor']);
     Route::get('schedule/room/{roomId}',              [ScheduledCourseController::class, 'getByRoom']);
 
+    // PDF Downloads (TÃ©lÃ©chargement PDF)
+    Route::get('schedule/class-group/{classGroupId}/pdf', [ScheduledCourseController::class, 'downloadClassGroupSchedulePDF']);
+    Route::get('schedule/professor/{professorId}/pdf', [ScheduledCourseController::class, 'downloadProfessorSchedulePDF']);
+    Route::get('schedule/room/{roomId}/pdf', [ScheduledCourseController::class, 'downloadRoomSchedulePDF']);
+
+    // Emploi du temps
     Route::get('emploi-du-temps-stats',              [EmploiDuTempsController::class, 'stats']);
     Route::post('emploi-du-temps/check-conflicts',   [EmploiDuTempsController::class, 'checkConflicts']);
 

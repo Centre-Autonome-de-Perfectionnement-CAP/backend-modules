@@ -5,28 +5,31 @@
 @section('custom-header')
 <div class="header">
     @php
-        $epacLogo = public_path("assets/epac.png");
-        $capLogo = public_path("assets/cap.png");
+        $epacLogo = storage_path("images/epac.png");
+        $capLogo = storage_path("images/cap.png");
+        $epacBase64 = file_exists($epacLogo) && filesize($epacLogo) > 0 ? 'data:image/png;base64,' . base64_encode(file_get_contents($epacLogo)) : '';
+        $capBase64 = file_exists($capLogo) && filesize($capLogo) > 0 ? 'data:image/png;base64,' . base64_encode(file_get_contents($capLogo)) : '';
     @endphp
-    @if(file_exists($epacLogo) && filesize($epacLogo) > 0)
-    <img src='{{ $epacLogo }}' alt="logo-epac" class="logo-header epac">
+    @if($epacBase64)
+    <img src='{{ $epacBase64 }}' alt="logo-epac" class="logo-header epac">
     @endif
-    @if(file_exists($capLogo) && filesize($capLogo) > 0)
-    <img src='{{ $capLogo }}' alt="logo-cap"  class="logo-header">
+    @if($capBase64)
+    <img src='{{ $capBase64 }}' alt="logo-cap"  class="logo-header">
     @endif
     <h3 style="margin:0px">Université d'Abomey-Calavi</h3>
     @php
-        $bannerImg = public_path("assets/banner.png");
+        $bannerImg = storage_path("images/banner.png");
         $hasBanner = file_exists($bannerImg) && filesize($bannerImg) > 0;
+        $bannerBase64 = $hasBanner ? 'data:image/png;base64,' . base64_encode(file_get_contents($bannerImg)) : '';
     @endphp
-    @if($hasBanner)
-    <img src='{{ $bannerImg }}' alt="header-separator-img" style="margin:0px">
+    @if($bannerBase64)
+    <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
     @else
     <hr style="margin: 5px 0;">
     @endif
     <h2 style="margin:0">Ecole Polytechnique d'Abomey-Calavi</h2>
-    @if($hasBanner)
-    <img src='{{ $bannerImg }}' alt="header-separator-img" style="margin:0px">
+    @if($bannerBase64)
+    <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
     @else
     <hr style="margin: 5px 0;">
     @endif
@@ -44,10 +47,10 @@
     @if(!$loop->first)
     <div class="header" style="margin-bottom: 20px;">
         @php
-            $epacLogo = public_path("assets/epac.png");
-            $capLogo = public_path("assets/cap.png");
-            $epacBase64 = file_exists($epacLogo) ? 'data:image/png;base64,' . base64_encode(file_get_contents($epacLogo)) : '';
-            $capBase64 = file_exists($capLogo) ? 'data:image/png;base64,' . base64_encode(file_get_contents($capLogo)) : '';
+            $epacLogo = storage_path("images/epac.png");
+            $capLogo = storage_path("images/cap.png");
+            $epacBase64 = file_exists($epacLogo) && filesize($epacLogo) > 0 ? 'data:image/png;base64,' . base64_encode(file_get_contents($epacLogo)) : '';
+            $capBase64 = file_exists($capLogo) && filesize($capLogo) > 0 ? 'data:image/png;base64,' . base64_encode(file_get_contents($capLogo)) : '';
         @endphp
         @if($epacBase64)
         <img src='{{ $epacBase64 }}' alt="logo-epac" style="position: absolute; left: 0; top: 0; height: 100px;">
@@ -56,16 +59,32 @@
         <img src='{{ $capBase64 }}' alt="logo-cap" style="position: absolute; right: 0; top: 0; height: 100px;">
         @endif
         <h3 style="margin:0px">Université d'Abomey-Calavi</h3>
-        <hr style="margin: 5px auto; width: 80px;">
-        <h2 style="margin:0">Ecole Polytechnique d'Abomey-Calavi</h2>
-        <hr style="margin: 5px auto; width: 150px;">
-        <h1 style="margin:0;">Centre Autonome de Perfectionnement</h1>
-        <p>01 BP 2009 COTONOU - TEl. 21 36 14 32/21 36 09 93 - Email. epac.uac@epac.uac.bj</p>
+         @php
+        $bannerImg = storage_path("images/banner.png");
+        $hasBanner = file_exists($bannerImg) && filesize($bannerImg) > 0;
+        $bannerBase64 = $hasBanner ? 'data:image/png;base64,' . base64_encode(file_get_contents($bannerImg)) : '';
+    @endphp
+    @if($bannerBase64)
+    <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
+    @else
+    <hr style="margin: 5px 0;">
+    @endif
+    <h2 style="margin:0">Ecole Polytechnique d'Abomey-Calavi</h2>
+    @if($bannerBase64)
+    <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
+    @else
+    <hr style="margin: 5px 0;">
+    @endif
+    <h1 style="margin:0;">Centre Autonome de Perfectionnement</h1>
+    <p>
+        01 BP 2009 COTONOU - TEl. 21 36 14 32/21 36 09 93 - Email. epac.uac@epac.uac.bj
+    </p>
         <hr>
     </div>
     @endif
 
 
+<<<<<<< HEAD
       <div style="position: absolute; top: {{ !$loop->first ? '120px' : '0px' }}; left: 0;">
         @if(ucfirst($bulletin['etudiant']->genre) == 'Masculin')
                         <img src="{{ storage_path('avatars/homme.png') }}" style="width: 80px; height: 80px;" alt="">
@@ -83,6 +102,42 @@
     </div>
     @endif
 
+=======
+    @php
+        // Encoder la photo de l'étudiant en base64 pour DomPDF
+        if(isset($bulletin['etudiant']->photo) && $bulletin['etudiant']->photo && file_exists($bulletin['etudiant']->photo)) {
+            $photoPath = $bulletin['etudiant']->photo;
+            $photoBase64 = 'data:image/png;base64,' . base64_encode(file_get_contents($photoPath));
+        } else {
+            if(ucfirst($bulletin['etudiant']->genre) == 'Masculin') {
+                $avatarPath = storage_path('avatars/homme.png');
+            } else {
+                $avatarPath = storage_path('avatars/femme.png');
+            }
+            $photoBase64 = file_exists($avatarPath) ? 'data:image/png;base64,' . base64_encode(file_get_contents($avatarPath)) : '';
+        }
+    @endphp
+    
+    <table style="width: 100%; border: none; border-collapse: collapse; margin-top: 10px; margin-bottom: 7px;">
+        <tr>
+            <td style="border: none; width: 90px; vertical-align: top; padding: 0;">
+                @if(isset($photoBase64) && $photoBase64)
+                    <img src="{{ $photoBase64 }}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 5px;" alt="Photo étudiant">
+                @endif
+            </td>
+            <td style="border: none; text-align: center; vertical-align: middle; padding: 0;">
+                <div style="font-weight: bold; margin-bottom: 7px; font-size: 25px;">BULLETIN DE NOTES</div>
+                <div style="font-weight: bold; font-size: 15px;">Année Académique: {{ $bulletin['annee'] ?? '' }}</div>
+            </td>
+            <td style="border: none; width: 110px; text-align: right; vertical-align: top; padding: 0;">
+                @if(isset($bulletin['qrcode']))
+                    <img src="data:image/svg+xml;base64,{{ $bulletin['qrcode'] }}" width="100px" height="100px" class="qrcode" alt="Code QR">
+                @endif
+            </td>
+        </tr>
+    </table>
+    
+>>>>>>> cc06ae56466116d4734c6cc1ff33ad0d0a94b42b
     <table style="width: 100%; text-align: left; margin-bottom: 10px; font-size: 11px; border: none; margin-top: 10px; border-collapse: collapse;">
         <tbody>
             <tr>

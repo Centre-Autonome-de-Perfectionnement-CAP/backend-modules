@@ -293,6 +293,10 @@ class PendingStudentExportController extends Controller
         return response()->make($output, 200)
             ->header('Content-Type', 'application/pdf')
             ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+<<<<<<< HEAD
     }
     }
 
+=======
+    }}
+>>>>>>> cc06ae56466116d4734c6cc1ff33ad0d0a94b42b
