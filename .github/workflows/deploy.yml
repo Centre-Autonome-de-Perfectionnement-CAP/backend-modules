@@ -108,7 +108,7 @@ jobs:
             # Keep only last 5 releases
             echo "🧹 Cleaning old releases..."
             cd $DEPLOY_PATH/releases
-            ls -t | tail -n +6 | xargs -r sudo rm -rf
+            ls -t | tail -n +6 | xargs -r  rm -rf
             
             echo "✅ Deployment completed successfully!"
           ENDSSH
