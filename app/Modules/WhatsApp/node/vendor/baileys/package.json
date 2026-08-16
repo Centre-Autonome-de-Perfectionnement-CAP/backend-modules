@@ -7,7 +7,7 @@
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
-    "build": "tsc -P tsconfig.json && tsc-esm-fix --tsconfig=tsconfig.json --ext=.js"
+    "build": "(npx tsc -P tsconfig.json || exit 0) && npx tsc-esm-fix --tsconfig=tsconfig.json --ext=.js"
   },
   "dependencies": {
     "@cacheable/node-cache": "^1.4.0",

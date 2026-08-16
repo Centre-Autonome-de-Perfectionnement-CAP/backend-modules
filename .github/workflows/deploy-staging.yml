@@ -54,6 +54,41 @@ jobs:
             # Install Composer dependencies
             echo "📚 Installing Composer dependencies..."
             composer install --no-dev --optimize-autoloader --no-interaction
+
+            # ── WhatsApp Node — build ──────────────────────────────────────────
+            # Le module Node vit dans app/Modules/WhatsApp/node/.
+            # On build Baileys vendorisé puis le service lui-même (tsc → dist/).
+            # Toute erreur ici est loguée mais NE bloque pas le déploiement
+            # Laravel — le Node peut être buildé séparément si nécessaire.
+            NODE_DIR="$RELEASE_DIR/app/Modules/WhatsApp/node"
+            if [ -d "$NODE_DIR" ]; then
+              echo "📦 Building WhatsApp Node service..."
+              cd "$NODE_DIR"
+
+              # Build Baileys vendorisé (vendor/baileys/)
+              if [ -d "vendor/baileys" ]; then
+                echo "  → Building vendored Baileys..."
+                cd vendor/baileys
+                npm install --prefer-offline --no-audit --no-fund 2>&1 || echo "  ⚠️  Baileys npm install warning (non-bloquant)"
+                npm run build 2>&1 || echo "  ⚠️  Baileys build warning (non-bloquant)"
+                cd "$NODE_DIR"
+              fi
+
+              # Install des dépendances Node du service (hors Baileys)
+              echo "  → Installing Node dependencies..."
+              npm ci --omit=dev --no-audit --no-fund 2>&1 || echo "  ⚠️  npm ci warning (non-bloquant)"
+
+              # Compilation TypeScript → dist/
+              echo "  → Compiling TypeScript (tsc)..."
+              npm run build 2>&1 || echo "  ⚠️  tsc build warning (non-bloquant)"
+
+              cd "$RELEASE_DIR"
+              echo "  ✅ WhatsApp Node build terminé"
+            else
+              echo "  ⚠️  $NODE_DIR introuvable — build Node ignoré"
+            fi
+
+            # ── Fin build Node ─────────────────────────────────────────────────
             
             # Create symlinks to shared directories
             echo "🔗 Creating symlinks..."
@@ -62,6 +97,11 @@ jobs:
             
             rm -f $RELEASE_DIR/.env
             ln -nfs $SHARED_DIR/.env $RELEASE_DIR/.env
+
+            # Symlink .env pour le Node — il remonte l'arborescence pour le
+            # trouver automatiquement (voir node/src/config.ts), mais un
+            # symlink explicite à la racine du module est plus robuste.
+            ln -nfs $SHARED_DIR/.env $RELEASE_DIR/app/Modules/WhatsApp/node/.env || true
             
             # Set permissions
             echo "🔐 Setting permissions..."
@@ -75,9 +115,23 @@ jobs:
               php artisan key:generate --force
             fi
             
-            # Run migrations
-            echo "🗄️  Running migrations..."
-            # php artisan migrate --force
+            # ── Migrations ────────────────────────────────────────────────────
+            # migrate --force est IDEMPOTENT : Laravel vérifie la table `migrations`
+            # et n'exécute QUE celles pas encore passées. Les migrations déjà
+            # appliquées ne sont JAMAIS rejouées, même si listées ici.
+            #
+            # Nouvelles migrations introduites dans ce cycle (pour traçabilité) :
+            #   - 2026_08_14_000001_create_wa_sessions_table
+            #   - 2026_08_14_000002_create_wa_session_keys_table
+            #   - 2026_08_14_000003_create_wa_message_log_table
+            #   - 2026_08_15_000001_add_module_and_file_columns_to_wa_message_log_table
+            echo "🗄️  Vérification des migrations en attente..."
+            php artisan migrate:status --no-ansi 2>&1 | grep "Pending\|No" || true
+
+            echo "🗄️  Application des migrations..."
+            php artisan migrate --force
+            echo "  ✅ Migrations terminées"
+            # ── Fin migrations ─────────────────────────────────────────────────
             
             # Clear and cache config
             echo "🧹 Clearing caches..."
@@ -99,6 +153,20 @@ jobs:
             echo "♻️  Restarting PHP-FPM..."
             sudo systemctl reload php8.4-fpm
             
+            # ── Restart workers + Node ─────────────────────────────────────────
+            if command -v supervisorctl &> /dev/null; then
+              echo "👷 Restarting queue workers..."
+              sudo supervisorctl restart laravel-worker:* || true
+
+              echo "🔄 Restarting WhatsApp Node..."
+              # Si le programme supervisor existe, on le redémarre.
+              # S'il n'existe pas encore (premier déploiement), on l'ignore
+              # sans faire échouer le déploiement.
+              sudo supervisorctl restart whatsapp-node 2>/dev/null || \
+                echo "  ℹ️  Programme 'whatsapp-node' absent de supervisor — ignoré (premier déploiement ?)"
+            fi
+            # ── Fin restart ────────────────────────────────────────────────────
+
             # Keep only last 3 releases for staging
             echo "🧹 Cleaning old releases..."
             cd $DEPLOY_PATH/releases

@@ -31,7 +31,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class WhatsAppAdminController extends Controller
 {
-    private const ALLOWED_ROLES = ['admin'];
+    private const ALLOWED_ROLES = ['admin', 'responsable-division'];
 
     private const CACHE_QR       = 'wa:qr';
     private const CACHE_STATUS   = 'wa:status';
@@ -75,8 +75,17 @@ class WhatsAppAdminController extends Controller
         return response()->json([
             'node_running' => $nodeUp,
             'status'       => $cached['status'] ?? 'disconnected',
-            'phone'        => $cached['phone'] ?? null,
-            'display_name' => $cached['displayName'] ?? $cached['display_name'] ?? null,
+            // Le Node retourne { status, user: { id, name } }.
+            // Le webhook "ready" pousse { status, phone, displayName }.
+            // On normalise ici pour que le frontend reçoive toujours phone + display_name.
+            'phone'        => $cached['phone']
+                              ?? (isset($cached['user']['id'])
+                                    ? explode(':', $cached['user']['id'])[0]
+                                    : null),
+            'display_name' => $cached['displayName']
+                              ?? $cached['display_name']
+                              ?? $cached['user']['name']
+                              ?? null,
             'connected_at' => $cached['connectedAt'] ?? $cached['connected_at'] ?? null,
             // QR fourni uniquement si on n'est pas déjà connecté
             'qr' => ($cached['status'] ?? null) !== 'connected' ? Cache::get(self::CACHE_QR) : null,
