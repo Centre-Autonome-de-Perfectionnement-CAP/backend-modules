@@ -43,7 +43,7 @@
 
 @section('content')
 @foreach($bulletins as $bulletin)
-<div class="main" style="position: relative; {{ !$loop->last ? 'page-break-after: always;' : '' }}">
+<div class="main" style="margin-bottom: 10px; position: relative; {{ !$loop->last ? 'page-break-after: always;' : '' }}">
     @if(!$loop->first)
     <div class="header" style="margin-bottom: 20px;">
         @php
@@ -137,7 +137,7 @@
             </tr>
         </tbody>
     </table>
-    
+
     <table class="corps">
         <thead style="font-weight: bold;">
             <tr>
@@ -160,7 +160,7 @@
                 <td>{{ $line["code"] ?? '' }}</td>
                 <td style="font-weight: bold;">{{ $line['nom'] ?? '' }}</td>
                 <td>{{ $line['credit'] ?? '' }}</td>
-                <td>{{ ($line['moyenne'] ?? 0) * 5 }}</td>  
+                <td>{{ ($line['moyenne'] ?? 0) * 5 }}</td>
                 <td>{{ $line['frequence'] ?? '' }}</td>
                 <td>{{ $line['etat'] ?? '' }}</td>
                 @php $num++; @endphp
@@ -175,36 +175,36 @@
     <table style="width: 100%; margin: 7px; text-align: center; font-size: 13px; border: none; border-collapse: collapse;">
         <tbody>
             <tr>
-                <td colspan="3" style="font-weight: bolder; text-align: center; border: none;">BILAN DE L'ANNÉE</td>
+                <td colspan="3" style="font-weight: bolder; text-align: left; border: none;">BILAN DE L'ANNÉE</td>
             </tr>
         </tbody>
     </table>
 
     <table style="width: 100%; text-align: left; padding-left: 10px; margin-bottom: 10px; font-size: 12px; border: none; border-collapse: collapse;">
         <tbody>
-            <tr>
-                <td style="border: none;"><span style="font-weight: normal;">Nombre de UE validé : </span><strong> {{ $bulletin['bulletin_data'][0]["nombre_ue_valide"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_ue"] ?? 0 }}</strong></td>
-                <td style="border: none;"><span style="font-weight: normal;">Crédits obtenus : </span> <strong>{{ $bulletin['bulletin_data'][0]["nombre_credit_obtenu"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_credit_total"] ?? 0 }}</strong></td>
-                <td style="border: none;"><span style="font-weight: normal;">Moyenne : </span> <strong>{{ $bulletin['bulletin_data'][0]["moyenne"] ?? 0 }}</strong></td>
+            <tr style="text-align:center;">
+<!--                 <td style="border: none;"><span style="font-weight: normal;">Nombre de UE validé : </span><strong> {{ $bulletin['bulletin_data'][0]["nombre_ue_valide"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_ue"] ?? 0 }}</strong></td>
+                <td style="border: none;"><span style="font-weight: normal;">Crédits obtenus : </span> <strong>{{ $bulletin['bulletin_data'][0]["nombre_credit_obtenu"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_credit_total"] ?? 0 }}</strong></td> -->
+                <td style="border: none; text-align:center;"><span style="font-weight: normal;">Moyenne : </span> <strong>{{ str_replace('.', ',', number_format((float)($bulletin['bulletin_data'][0]["moyenne"] ?? 0), 2, '.', '')) }}</strong></td>
             </tr>
-            <tr>
-                <td style="border: none;"><span style="font-weight: normal;">Nombre de UE cumulé : </span> <strong>{{ $bulletin['bulletin_data'][0]["nombre_ue_valide"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_ue"] ?? 0 }}</strong></td>
-                <td style="border: none;"><span style="font-weight: normal;">Total crédits cumulés : </span> <strong>{{ $bulletin['bulletin_data'][0]["nombre_credit_obtenu"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_credit_total"] ?? 0 }}</strong></td>
-                <td style="border: none;"><span style="font-weight: normal;">Grade ETCS : </span><strong>{{ $bulletin['bulletin_data'][0]["grade"] ?? '' }}</strong></td> 
+            <tr >
+<!--                 <td style="border: none;"><span style="font-weight: normal;">Nombre de UE cumulé : </span> <strong>{{ $bulletin['bulletin_data'][0]["nombre_ue_valide"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_ue"] ?? 0 }}</strong></td>
+                <td style="border: none;"><span style="font-weight: normal;">Total crédits cumulés : </span> <strong>{{ $bulletin['bulletin_data'][0]["nombre_credit_obtenu"] ?? 0 }}/{{ $bulletin['bulletin_data'][0]["nombre_credit_total"] ?? 0 }}</strong></td> -->
+                <td style="border: none; text-align:center;"><span style="font-weight: normal;">Grade ETCS : </span><strong>{{ $bulletin['bulletin_data'][0]["grade"] ?? '' }}</strong></td>
             </tr>
-            <tr>
-                <td style="border: none;"><span style="font-weight: normal;">% Crédits requis : </span><strong> 80%</strong></td>
-                <td style="border: none;"><span style="font-weight: normal;">% Crédits cumulés : </span> <strong>{{ isset($bulletin['bulletin_data'][0]) ? round((float)($bulletin['bulletin_data'][0]["nombre_credit_obtenu"] *100 )/ (float)($bulletin['bulletin_data'][0]["nombre_credit_total"]), 2) : 0 }}%</strong></td>
-                <td style="border: none;"><span style="font-weight: normal;">Décision du conseil : </span><strong> {{ $bulletin['bulletin_data'][0]["decision"] ?? '' }}</strong></td>
+            <tr style="text-align:center;">
+<!--                 <td style="border: none;"><span style="font-weight: normal;">% Crédits requis : </span><strong> 80%</strong></td>
+                <td style="border: none;"><span style="font-weight: normal;">% Crédits cumulés : </span> <strong>{{ isset($bulletin['bulletin_data'][0]) ? round((float)($bulletin['bulletin_data'][0]["nombre_credit_obtenu"] *100 )/ (float)($bulletin['bulletin_data'][0]["nombre_credit_total"]), 2) : 0 }}%</strong></td> -->
+                <td style="border: none; text-align:center;"><span style="font-weight: normal;">Décision du conseil : </span><strong> {{ $bulletin['bulletin_data'][0]["decision"] ?? '' }}</strong></td>
             </tr>
         </tbody>
     </table>
     @endif
     <br>
     <div style="width: 100%; text-align: center; font-size: 14px;">
-        <p style="margin: 5px 0;">Fait à Abomey-Calavi le {{ now()->format('d') }} {{ ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][now()->format('n')] }} {{ now()->format('Y') }}</p>
-        <p style="margin: 5px 0;">Le Chef CAP</p>
-        <div style="height: 60px;"></div>
+        <p style="margin: 30px 0;">Fait à Abomey-Calavi le {{ now()->format('d') }} {{ ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][now()->format('n')] }} {{ now()->format('Y') }}</p>
+        <p style="margin: 40px 0;">Le Chef CAP</p>
+        <div style="height: 80px;"></div>
         <p style="margin: 5px 0; text-decoration: underline;">{{ $bulletin['signataire']->nomination ?? '' }}</p>
     </div>
 </div>

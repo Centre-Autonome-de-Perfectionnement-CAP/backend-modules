@@ -38,6 +38,7 @@ class DashboardService
     public function getGraphData($academicYearId = null): array {
         $currentYear = null;
 
+        // Nettoyer l'ID si c'est la chaîne 'null'
         if ($academicYearId === 'null' || $academicYearId === '') {
             $academicYearId = null;
         }
@@ -46,6 +47,7 @@ class DashboardService
             $currentYear = AcademicYear::where('is_current', true)->first();
             $academicYearId = $currentYear ? $currentYear->id : null;
         } elseif (is_string($academicYearId) && preg_match('/^\d{4}-\d{4}$/', $academicYearId)) {
+            // Si l'ID ressemble à une année académique (ex: "2026-2027"), chercher par academic_year
             $currentYear = AcademicYear::where('academic_year', $academicYearId)->first();
             $academicYearId = $currentYear ? $currentYear->id : null;
         } else {
@@ -66,9 +68,10 @@ class DashboardService
         ];
     }
 
-    
-    protected function getStudentsByDepartment($academicYearId = null): array  {
-        $departments = Department::all();
+
+    protected function getStudentsByDepartment($academicYearId = null): array
+    {  $departments = Department::all();
+
 
         if ($departments->isEmpty()) {
             return [['filiere' => 'Aucune filière', 'nombre' => 0]];

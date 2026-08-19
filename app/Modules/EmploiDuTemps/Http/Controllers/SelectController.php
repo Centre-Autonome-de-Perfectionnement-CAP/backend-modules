@@ -83,70 +83,65 @@ class SelectController extends Controller
         return response()->json(['success' => true, 'data' => $data]);
     }
 
-   public function programs(Request $request): JsonResponse
-{
-    $query = Program::with([
-        'courseElementProfessor.courseElement:id,name,code,credits',
-        'courseElementProfessor.professor:id,first_name,last_name,email',
-        'classGroup:id,group_name,study_level',
-    ]);
+    public function programs(Request $request): JsonResponse{
+        $query = Program::with([
+            'courseElementProfessor.courseElement:id,name,code,credits',
+            'courseElementProfessor.professor:id,first_name,last_name,email',
+            'classGroup:id,group_name,study_level',
+        ]);
 
-    // Filtre par année académique
-    if ($request->filled('academic_year_id')) {
-        $query->where('academic_year_id', $request->academic_year_id);
-    }
-
-    // Filtre par classe
-    if ($request->filled('class_group_id')) {
-        $query->where('class_group_id', $request->class_group_id);
-    }
-
-    // ✅ CONDITION MANQUANTE :
-    // Ne garder que les programmes dont le professeur a AU MOINS un contrat SIGNÉ
-    $query->whereHas('courseElementProfessor.professor.contrats', function ($q) use ($request) {
-        $q->where('status', 'signed');
-
-        // Optionnel mais fortement recommandé :
-        // filtrer aussi par année académique pour cohérence
+        // Filtre par année académique
         if ($request->filled('academic_year_id')) {
-            $q->where('academic_year_id', $request->academic_year_id);
+            $query->where('academic_year_id', $request->academic_year_id);
         }
-    });
 
-    $programs = $query->orderBy('id')->get();
+        // Filtre par classe
+        if ($request->filled('class_group_id')) {
+            $query->where('class_group_id', $request->class_group_id);
+        }
 
-    $result = $programs->map(function ($p) {
-        $cep = $p->courseElementProfessor;
+        $query->whereHas('courseElementProfessor.professor.contrats', function ($q) use ($request) {
 
-        return [
-            'id'       => $p->id,
-            'semester' => $p->semester,
+            $q->whereIn('status', ['signed', 'ongoing']);
 
-            'course_element' => $cep?->courseElement ? [
-                'id'      => $cep->courseElement->id,
-                'name'    => $cep->courseElement->name,
-                'code'    => $cep->courseElement->code,
-                'credits' => $cep->courseElement->credits,
-            ] : null,
+            if ($request->filled('academic_year_id')) {
+                $q->where('academic_year_id', $request->academic_year_id);
+            }
+        });
 
-            'professor' => $cep?->professor ? [
-                'id'         => $cep->professor->id,
-                'first_name' => $cep->professor->first_name,
-                'last_name'  => $cep->professor->last_name,
-                'email'      => $cep->professor->email,
-            ] : null,
-        ];
-    });
+        $programs = $query->orderBy('id')->get();
 
-    return response()->json([
-        'success' => true,
-        'data'    => $result
-    ]);
-}
+        $result = $programs->map(function ($p) {
+            $cep = $p->courseElementProfessor;
+
+            return [
+                'id'       => $p->id,
+                'semester' => $p->semester,
+
+                'course_element' => $cep?->courseElement ? [
+                    'id'      => $cep->courseElement->id,
+                    'name'    => $cep->courseElement->name,
+                    'code'    => $cep->courseElement->code,
+                    'credits' => $cep->courseElement->credits,
+                ] : null,
+
+                'professor' => $cep?->professor ? [
+                    'id'         => $cep->professor->id,
+                    'first_name' => $cep->professor->first_name,
+                    'last_name'  => $cep->professor->last_name,
+                    'email'      => $cep->professor->email,
+                ] : null,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data'    => $result
+        ]);
+    }
 
     // GET /api/emploi-temps/selects/rooms-by-building/{buildingId}
-    public function roomsByBuilding(Request $request, int $buildingId): JsonResponse
-    {
+    public function roomsByBuilding(Request $request, int $buildingId): JsonResponse  {
         $rooms = \App\Modules\EmploiDuTemps\Models\Room::where('building_id', $buildingId)
             ->when($request->boolean('available_only'), fn($q) => $q->where('is_available', true))
             ->orderBy('name')

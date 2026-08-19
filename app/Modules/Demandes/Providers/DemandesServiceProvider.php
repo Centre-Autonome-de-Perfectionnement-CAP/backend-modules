@@ -24,24 +24,25 @@ use App\Modules\Demandes\Services\SecretaryFileService;
  *   - SecretaryFileService en singleton (nouveau service extrait du contrôleur)
  *   - Gate::policy() pour DocumentRequestPolicy, absente de l'original
  *     (la vérification de rôle était inline dans le contrôleur)
+ *
+ * NOTE HISTORIQUE : ce dossier s'appelait autrefois "Routes" (majuscule).
+ * Sur Linux (filesystem case-sensitive), __DIR__ . '/../Routes/api.php'
+ * pointait dans le vide et aucune route n'était jamais enregistrée
+ * ("Aucune demande" côté secrétaire). Déjà corrigé ci-dessous
+ * (loadRoutesFrom pointe vers routes/ en minuscule) — gardé en note pour
+ * éviter de reproduire l'erreur.
  */
 class DemandesServiceProvider extends ServiceProvider
 {
+
+    
+
     public function register(): void
     {
-        // ── WhatsApp (singleton partagé — évite de recréer le client Twilio) ──
-        $this->app->singleton(WhatsAppService::class);
-
-        // ── NotificationService : dépend de WhatsAppService ───────────────────
-        $this->app->singleton(NotificationService::class, function ($app) {
-            return new NotificationService(
-                $app->make(WhatsAppService::class),
-            );
-        });
-
-        // ── Autres singletons (inchangés) ─────────────────────────────────────
+        // Singletons explicites — lisibilité + perf (pas de re-instanciation)
         $this->app->singleton(DocumentRequestQueryService::class);
         $this->app->singleton(DocumentRequestHistoryService::class);
+        $this->app->singleton(NotificationService::class);
 
         $this->app->singleton(TransitionService::class, function ($app) {
             return new TransitionService(
@@ -54,9 +55,13 @@ class DemandesServiceProvider extends ServiceProvider
         $this->app->singleton(SecretaryFileService::class);
     }
 
+
     public function boot(): void
     {
         $this->loadRoutesFrom(__DIR__ . '/../routes/api.php');
+
+
+
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
 
         // ── AJOUT (B1.3) : Policy absente de l'original ───────────────────────

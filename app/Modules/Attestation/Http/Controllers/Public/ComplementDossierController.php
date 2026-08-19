@@ -21,6 +21,13 @@ use Illuminate\Support\Facades\{DB, Log};
  * Les fichiers complémentaires sont stockés dans complement/
  * sans jamais écraser demande/. La priorité de lecture est gérée
  * par DocumentStorageService::resolveDocuments().
+ *
+ * WhatsApp est obligatoire à la soumission du complément.
+ * Le numéro est normalisé côté backend avant stockage.
+ *
+ * Notifications déclenchées automatiquement :
+ *  → Étudiant   : email + WhatsApp (accusé de réception)
+ *  → Secrétaire : email + WhatsApp (nouveau complément à traiter)
  */
 class ComplementDossierController extends Controller
 {
@@ -51,6 +58,12 @@ class ComplementDossierController extends Controller
         'bulletin_annuel'         => 'Bulletin de Notes',
     ];
 
+    private const TYPE_TO_FOLDER = [
+        'attestation_definitive'  => 'definitive',
+        'attestation_inscription' => 'inscription',
+        'attestation_passage'     => 'passage',
+    ];
+
     public function __construct(
         protected NotificationService    $notificationService,
         protected WhatsAppService        $whatsAppService,
@@ -72,6 +85,7 @@ class ComplementDossierController extends Controller
             ], 422);
         }
 
+        // Recherche par référence → résultat unique
         if ($request->filled('reference')) {
             $demande = DB::table('document_requests')
                 ->where('reference', strtoupper(trim($request->reference)))
@@ -87,6 +101,7 @@ class ComplementDossierController extends Controller
             ]);
         }
 
+        // Recherche par matricule → tableau
         $student = Student::where(
             'student_id_number', strtoupper(trim($request->matricule))
         )->first();
@@ -230,6 +245,10 @@ class ComplementDossierController extends Controller
 
         $piecesList = array_values($savedLabels);
 
+        // ── Notifications (email + WhatsApp) ──────────────────────────────────
+        // sendComplementSecretaire() gère en un appel :
+        //   - Email + WhatsApp → étudiant
+        //   - Email + WhatsApp → toutes les secrétaires
         $this->notificationService->sendComplementSecretaire(
             etudiantEmail:    $request->email,
             vars:             compact('nomComplet', 'matricule', 'reference', 'dateComplement', 'piecesList'),
@@ -249,6 +268,10 @@ class ComplementDossierController extends Controller
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    /**
+     * Formate une demande pour la réponse publique.
+     * N'expose PAS le statut ni les dates internes de traitement.
+     */
     private function formatDemande(object $demande): array
     {
         $link = StudentPendingStudent::with([

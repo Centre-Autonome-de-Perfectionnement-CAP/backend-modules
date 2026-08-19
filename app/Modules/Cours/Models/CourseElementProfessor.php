@@ -17,6 +17,8 @@ class CourseElementProfessor extends Model
         'course_element_id',
         'professor_id',
         'is_primary',
+        'academic_year_id',  // ← ajouté
+        'class_group_id',    // ← ajouté
     ];
 
     protected $casts = [

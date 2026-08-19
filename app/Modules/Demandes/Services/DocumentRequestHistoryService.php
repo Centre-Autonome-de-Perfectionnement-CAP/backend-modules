@@ -9,10 +9,6 @@ use Illuminate\Support\Facades\Auth;
 /**
  * Gère toutes les écritures dans document_request_histories.
  * Chaque entrée est immuable après création.
- *
- * CORRECTION : ajout de recordMail() qui était référencé dans le trait
- * RecordsDocumentHistory mais absent de ce service (provoquait une erreur
- * BadMethodCallException à l'appel de logMail()).
  */
 class DocumentRequestHistoryService
 {
@@ -46,6 +42,7 @@ class DocumentRequestHistoryService
 
     /**
      * Enregistre la levée d'une réserve (flag_cleared).
+     * Pas de changement de statut, on enregistre quand même pour traçabilité.
      */
     public function recordFlagCleared(int $documentRequestId, string $currentStatus): DocumentRequestHistory
     {
@@ -119,10 +116,6 @@ class DocumentRequestHistoryService
 
         if ($action === 'secretaire_deliver') {
             return 'delivery';
-        }
-
-        if ($action === 'return_to_secretaire') {
-            return 'correction';
         }
 
         return 'validation';

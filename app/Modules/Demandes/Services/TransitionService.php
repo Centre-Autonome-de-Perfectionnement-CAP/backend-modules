@@ -43,6 +43,11 @@ class TransitionService
 
     // ── Point d'entrée ────────────────────────────────────────────────────────
 
+    /**
+     * Applique la transition demandée et retourne la demande mise à jour.
+     *
+     * @throws \Symfony\Component\HttpKernel\Exception\HttpException
+     */
     public function apply(int $id, string $action, array $payload, string $role): object
     {
         $role = WorkflowConstants::canonicalRole($role);
@@ -90,10 +95,6 @@ class TransitionService
         // ── Mails (hors transaction, comme dans l'original) ───────────────────
         $fresh = DB::table('document_requests')->where('id', $id)->first();
 
-        if (str_ends_with($action, '_flagged')) {
-            $this->notificationService->sendSousReserve($fresh, $payload['motif'] ?? '');
-        }
-
         match ($mailTrigger) {
             'rejected'                          => $this->notificationService->sendRejected($fresh, $payload['motif'] ?? ''),
             'ready_for_pickup'                  => $this->notificationService->sendReady($fresh),
@@ -120,8 +121,8 @@ class TransitionService
     // ── Constructeur d'update (INCHANGÉ — copie fidèle de l'original) ─────────
 
     /**
-     * @return array{0: array, 1: string|null, 2: string|null}
-     *         [champs à mettre à jour, nouveau statut|null, déclencheur mail|null]
+     * @return array{0: array, 1: string|null, 2: string|null, 3: bool}
+     *         [champs à mettre à jour, nouveau statut|null, déclencheur mail|null, est flagged]
      */
     private function buildUpdate(string $action, array $p, object $demande, object $user, string $role): array
     {
@@ -143,13 +144,10 @@ class TransitionService
         // ── CLEAR FLAG ────────────────────────────────────────────────────────
         if ($action === 'clear_flag') {
             $update['has_flag'] = false;
-            return [$update, null, null];
+            return [$update, null, null, false];
         }
 
-        // ═════════════════════════════════════════════════════════════════════
-        // SECRÉTAIRE
-        // ═════════════════════════════════════════════════════════════════════
-
+        // ── SECRÉTAIRE ────────────────────────────────────────────────────────
         if ($action === 'secretaire_validate') {
             $newStatus        = 'accounting_review';
             $update['status'] = $newStatus;
@@ -157,9 +155,10 @@ class TransitionService
 
         elseif (in_array($action, ['secretaire_reject', 'secretaire_reject_final'])) {
             $this->requireMotif($p);
-            $update['status']          = 'rejected';
-            $update['rejected_reason'] = $p['motif'];
-            $update['rejected_by']     = 'Secrétaire';
+            $update['status']             = 'rejected';
+            $update['rejected_reason']    = $p['motif'];
+            $update['secretaire_comment'] = $p['motif'];
+            $update['rejected_by']        = 'Secrétaire';
             $mail = 'rejected';
         }
 
@@ -208,17 +207,15 @@ class TransitionService
             $mail = 'ready_for_pickup';
         }
 
-        // ═════════════════════════════════════════════════════════════════════
-        // COMPTABLE
-        // ═════════════════════════════════════════════════════════════════════
-
+        // ── COMPTABLE ─────────────────────────────────────────────────────────
         elseif (in_array($action, ['comptable_validate', 'comptable_validate_flagged'])) {
             $newStatus                           = 'division_manager_review';
             $update['status']                    = $newStatus;
             $update['responsable_division_type'] = $this->resolveResponsableDivisionType($demande->id);
 
             if ($isFlagged) {
-                $update['has_flag'] = true;
+                $update['has_flag']          = true;
+                $update['comptable_comment'] = $p['motif'] ?? $p['comment'] ?? null;
             }
         }
 
@@ -242,7 +239,8 @@ class TransitionService
             $update['status'] = $newStatus;
 
             if ($isFlagged) {
-                $update['has_flag'] = true;
+                $update['has_flag']               = true;
+                $update['chef_division_comment']  = $p['motif'] ?? $p['comment'] ?? null;
             }
         }
 
@@ -278,15 +276,11 @@ class TransitionService
             $update['status']                   = $newStatus;
             $update['rejected_reason']          = $p['motif'];
             $update['rejected_by']              = WorkflowConstants::ROLE_LABELS[$role] ?? $role;
-            $update['correction_origin_role']   = $role;
-            $update['correction_origin_status'] = $demande->status;
-            $update['is_in_correction_circuit'] = true;
+            $update['chef_cap_reviewed_at']     = now();
+            $update['processed_by_chef_cap_id'] = $user->id;
         }
 
-        // ═════════════════════════════════════════════════════════════════════
-        // SEC. DIRECTRICE ADJOINTE
-        // ═════════════════════════════════════════════════════════════════════
-
+        // ── SEC. DIRECTRICE ADJOINTE ──────────────────────────────────────────
         elseif (in_array($action, ['sec_da_transmit', 'sec_da_transmit_flagged'])) {
             $newStatus        = 'deputy_director_review';
             $update['status'] = $newStatus;
@@ -307,10 +301,7 @@ class TransitionService
             $update['is_in_correction_circuit'] = true;
         }
 
-        // ═════════════════════════════════════════════════════════════════════
-        // DIRECTRICE ADJOINTE
-        // ═════════════════════════════════════════════════════════════════════
-
+        // ── DIRECTRICE ADJOINTE ───────────────────────────────────────────────
         elseif (in_array($action, ['directrice_adjointe_sign', 'directrice_adjointe_sign_flagged'])) {
             $newStatus        = 'director_secretary_review';
             $update['status'] = $newStatus;
@@ -331,10 +322,7 @@ class TransitionService
             $update['is_in_correction_circuit'] = true;
         }
 
-        // ═════════════════════════════════════════════════════════════════════
-        // SEC. DIRECTEUR
-        // ═════════════════════════════════════════════════════════════════════
-
+        // ── SEC. DIRECTEUR ────────────────────────────────────────────────────
         elseif (in_array($action, ['sec_directeur_transmit', 'sec_directeur_transmit_flagged'])) {
             $newStatus        = 'director_review';
             $update['status'] = $newStatus;
@@ -355,10 +343,7 @@ class TransitionService
             $update['is_in_correction_circuit'] = true;
         }
 
-        // ═════════════════════════════════════════════════════════════════════
-        // DIRECTEUR
-        // ═════════════════════════════════════════════════════════════════════
-
+        // ── DIRECTEUR ─────────────────────────────────────────────────────────
         elseif (in_array($action, ['directeur_sign', 'directeur_sign_flagged'])) {
             $update['signature_type'] = $p['signature_type'] ?? 'signature';
             $newStatus        = 'secretary_final_review';
@@ -395,7 +380,7 @@ class TransitionService
             abort(422, "Action inconnue : {$action}");
         }
 
-        return [$update, $newStatus, $mail];
+        return [$update, $newStatus, $mail, $isFlagged];
     }
 
     // ── Auto-détection du Responsable Division (INCHANGÉ) ─────────────────────
@@ -415,30 +400,17 @@ class TransitionService
 
     // ── Assertions (INCHANGÉ) ──────────────────────────────────────────────────
 
-    private function assertActionAllowed(?string $role, string $action, object $demande): void
+    private function assertActionAllowed(?string $role, string $action, string $currentStatus): void
     {
-        $currentStatus = $demande->status;
-
         if ($role === 'admin') {
             return;
         }
 
+        // clear_flag : secrétaire uniquement, n'importe quel statut
         if ($action === 'clear_flag') {
             if ($role !== 'secretaire') {
                 abort(403, 'Seul la secrétaire peut lever une réserve.');
             }
-            return;
-        }
-
-        if (
-            $demande->is_in_correction_circuit
-            && $role !== 'secretaire'
-            && $action !== 'return_to_secretaire'
-        ) {
-            abort(403, "Ce dossier est en circuit de correction. Seule l'action « Renvoyer à la Secrétaire » est autorisée.");
-        }
-
-        if ($action === 'return_to_secretaire' && $demande->is_in_correction_circuit) {
             return;
         }
 
@@ -454,14 +426,6 @@ class TransitionService
     {
         if (empty($p['motif'])) {
             abort(422, 'Un motif est obligatoire pour cette action.');
-        }
-    }
-
-    private function requireComment(array $p): void
-    {
-        $comment = trim($p['comment'] ?? $p['motif'] ?? '');
-        if (strlen($comment) < 5) {
-            abort(422, 'Un commentaire (minimum 5 caractères) est obligatoire avant de renvoyer à la Secrétaire.');
         }
     }
 }

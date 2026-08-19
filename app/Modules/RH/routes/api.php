@@ -12,7 +12,7 @@ use App\Modules\RH\Http\Controllers\ContratController;
 use App\Modules\RH\Http\Controllers\AcademicYearController;
 use App\Modules\RH\Http\Controllers\CycleController;
 
-Route::prefix('rh')->group(function () {
+Route::prefix('api/rh')->group(function () {
 
     Route::get('professors',             [ProfessorController::class, 'index']);
     Route::get('grades',                 [GradeController::class, 'index']);
@@ -34,47 +34,86 @@ Route::prefix('rh')->group(function () {
     Route::get('contrats/by-token/{token}/download',  [ContratController::class, 'downloadByToken']);
 
     // ─── Contrats (CRUD complet — admin) ──────────────────────────────────────
-    Route::get('contrats',         [ContratController::class, 'index']);
-    Route::post('contrats',        [ContratController::class, 'store']);
-    Route::get('contrats/{id}',    [ContratController::class, 'show']);
-    Route::put('contrats/{id}',    [ContratController::class, 'update']);
-    Route::delete('contrats/{id}', [ContratController::class, 'destroy']);
+    //
+    // CORRECTIF SÉCURITÉ (16/08/2026) : ces routes (CRUD contrats, upload PDF,
+    // autorisation, email de transfert, gestion admin-users avec attribution
+    // de rôles, signataires, documents, informations importantes) étaient
+    // ENTIÈREMENT accessibles SANS authentification — le commentaire
+    // "Routes protégées" au-dessus d'apiResource('documents', ...) était
+    // trompeur, aucun middleware n'était réellement appliqué.
+    //
+    // auth:sanctum ajouté ici : garantit maintenant qu'un utilisateur doit
+    // au minimum être connecté. ATTENTION : aucun contrôle de RÔLE fin
+    // n'existe encore à l'intérieur de ContratController / AdminUserController
+    // (vérifié : aucun assertAdmin()/Gate:: nulle part dans ces deux fichiers).
+    // Concrètement, N'IMPORTE QUEL compte connecté (y compris un professeur)
+    // peut aujourd'hui créer/supprimer des contrats et attribuer le rôle
+    // admin à n'importe qui. À corriger en ajoutant un assertAdmin() dans
+    // ces contrôleurs (même pattern que WhatsAppAdminController) — décision
+    // du rôle exact à autoriser laissée à l'équipe, pas prise seul ici.
+    Route::middleware('auth:sanctum')->group(function () {
 
-    // ─── Autorisation d'un contrat validé (admin uniquement) ─────────────────
-    Route::post('contrats/{id}/authorize',   [ContratController::class, 'authorizeContrat']);
+        Route::get('contrats',         [ContratController::class, 'index']);
+        Route::post('contrats',        [ContratController::class, 'store']);
+        Route::get('contrats/{id}',    [ContratController::class, 'show']);
+        Route::put('contrats/{id}',    [ContratController::class, 'update']);
+        Route::delete('contrats/{id}', [ContratController::class, 'destroy']);
 
-    // ─── Upload PDF final (admin remplace ou ajoute le PDF définitif) ─────────
-    Route::post('contrats/{id}/upload-pdf',  [ContratController::class, 'uploadPdf']);
+        // ─── Autorisation d'un contrat validé (admin uniquement) ─────────────
+        Route::post('contrats/{id}/authorize',   [ContratController::class, 'authorizeContrat']);
 
-    // ─── Email de transfert ───────────────────────────────────────────────────
-    Route::post('contrats/{id}/send-transfer-email', [ContratController::class, 'sendTransferEmail']);
+        // ─── Upload PDF final (admin remplace ou ajoute le PDF définitif) ────
+        Route::post('contrats/{id}/upload-pdf',  [ContratController::class, 'uploadPdf']);
 
-    // ─── Routes protégées ─────────────────────────────────────────────────────
-    Route::apiResource('documents', DocumentManagementController::class)->except(['index']);
+        // ─── Email de transfert (+ WhatsApp automatique, voir ContratController) ──
+        Route::post('contrats/{id}/send-transfer-email', [ContratController::class, 'sendTransferEmail']);
 
-    Route::get('important-informations/admin', [ImportantInformationController::class, 'indexAdmin']);
-    Route::apiResource('important-informations', ImportantInformationController::class)->except(['index']);
+        Route::apiResource('documents', DocumentManagementController::class)->except(['index']);
 
-    Route::apiResource('professors', ProfessorController::class)->only(['store', 'show', 'update', 'destroy']);
+        Route::get('important-informations/admin', [ImportantInformationController::class, 'indexAdmin']);
+        Route::apiResource('important-informations', ImportantInformationController::class)->except(['index']);
 
-    Route::apiResource('admin-users', AdminUserController::class);
-    Route::post('admin-users/{adminUser}/roles/attach', [AdminUserController::class, 'attachRole']);
-    Route::post('admin-users/{adminUser}/roles/detach', [AdminUserController::class, 'detachRole']);
-    Route::get('admin-users-statistics', [AdminUserController::class, 'statistics']);
+        Route::apiResource('professors', ProfessorController::class)->only(['store', 'show', 'update', 'destroy']);
 
-    Route::apiResource('signataires', SignataireController::class);
-    Route::get('banks', [ProfessorController::class, 'getBanks']);
+        Route::apiResource('admin-users', AdminUserController::class);
+        Route::post('admin-users/{adminUser}/roles/attach', [AdminUserController::class, 'attachRole']);
+        Route::post('admin-users/{adminUser}/roles/detach', [AdminUserController::class, 'detachRole']);
+        Route::get('admin-users-statistics', [AdminUserController::class, 'statistics']);
 
-    Route::get('roles', function () {
-        return response()->json([
-            'success' => true,
-            'data'    => \App\Modules\Stockage\Models\Role::select('id', 'name', 'slug')->get(),
-        ]);
+        Route::apiResource('signataires', SignataireController::class);
+        Route::get('banks', [ProfessorController::class, 'getBanks']);
+
+        Route::get('roles', function () {
+            return response()->json([
+                'success' => true,
+                'data'    => \App\Modules\Stockage\Models\Role::select('id', 'name', 'slug')->get(),
+            ]);
+        });
+
+        Route::get(
+            'contrats/{contratId}/programs/{programId}/supports',
+            [ContratController::class, 'listProgramSupports']
+        );
+        Route::post(
+            'contrats/{contratId}/programs/{programId}/supports',
+            [ContratController::class, 'addProgramSupport']
+        );
+        Route::delete(
+            'contrats/{contratId}/programs/{programId}/supports/{index}',
+            [ContratController::class, 'deleteProgramSupport']
+        );
+        Route::put(
+            'contrats/{contratId}/programs/{programId}/monographie',
+            [ContratController::class, 'updateProgramMonographie']
+        );
+        Route::get('professors/{professorId}/programs/{programId}', [ContratController::class, 'getProfessorProgram']);
+        Route::post('/contrats/{id}/factures-normalisees', [ContratController::class, 'uploadFacturesNormalisees']);
     });
 
     // ─── Contrats du professeur connecté ─────────────────────────────────────
     // Protégé par Sanctum — accepte tout utilisateur authentifié (User ou Professor)
     Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('professor/my-contrats', [ContratController::class, 'myContrats']);
+        Route::get('professor/my-factures', [ContratController::class, 'myFactures']);
     });
 });

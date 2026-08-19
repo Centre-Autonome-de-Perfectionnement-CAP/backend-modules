@@ -17,10 +17,30 @@ class AdminUserController extends Controller
 {
     use ApiResponse, HasPagination;
 
+    /**
+     * AJOUT (16/08/2026) — contrôle de rôle fin, absent jusqu'ici. Ce
+     * contrôleur gère les comptes admin et l'attribution de rôles :
+     * n'importe quel compte connecté pouvait auparavant s'attribuer le
+     * rôle admin lui-même. Appliqué une seule fois ici (middleware de
+     * closure, exécuté après auth:sanctum) plutôt que répété dans
+     * chaque méthode.
+     *
+     * ⚠️ 'admin' et 'rh' n'ont été retrouvés dans AUCUN seeder de rôles
+     * de ce dépôt — à vérifier en base avant mise en production.
+     */
+    private const ALLOWED_ROLES = ['admin', 'responsable-division', 'rh'];
+
     public function __construct(
         protected AdminUserService $adminUserService
     ) {
         $this->middleware('auth:sanctum');
+        $this->middleware(function ($request, $next) {
+            $slug = $request->user()?->roles->first()?->slug;
+            if (!in_array($slug, self::ALLOWED_ROLES, true)) {
+                abort(403, 'Accès réservé aux rôles autorisés (admin, responsable-division, rh).');
+            }
+            return $next($request);
+        });
     }
 
     /**

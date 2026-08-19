@@ -4,6 +4,7 @@ namespace App\Modules\Demandes;
 
 /**
  * Source unique de vérité pour les constantes du workflow Demandes.
+ * Importée partout où l'on a besoin de labels, mappings ou matrices.
  */
 final class WorkflowConstants
 {
@@ -101,15 +102,14 @@ final class WorkflowConstants
         'sec_da_reject'                  => 'Rejet',
         'directrice_adjointe_sign'       => 'Signature',
         'directrice_adjointe_sign_flagged' => 'Signature avec réserve',
-        'directrice_adjointe_reject'     => 'Rejet',
-        'sec_directeur_transmit'         => 'Transmission',
+        'directrice_adjointe_reject'   => 'Rejet',
+        'sec_directeur_transmit'       => 'Transmission',
         'sec_directeur_transmit_flagged' => 'Transmission avec réserve',
-        'sec_directeur_reject'           => 'Rejet',
-        'directeur_sign'                 => 'Signature',
-        'directeur_sign_flagged'         => 'Signature avec réserve',
-        'directeur_reject'               => 'Rejet',
-        'clear_flag'                     => 'Réserve levée',
-        'return_to_secretaire'           => 'Renvoi à la Secrétaire',
+        'sec_directeur_reject'         => 'Rejet',
+        'directeur_sign'               => 'Signature',
+        'directeur_sign_flagged'       => 'Signature avec réserve',
+        'directeur_reject'             => 'Rejet',
+        'clear_flag'                   => 'Réserve levée',
     ];
 
     // ── Nouveau statut → slug rôle notifié ────────────────────────────────────
@@ -134,7 +134,7 @@ final class WorkflowConstants
         'secretary_final_review'             => 'secretaire',       // ← NOUVEAU : après signature DG
     ];
 
-    // ── Matrice d'autorisation ────────────────────────────────────────────────
+    // ── Matrice d'autorisation : rôle → action → statuts autorisés ───────────
 
     public const ACTION_MATRIX = [
         'secretaire' => [
@@ -219,17 +219,17 @@ final class WorkflowConstants
         ],
         // Chaque acteur voit UNIQUEMENT son statut propre.
         // secretaire_correction est retiré intentionnellement.
-        'comptable'           => ['accounting_review'],
-        'responsable-division'=> ['division_manager_review'],
-        'chef-cap'            => ['cap_manager_review'],
-        'sec-da'              => ['deputy_director_secretary_review'],
-        'directrice-adjointe' => ['deputy_director_review'],
-        'sec-dir'             => ['director_secretary_review'],
-        'directeur'           => ['director_review'],
-        'admin'               => [],
+        'comptable'            => ['accounting_review'],
+        'responsable-division' => ['division_manager_review'],
+        'chef-cap'             => ['cap_manager_review'],
+        'sec-da'               => ['deputy_director_secretary_review'],
+        'directrice-adjointe'  => ['deputy_director_review'],
+        'sec-dir'              => ['director_secretary_review'],
+        'directeur'            => ['director_review'],
+        'admin'                => [],
     ];
 
-    // ── Rôles direction ───────────────────────────────────────────────────────
+    // ── Rôles direction (pas d'accès portail) ─────────────────────────────────
 
     public const DIRECTION_ROLES = [
         'sec-da',
@@ -238,5 +238,5 @@ final class WorkflowConstants
         'directeur',
     ];
 
-    private function __construct() {}
+    private function __construct() {} // non-instanciable
 }

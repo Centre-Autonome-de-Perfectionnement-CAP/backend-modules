@@ -6,44 +6,36 @@ use App\Modules\Demandes\WorkflowConstants;
 use Illuminate\Support\Facades\DB;
 
 /**
- * CORRECTIF (v2) — Base inchangée par rapport au service réel.
- *
- * Seul ajout (B3.2) : paginatedListing(), une méthode additive qui
- * réutilise exactement les mêmes colonnes et filtres que listing(),
- * mais avec ->paginate() au lieu de ->get(). Aucune méthode existante
- * n'est modifiée — listing(), findOrFail() et statsForDirectionUser()
- * restent identiques à l'original.
- *
- * B2.2 — Les index suivants sont nécessaires pour que ce service reste
- * performant à mesure que document_requests grossit (voir migration
- * jointe dans ce sprint) :
- *   - (student_pending_student_id) : déjà couvert par la FK
- *   - (status, created_at)         : pour le tri + filtre par statut du listing
- *   - (type, status)               : pour le filtre combiné type+statut
- *
  * Toutes les lectures DB pour les demandes (index, show, stats).
  * Aucune écriture ici.
  *
- * ─── STRATÉGIE POST-NETTOYAGE ────────────────────────────────────────────────
+ * CORRECTIF (16/08/2026 — résolution merge Benoite) :
+ *   Le schéma réel de document_requests (migration 2026_06_10_...) ne
+ *   contient PAS de colonnes chef_division_comment / secretaire_comment /
+ *   comptable_comment / *_reviewed_at directement sur la table — ces
+ *   informations sont dérivées de document_request_histories via les
+ *   sous-requêtes corrélées ci-dessous (historySubqueries()), qui
+ *   reconstituent le dernier commentaire/horodatage de chaque rôle à
+ *   partir du journal d'audit. C'est la bonne approche : elle ne dépend
+ *   d'aucune colonne fantôme.
  *
- * Les colonnes supprimées de document_requests (commentaires par rôle,
- * horodatages de révision, processed_by_*) sont reconstituées via des
- * sous-requêtes corrélées sur document_request_histories.
+ *   BASE_COLUMNS ne liste donc que les colonnes qui existent RÉELLEMENT
+ *   sur document_requests (vérifié contre la migration réelle).
  *
- * Ces sous-requêtes sont ultra-rapides grâce à l'index composite :
- *   drh_request_role_idx (document_request_id, actor_role, created_at)
+ *   `chef_division_type` n'est PAS une colonne de document_requests —
+ *   c'est une colonne de `users` (accédée via $user->chef_division_type
+ *   dans listing()), à ne jamais mettre dans BASE_COLUMNS.
  *
- * ─── DEUX MODES DE SÉLECTION ─────────────────────────────────────────────────
- *
- * listing()    → BASE_SELECT : colonnes légères + sous-requêtes commentaires/timestamps
- *                utiles pour l'affichage en liste (pas de dr.*)
- *
- * findOrFail() → DETAIL_SELECT : dr.* + sous-requêtes pour la vue détail
- *                (inclut complement_files, files, etc.)
+ * B2.2 — Index nécessaires pour rester performant (voir migration
+ * 2026_07_01_000001_add_missing_indexes_to_document_requests.php) :
+ *   - (student_pending_student_id, type, status)
+ *   - (status, created_at)
+ *   - (responsable_division_type, status)
+ *   - (is_in_correction_circuit, status)
  */
 class DocumentRequestQueryService
 {
-    // ── Colonnes directes pour le listing ─────────────────────────────────────
+    // ── Colonnes réelles de document_requests pour le listing ─────────────────
 
     private const BASE_COLUMNS = [
         'dr.id',
@@ -58,8 +50,8 @@ class DocumentRequestQueryService
         'dr.complement_at',
         'dr.submitted_at',
         'dr.created_at',
-        'dr.delivered_at',
         'dr.updated_at',
+        'dr.delivered_at',
         'dr.rejected_reason',
         'dr.rejected_by',
         'dr.signature_type',
@@ -69,7 +61,6 @@ class DocumentRequestQueryService
         'dr.correction_origin_role',
         'dr.correction_origin_status',
         'dr.student_pending_student_id',
-        // Étudiant
         'pi.last_name',
         'pi.first_names',
         'dept.name as department',
@@ -77,8 +68,11 @@ class DocumentRequestQueryService
     ];
 
     /**
-     * Sous-requêtes corrélées qui remplacent les colonnes supprimées.
-     * Chacune utilise l'index drh_request_role_idx (dr_id, actor_role, created_at).
+     * Sous-requêtes corrélées qui reconstituent les commentaires et
+     * horodatages par rôle à partir de document_request_histories
+     * (ces informations n'existent pas en colonnes directes sur
+     * document_requests). Chacune utilise l'index
+     * drh_request_role_idx (dr_id, actor_role, created_at).
      *
      * Pattern : on récupère la dernière entrée pour chaque rôle,
      * ce qui correspond toujours à l'action la plus récente de ce rôle.
@@ -173,12 +167,12 @@ class DocumentRequestQueryService
     }
 
     private const MATRICULE_SUBQUERY = "
-        (SELECT s.student_id_number FROM students s
+        (SELECT student_id_number FROM students s
          JOIN student_pending_student sps2 ON sps2.student_id = s.id
-         WHERE sps2.id = dr.student_pending_student_id LIMIT 1) AS matricule
+         WHERE sps2.id = dr.student_pending_student_id LIMIT 1) as matricule
     ";
 
-    // ── Base query ─────────────────────────────────────────────────────────────
+    // ── Base query ────────────────────────────────────────────────────────────
 
     private function baseQuery()
     {
@@ -222,7 +216,7 @@ class DocumentRequestQueryService
         }
 
         // Responsable Division : filtrer par son type (utilise l'index dr_responsable_division_type_idx)
-        // La colonne sur l'utilisateur s'appelle chef_division_type (nom historique en BD).
+        // La colonne sur l'utilisateur s'appelle chef_division_type (nom historique en BD, table users).
         // La colonne sur le dossier s'appelle responsable_division_type.
         if ($role === 'responsable-division' && $user->chef_division_type) {
             $query->where('dr.responsable_division_type', $user->chef_division_type);
@@ -248,7 +242,7 @@ class DocumentRequestQueryService
         return $query->orderBy('dr.created_at', 'asc')->get();
     }
 
-    // ── AJOUT (B3.2) — Listing paginé ─────────────────────────────────────────
+    // ── Listing paginé ───────────────────────────────────────────────────────
     //
     // Reproduit exactement la même construction de requête que listing()
     // ci-dessus (même colonnes, même filtrage par rôle, mêmes filtres
@@ -289,12 +283,18 @@ class DocumentRequestQueryService
         return $query->orderBy('dr.created_at', 'asc')->paginate($perPage);
     }
 
-    // ── Détail ─────────────────────────────────────────────────────────────────
+    // ── Détail ────────────────────────────────────────────────────────────────
 
     public function findOrFail(int $id): object
     {
-        // Pour le détail on prend dr.* (toutes les colonnes restantes)
-        // + infos étudiant + sous-requêtes histories
+        // Pour le détail on prend dr.* (toutes les colonnes réelles restantes)
+        // + infos étudiant + sous-requêtes histories.
+        //
+        // CORRECTIF : $select était construit puis jamais utilisé dans
+        // l'ancienne version (la requête réelle appelait un ->select()
+        // différent, plus simple, sans les sous-requêtes) — la vue détail
+        // n'affichait donc jamais les commentaires/horodatages par rôle.
+        // Corrigé : $select est maintenant bien celui utilisé ci-dessous.
         $select = array_merge(
             ['dr.*', 'pi.birth_date', 'dept.name as department', 'ay.academic_year'],
             array_map(fn($sq) => DB::raw($sq), $this->historySubqueries()),
@@ -316,7 +316,7 @@ class DocumentRequestQueryService
         return $demande;
     }
 
-    // ── Stats direction ────────────────────────────────────────────────────────
+    // ── Stats direction ───────────────────────────────────────────────────────
 
     public function statsForDirectionUser(int $userId, string $role): array
     {
@@ -330,7 +330,6 @@ class DocumentRequestQueryService
             ? DB::table('document_requests')->where('status', $myStatus)->count()
             : 0;
 
-        // Utilise l'index drh_actor_action_idx (actor_id, action_type)
         $totalValidated = DB::table('document_request_histories')
             ->where('actor_id', $userId)
             ->whereIn('action_type', ['validation', 'validation_flagged'])

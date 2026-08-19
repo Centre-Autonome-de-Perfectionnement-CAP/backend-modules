@@ -144,7 +144,7 @@ body {
     }
 @endphp
 
-{{-- ── EN-TÊTE ─────────────────────────────────────────────────────────────── --}}
+ 
 <table class="header-table">
     <tr>
         <td class="header-logo">
@@ -206,7 +206,7 @@ Adresse : {{ $contrat->professor->city ?? '' }} / Email : {{ $contrat->professor
 <div class="justify">Les parties au présent contrat ont convenu de ce qui suit :</div>
 
 <div class="section bold">1- Objet du contrat</div>
-<div class="justify">Le présent contrat a pour objet la fourniture de prestations d'enseignement au CAP dans les conditions de délai, normes académiques et de qualité conformément aux clauses et conditions ci-après énoncées.</div>
+<div class="justify">Le présent contrat a pour objet la fourniture de prestations d'enseignement au CAP dans les conditions de délai, normes académiques et de qualité conformément aux clauses et conditions ci-après énoncées.</div> <br><br>
 
 <div class="section bold">2- Nature des prestations</div>
 <div class="justify">
@@ -367,9 +367,9 @@ Pour tout ce qui n'est pas prévu au présent contrat, les parties se référero
         <td class="center">
             Le Directeur<br><br> <br><br>
 
-            Guy Alain ALITONOU<br>
-            Professeur Titulaire de Chimie organique<br>
-            et chimie des substances naturelles
+            Victorien Tamègnon DOUGNON<br>
+            Docteur (MC)<br>
+
         </td>
     </tr>
 </table>

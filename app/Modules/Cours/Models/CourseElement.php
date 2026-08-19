@@ -23,10 +23,12 @@ class CourseElement extends Model
         'code',
         'credits',
         'teaching_unit_id',
+        'hours'
     ];
 
     protected $casts = [
         'credits' => 'integer',
+        'hours' => 'integer',
     ];
 
     /**

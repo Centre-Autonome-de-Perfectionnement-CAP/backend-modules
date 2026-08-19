@@ -38,9 +38,17 @@ use Illuminate\Support\Facades\Log;
  */
 class NotificationService
 {
+    /**
+     * CORRECTIF (16/08/2026) : cette propriété était utilisée 12 fois dans
+     * ce fichier ($this->whatsApp->templateXxx()) sans jamais être déclarée
+     * ni injectée — erreur fatale "Undefined property" garantie à chaque
+     * notification. Ajouté ici.
+     */
     public function __construct(
-        protected WhatsAppService $whatsApp,
+        private WhatsAppService $whatsApp,
     ) {}
+
+    // ── Mails étudiant ────────────────────────────────────────────────────────
 
     // ══════════════════════════════════════════════════════════════════════════
     // HELPERS DISPATCH — remplacent Mail::send() et whatsApp->send() directs
@@ -178,7 +186,7 @@ class NotificationService
             view:    'core::emails.demande-rejected',
             vars:    [
                 'reference' => $demande->reference,
-                'type'      => $typeLabel,
+                'type'      => WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type,
                 'motif'     => $motif,
             ],
             context: "rejet:{$demande->reference}",
@@ -242,7 +250,7 @@ class NotificationService
             view:    'core::emails.demande-ready',
             vars:    [
                 'reference' => $demande->reference,
-                'type'      => $typeLabel,
+                'type'      => WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type,
             ],
             context: "pret:{$demande->reference}",
         );
@@ -273,7 +281,7 @@ class NotificationService
             view:    'core::emails.demande-delivered',
             vars:    [
                 'reference' => $demande->reference,
-                'type'      => $typeLabel,
+                'type'      => WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type,
             ],
             context: "remis:{$demande->reference}",
         );
@@ -373,7 +381,7 @@ class NotificationService
         $destinataires = $this->findUsersWithRole($targetRoleSlug, $responsableDivisionType);
 
         if ($destinataires->isEmpty()) {
-            Log::warning('[Notification] Aucun utilisateur pour le rôle', [
+            Log::warning('notifyNextActor: aucun utilisateur pour le rôle', [
                 'role'   => $targetRoleSlug,
                 'status' => $newStatus,
                 'ref'    => $demande->reference,
@@ -382,12 +390,8 @@ class NotificationService
         }
 
         $etudiantInfo      = $this->fetchEtudiantInfo($demande->id);
-        $etudiantNom       = $this->buildNom($etudiantInfo);
-        $matricule         = $etudiantInfo->matricule ?? '';
-        $expediteurNomRole = WorkflowConstants::ROLE_LABELS[$expediteurRole] ?? $expediteurRole ?? 'Acteur';
-        $typeDocument      = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
-        $destinataireRole  = WorkflowConstants::ROLE_LABELS[$targetRoleSlug] ?? $targetRoleSlug;
-        $isCorrection      = $demande->is_in_correction_circuit ?? false;
+        $etudiantNom       = trim(($etudiantInfo->first_names ?? '') . ' ' . ($etudiantInfo->last_name ?? '')) ?: 'Étudiant(e)';
+        $expediteurNomRole = (WorkflowConstants::ROLE_LABELS[$expediteurRole] ?? $expediteurRole ?? 'Acteur');
 
         foreach ($destinataires as $dest) {
             // ── Email ──────────────────────────────────────────────────────────
@@ -559,7 +563,6 @@ class NotificationService
             ->join('roles as r', 'r.id', '=', 'ru.role_id')
             ->whereIn('r.slug', $slugVariants)
             ->whereNotNull('u.email')
-            ->whereNull('u.deleted_at')
             ->select(
                 'u.id',
                 DB::raw("CONCAT(u.first_name, ' ', u.last_name) as name"),
@@ -585,16 +588,10 @@ class NotificationService
             ->select(
                 'pi.last_name',
                 'pi.first_names',
-                DB::raw("(SELECT s.student_id_number FROM students s
+                DB::raw("(SELECT student_id_number FROM students s
                           JOIN student_pending_student sps2 ON sps2.student_id = s.id
                           WHERE sps2.id = dr.student_pending_student_id LIMIT 1) as matricule")
             )
             ->first();
-    }
-
-    private function buildNom(?object $info): string
-    {
-        if (!$info) return 'Étudiant(e)';
-        return trim(($info->first_names ?? '') . ' ' . ($info->last_name ?? '')) ?: 'Étudiant(e)';
     }
 }

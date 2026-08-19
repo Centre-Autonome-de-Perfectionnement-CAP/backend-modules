@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Modules\CahierTexte\Http\Controllers\TextbookEntryController;
 use App\Modules\CahierTexte\Http\Controllers\TextbookCommentController;
 
-Route::middleware(['auth:sanctum'])->prefix('cahier-texte')->group(function () {
+Route::middleware(['auth:sanctum'])->prefix('api/cahier-texte')->group(function () {
     
     // Textbook Entries
     Route::get('/', [TextbookEntryController::class, 'index']);
@@ -24,10 +24,19 @@ Route::middleware(['auth:sanctum'])->prefix('cahier-texte')->group(function () {
     
     // Statistiques
     Route::get('/statistics/all', [TextbookEntryController::class, 'statistics']);
+
+    Route::get('/export/payment-excel', [TextbookEntryController::class, 'exportPaymentExcel']);
     
     // Comments
     Route::get('/{entryId}/comments', [TextbookCommentController::class, 'index']);
     Route::post('/{entryId}/comments', [TextbookCommentController::class, 'store']);
     Route::put('/{entryId}/comments/{commentId}', [TextbookCommentController::class, 'update']);
     Route::delete('/{entryId}/comments/{commentId}', [TextbookCommentController::class, 'destroy']);
+
+    Route::post(
+        '/professor-teaching-summary',
+        [TextbookEntryController::class, 'professorTeachingSummary']
+    );
+ 
+    
 });

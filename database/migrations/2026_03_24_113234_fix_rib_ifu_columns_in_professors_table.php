@@ -27,7 +27,12 @@ return new class extends Migration
         Schema::table('professors', function (Blueprint $table) {
             // Renommage statut -> status
             if (Schema::hasColumn('professors', 'statut')) {
-                $table->renameColumn('statut', 'status');
+              DB::statement("
+    ALTER TABLE professors
+    CHANGE statut status
+    ENUM('active','inactive','suspended')
+    NOT NULL DEFAULT 'active'
+");
             }
 
             // Changement des types en string (Maintenant possible car la FK est supprimée)
@@ -43,7 +48,7 @@ return new class extends Migration
         });
 
         // 4. Modifier l'ENUM
-        DB::statement("ALTER TABLE professors MODIFY COLUMN status ENUM('active', 'inactive', 'suspended') DEFAULT 'active'");
+        DB::statement("ALTER TABLE professors MODIFY COLUMN status ENUM('active', 'inactive', 'suspended') DEFAULT 'active' ");
 
         // 5. Réactiver les contraintes
         Schema::enableForeignKeyConstraints();

@@ -5,6 +5,7 @@ namespace App\Modules\Demandes\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+
 /**
  * CORRECTIF (v2) — basé sur le modèle DocumentRequest réel.
  *
@@ -19,16 +20,22 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * services (aucun code existant n'est impacté par leur ajout, ce sont
  * des méthodes additives qui ne changent aucun comportement actuel).
  */
+
+
 class DocumentRequest extends Model
 {
     protected $table = 'document_requests';
 
     protected $fillable = [
+
         // Workflow
+
+
         'status',
         'has_flag',
         'rejected_reason',
         'rejected_by',
+
         'signature_type',
         'responsable_division_type',
 
@@ -60,6 +67,40 @@ class DocumentRequest extends Model
 
     // ── Relations ─────────────────────────────────────────────────────────────
 
+
+        'chef_division_comment',
+        'secretaire_comment',
+        'comptable_comment',
+        'signature_type',
+        'chef_division_type',
+        'chef_division_reviewed_at',
+        'comptable_reviewed_at',
+        'chef_cap_reviewed_at',
+        'sec_da_reviewed_at',
+        'directrice_adjointe_reviewed_at',
+        'sec_directeur_reviewed_at',
+        'directeur_reviewed_at',
+        'delivered_at',
+        'processed_by_secretaire_id',
+        'processed_by_comptable_id',
+        'processed_by_chef_division_id',
+        'processed_by_chef_cap_id',
+        // ── Complément de dossier ──────────────────────────────────────────
+        'complement_files',
+        'complement_at',
+        'complement_pieces_requises',
+    ];
+
+    protected $casts = [
+        'has_flag'                   => 'boolean',
+        'submitted_at'               => 'datetime',
+        'delivered_at'               => 'datetime',
+        'complement_at'              => 'datetime',
+        'complement_files'           => 'array',
+        'complement_pieces_requises' => 'array',
+    ];
+
+ 
     public function histories(): HasMany
     {
         return $this->hasMany(DocumentRequestHistory::class)->orderBy('created_at');

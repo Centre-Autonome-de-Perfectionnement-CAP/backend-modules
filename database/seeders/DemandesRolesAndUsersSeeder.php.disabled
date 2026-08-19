@@ -56,21 +56,33 @@ class DemandesRolesAndUsersSeeder extends Seeder
         // ── 2. Récupérer les IDs des rôles ────────────────────────────────────
         $roleIds = DB::table('roles')->pluck('id', 'slug');
 
+
         // ── 3. Créer les 2 utilisateurs Responsable Division ─────────────────────────
+
+        // ── 3. Créer les 2 utilisateurs Chef Division ─────────────────────────
+  (blade mail entre acteur cap)
         // (si le rôle chef-division existe déjà, on crée juste les 2 users)
         $chefDivisionRoleId = $roleIds['chef-division'] ?? null;
 
         if ($chefDivisionRoleId) {
             $chefDivUsers = [
                 [
+
                     'last_name'          => 'RESPONSABLE DIVISION',
+
+                    'last_name'          => 'CHEF DIVISION',
+  (blade mail entre acteur cap)
                     'first_name'         => 'Formation Distance',
                     'email'              => 'chef.division.distance@cap-epac.bj',
                     'chef_division_type' => 'formation_distance',
                     'role_slug'          => 'chef-division',
                 ],
                 [
+
                     'last_name'          => 'RESPONSABLE DIVISION',
+
+                    'last_name'          => 'CHEF DIVISION',
+  (blade mail entre acteur cap)
                     'first_name'         => 'Formation Continue',
                     'email'              => 'chef.division.continue@cap-epac.bj',
                     'chef_division_type' => 'formation_continue',
