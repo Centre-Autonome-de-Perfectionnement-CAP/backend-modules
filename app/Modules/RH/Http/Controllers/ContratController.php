@@ -859,7 +859,7 @@ if (array_key_exists('course_element_professor_ids', $validated)) {
 
     public function listProgramSupports(Request $request, $contratId, $programId)
     {
-        $this->assertAdmin($request);
+        // Accessible au professeur et à l'admin — pas d'assertAdmin.
 
         $contrat = \App\Modules\RH\Models\Contrat::findOrFail($contratId);
 
@@ -905,7 +905,9 @@ if (array_key_exists('course_element_professor_ids', $validated)) {
      */
     public function addProgramSupport(Request $request, $contratId, $programId)
     {
-        $this->assertAdmin($request);
+        // Pas d'assertAdmin ici : le professeur connecté doit pouvoir ajouter
+        // ses propres supports de cours sur ses contrats.
+        // La vérification d'appartenance se fait via la table contrat_programs.
 
         $contrat = \App\Modules\RH\Models\Contrat::findOrFail($contratId);
 
@@ -972,7 +974,7 @@ if (array_key_exists('course_element_professor_ids', $validated)) {
      */
     public function deleteProgramSupport(Request $request, $contratId, $programId, $index)
     {
-        $this->assertAdmin($request);
+        // Accessible au professeur et à l'admin — pas d'assertAdmin.
 
         $pivot = \DB::table('contrat_programs')
             ->where('contrat_id', $contratId)
