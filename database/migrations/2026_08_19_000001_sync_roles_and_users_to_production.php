@@ -68,42 +68,7 @@ return new class extends Migration
             }
         }
 
-        // 4. Assigner les bons rôles aux users existants par email
-        $assignments = [
-            'admin@cap-epac.online'          => 'admin',
-            'logbomaurel@gmail.com'           => 'chef-cap',
-            'miraclesounouvou@gmail.com'      => 'responsable-division',
-            'dondiegue21@gmail.com'           => 'responsable-division',
-            'alohoutadegbetohopaul@gmail.com' => 'secretaire',
-            'paulalohoutade7@gmail.com'       => 'comptable',
-            'laurieegoubiyi@gmail.com'        => 'sec-dir',
-            'koumagnonybenoite@gmail.com'     => 'sec-da',
-            'careasy26@gmail.com'             => 'directrice-adjointe',
-            'djivoedoarsene@gmail.com'        => 'directeur',
-        ];
 
-        foreach ($assignments as $email => $roleSlug) {
-            $user = DB::table('users')->where('email', $email)->first();
-            $role = DB::table('roles')->where('slug', $roleSlug)->first();
-
-            if (!$user || !$role) {
-                continue; // user ou rôle absent en ligne → on skip sans erreur
-            }
-
-            $alreadyAssigned = DB::table('role_user')
-                ->where('user_id', $user->id)
-                ->where('role_id', $role->id)
-                ->exists();
-
-            if (!$alreadyAssigned) {
-                DB::table('role_user')->insert([
-                    'user_id'    => $user->id,
-                    'role_id'    => $role->id,
-                    'created_at' => null,
-                    'updated_at' => null,
-                ]);
-            }
-        }
     }
 
     public function down(): void
