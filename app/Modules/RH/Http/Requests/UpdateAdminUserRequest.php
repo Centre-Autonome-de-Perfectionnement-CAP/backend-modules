@@ -36,6 +36,7 @@ class UpdateAdminUserRequest extends FormRequest
             }],
             'ifu' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
             'bank' => 'nullable|string|max:255',
+            'chef_division_type' => 'nullable|in:formation_distance,formation_continue',
         ];
     }
 }

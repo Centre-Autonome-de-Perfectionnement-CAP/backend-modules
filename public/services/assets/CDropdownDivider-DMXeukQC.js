@@ -1,1 +1,0 @@
-import{r as t,a7 as p,R as c,a8 as d,a9 as i}from"./index-C7Gj1m6m.js";const a=t.forwardRef((s,r)=>{var{className:e}=s,o=p(s,["className"]);return c.createElement("hr",Object.assign({className:d("dropdown-divider",e)},o,{ref:r}))});a.propTypes={className:i.string};a.displayName="CDropdownDivider";export{a as C};
