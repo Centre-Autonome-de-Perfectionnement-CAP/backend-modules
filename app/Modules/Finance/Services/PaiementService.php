@@ -141,6 +141,7 @@ class PaiementService
         return DB::transaction(function () use ($data, $quittanceFile) {
             $matricule = strtoupper(trim($data['matricule']));
             $student = Student::where('student_id_number', $matricule)->first();
+            $legacy = null;
             $studentPendingStudentId = null;
 
             if (!$student) {
@@ -198,11 +199,20 @@ class PaiementService
             // Envoyer un email de confirmation si un email est fourni
             try {
                 if (!empty($paiement->email)) {
-                    // Charger les informations personnelles via l'accessor
-                    if (!$student->relationLoaded('pendingStudents')) {
-                        $student->load('pendingStudents.personalInformation');
+                    $firstName = 'Étudiant(e)';
+                    $lastName = '';
+
+                    if ($student) {
+                        if (!$student->relationLoaded('pendingStudents')) {
+                            $student->load('pendingStudents.personalInformation');
+                        }
+                        $personalInfo = $student->personalInformation;
+                        $firstName = $personalInfo?->first_names ?? 'Étudiant(e)';
+                        $lastName = $personalInfo?->last_name ?? '';
+                    } elseif ($legacy) {
+                        $firstName = $legacy->first_name ?? 'Étudiant(e)';
+                        $lastName = $legacy->last_name ?? '';
                     }
-                    $personalInfo = $student->personalInformation;
                     
                     $mailData = [
                         'reference' => $paiement->reference,
@@ -211,8 +221,8 @@ class PaiementService
                         'numero_compte' => $paiement->account_number,
                         'date_versement' => $paiement->payment_date,
                         'motif' => $paiement->purpose,
-                        'prenoms' => $personalInfo?->first_names ?? 'Étudiant(e)',
-                        'nom' => $personalInfo?->last_name ?? '',
+                        'prenoms' => $firstName,
+                        'nom' => $lastName,
                     ];
                     
                     Mail::to($paiement->email)->send(new QuittanceConfirmation($mailData));
