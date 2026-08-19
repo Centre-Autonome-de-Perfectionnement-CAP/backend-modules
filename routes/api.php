@@ -2,9 +2,6 @@
 
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
- Route::get('/test', function () {
-    return 'Ceci est une route de test';
-});
-});
+// Les routes API sont enregistrées par chaque ServiceProvider dans
+// app/Modules/*/Providers/*ServiceProvider.php via Route::prefix('api')->middleware('api')->group(...)
+// Ce fichier est intentionnellement vide.

@@ -3,11 +3,21 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
     public function up(): void
     {
+        // Vérifier si la contrainte unique 4-colonnes existe déjà (migration déjà jouée)
+        $newUniqueExists = collect(
+            DB::select("SHOW INDEX FROM course_element_professor WHERE Key_name = 'course_professor_unique'")
+        )->count() >= 4; // 4 colonnes dans la contrainte
+
+        if ($newUniqueExists) {
+            return;
+        }
+
         Schema::table('course_element_professor', function (Blueprint $table) {
             // Supprimer la FK sur course_element_id
             $table->dropForeign('course_element_professor_course_element_id_foreign');

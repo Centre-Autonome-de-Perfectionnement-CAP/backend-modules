@@ -6,28 +6,26 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::table('course_element_professor', function (Blueprint $table) {
-            $table->foreignId('academic_year_id')
-                  ->nullable()
-                  ->constrained('academic_years')
-                  ->onDelete('set null')
-                  ->index();
-        });
+        if (!Schema::hasColumn('course_element_professor', 'academic_year_id')) {
+            Schema::table('course_element_professor', function (Blueprint $table) {
+                $table->foreignId('academic_year_id')
+                      ->nullable()
+                      ->constrained('academic_years')
+                      ->onDelete('set null')
+                      ->index();
+            });
+        }
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::table('course_element_professor', function (Blueprint $table) {
-            $table->dropForeign(['academic_year_id']);
-            $table->dropColumn('academic_year_id');
-        });
+        if (Schema::hasColumn('course_element_professor', 'academic_year_id')) {
+            Schema::table('course_element_professor', function (Blueprint $table) {
+                $table->dropForeign(['academic_year_id']);
+                $table->dropColumn('academic_year_id');
+            });
+        }
     }
 };

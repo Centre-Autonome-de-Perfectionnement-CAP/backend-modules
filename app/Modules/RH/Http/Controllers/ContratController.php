@@ -122,7 +122,7 @@ class ContratController extends Controller
      * Un échec WhatsApp ne fait JAMAIS échouer l'envoi (l'email reste le
      * canal de référence, WhatsApp est un plus) — juste loggué.
      */
-    public function sendTransferEmail(\App\Modules\WhatsApp\Services\WhatsAppBridgeClient $whatsapp, $id)
+    public function sendTransferEmail(Request $request, \App\Modules\WhatsApp\Services\WhatsAppBridgeClient $whatsapp, $id)
     {
         $this->assertAdmin($request);
 
@@ -680,7 +680,10 @@ if (array_key_exists('course_element_professor_ids', $validated)) {
 
     public function professorPrograms(Request $request, $professorId)
     {
-        $this->assertAdmin($request);
+        // assertAdmin retiré intentionnellement : cette route est également
+        // appelée depuis le formulaire de création de contrat où l'utilisateur
+        // connecté peut être admin, rh ou responsable-division. La protection
+        // est assurée par auth:sanctum sur la route (déplacée dans le groupe protégé).
 
         $professor = Professor::findOrFail($professorId);
 

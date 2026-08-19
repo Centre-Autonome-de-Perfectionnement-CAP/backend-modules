@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasColumn('professors', 'nationality')) {
+            return;
+        }
+
         Schema::table('professors', function (Blueprint $table) {
             $table->string('nationality', 100)->nullable()->after('email');
             $table->string('profession', 100)->nullable()->after('nationality');

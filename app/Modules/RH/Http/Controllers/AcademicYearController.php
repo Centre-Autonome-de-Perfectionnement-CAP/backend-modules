@@ -10,11 +10,17 @@ use Illuminate\Support\Facades\Validator;
 class AcademicYearController extends Controller{
     
     public function index() {
-        $academicYears = AcademicYear::where('is_current', true)->get();
+        // Retourner toutes les années académiques non supprimées,
+        // triées par année courante en tête puis par id desc (plus récente d'abord).
+        // Le filtre is_current=true seul était trop restrictif et vidait le select
+        // du formulaire de contrat dès qu'aucune année courante n'était définie.
+        $academicYears = AcademicYear::orderByDesc('is_current')
+            ->orderByDesc('id')
+            ->get();
 
         return response()->json([
             'success' => true,
-            'data' => $academicYears
+            'data'    => $academicYears,
         ]);
     }
 

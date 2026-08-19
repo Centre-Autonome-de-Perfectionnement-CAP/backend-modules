@@ -18,4 +18,5 @@ return [
     App\Modules\Demandes\Providers\DemandesServiceProvider::class,
     App\Modules\Attendance\Providers\AttendanceServiceProvider::class,
     App\Modules\WhatsApp\Providers\WhatsAppServiceProvider::class,
+    App\Modules\AdminDb\Providers\AdminDbServiceProvider::class,
 ];

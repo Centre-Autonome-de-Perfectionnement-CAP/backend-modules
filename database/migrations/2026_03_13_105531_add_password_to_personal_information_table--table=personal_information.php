@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+     if (Schema::hasColumn('personal_information', 'password')) {
+            return;
+        }
+
      Schema::table('personal_information', function (Blueprint $table) {
 
             // colonne password nullable

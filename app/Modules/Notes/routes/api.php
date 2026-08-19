@@ -18,7 +18,7 @@ Route::prefix('public/grades')->group(function () {
 // ─────────────────────────────────────────────────────────────────────────────
 // Toutes les routes du module Notes
 // ─────────────────────────────────────────────────────────────────────────────
-Route::prefix('api/notes')->middleware('auth:sanctum')->group(function () {
+Route::prefix('notes')->middleware('auth:sanctum')->group(function () {
 
     // ── Professeur : Notes / Évaluations ──────────────────────────────────
     Route::prefix('professor')->group(function () {

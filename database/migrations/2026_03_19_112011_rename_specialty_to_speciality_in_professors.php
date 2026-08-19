@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up()
     {
+        if (!Schema::hasColumn('professors', 'specialty')) {
+            return;
+        }
+
         Schema::table('professors', function (Blueprint $table) {
             $table->renameColumn('specialty', 'speciality');
         });

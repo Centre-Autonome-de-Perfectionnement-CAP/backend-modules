@@ -11,8 +11,9 @@ use App\Modules\RH\Http\Controllers\FileController;
 use App\Modules\RH\Http\Controllers\ContratController;
 use App\Modules\RH\Http\Controllers\AcademicYearController;
 use App\Modules\RH\Http\Controllers\CycleController;
+use App\Modules\RH\Http\Controllers\WhatsAppGroupController;
 
-Route::prefix('api/rh')->group(function () {
+Route::prefix('rh')->group(function () {
 
     Route::get('professors',             [ProfessorController::class, 'index']);
     Route::get('grades',                 [GradeController::class, 'index']);
@@ -23,7 +24,7 @@ Route::prefix('api/rh')->group(function () {
     Route::get('cycles',                 [CycleController::class, 'index']);
 
     // ─── Programmes d'un professeur ───────────────────────────────────────────
-    Route::get('professors/{professorId}/programs', [ContratController::class, 'professorPrograms']);
+    // Route dans le groupe auth:sanctum — voir bloc ci-dessous
 
     // ─── Accès par token (liens email — PUBLIC, sans authentification) ─────────
     // IMPORTANT : ces routes doivent être déclarées AVANT contrats/{id}
@@ -52,6 +53,8 @@ Route::prefix('api/rh')->group(function () {
     // ces contrôleurs (même pattern que WhatsAppAdminController) — décision
     // du rôle exact à autoriser laissée à l'équipe, pas prise seul ici.
     Route::middleware('auth:sanctum')->group(function () {
+
+        Route::get('professors/{professorId}/programs', [ContratController::class, 'professorPrograms']);
 
         Route::get('contrats',         [ContratController::class, 'index']);
         Route::post('contrats',        [ContratController::class, 'store']);
@@ -108,6 +111,11 @@ Route::prefix('api/rh')->group(function () {
         );
         Route::get('professors/{professorId}/programs/{programId}', [ContratController::class, 'getProfessorProgram']);
         Route::post('/contrats/{id}/factures-normalisees', [ContratController::class, 'uploadFacturesNormalisees']);
+
+        // ─── Groupes WhatsApp (liens WhatsApp des filières) ───────────────────
+        Route::get('whatsapp-groups',              [WhatsAppGroupController::class, 'index']);
+        Route::put('whatsapp-groups/{department}', [WhatsAppGroupController::class, 'update']);
+        Route::delete('whatsapp-groups/{department}', [WhatsAppGroupController::class, 'destroy']);
     });
 
     // ─── Contrats du professeur connecté ─────────────────────────────────────

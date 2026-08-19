@@ -12,7 +12,7 @@ use App\Modules\EmploiDuTemps\Http\Controllers\PdfController;
 use App\Modules\EmploiDuTemps\Http\Controllers\TextbookProfessorController;
 
 // Routes pour le professeur (cahier de texte)
-Route::middleware(['auth:sanctum'])->prefix('api/notes/professor/textbook')->group(function () {
+Route::middleware(['auth:sanctum'])->prefix('notes/professor/textbook')->group(function () {
 
     // EntrÃ©es pour un programme spÃ©cifique
     Route::get('/entries/{programId}', [TextbookProfessorController::class, 'entries']);
@@ -22,7 +22,7 @@ Route::middleware(['auth:sanctum'])->prefix('api/notes/professor/textbook')->gro
     Route::put('/unpublish/{entryId}', [TextbookProfessorController::class, 'unpublish']);
 });
 
-Route::prefix('api/emploi-temps')->group(function () {
+Route::prefix('emploi-du-temps')->group(function () {
 
     // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // SELECTS â€” donnÃ©es de rÃ©fÃ©rence pour les formulaires
