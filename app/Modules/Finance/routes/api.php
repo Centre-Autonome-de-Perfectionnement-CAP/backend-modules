@@ -23,7 +23,7 @@ Route::prefix('api/finance')->group(function () {
     // Paiements
     Route::get('/paiements', [PaiementController::class, 'index']);
     Route::post('/paiements', [PaiementController::class, 'store']);
-    Route::get('/paiements/{reference}/download', [PaiementController::class, 'download'])->where('reference', '.*');
+    Route::get('/paiements/{reference}/download', [PaiementController::class, 'download'])->where('reference', '.*')->name('api.finance.paiements.download');
     Route::get('/paiements/{reference}', [PaiementController::class, 'show'])->where('reference', '.*');
     Route::get('/students/{matricule}', [PaiementController::class, 'getStudentInfo']);
     

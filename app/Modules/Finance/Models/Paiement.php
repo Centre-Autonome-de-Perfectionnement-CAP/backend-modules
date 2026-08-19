@@ -106,8 +106,8 @@ class Paiement extends Model
      */
     public function getReceiptUrlAttribute(): ?string
     {
-        if ($this->receipt_path) {
-            return route('api.finance.paiements.download', ['reference' => $this->reference]);
+        if ($this->receipt_path && $this->reference) {
+            return url('/api/finance/paiements/' . urlencode((string)$this->reference) . '/download');
         }
         return null;
     }
