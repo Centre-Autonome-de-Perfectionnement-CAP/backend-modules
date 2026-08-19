@@ -148,20 +148,50 @@ class InformationCorrectionService
     public function approve(InformationCorrectionRequest $correctionRequest, int $reviewerId): void
     {
         DB::transaction(function () use ($correctionRequest, $reviewerId) {
-            $student = Student::where('student_id_number', $correctionRequest->student_id_number)->firstOrFail();
+            $student = Student::where('student_id_number', $correctionRequest->student_id_number)->first();
+            $emailTo = null;
+            $firstName = 'Étudiant(e)';
 
-            $studentPendingStudent = StudentPendingStudent::where('student_id', $student->id)
-                ->with('pendingStudent.personalInformation')
-                ->firstOrFail();
+            if ($student) {
+                $studentPendingStudent = StudentPendingStudent::where('student_id', $student->id)
+                    ->with('pendingStudent.personalInformation')
+                    ->firstOrFail();
 
-            $personalInfo = $studentPendingStudent->pendingStudent->personalInformation;
+                $personalInfo = $studentPendingStudent->pendingStudent->personalInformation;
 
-            if (!$personalInfo) {
-                throw new ResourceNotFoundException('PersonalInformation introuvable pour cet étudiant.');
+                if (!$personalInfo) {
+                    throw new ResourceNotFoundException('PersonalInformation introuvable pour cet étudiant.');
+                }
+
+                // Appliquer les modifications
+                $personalInfo->update($correctionRequest->suggested_values);
+                $emailTo = $correctionRequest->suggested_values['email'] ?? $personalInfo->fresh()->email;
+                $firstName = $correctionRequest->suggested_values['first_names'] ?? $personalInfo->first_names;
+            } else {
+                $legacy = \App\Modules\LegacyStudent\Models\LegacyStudent::where('matricule', $correctionRequest->student_id_number)->first();
+                if (!$legacy) {
+                    throw new ResourceNotFoundException('Étudiant introuvable pour cette demande.');
+                }
+
+                $legacyUpdates = [];
+                if (isset($correctionRequest->suggested_values['last_name'])) {
+                    $legacyUpdates['last_name'] = $correctionRequest->suggested_values['last_name'];
+                }
+                if (isset($correctionRequest->suggested_values['first_names'])) {
+                    $legacyUpdates['first_name'] = $correctionRequest->suggested_values['first_names'];
+                }
+                if (isset($correctionRequest->suggested_values['email'])) {
+                    $legacyUpdates['email'] = $correctionRequest->suggested_values['email'];
+                }
+                if (isset($correctionRequest->suggested_values['contacts'])) {
+                    $contacts = $correctionRequest->suggested_values['contacts'];
+                    $legacyUpdates['phone'] = is_array($contacts) ? ($contacts[0] ?? $legacy->phone) : $contacts;
+                }
+
+                $legacy->update($legacyUpdates);
+                $emailTo = $correctionRequest->suggested_values['email'] ?? $legacy->email;
+                $firstName = $correctionRequest->suggested_values['first_names'] ?? $legacy->first_name;
             }
-
-            // Appliquer les modifications
-            $personalInfo->update($correctionRequest->suggested_values);
 
             // Mettre à jour la demande
             $correctionRequest->update([
@@ -171,21 +201,20 @@ class InformationCorrectionService
             ]);
 
             // Envoyer le mail vers le NOUVEL email (s'il a été modifié) ou l'actuel
-            $emailTo = $correctionRequest->suggested_values['email'] ?? $personalInfo->fresh()->email;
-            $firstName = $correctionRequest->suggested_values['first_names'] ?? $personalInfo->first_names;
-
-            try {
-                Mail::to($emailTo)->send(new InformationCorrectionResult([
-                    'first_names'      => $firstName,
-                    'student_id_number' => $correctionRequest->student_id_number,
-                    'status'           => 'approved',
-                    'suggested_values' => $correctionRequest->suggested_values,
-                    'rejection_reason' => null,
-                ]));
-            } catch (\Exception $e) {
-                Log::error('Échec envoi mail approbation correction: ' . $e->getMessage(), [
-                    'correction_id' => $correctionRequest->id,
-                ]);
+            if ($emailTo) {
+                try {
+                    Mail::to($emailTo)->send(new InformationCorrectionResult([
+                        'first_names'      => $firstName,
+                        'student_id_number' => $correctionRequest->student_id_number,
+                        'status'           => 'approved',
+                        'suggested_values' => $correctionRequest->suggested_values,
+                        'rejection_reason' => null,
+                    ]));
+                } catch (\Exception $e) {
+                    Log::error('Échec envoi mail approbation correction: ' . $e->getMessage(), [
+                        'correction_id' => $correctionRequest->id,
+                    ]);
+                }
             }
 
             Log::info('Demande de correction approuvée', [
