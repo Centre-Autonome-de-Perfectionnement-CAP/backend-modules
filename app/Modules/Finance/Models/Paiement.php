@@ -41,6 +41,11 @@ class Paiement extends Model
         'status' => 'pending',
     ];
 
+    protected $appends = [
+        'receipt_url',
+        'student_full_name',
+    ];
+
     /**
      * Relation avec le modèle Student via le matricule (student_id_number)
      */
@@ -50,11 +55,50 @@ class Paiement extends Model
     }
 
     /**
+     * Relation avec LegacyStudent pour les anciens étudiants (< 2023)
+     */
+    public function legacyStudent()
+    {
+        return $this->belongsTo(\App\Modules\LegacyStudent\Models\LegacyStudent::class, 'student_id_number', 'matricule');
+    }
+
+    /**
      * Relation avec StudentPendingStudent
      */
     public function studentPendingStudent()
     {
         return $this->belongsTo(StudentPendingStudent::class, 'student_pending_student_id');
+    }
+
+    /**
+     * Nom complet de l'étudiant (qu'il soit moderne ou ancien étudiant)
+     */
+    public function getStudentFullNameAttribute(): ?string
+    {
+        if ($this->legacyStudent) {
+            return trim("{$this->legacyStudent->first_name} {$this->legacyStudent->last_name}");
+        }
+
+        if ($this->studentPendingStudent?->pendingStudent?->personalInformation) {
+            $pi = $this->studentPendingStudent->pendingStudent->personalInformation;
+            return trim("{$pi->first_names} {$pi->last_name}");
+        }
+
+        if ($this->relationLoaded('student') && $this->student) {
+            $studentPending = $this->student->pendingStudents()->with('personalInformation')->first();
+            $pi = $studentPending?->personalInformation;
+            if ($pi) {
+                return trim("{$pi->first_names} {$pi->last_name}");
+            }
+        }
+
+        // Fallback: rechercher dans legacy_students si non chargé
+        $legacy = \App\Modules\LegacyStudent\Models\LegacyStudent::where('matricule', $this->student_id_number)->first();
+        if ($legacy) {
+            return trim("{$legacy->first_name} {$legacy->last_name}");
+        }
+
+        return null;
     }
 
     /**

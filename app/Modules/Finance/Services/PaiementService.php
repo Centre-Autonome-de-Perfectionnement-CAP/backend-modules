@@ -23,7 +23,11 @@ class PaiementService
      */
     public function getAll(array $filters, int $perPage = 15)
     {
-        $query = Paiement::query()->with(['student']);
+        $query = Paiement::query()->with([
+            'student.pendingStudents.personalInformation',
+            'studentPendingStudent.pendingStudent.personalInformation',
+            'legacyStudent',
+        ]);
 
         // Recherche globale
         if (!empty($filters['search'])) {
