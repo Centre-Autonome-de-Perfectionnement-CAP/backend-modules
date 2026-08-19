@@ -157,14 +157,16 @@ jobs:
             if command -v supervisorctl &> /dev/null; then
               echo "👷 Restarting queue workers..."
               sudo supervisorctl restart laravel-worker:* || true
-
-              echo "🔄 Restarting WhatsApp Node..."
-              # Si le programme supervisor existe, on le redémarre.
-              # S'il n'existe pas encore (premier déploiement), on l'ignore
-              # sans faire échouer le déploiement.
-              sudo supervisorctl restart whatsapp-node 2>/dev/null || \
-                echo "  ℹ️  Programme 'whatsapp-node' absent de supervisor — ignoré (premier déploiement ?)"
             fi
+
+            echo "🔄 Restarting WhatsApp Node via Artisan..."
+            # 1. Tuer l'ancien processus Node WhatsApp s'il tourne
+            pkill -f "node.*dist/index.js" || true
+            pkill -f "node.*whatsapp/node" || true
+            sleep 2
+
+            # 2. Démarrer le nouveau processus en mode détaché
+            php artisan whatsapp:node:start
             # ── Fin restart ────────────────────────────────────────────────────
 
             # Keep only last 3 releases for staging

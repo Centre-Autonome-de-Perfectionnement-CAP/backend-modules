@@ -104,6 +104,15 @@ jobs:
               echo "👷 Restarting queue workers..."
               sudo supervisorctl restart laravel-worker:* || true
             fi
+
+            echo "🔄 Restarting WhatsApp Node via Artisan..."
+            # 1. Tuer l'ancien processus Node WhatsApp s'il tourne
+            pkill -f "node.*dist/index.js" || true
+            pkill -f "node.*whatsapp/node" || true
+            sleep 2
+
+            # 2. Démarrer le nouveau processus en mode détaché
+            php artisan whatsapp:node:start
             
             # Keep only last 5 releases
             echo "🧹 Cleaning old releases..."
