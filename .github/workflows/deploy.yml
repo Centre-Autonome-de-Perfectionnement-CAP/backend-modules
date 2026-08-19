@@ -111,8 +111,13 @@ jobs:
             pkill -f "node.*whatsapp/node" || true
             sleep 2
 
-            # 2. Démarrer le nouveau processus en mode détaché
-            php artisan whatsapp:node:start
+            # 2. Démarrer le nouveau processus en mode détaché (ne bloque pas le déploiement en cas d'échec)
+            php artisan whatsapp:node:start || {
+              echo "⚠️  Erreur au démarrage de WhatsApp Node."
+              echo "--- LOG D'ERREUR ---"
+              cat storage/logs/whatsapp-node-error.log || echo "Le fichier de log est introuvable."
+              echo "--------------------"
+            }
             
             # Keep only last 5 releases
             echo "🧹 Cleaning old releases..."
