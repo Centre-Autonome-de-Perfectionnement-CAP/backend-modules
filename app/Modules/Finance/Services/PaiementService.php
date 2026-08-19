@@ -67,9 +67,35 @@ class PaiementService
      */
     public function getStudentInfo(string $matricule): array
     {
+        $matricule = strtoupper(trim($matricule));
         $student = Student::with('pendingStudents.personalInformation')->where('student_id_number', $matricule)->first();
         
         if (!$student) {
+            // Vérifier si c'est un ancien étudiant (< 2023)
+            $legacy = \App\Modules\LegacyStudent\Models\LegacyStudent::with('department')->where('matricule', $matricule)->first();
+            if ($legacy) {
+                $filieres = [];
+                if ($legacy->department) {
+                    $filieres[] = [
+                        'id' => $legacy->department->id,
+                        'nom' => $legacy->department->name . ($legacy->cycle ? " ({$legacy->cycle})" : ''),
+                    ];
+                }
+
+                return [
+                    'id' => $legacy->id,
+                    'student_id_number' => $legacy->matricule,
+                    'nom' => $legacy->last_name,
+                    'prenoms' => $legacy->first_name,
+                    'email' => $legacy->email,
+                    'tel' => $legacy->phone,
+                    'filieres' => $filieres,
+                    'has_no_filieres' => empty($filieres),
+                    'message' => null,
+                    'is_legacy' => true,
+                ];
+            }
+
             throw new ResourceNotFoundException('Étudiant');
         }
 
@@ -113,43 +139,31 @@ class PaiementService
     public function create(array $data, $quittanceFile): Paiement
     {
         return DB::transaction(function () use ($data, $quittanceFile) {
-            // La référence vient de la quittance (extraite par OCR)
-            // Elle est déjà validée comme unique dans CreatePaiementRequest
+            $matricule = strtoupper(trim($data['matricule']));
+            $student = Student::where('student_id_number', $matricule)->first();
+            $studentPendingStudentId = null;
 
-            // Vérifier que l'étudiant existe
-            $student = Student::where('student_id_number', $data['matricule'])->first();
             if (!$student) {
-                throw new ResourceNotFoundException("Étudiant avec le matricule {$data['matricule']}");
-            }
+                // Vérifier si c'est un ancien étudiant (< 2023)
+                $legacy = \App\Modules\LegacyStudent\Models\LegacyStudent::where('matricule', $matricule)->first();
+                if (!$legacy) {
+                    throw new ResourceNotFoundException("Étudiant avec le matricule {$matricule}");
+                }
+            } else {
+                if (!empty($data['department_id'])) {
+                    $studentPendingStudent = StudentPendingStudent::query()
+                        ->where('student_id', $student->id)
+                        ->whereHas('pendingStudent', function ($q) use ($data) {
+                            $q->where('department_id', $data['department_id']);
+                        })
+                        ->latest('id')
+                        ->first();
 
-            // Récupérer le student_pending_student_id à partir du matricule et department_id
-            // Le department_id est requis pour identifier correctement l'inscription
-            if (empty($data['department_id'])) {
-                throw new \InvalidArgumentException('Le department_id est requis pour créer un paiement');
+                    if ($studentPendingStudent) {
+                        $studentPendingStudentId = $studentPendingStudent->id;
+                    }
+                }
             }
-            
-            $studentPendingStudent = StudentPendingStudent::query()
-                ->where('student_id', $student->id)
-                ->whereHas('pendingStudent', function ($q) use ($data) {
-                    $q->where('department_id', $data['department_id']);
-                })
-                ->latest('id') // Prendre le plus récent si plusieurs
-                ->first();
-            
-            if (!$studentPendingStudent) {
-                throw new ResourceNotFoundException(
-                    "Aucune inscription trouvée pour l'étudiant {$data['matricule']} dans le département {$data['department_id']}"
-                );
-            }
-            
-            $studentPendingStudentId = $studentPendingStudent->id;
-            
-            Log::info('Récupération student_pending_student_id', [
-                'student_id' => $student->id,
-                'department_id' => $data['department_id'],
-                'student_pending_student_id' => $studentPendingStudentId,
-                'pending_student_id' => $studentPendingStudent->pending_student_id,
-            ]);
 
             // Stockage direct de la quittance
             // Structure: storage/app/private/payments/{matricule}/{année}/{filename}

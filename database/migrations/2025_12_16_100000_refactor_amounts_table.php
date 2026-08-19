@@ -8,9 +8,26 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Drop indexes on level if SQLite or MySQL
+        try {
+            Schema::table('amounts', function (Blueprint $table) {
+                $table->dropUnique('amounts_unique_combination');
+                $table->dropIndex(['level']);
+            });
+        } catch (\Throwable $e) {
+            // Index might not exist or already dropped
+        }
+
         Schema::table('amounts', function (Blueprint $table) {
-            $table->dropForeign(['program_id']);
-            $table->dropColumn(['program_id', 'level', 'sponsored_amount']);
+            $colsToDrop = [];
+            foreach (['program_id', 'level', 'sponsored_amount'] as $col) {
+                if (Schema::hasColumn('amounts', $col)) {
+                    $colsToDrop[] = $col;
+                }
+            }
+            if (!empty($colsToDrop)) {
+                $table->dropColumn($colsToDrop);
+            }
         });
     }
 

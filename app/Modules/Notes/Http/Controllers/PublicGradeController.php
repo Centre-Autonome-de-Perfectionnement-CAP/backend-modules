@@ -53,6 +53,47 @@ class PublicGradeController extends Controller
             ->first();
 
             if (!$student) {
+                // Vérifier dans les anciens étudiants (< 2023)
+                $legacy = \App\Modules\LegacyStudent\Models\LegacyStudent::with(['departments', 'academicRecords'])
+                    ->where('matricule', strtoupper(trim($request->student_id_number)))
+                    ->first();
+
+                if ($legacy) {
+                    $academicYears = [];
+                    if ($legacy->academicRecords && $legacy->academicRecords->isNotEmpty()) {
+                        $academicYears = $legacy->academicRecords->map(function ($record) {
+                            return [
+                                'id' => $record->id,
+                                'label' => $record->academic_year . ($record->level ? " ({$record->level})" : ''),
+                                'level' => $record->level ?? 'Ancien Étudiant',
+                                'is_legacy' => true,
+                            ];
+                        })->values()->toArray();
+                    } else {
+                        $yearLabel = "{$legacy->enrollment_year}-" . ($legacy->enrollment_year + 1);
+                        $academicYears = [
+                            [
+                                'id' => 0,
+                                'label' => $yearLabel . ($legacy->cycle ? " ({$legacy->cycle})" : ''),
+                                'level' => $legacy->cycle ?? 'Ancien Étudiant',
+                                'is_legacy' => true,
+                            ]
+                        ];
+                    }
+
+                    return $this->successResponse([
+                        'student' => [
+                            'id' => $legacy->id,
+                            'student_id_number' => $legacy->matricule,
+                            'last_name' => $legacy->last_name,
+                            'first_names' => $legacy->first_name,
+                            'birth_date' => $legacy->date_of_birth,
+                            'is_legacy' => true,
+                        ],
+                        'academic_years' => $academicYears,
+                    ], 'Authentification réussie (Ancien Étudiant)');
+                }
+
                 return $this->notFoundResponse('Matricule introuvable');
             }
 
@@ -93,13 +134,11 @@ class PublicGradeController extends Controller
     public function getResults(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'student_id' => 'required|integer|exists:student_pending_student,id',
-            'academic_year_id' => 'required|integer|exists:academic_years,id',
+            'student_id' => 'required|integer',
+            'academic_year_id' => 'required',
         ], [
             'student_id.required' => 'L\'identifiant de l\'étudiant est requis',
-            'student_id.exists' => 'Étudiant introuvable',
             'academic_year_id.required' => 'L\'année académique est requise',
-            'academic_year_id.exists' => 'Année académique introuvable',
         ]);
 
         if ($validator->fails()) {
@@ -110,6 +149,77 @@ class PublicGradeController extends Controller
             $studentId = $request->student_id;
             $academicYearId = $request->academic_year_id;
 
+            // 1. Vérifier s'il s'agit d'un ancien étudiant (< 2023)
+            $legacy = \App\Modules\LegacyStudent\Models\LegacyStudent::with('academicRecords')->find($studentId);
+            if ($legacy) {
+                $record = $legacy->academicRecords()->where('id', $academicYearId)->first()
+                    ?? $legacy->academicRecords()->first();
+
+                if (!$record) {
+                    return $this->errorResponse(
+                        "Votre dossier ancien étudiant ({$legacy->matricule}) est bien enregistré. " .
+                        "Toutefois, vos relevés de notes et résultats d'archives n'ont pas encore été complétés par le secrétariat de scolarité. " .
+                        "Veuillez vous rapprocher de la scolarité du CAP ou formuler une demande de bulletin.",
+                        404
+                    );
+                }
+
+                $courses = is_array($record->courses) ? $record->courses : json_decode($record->courses ?? '[]', true) ?? [];
+                $results = [];
+                $totalCredits = $record->total_credits ?? 0;
+                $obtainedCredits = $record->obtained_credits ?? 0;
+                $totalCoefficient = 0;
+                $weightedSum = 0;
+
+                foreach ($courses as $c) {
+                    $grade = (float) ($c['grade'] ?? $c['average'] ?? 0);
+                    $coeff = (int) ($c['coefficient'] ?? 1);
+                    $cred = (int) ($c['credits'] ?? 0);
+                    $isValidated = $grade >= 10;
+
+                    $totalCoefficient += $coeff;
+                    $weightedSum += ($grade * $coeff);
+
+                    $results[] = [
+                        'course_name' => $c['name'] ?? $c['course_name'] ?? 'Matière',
+                        'course_code' => $c['code'] ?? $c['course_code'] ?? null,
+                        'professor' => $c['professor'] ?? $c['professor_name'] ?? 'Équipe pédagogique',
+                        'credits' => $cred,
+                        'coefficient' => $coeff,
+                        'semester' => $c['semester'] ?? $record->semester ?? null,
+                        'average' => round($grade, 2),
+                        'retake_average' => isset($c['retake_grade']) ? round((float) $c['retake_grade'], 2) : null,
+                        'final_average' => round($grade, 2),
+                        'validated' => $isValidated,
+                        'must_retake' => !$isValidated,
+                    ];
+                }
+
+                $calculatedAverage = $record->general_average !== null
+                    ? (float) $record->general_average
+                    : ($totalCoefficient > 0 ? round($weightedSum / $totalCoefficient, 2) : 0);
+
+                return $this->successResponse([
+                    'academic_info' => [
+                        'academic_year' => $record->academic_year,
+                        'level' => $record->level ?? $legacy->cycle ?? 'Ancien Cursus',
+                    ],
+                    'results' => $results,
+                    'summary' => [
+                        'total_credits' => $totalCredits ?: 60,
+                        'obtained_credits' => $obtainedCredits ?: 60,
+                        'general_average' => $calculatedAverage,
+                        'year_decision' => $record->decision ?? 'pass',
+                        'mention' => $record->mention,
+                        'thesis_title' => $record->thesis_title,
+                        'thesis_grade' => $record->thesis_grade,
+                        'thesis_date' => $record->thesis_date?->format('d/m/Y'),
+                        'quitus_accorded' => (bool) $record->quitus_accorded,
+                    ],
+                ], 'Résultats récupérés avec succès');
+            }
+
+            // 2. Flux normal pour les étudiants modernes
             // Récupérer le parcours académique
             $academicPath = AcademicPath::with(['academicYear'])
                 ->where('student_pending_student_id', $studentId)
@@ -121,10 +231,8 @@ class PublicGradeController extends Controller
             }
 
             // Vérifier si l'étudiant a soldé sa scolarité
-            // On vérifie uniquement les paiements APPROUVÉS pour cette année académique
             $financialStatus = $this->financialService->calculateBalance($studentId, $academicYearId);
             
-            // L'étudiant doit avoir un solde de 0 ou négatif (trop payé) pour accéder aux résultats
             if ($financialStatus['balance'] > 0) {
                 return $this->errorResponse(
                     'Vous devez être en règle avec la scolarité pour consulter vos résultats. ' . 

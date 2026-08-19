@@ -24,6 +24,21 @@ class StudentIdService
             ->first();
 
         if (!$pi) {
+            // Vérifier dans les anciens étudiants (< 2023)
+            $firstWord = mb_strtolower(explode(' ', trim($data['first_names']))[0]);
+            $legacyQuery = \App\Modules\LegacyStudent\Models\LegacyStudent::query()
+                ->whereRaw('LOWER(last_name) = ?', [mb_strtolower($data['last_name'])])
+                ->whereRaw('LOWER(first_name) LIKE ?', ["%{$firstWord}%"]);
+            
+            if (!empty($data['birth_date'])) {
+                $legacyQuery->whereDate('date_of_birth', $data['birth_date']);
+            }
+
+            $legacy = $legacyQuery->first();
+            if ($legacy) {
+                return $legacy->matricule;
+            }
+
             throw new BusinessException(
                 message: 'Aucune identité trouvée avec ces informations. Veuillez vérifier vos données (nom, prénoms, date et lieu de naissance).',
                 errorCode: 'IDENTITY_NOT_FOUND',

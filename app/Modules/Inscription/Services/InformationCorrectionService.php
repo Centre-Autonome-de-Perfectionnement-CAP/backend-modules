@@ -28,9 +28,22 @@ class InformationCorrectionService
      */
     public function lookupStudent(string $matricule): array
     {
-        $student = Student::where('student_id_number', strtoupper(trim($matricule)))->first();
+        $matriculeClean = strtoupper(trim($matricule));
+        $student = Student::where('student_id_number', $matriculeClean)->first();
 
         if (!$student) {
+            // Vérifier dans les anciens étudiants (< 2023)
+            $legacy = \App\Modules\LegacyStudent\Models\LegacyStudent::where('matricule', $matriculeClean)->first();
+            if ($legacy) {
+                return [
+                    'student_id_number' => $legacy->matricule,
+                    'last_name'         => $legacy->last_name,
+                    'first_names'       => $legacy->first_name,
+                    'email'             => $legacy->email ?? '',
+                    'contacts'          => $legacy->phone ? [$legacy->phone] : [],
+                ];
+            }
+
             throw new ResourceNotFoundException('Aucun étudiant trouvé avec ce matricule.');
         }
 

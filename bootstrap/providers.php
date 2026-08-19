@@ -15,4 +15,5 @@ return [
     App\Modules\Attestation\Providers\AttestationServiceProvider::class,
     App\Modules\CahierTexte\Providers\CahierTexteServiceProvider::class,
     App\Modules\Alumni\Providers\AlumniServiceProvider::class,
+    App\Modules\LegacyStudent\Providers\LegacyStudentServiceProvider::class,
 ];
