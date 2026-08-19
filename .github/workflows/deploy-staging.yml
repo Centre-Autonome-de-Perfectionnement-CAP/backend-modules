@@ -180,14 +180,25 @@ jobs:
             php artisan config:clear
             WA_AUTO_START=true php artisan whatsapp:node:start || {
               echo "⚠️  Erreur au démarrage de WhatsApp Node."
-              echo "--- LOG NODE ERREUR ---"
-              cat storage/logs/whatsapp-node-error.log 2>/dev/null || echo "Le fichier de log Node est introuvable."
-              echo "--- LOG LARAVEL (POUR VOIR LE REFUS) ---"
-              tail -n 20 storage/logs/laravel.log 2>/dev/null || true
-              echo "--- VERIF dist/ ---"
-              ls -la app/Modules/WhatsApp/node/dist/ 2>/dev/null || echo "Le dossier dist/ n'existe pas."
-              echo "--------------------"
             }
+
+            # 3. Vérification post-démarrage : le process est-il toujours vivant ?
+            echo "⏳ Attente 4s pour vérifier que le Node reste en vie..."
+            sleep 4
+            if pgrep -f "node.*dist/index.js" > /dev/null 2>&1; then
+              echo "✅ Le process Node est toujours en vie après 4s."
+            else
+              echo "❌ Le process Node a crashé après le lancement !"
+              echo "--- LOG NODE (stdout) ---"
+              tail -n 30 storage/logs/whatsapp-node.log 2>/dev/null || echo "(fichier introuvable)"
+              echo "--- LOG NODE (stderr) ---"
+              tail -n 30 storage/logs/whatsapp-node-error.log 2>/dev/null || echo "(fichier introuvable)"
+              echo "--- LOG LARAVEL ---"
+              tail -n 20 storage/logs/laravel.log 2>/dev/null || true
+              echo "--- Contenu de .env (WA_ et DB_ vars seulement) ---"
+              grep -E '^(WA_|DB_|APP_URL|WHATSAPP_|NODE_ENV)' $SHARED_DIR/.env 2>/dev/null | sed 's/=.*/=***/' || true
+              echo "--------------------"
+            fi
             php artisan config:cache
 
             # Keep only last 3 releases for staging
