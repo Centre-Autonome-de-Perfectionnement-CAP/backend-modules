@@ -56,18 +56,78 @@ class AdminTableController extends Controller
     private function assertAdmin(Request $request): void
     {
         $user = $request->user();
-        $slug = $user?->roles?->first()?->slug;
+        if (!$user) {
+            abort(401, "Non authentifié.");
+        }
 
-        if (!$user || !in_array($slug, self::ALLOWED_ROLES, true)) {
+        $userRoles = [];
+        try {
+            if ($user->relationLoaded('roles') || method_exists($user, 'roles')) {
+                $userRoles = $user->roles?->pluck('slug')->filter()->toArray() ?? [];
+            }
+        } catch (\Throwable) {
+            $userRoles = [];
+        }
+
+        if (!empty($user->role)) {
+            $userRoles[] = $user->role;
+        }
+
+        $isAllowed = false;
+        foreach (self::ALLOWED_ROLES as $allowed) {
+            if (in_array($allowed, $userRoles, true)) {
+                $isAllowed = true;
+                break;
+            }
+        }
+
+        if (!$isAllowed) {
             abort(403, "Accès réservé aux administrateurs.");
         }
     }
 
     private function getAllTables(): array
     {
-        $database = config('database.connections.mysql.database') ?? DB::getDatabaseName();
-        $rows = DB::select("SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME ASC", [$database]);
-        return array_map(fn($r) => $r->TABLE_NAME ?? $r->table_name, $rows);
+        try {
+            $database = config('database.connections.mysql.database') ?? DB::getDatabaseName();
+            $rows = DB::select("
+                SELECT TABLE_NAME 
+                FROM information_schema.tables 
+                WHERE TABLE_SCHEMA = ? 
+                  AND TABLE_TYPE = 'BASE TABLE'
+                ORDER BY TABLE_NAME ASC
+            ", [$database]);
+
+            $tableNames = [];
+            foreach ($rows as $row) {
+                $arr = (array) $row;
+                $name = $arr['TABLE_NAME'] ?? $arr['table_name'] ?? array_values($arr)[0] ?? null;
+                if (!empty($name) && is_string($name)) {
+                    $tableNames[] = $name;
+                }
+            }
+
+            if (!empty($tableNames)) {
+                return array_values(array_unique($tableNames));
+            }
+        } catch (\Throwable) {
+            // fallback
+        }
+
+        try {
+            $rows = DB::select('SHOW TABLES');
+            $tableNames = [];
+            foreach ($rows as $row) {
+                $arr = (array) $row;
+                $name = array_values($arr)[0] ?? null;
+                if (!empty($name) && is_string($name)) {
+                    $tableNames[] = $name;
+                }
+            }
+            return array_values(array_unique($tableNames));
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     private function assertAllowedTable(string $table): void
@@ -95,11 +155,24 @@ class AdminTableController extends Controller
         $this->assertAdmin($request);
 
         $allTables = $this->getAllTables();
+        $tables = [];
 
-        $tables = array_map(fn (string $t) => [
-            'name'  => $t,
-            'count' => DB::table($t)->count(),
-        ], $allTables);
+        foreach ($allTables as $t) {
+            if (empty($t) || !is_string($t)) {
+                continue;
+            }
+
+            try {
+                $count = DB::table($t)->count();
+            } catch (\Throwable) {
+                $count = 0;
+            }
+
+            $tables[] = [
+                'name'  => $t,
+                'count' => $count,
+            ];
+        }
 
         return response()->json(['success' => true, 'data' => $tables]);
     }
