@@ -30,15 +30,26 @@ class ContratController extends Controller
      * à vérifier en base avant mise en production. 'responsable-division'
      * est confirmé partout ailleurs dans le code (WorkflowConstants, etc.).
      */
-    private const ALLOWED_ROLES = ['admin', 'responsable-division', 'rh'];
+    private const ADMIN_ROLES       = ['admin', 'chef-cap', 'rh'];
+    private const MONOGRAPHIE_ROLES = ['admin', 'chef-cap', 'responsable-division', 'chef-division', 'rh'];
 
     private function assertAdmin(Request $request): void
     {
         $user = $request->user();
-        $slug = $user?->roles->first()?->slug;
+        $slug = $user?->roles?->first()?->slug;
 
-        if (!$user || !in_array($slug, self::ALLOWED_ROLES, true)) {
-            abort(403, 'Accès réservé aux rôles autorisés (admin, responsable-division, rh).');
+        if (!$user || !in_array($slug, self::ADMIN_ROLES, true)) {
+            abort(403, 'Accès réservé aux administrateurs (admin, chef-cap, rh).');
+        }
+    }
+
+    private function assertCanManageMonographie(Request $request): void
+    {
+        $user = $request->user();
+        $slug = $user?->roles?->first()?->slug;
+
+        if (!$user || !in_array($slug, self::MONOGRAPHIE_ROLES, true)) {
+            abort(403, 'Accès réservé aux administrateurs et responsables de division.');
         }
     }
 
@@ -278,7 +289,7 @@ class ContratController extends Controller
 
     public function index(Request $request)
     {
-        $this->assertAdmin($request);
+        $this->assertCanManageMonographie($request);
 
         $contrats = Contrat::with([
             'professor',
@@ -373,7 +384,7 @@ if (!empty($validated['course_element_professor_ids'])) {
 
     public function show(Request $request, $id)
     {
-        $this->assertAdmin($request);
+        $this->assertCanManageMonographie($request);
 
         $contrat = Contrat::findOrFail($id);
         return response()->json([
@@ -1032,7 +1043,7 @@ if (array_key_exists('course_element_professor_ids', $validated)) {
      */
     public function updateProgramMonographie(Request $request, $contratId, $programId)
     {
-        $this->assertAdmin($request);
+        $this->assertCanManageMonographie($request);
 
         try {
             $validated = $request->validate([
@@ -1116,7 +1127,7 @@ if (array_key_exists('course_element_professor_ids', $validated)) {
 
     public function uploadFacturesNormalisees(Request $request, $id)
     {
-        $this->assertAdmin($request);
+        // Accessible au professeur et à l'admin — pas d'assertAdmin.
 
         $request->validate([
             'factures_normalisees'   => 'required|array|min:1',

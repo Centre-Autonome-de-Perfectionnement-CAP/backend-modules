@@ -17,6 +17,6 @@ Route::prefix('admin-db')->middleware('auth:sanctum')->group(function () {
     Route::get('tables',                 [AdminTableController::class, 'tables']);
     Route::get('tables/{table}',         [AdminTableController::class, 'show']);
     Route::post('tables/{table}',        [AdminTableController::class, 'store']);
-    Route::put('tables/{table}/{id}',    [AdminTableController::class, 'update'])->whereNumber('id');
-    Route::delete('tables/{table}/{id}', [AdminTableController::class, 'destroy'])->whereNumber('id');
+    Route::put('tables/{table}/{id}',    [AdminTableController::class, 'update']);
+    Route::delete('tables/{table}/{id}', [AdminTableController::class, 'destroy']);
 });

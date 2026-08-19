@@ -41,6 +41,7 @@ class AuthService{
                     'role'              => $user->roles->first()?->slug ?? 'etudiant',
                     'role_display_name' => $user->roles->first()?->name ?? 'Étudiant',
                     'role_id'           => $user->roles->first()?->id ?? null,
+                    'chef_division_type'=> $user->chef_division_type,
                     'user_type'         => 'user',
                     'classes'           => [], // Pas de classes pour les admins
                 ],
@@ -275,6 +276,7 @@ class AuthService{
             $baseUser['role'] = $user->roles->first()?->slug ?? 'etudiant';
             $baseUser['role_display_name'] = $user->roles->first()?->name ?? 'Étudiant';
             $baseUser['role_id'] = $user->roles->first()?->id ?? null;
+            $baseUser['chef_division_type'] = $user->chef_division_type;
             $baseUser['classes'] = [];
         } elseif ($user instanceof PersonalInformation && $user->role_id == 9) {
             $baseUser['role'] = 'responsable';

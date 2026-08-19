@@ -24,6 +24,7 @@ class AdminDbServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->app['router']
+            ->prefix('api')
             ->middleware('api')
             ->group(__DIR__ . '/../routes/api.php');
     }

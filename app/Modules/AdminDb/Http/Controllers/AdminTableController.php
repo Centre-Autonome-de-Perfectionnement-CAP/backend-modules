@@ -38,16 +38,9 @@ use Illuminate\Support\Facades\{DB, Schema};
 class AdminTableController extends Controller
 {
     /**
-     * Whitelist des tables administrables. Ajouter une entrée ici pour
-     * étendre l'outil à une autre table plus tard.
+     * Rôles autorisés à utiliser cet outil.
      */
-    private const ALLOWED_TABLES = ['document_requests', 'users'];
-
-    /**
-     * Rôles autorisés à utiliser cet outil. À garder synchronisé avec
-     * ALLOWED_ROLES dans src/views/pages/admin-db/AdminDbGuard.tsx.
-     */
-    private const ALLOWED_ROLES = ['admin', 'responsable-division'];
+    private const ALLOWED_ROLES = ['admin', 'chef-cap', 'responsable-division', 'chef-division'];
 
     /**
      * Colonnes jamais renvoyées ni modifiables, par table.
@@ -63,17 +56,24 @@ class AdminTableController extends Controller
     private function assertAdmin(Request $request): void
     {
         $user = $request->user();
-        $slug = $user?->roles->first()?->slug;
+        $slug = $user?->roles?->first()?->slug;
 
         if (!$user || !in_array($slug, self::ALLOWED_ROLES, true)) {
-            abort(403, "Accès réservé aux rôles autorisés.");
+            abort(403, "Accès réservé aux administrateurs.");
         }
+    }
+
+    private function getAllTables(): array
+    {
+        $database = config('database.connections.mysql.database') ?? DB::getDatabaseName();
+        $rows = DB::select("SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME ASC", [$database]);
+        return array_map(fn($r) => $r->TABLE_NAME ?? $r->table_name, $rows);
     }
 
     private function assertAllowedTable(string $table): void
     {
-        if (!in_array($table, self::ALLOWED_TABLES, true) || !Schema::hasTable($table)) {
-            abort(404, "Table inconnue ou non autorisée : {$table}");
+        if (!Schema::hasTable($table)) {
+            abort(404, "Table inconnue ou introuvable : {$table}");
         }
     }
 
@@ -88,16 +88,18 @@ class AdminTableController extends Controller
 
     /**
      * GET /api/admin-db/tables
-     * Liste des tables administrables (whitelist) + nombre de lignes.
+     * Liste de TOUTES les tables de la base de données + nombre de lignes.
      */
     public function tables(Request $request): JsonResponse
     {
         $this->assertAdmin($request);
 
+        $allTables = $this->getAllTables();
+
         $tables = array_map(fn (string $t) => [
             'name'  => $t,
-            'count' => Schema::hasTable($t) ? DB::table($t)->count() : 0,
-        ], self::ALLOWED_TABLES);
+            'count' => DB::table($t)->count(),
+        ], $allTables);
 
         return response()->json(['success' => true, 'data' => $tables]);
     }
@@ -148,7 +150,13 @@ class AdminTableController extends Controller
         $payload = $this->applyTimestamps($payload, $table, isCreate: true);
 
         try {
-            $id = DB::table($table)->insertGetId($payload);
+            $hasId = in_array('id', Schema::getColumnListing($table), true);
+            if ($hasId) {
+                $id = DB::table($table)->insertGetId($payload);
+            } else {
+                DB::table($table)->insert($payload);
+                $id = null;
+            }
         } catch (\Throwable $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
@@ -159,7 +167,7 @@ class AdminTableController extends Controller
     /**
      * PUT /api/admin-db/tables/{table}/{id}
      */
-    public function update(Request $request, string $table, int $id): JsonResponse
+    public function update(Request $request, string $table, $id): JsonResponse
     {
         $this->assertAdmin($request);
         $this->assertAllowedTable($table);
@@ -183,7 +191,7 @@ class AdminTableController extends Controller
     /**
      * DELETE /api/admin-db/tables/{table}/{id}
      */
-    public function destroy(Request $request, string $table, int $id): JsonResponse
+    public function destroy(Request $request, string $table, $id): JsonResponse
     {
         $this->assertAdmin($request);
         $this->assertAllowedTable($table);
