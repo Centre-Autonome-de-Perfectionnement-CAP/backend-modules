@@ -70,13 +70,17 @@ jobs:
                 echo "  → Building vendored Baileys..."
                 cd vendor/baileys
                 npm install --prefer-offline --no-audit --no-fund 2>&1 || echo "  ⚠️  Baileys npm install warning (non-bloquant)"
+                chmod -R +x node_modules/.bin || true
                 npm run build 2>&1 || echo "  ⚠️  Baileys build warning (non-bloquant)"
                 cd "$NODE_DIR"
               fi
 
-              # Install des dépendances Node du service (hors Baileys)
+              # Install des dépendances Node du service
               echo "  → Installing Node dependencies..."
-              npm ci --omit=dev --no-audit --no-fund 2>&1 || echo "  ⚠️  npm ci warning (non-bloquant)"
+              npm ci --no-audit --no-fund 2>&1 || echo "  ⚠️  npm ci warning (non-bloquant)"
+
+              # Fix permissions for executables
+              chmod -R +x node_modules/.bin || true
 
               # Compilation TypeScript → dist/
               echo "  → Compiling TypeScript (tsc)..."
