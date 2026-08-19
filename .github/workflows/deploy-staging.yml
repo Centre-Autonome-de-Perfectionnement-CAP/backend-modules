@@ -70,6 +70,7 @@ jobs:
                 echo "  → Building vendored Baileys..."
                 cd vendor/baileys
                 npm install --prefer-offline --no-audit --no-fund 2>&1 || echo "  ⚠️  Baileys npm install warning (non-bloquant)"
+                npm install link-preview-js --no-audit --no-fund 2>&1 || true
                 chmod -R +x node_modules/.bin || true
                 npm run build 2>&1 || echo "  ⚠️  Baileys build warning (non-bloquant)"
                 cd "$NODE_DIR"
@@ -84,7 +85,8 @@ jobs:
 
               # Compilation TypeScript → dist/
               echo "  → Compiling TypeScript (tsc)..."
-              npm run build 2>&1 || echo "  ⚠️  tsc build warning (non-bloquant)"
+              # On utilise directement npx tsc au lieu de npm run build pour ne pas que npm relance le build:vendor qui échoue
+              npx tsc 2>&1 || echo "  ⚠️  tsc build warning (non-bloquant)"
 
               cd "$RELEASE_DIR"
               echo "  ✅ WhatsApp Node build terminé"
