@@ -166,16 +166,29 @@ jobs:
             fi
 
             echo "🔄 Restarting WhatsApp Node via Artisan..."
+            # Force WA_AUTO_START=true in .env if missing or false
+            if ! grep -q "WA_AUTO_START=" $SHARED_DIR/.env; then
+              echo "WA_AUTO_START=true" >> $SHARED_DIR/.env
+            else
+              sed -i 's/WA_AUTO_START=false/WA_AUTO_START=true/g' $SHARED_DIR/.env
+            fi
+
             # 1. Tuer l'ancien processus Node WhatsApp s'il tourne
             pkill -f "node.*dist/index.js" || true
             pkill -f "node.*whatsapp/node" || true
             sleep 2
 
+            # Verifier que le build a bien produit dist/index.js
+            echo "🔍 Vérification de dist/index.js :"
+            ls -la app/Modules/WhatsApp/node/dist/index.js || echo "❌ dist/index.js N'EXISTE PAS !"
+
             # 2. Démarrer le nouveau processus en mode détaché (ne bloque pas le déploiement en cas d'échec)
             php artisan whatsapp:node:start || {
               echo "⚠️  Erreur au démarrage de WhatsApp Node."
-              echo "--- LOG D'ERREUR ---"
-              cat storage/logs/whatsapp-node-error.log || echo "Le fichier de log est introuvable."
+              echo "--- LOG NODE ERREUR ---"
+              cat storage/logs/whatsapp-node-error.log || echo "Le fichier de log Node est introuvable."
+              echo "--- LOG LARAVEL (POUR VOIR LE REFUS) ---"
+              tail -n 15 storage/logs/laravel.log || true
               echo "--------------------"
             }
 
