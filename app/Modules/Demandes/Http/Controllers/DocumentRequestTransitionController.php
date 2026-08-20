@@ -87,6 +87,17 @@ class DocumentRequestTransitionController extends Controller
                 'success' => false,
                 'message' => $e->getMessage(),
             ], $e->getStatusCode());
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Transition error', [
+                'demande_id' => $id,
+                'action'     => $action ?? 'unknown',
+                'error'      => $e->getMessage(),
+                'trace'      => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur interne lors de la transition.',
+            ], 500);
         }
     }
 }

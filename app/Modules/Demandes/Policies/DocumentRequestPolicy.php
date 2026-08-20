@@ -27,6 +27,7 @@ class DocumentRequestPolicy
      */
     public function manageSecretaryFiles(User $user, DocumentRequest $demande): bool
     {
-        return $user->roles->first()?->slug === 'secretaire';
+        $slug = $user->roles->first()?->slug;
+        return in_array($slug, ['secretaire', 'admin']);
     }
 }

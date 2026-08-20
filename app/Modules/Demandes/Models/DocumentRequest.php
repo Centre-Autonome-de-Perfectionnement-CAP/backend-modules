@@ -5,32 +5,22 @@ namespace App\Modules\Demandes\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-
 /**
- * CORRECTIF (v2) — basé sur le modèle DocumentRequest réel.
+ * DocumentRequest — modèle Eloquent unifié.
  *
- * Conservé strictement à l'identique (fillable, casts, relation histories).
- * AUCUNE colonne ajoutée/retirée : le modèle réel ne déclare PAS 'files'
- * dans $fillable ni $casts (les écritures sur 'files' passent uniquement
- * par DB::table()->insertGetId(), jamais par le modèle Eloquent) — donc
- * je n'ajoute pas de cast 'files' => 'array' ici, contrairement à ma v1
- * précédente qui l'avait fait à tort sans connaître le vrai modèle.
+ * CORRECTIF : l'ancien fichier contenait DEUX déclarations de $fillable et
+ * $casts, la seconde écrasant silencieusement la première. Résultat :
+ *   - secretary_files n'était PAS dans $fillable → 500 sur upload secrétaire
+ *   - is_in_correction_circuit n'était PAS casté → circuit de correction HS
  *
- * AJOUT (B2.1) : scopes Eloquent utilisés uniquement par les NOUVEAUX
- * services (aucun code existant n'est impacté par leur ajout, ce sont
- * des méthodes additives qui ne changent aucun comportement actuel).
+ * Ce fichier fusionne les deux blocs en UN SEUL, avec toutes les colonnes.
  */
-
-
 class DocumentRequest extends Model
 {
     protected $table = 'document_requests';
 
     protected $fillable = [
-
         // Workflow
-
-
         'status',
         'has_flag',
         'rejected_reason',
@@ -44,9 +34,31 @@ class DocumentRequest extends Model
         'correction_origin_role',
         'correction_origin_status',
 
-        // Complément de dossier (actif — utilisé par ComplementDossierController)
+        // Commentaires acteurs
+        'chef_division_comment',
+        'secretaire_comment',
+        'comptable_comment',
+        'chef_division_type',
+
+        // Timestamps de revue par acteur
+        'chef_division_reviewed_at',
+        'comptable_reviewed_at',
+        'chef_cap_reviewed_at',
+        'sec_da_reviewed_at',
+        'directrice_adjointe_reviewed_at',
+        'sec_directeur_reviewed_at',
+        'directeur_reviewed_at',
+
+        // Traçabilité (qui a traité)
+        'processed_by_secretaire_id',
+        'processed_by_comptable_id',
+        'processed_by_chef_division_id',
+        'processed_by_chef_cap_id',
+
+        // Complément de dossier
         'complement_files',
         'complement_at',
+        'complement_pieces_requises',
 
         // Fichiers de la secrétaire
         'secretary_files',
@@ -56,62 +68,27 @@ class DocumentRequest extends Model
     ];
 
     protected $casts = [
-        'has_flag'                 => 'boolean',
-        'is_in_correction_circuit' => 'boolean',
-        'submitted_at'             => 'datetime',
-        'delivered_at'             => 'datetime',
-        'complement_at'            => 'datetime',
-        'complement_files'         => 'array',
-        'secretary_files'          => 'array',
-    ];
-
-    // ── Relations ─────────────────────────────────────────────────────────────
-
-
-        'chef_division_comment',
-        'secretaire_comment',
-        'comptable_comment',
-        'signature_type',
-        'chef_division_type',
-        'chef_division_reviewed_at',
-        'comptable_reviewed_at',
-        'chef_cap_reviewed_at',
-        'sec_da_reviewed_at',
-        'directrice_adjointe_reviewed_at',
-        'sec_directeur_reviewed_at',
-        'directeur_reviewed_at',
-        'delivered_at',
-        'processed_by_secretaire_id',
-        'processed_by_comptable_id',
-        'processed_by_chef_division_id',
-        'processed_by_chef_cap_id',
-        // ── Complément de dossier ──────────────────────────────────────────
-        'complement_files',
-        'complement_at',
-        'complement_pieces_requises',
-    ];
-
-    protected $casts = [
         'has_flag'                   => 'boolean',
+        'is_in_correction_circuit'   => 'boolean',
         'submitted_at'               => 'datetime',
         'delivered_at'               => 'datetime',
         'complement_at'              => 'datetime',
         'complement_files'           => 'array',
         'complement_pieces_requises' => 'array',
+        'secretary_files'            => 'array',
     ];
 
- 
+    // ── Relations ─────────────────────────────────────────────────────────────
+
     public function histories(): HasMany
     {
         return $this->hasMany(DocumentRequestHistory::class)->orderBy('created_at');
     }
 
-    // ── AJOUT (B2.1) — Scopes utilisés par les services additionnels ──────────
-    // N'affectent aucun comportement existant : purement additifs.
+    // ── Scopes (additifs — n'affectent aucun comportement existant) ───────────
 
     /**
-     * Demandes actives (ni rejetées, ni remises) — reproduit la constante
-     * INACTIVE_STATUSES trouvée dans DemandeController et ComplementDossierController.
+     * Demandes actives (ni rejetées, ni remises).
      */
     public function scopeActive($query)
     {
