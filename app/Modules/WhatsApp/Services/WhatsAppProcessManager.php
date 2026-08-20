@@ -89,47 +89,32 @@ class WhatsAppProcessManager
                 $logFile      = storage_path('logs/whatsapp-node.log');
                 $errorLogFile = storage_path('logs/whatsapp-node-error.log');
 
-                // setsid détache totalement le process du parent PHP-FPM :
-                // il survit même si le worker qui l'a lancé se termine.
+                // L'utilisation de proc_open() gardait la session SSH ouverte dans GitHub Actions
+                // car des descripteurs de fichiers hérités restaient attachés au PTY.
+                // En utilisant nohup + exec(), on détache totalement le processus.
                 $isWindows = str_starts_with(PHP_OS_FAMILY, 'Win');
-                $command = $isWindows
-                    ? sprintf(
-                        'start /B node dist/index.js >> %s 2>> %s',
-                        escapeshellarg($logFile),
-                        escapeshellarg($errorLogFile)
-                    )
-                    : sprintf(
-                        'setsid node dist/index.js >> %s 2>> %s < /dev/null &',
+                if ($isWindows) {
+                    $command = sprintf(
+                        'cd %s && start /B node dist/index.js >> %s 2>> %s',
+                        escapeshellarg($nodePath),
                         escapeshellarg($logFile),
                         escapeshellarg($errorLogFile)
                     );
-
-                $descriptors = [
-                    0 => ['pipe', 'r'],
-                    1 => ['file', $logFile, 'a'],
-                    2 => ['file', $errorLogFile, 'a'],
-                ];
-
-                $process = proc_open(
-                    $command,
-                    $descriptors,
-                    $pipes,
-                    $nodePath,
-                    array_merge($_ENV, ['NODE_ENV' => config('app.env')])
-                );
-
-                if (is_resource($process)) {
-                    if (isset($pipes[0])) {
-                        fclose($pipes[0]);
-                    }
-                    // Non bloquant : on ne fait pas proc_close() ici, on laisse
-                    // le process tourner indépendamment (déjà détaché par setsid).
-                    Log::info('[WhatsApp] Process Node lancé en mode détaché');
-                    return true;
+                    pclose(popen($command, 'r'));
+                } else {
+                    $env = 'NODE_ENV=' . escapeshellarg(config('app.env')) . ' ';
+                    $command = sprintf(
+                        'cd %s && %s nohup setsid node dist/index.js >> %s 2>> %s < /dev/null &',
+                        escapeshellarg($nodePath),
+                        $env,
+                        escapeshellarg($logFile),
+                        escapeshellarg($errorLogFile)
+                    );
+                    exec($command);
                 }
 
-                Log::warning('[WhatsApp] proc_open a échoué à lancer le Node');
-                return false;
+                Log::info('[WhatsApp] Process Node lancé en mode détaché');
+                return true;
 
             } catch (\Throwable $e) {
                 // Règle d'or : une erreur ici ne doit JAMAIS remonter et
