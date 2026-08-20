@@ -68,7 +68,7 @@ class TransitionService
                 abort(404, 'Demande introuvable.');
             }
 
-            $this->assertActionAllowed($role, $action, $demande);
+            $this->assertActionAllowed($role, $action, $demande->status);
 
             [$update, $newStatus, $mail] = $this->buildUpdate($action, $payload, $demande, $user, $role);
 
@@ -426,6 +426,13 @@ class TransitionService
     {
         if (empty($p['motif'])) {
             abort(422, 'Un motif est obligatoire pour cette action.');
+        }
+    }
+
+    private function requireComment(array $p): void
+    {
+        if (empty($p['comment']) && empty($p['motif'])) {
+            abort(422, 'Un commentaire est obligatoire pour un retour à la secrétaire.');
         }
     }
 }
