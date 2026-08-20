@@ -178,7 +178,9 @@ jobs:
             # 2. Vider le cache config pour que env() relise le .env,
             #    puis démarrer avec WA_AUTO_START forcé, puis re-cacher
             php artisan config:clear
-            WA_AUTO_START=true php artisan whatsapp:node:start || {
+            # REDIRECTION TOTALE vers /dev/null requise ici pour éviter que le 
+            # processus Node n'hérite des descripteurs SSH et bloque la session
+            WA_AUTO_START=true php artisan whatsapp:node:start > /dev/null 2>&1 || {
               echo "⚠️  Erreur au démarrage de WhatsApp Node."
             }
 
