@@ -160,9 +160,16 @@ jobs:
             sudo systemctl reload php8.4-fpm
             
             # ── Restart workers + Node ─────────────────────────────────────────
-            if command -v supervisorctl &> /dev/null; then
-              echo "👷 Restarting queue workers..."
+            if command -v supervisorctl &> /dev/null && sudo supervisorctl status laravel-worker:* &> /dev/null; then
+              echo "👷 Restarting queue workers via supervisor..."
               sudo supervisorctl restart laravel-worker:* || true
+            else
+              echo "⚠️  Supervisor non trouvé ou non configuré pour laravel-worker. Lancement manuel de queue:work en arrière-plan..."
+              # Tuer les anciens workers pour éviter les doublons
+              pkill -f "php artisan queue:work" || true
+              sleep 1
+              # Lancer en arrière-plan (detached)
+              nohup php artisan queue:work --sleep=3 --tries=3 --max-time=3600 > /dev/null 2>&1 &
             fi
 
             echo "🔄 Restarting WhatsApp Node via Artisan..."
