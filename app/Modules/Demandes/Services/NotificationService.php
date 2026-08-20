@@ -594,4 +594,9 @@ class NotificationService
             )
             ->first();
     }
+
+    private function buildNom(?object $etudiantInfo): string
+    {
+        return trim(($etudiantInfo->first_names ?? '') . ' ' . ($etudiantInfo->last_name ?? '')) ?: 'Étudiant(e)';
+    }
 }
