@@ -391,7 +391,11 @@ class NotificationService
 
         $etudiantInfo      = $this->fetchEtudiantInfo($demande->id);
         $etudiantNom       = trim(($etudiantInfo->first_names ?? '') . ' ' . ($etudiantInfo->last_name ?? '')) ?: 'Étudiant(e)';
+        $matricule         = $etudiantInfo->matricule ?? '';
         $expediteurNomRole = (WorkflowConstants::ROLE_LABELS[$expediteurRole] ?? $expediteurRole ?? 'Acteur');
+        $typeDocument      = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $destinataireRole  = WorkflowConstants::ROLE_LABELS[$targetRoleSlug] ?? $targetRoleSlug;
+        $isCorrection      = !empty($demande->is_in_correction_circuit);
 
         foreach ($destinataires as $dest) {
             // ── Email ──────────────────────────────────────────────────────────
