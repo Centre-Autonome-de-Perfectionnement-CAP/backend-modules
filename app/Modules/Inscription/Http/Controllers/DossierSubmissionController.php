@@ -324,4 +324,73 @@ class DossierSubmissionController extends Controller
 
         return $this->createdResponse($result, 'Compléments soumis avec succès');
     }
+
+    /**
+     * Vérifie si un candidat a déjà un dossier en attente pour l'année académique.
+     */
+    public function checkExistingDossier(Request $request): JsonResponse
+    {
+        $email = (string) $request->query('email', '');
+        $academicYearId = $request->query('academic_year_id') ? (int) $request->query('academic_year_id') : null;
+
+        if (empty($email)) {
+            return $this->errorResponse("L'adresse email est requise.", 'EMAIL_REQUIRED', 422);
+        }
+
+        $existing = $this->submissionService->checkExistingPendingDossier($email, $academicYearId);
+
+        if (!$existing) {
+            return $this->successResponse(['exists' => false], 'Aucun dossier en attente trouvé.');
+        }
+
+        return $this->successResponse([
+            'exists' => true,
+            'dossier' => $existing,
+        ], 'Dossier existant en attente détecté.');
+    }
+
+    /**
+     * Récupère les données complètes du dossier pour le formulaire de modification.
+     */
+    public function getDossierForUpdate(Request $request): JsonResponse
+    {
+        $email = (string) $request->input('email', '');
+        $trackingCode = (string) $request->input('tracking_code', '');
+
+        if (empty($email) || empty($trackingCode)) {
+            return $this->errorResponse("L'email et le code de suivi sont requis.", 'MISSING_FIELDS', 422);
+        }
+
+        $dossier = $this->submissionService->getDossierForUpdate($email, $trackingCode);
+
+        return $this->successResponse($dossier, 'Données du dossier récupérées avec succès.');
+    }
+
+    /**
+     * Met à jour le dossier existant (Vague 1 conservée).
+     */
+    public function updateExistingDossier(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'tracking_code' => 'required|string',
+        ]);
+
+        $fileFields = [
+            'demande_da' => 'Demande DA',
+            'cv' => 'CV',
+            'acte_naissance' => 'Acte de Naissance',
+            'diplome_bac' => 'Diplôme BAC',
+            'attestation_travail' => 'Attestation de Travail',
+            'quittance_rectorat' => 'Quittance Rectorat',
+            'quittance_cap' => 'Quittance CAP',
+            'diplome_licence' => 'Diplôme Licence',
+            'attestation_anglais' => 'Attestation Anglais',
+            'certificat_prepa' => 'Certificat de Classes Préparatoires',
+        ];
+
+        $result = $this->submissionService->updateExistingDossier($request, $fileFields);
+
+        return $this->successResponse($result, 'Dossier mis à jour avec succès.');
+    }
 }

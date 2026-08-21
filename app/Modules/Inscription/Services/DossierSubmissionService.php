@@ -355,5 +355,245 @@ class DossierSubmissionService
         ];
     }
 
+    /**
+     * Vérifie si un candidat a déjà un dossier en attente (status = pending) pour l'année académique.
+     */
+    public function checkExistingPendingDossier(string $email, ?int $academicYearId = null): ?array
+    {
+        $normalizedEmail = trim(mb_strtolower($email));
+        
+        $query = PendingStudent::whereHas('personalInformation', function ($q) use ($normalizedEmail) {
+            $q->whereRaw('LOWER(email) = ?', [$normalizedEmail]);
+        })
+        ->where('status', 'pending')
+        ->with(['personalInformation', 'department.cycle', 'academicYear', 'entryDiploma'])
+        ->latest();
 
+        if ($academicYearId) {
+            $query->where('academic_year_id', $academicYearId);
+        }
+
+        $pendingStudent = $query->first();
+
+        if (!$pendingStudent) {
+            return null;
+        }
+
+        return [
+            'exists' => true,
+            'id' => $pendingStudent->id,
+            'tracking_code' => $pendingStudent->tracking_code,
+            'first_names' => $pendingStudent->personalInformation?->first_names,
+            'last_name' => $pendingStudent->personalInformation?->last_name,
+            'email' => $pendingStudent->personalInformation?->email,
+            'cycle' => $pendingStudent->department?->cycle?->name,
+            'department_id' => $pendingStudent->department_id,
+            'department_name' => $pendingStudent->department?->name,
+            'study_level' => $pendingStudent->level,
+            'entry_diploma_id' => $pendingStudent->entry_diploma_id,
+            'academic_year_id' => $pendingStudent->academic_year_id,
+            'academic_year' => $pendingStudent->academicYear?->academic_year,
+            'initial_wave' => (int) ($pendingStudent->initial_wave ?? 1),
+            'is_updated_by_student' => (bool) ($pendingStudent->is_updated_by_student ?? false),
+            'submitted_at' => $pendingStudent->created_at?->toISOString(),
+            'last_student_update_at' => $pendingStudent->last_student_update_at?->toISOString(),
+        ];
+    }
+
+    /**
+     * Récupère les données d'un dossier pour pré-remplir le formulaire de modification.
+     */
+    public function getDossierForUpdate(string $email, string $trackingCode): array
+    {
+        $normalizedEmail = trim(mb_strtolower($email));
+        
+        $pendingStudent = PendingStudent::whereHas('personalInformation', function ($q) use ($normalizedEmail) {
+            $q->whereRaw('LOWER(email) = ?', [$normalizedEmail]);
+        })
+        ->where('tracking_code', strtoupper($trackingCode))
+        ->where('status', 'pending')
+        ->with(['personalInformation', 'department.cycle', 'academicYear', 'entryDiploma'])
+        ->first();
+
+        if (!$pendingStudent) {
+            throw new ResourceNotFoundException('Dossier introuvable ou non modifiable.');
+        }
+
+        $contacts = $pendingStudent->personalInformation?->contacts;
+        if (is_string($contacts)) {
+            $contacts = json_decode($contacts, true) ?: [$contacts];
+        }
+
+        return [
+            'tracking_code' => $pendingStudent->tracking_code,
+            'initial_wave' => (int) ($pendingStudent->initial_wave ?? 1),
+            'first_names' => $pendingStudent->personalInformation?->first_names,
+            'last_name' => $pendingStudent->personalInformation?->last_name,
+            'email' => $pendingStudent->personalInformation?->email,
+            'birth_date' => $pendingStudent->personalInformation?->birth_date ? date('Y-m-d', strtotime($pendingStudent->personalInformation->birth_date)) : '',
+            'birth_place' => $pendingStudent->personalInformation?->birth_place,
+            'birth_country' => $pendingStudent->personalInformation?->birth_country,
+            'gender' => $pendingStudent->personalInformation?->gender,
+            'contacts' => is_array($contacts) ? $contacts : [''],
+            'cycle_name' => $pendingStudent->department?->cycle?->name,
+            'department_id' => $pendingStudent->department_id,
+            'academic_year_id' => $pendingStudent->academic_year_id,
+            'study_level' => $pendingStudent->level,
+            'entry_diploma_id' => $pendingStudent->entry_diploma_id,
+            'documents' => $pendingStudent->documents ?? [],
+            'has_photo' => !empty($pendingStudent->photo),
+        ];
+    }
+
+    /**
+     * Met à jour le dossier existant d'un candidat en conservant sa Vague 1 d'origine.
+     */
+    public function updateExistingDossier(Request $request, array $fileFields): array
+    {
+        return DB::transaction(function () use ($request, $fileFields) {
+            $trackingCode = strtoupper(trim($request->input('tracking_code', '')));
+            $email = trim(mb_strtolower($request->input('email', '')));
+
+            $pendingStudent = PendingStudent::whereHas('personalInformation', function ($q) use ($email) {
+                $q->whereRaw('LOWER(email) = ?', [$email]);
+            })
+            ->where('tracking_code', $trackingCode)
+            ->where('status', 'pending')
+            ->with(['personalInformation', 'department.cycle', 'academicYear', 'entryDiploma'])
+            ->first();
+
+            if (!$pendingStudent) {
+                throw new BusinessException(
+                    message: "Dossier introuvable ou vous n'avez pas l'autorisation de le modifier.",
+                    errorCode: 'DOSSIER_NOT_FOUND'
+                );
+            }
+
+            $modifications = [];
+
+            // 1. Mise à jour des contacts
+            $personalInfo = $pendingStudent->personalInformation;
+            if ($request->has('contacts')) {
+                $newContacts = $request->input('contacts');
+                if (is_array($newContacts)) {
+                    $cleaned = array_values(array_filter($newContacts, fn($c) => !empty(trim((string)$c))));
+                    if (!empty($cleaned)) {
+                        $personalInfo->contacts = $cleaned;
+                        $personalInfo->save();
+                        $modifications[] = 'Contacts / Téléphone';
+                    }
+                }
+            }
+
+            // 2. Mise à jour filière / niveau
+            if ($request->has('department_id') && (int)$request->department_id !== (int)$pendingStudent->department_id) {
+                $newDept = Department::findOrFail($request->department_id);
+                $oldDeptName = $pendingStudent->department?->name;
+                $pendingStudent->department_id = $newDept->id;
+                $modifications[] = "Filière : {$oldDeptName} → {$newDept->name}";
+            }
+
+            if ($request->has('study_level') && (string)$request->study_level !== (string)$pendingStudent->level) {
+                $pendingStudent->level = $request->study_level;
+                $modifications[] = "Niveau d'étude : {$request->study_level}";
+            }
+
+            if ($request->has('entry_diploma_id') && (int)$request->entry_diploma_id !== (int)$pendingStudent->entry_diploma_id) {
+                $pendingStudent->entry_diploma_id = $request->entry_diploma_id;
+                $modifications[] = "Diplôme d'entrée";
+            }
+
+            // 3. Remplacement des fichiers / pièces jointes
+            $documents = $pendingStudent->documents ?? [];
+            foreach ($fileFields as $field => $documentName) {
+                if ($request->hasFile($field) && $request->file($field)->isValid()) {
+                    $file = $this->fileStorageService->uploadFile(
+                        $request->file($field),
+                        null,
+                        'public',
+                        "dossiers/updates"
+                    );
+                    $documents[$documentName] = $file->id;
+                    $modifications[] = "Document : {$documentName}";
+                }
+            }
+            $pendingStudent->documents = $documents;
+
+            if ($request->hasFile('photo') && $request->file('photo')->isValid()) {
+                $photoFile = $this->fileStorageService->uploadFile(
+                    $request->file('photo'),
+                    null,
+                    'public',
+                    "dossiers/photos"
+                );
+                $pendingStudent->photo = $photoFile->id;
+                $modifications[] = "Photo d'identité";
+            }
+
+            // 4. Marquer le dossier comme mis à jour par le candidat (initial_wave reste inchangée)
+            $existingSummary = $pendingStudent->student_update_summary ?? [];
+            if (!is_array($existingSummary)) {
+                $existingSummary = [];
+            }
+            $updateEntry = [
+                'updated_at' => now()->toISOString(),
+                'changes' => !empty($modifications) ? $modifications : ['Mise à jour générale'],
+            ];
+            $existingSummary[] = $updateEntry;
+
+            $pendingStudent->is_updated_by_student = true;
+            $pendingStudent->last_student_update_at = now();
+            $pendingStudent->student_update_summary = $existingSummary;
+            $pendingStudent->save();
+
+            // 5. Régénérer la fiche PDF mise à jour et envoyer l'email de confirmation
+            try {
+                $submissionDatetime = now()->format('d/m/Y à H:i');
+                $academicYear = $pendingStudent->academicYear ?? AcademicYear::find($pendingStudent->academic_year_id);
+                $department = $pendingStudent->department ?? Department::find($pendingStudent->department_id);
+                $cycleName = $department?->cycle?->name ?? 'Licence';
+
+                $pdfData = [
+                    'tracking_code' => $pendingStudent->tracking_code,
+                    'submission_datetime' => $submissionDatetime . ' (Mise à jour)',
+                    'last_name' => $personalInfo->last_name,
+                    'first_names' => $personalInfo->first_names,
+                    'email' => $personalInfo->email,
+                    'contacts' => $personalInfo->contacts,
+                    'birth_date' => $personalInfo->birth_date ? date('d/m/Y', strtotime($personalInfo->birth_date)) : null,
+                    'birth_place' => $personalInfo->birth_place,
+                    'gender' => $personalInfo->gender,
+                    'cycle_name' => $cycleName,
+                    'department' => $department?->name,
+                    'study_level' => $pendingStudent->level,
+                    'academic_year' => $academicYear?->academic_year,
+                    'documents' => array_keys($documents),
+                ];
+
+                $pdfFileName = 'fiche_confirmation_' . $pendingStudent->tracking_code . '.pdf';
+                $pdfPath = storage_path('app/temp/' . $pdfFileName);
+                if (!file_exists(storage_path('app/temp'))) {
+                    mkdir(storage_path('app/temp'), 0755, true);
+                }
+
+                $this->pdfService->saveWithTemplate('fiche-confirmation-inscription', $pdfData, $pdfPath);
+
+                if (filter_var($personalInfo->email, FILTER_VALIDATE_EMAIL)) {
+                    Mail::to($personalInfo->email)->queue(
+                        new DossierSubmissionWithAttachment($personalInfo, $pendingStudent, $pdfPath)
+                    );
+                }
+            } catch (\Throwable $e) {
+                Log::error('Erreur lors de la génération PDF ou envoi email de mise à jour: ' . $e->getMessage());
+            }
+
+            return [
+                'success' => true,
+                'message' => 'Votre dossier a été mis à jour avec succès.',
+                'tracking_code' => $pendingStudent->tracking_code,
+                'initial_wave' => (int) ($pendingStudent->initial_wave ?? 1),
+                'modifications' => $modifications,
+            ];
+        });
+    }
 }

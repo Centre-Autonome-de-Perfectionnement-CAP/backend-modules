@@ -34,6 +34,10 @@ class PendingStudent extends Model
         'sponsorise',
         'exonere',
         'status',
+        'initial_wave',
+        'is_updated_by_student',
+        'last_student_update_at',
+        'student_update_summary',
         'mail_cuca_sent',
         'mail_cuca_count',
         'mail_cuo_sent',
@@ -42,6 +46,10 @@ class PendingStudent extends Model
 
     protected $casts = [
         'documents' => 'array',
+        'initial_wave' => 'integer',
+        'is_updated_by_student' => 'boolean',
+        'last_student_update_at' => 'datetime',
+        'student_update_summary' => 'array',
         'mail_cuca_sent' => 'boolean',
         'mail_cuo_sent' => 'boolean',
         'mail_cuca_count' => 'integer',
