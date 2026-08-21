@@ -15,9 +15,9 @@ use Illuminate\Support\Facades\Route;
 
 // Route globale de vérification d'adresse email en temps réel (DNS / Format / Unicité)
 Route::match(['get', 'post'], '/core/validate-email', function (\Illuminate\Http\Request $request) {
-    $email = trim(mb_strtolower($request->input('email', '')));
-    $matricule = trim($request->input('matricule', ''));
-    $purpose = $request->input('purpose', '');
+    $email = trim(mb_strtolower((string) ($request->get('email') ?? $request->input('email', ''))));
+    $matricule = trim((string) ($request->get('matricule') ?? $request->input('matricule', '')));
+    $purpose = (string) ($request->get('purpose') ?? $request->input('purpose', ''));
 
     $result = \App\Rules\ValidRealEmail::analyzeEmail((string) $email);
     if (!$result['valid']) {
@@ -26,19 +26,28 @@ Route::match(['get', 'post'], '/core/validate-email', function (\Illuminate\Http
 
     // Vérification de l'unicité avant envoi de l'OTP
     if (!empty($email)) {
-        if ($purpose === 'legacy_student' || !empty($matricule)) {
-            $query = \App\Modules\LegacyStudent\Models\LegacyStudent::whereRaw('LOWER(email) = ?', [$email]);
-            if (!empty($matricule)) {
-                $query->where('matricule', '!=', $matricule);
-            }
-            $existing = $query->first();
-            if ($existing) {
-                return response()->json([
-                    'valid' => false,
-                    'message' => "Cette adresse email est déjà associée à un autre dossier étudiant. Chaque étudiant doit obligatoirement utiliser sa propre adresse email.",
-                    'is_duplicate' => true,
-                ], 422);
-            }
+        // 1. Vérification dans les anciens étudiants (legacy_students)
+        $query = \App\Modules\LegacyStudent\Models\LegacyStudent::whereRaw('LOWER(email) = ?', [$email]);
+        if (!empty($matricule)) {
+            $query->where('matricule', '!=', $matricule);
+        }
+        $existingLegacy = $query->first();
+        if ($existingLegacy) {
+            return response()->json([
+                'valid' => false,
+                'message' => "Cette adresse email est déjà associée à un autre dossier étudiant. Chaque étudiant doit obligatoirement utiliser sa propre adresse email.",
+                'is_duplicate' => true,
+            ], 422);
+        }
+
+        // 2. Vérification dans les étudiants récents (personal_information)
+        $existingPI = \App\Modules\Inscription\Models\PersonalInformation::whereRaw('LOWER(email) = ?', [$email])->first();
+        if ($existingPI) {
+            return response()->json([
+                'valid' => false,
+                'message' => "Cette adresse email est déjà associée à un autre dossier étudiant. Chaque étudiant doit obligatoirement utiliser sa propre adresse email.",
+                'is_duplicate' => true,
+            ], 422);
         }
     }
 

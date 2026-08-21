@@ -73,13 +73,13 @@ class LegacyStudentPublicController extends Controller
                         return;
                     }
 
-                    // 2. Vérification de l'unicité parmi les étudiants récents (pending_students)
-                    $otherPending = \App\Modules\Inscription\Models\PendingStudent::whereRaw('LOWER(email) = ?', [$email])
+                    // 2. Vérification de l'unicité parmi les étudiants récents (personal_information)
+                    $otherPI = \App\Modules\Inscription\Models\PersonalInformation::whereRaw('LOWER(email) = ?', [$email])
                         ->first();
 
-                    if ($otherPending) {
+                    if ($otherPI) {
                         $normLastName = mb_strtolower(trim($request->input('lastName', '')));
-                        if ($normLastName && mb_strtolower($otherPending->last_name) !== $normLastName) {
+                        if ($normLastName && mb_strtolower($otherPI->last_name) !== $normLastName) {
                             $fail("Cette adresse email est déjà associée à un autre dossier étudiant. Chaque étudiant doit obligatoirement utiliser sa propre adresse email.");
                         }
                     }
