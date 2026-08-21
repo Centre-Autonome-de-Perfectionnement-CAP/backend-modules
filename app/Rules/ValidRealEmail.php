@@ -41,6 +41,17 @@ class ValidRealEmail implements ValidationRule
     ];
 
     /**
+     * Liste des identifiants (local part) fictifs ou bidons.
+     */
+    protected static array $dummyUsernames = [
+        'test', 'test1', 'test12', 'test123', 'testing', 'admin', 'administrator', 'user', 'user1',
+        'temp', 'demo', 'fake', 'sample', 'example', 'dummy', 'null', 'undefined', 'none', 'nobody',
+        'noone', 'anonymous', 'azerty', 'qwerty', 'asdf', 'toto', 'tata', 'titi', 'tutu', 'aaaa',
+        'bbbb', 'cccc', '1111', '1234', '12345', '123456', 'email', 'mail', 'monmail', 'nom',
+        'prenom', 'xyz', 'abc', 'xxx', 'abcde', 'aaaaaa', '111111', 'testeur', 'inconnu'
+    ];
+
+    /**
      * Exécute la règle de validation.
      */
     public function validate(string $attribute, mixed $value, Closure $fail): void
@@ -49,46 +60,9 @@ class ValidRealEmail implements ValidationRule
             return;
         }
 
-        $email = trim((string) $value);
-
-        // 1. Validation de la syntaxe de base
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $fail("L'adresse email '{$email}' n'a pas un format valide.");
-            return;
-        }
-
-        // 2. Découpage identifiant / domaine
-        $parts = explode('@', $email);
-        if (count($parts) !== 2) {
-            $fail("L'adresse email est invalide.");
-            return;
-        }
-
-        $domain = mb_strtolower(trim($parts[1]));
-
-        // 3. Vérification de la présence d'une extension de domaine (TLD) valide
-        if (!preg_match('/^[a-z0-9.-]+\.[a-z]{2,}$/i', $domain)) {
-            $fail("Le domaine de l'adresse email ({$domain}) n'est pas valide.");
-            return;
-        }
-
-        // 4. Détection de fautes de frappe courantes
-        if (isset(self::$typoSuggestions[$domain])) {
-            $suggested = self::$typoSuggestions[$domain];
-            $fail("Le domaine '{$domain}' semble comporter une faute de frappe. Vouliez-vous dire '@{$suggested}' ?");
-            return;
-        }
-
-        // 5. Rejet des emails temporaires / jetables
-        if (in_array($domain, self::$disposableDomains, true)) {
-            $fail("Les adresses emails temporaires / jetables (@{$domain}) ne sont pas autorisées pour les démarches académiques.");
-            return;
-        }
-
-        // 6. Vérification DNS en direct (MX ou A record)
-        if (!self::domainExists($domain)) {
-            $fail("Le domaine de messagerie '@{$domain}' n'existe pas ou ne peut pas recevoir d'emails.");
-            return;
+        $res = self::analyzeEmail((string) $value);
+        if (!$res['valid']) {
+            $fail($res['message']);
         }
     }
 
@@ -97,14 +71,11 @@ class ValidRealEmail implements ValidationRule
      */
     public static function domainExists(string $domain): bool
     {
-        // En local ou environnement de test, si la résolution DNS échoue à cause du réseau local
-        // on tente MX puis A
         try {
             if (function_exists('checkdnsrr')) {
                 return checkdnsrr($domain, 'MX') || checkdnsrr($domain, 'A');
             }
         } catch (\Throwable $e) {
-            // En cas d'erreur de résolution imprévue, fallback tolérant
             return true;
         }
 
@@ -112,7 +83,7 @@ class ValidRealEmail implements ValidationRule
     }
 
     /**
-     * Analyse complète d'une adresse email pour l'endpoint API de validation.
+     * Analyse complète et approfondie de la validité et de l'existence d'une adresse email.
      */
     public static function analyzeEmail(string $email): array
     {
@@ -126,6 +97,7 @@ class ValidRealEmail implements ValidationRule
             ];
         }
 
+        // 1. Validation de la syntaxe RFC de base
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return [
                 'valid' => false,
@@ -135,9 +107,108 @@ class ValidRealEmail implements ValidationRule
         }
 
         $parts = explode('@', $email);
-        $user = $parts[0];
-        $domain = mb_strtolower(trim($parts[1] ?? ''));
+        if (count($parts) !== 2) {
+            return [
+                'valid' => false,
+                'message' => "L'adresse email est incomplète.",
+                'suggestion' => null,
+            ];
+        }
 
+        $user = trim($parts[0]);
+        $domain = mb_strtolower(trim($parts[1] ?? ''));
+        $userLower = mb_strtolower($user);
+
+        // 2. Vérification de la longueur minimale générale de l'identifiant
+        if (mb_strlen($user) < 3) {
+            return [
+                'valid' => false,
+                'message' => "L'identifiant '{$user}' est trop court. Une adresse email valide comporte au moins 3 caractères avant le '@'.",
+                'suggestion' => null,
+            ];
+        }
+
+        // 3. Vérification des identifiants fictifs / bidons évidents
+        if (in_array($userLower, self::$dummyUsernames, true)) {
+            return [
+                'valid' => false,
+                'message' => "L'adresse '{$email}' semble être une adresse fictive ou de test. Veuillez renseigner votre véritable adresse email.",
+                'suggestion' => null,
+            ];
+        }
+
+        // 4. Détection de répétitions abusives (ex: aaaaaa@...)
+        if (preg_match('/^(.)\1{4,}$/', $userLower)) {
+            return [
+                'valid' => false,
+                'message' => "L'adresse email contient une répétition anormale de caractères. Veuillez saisir une adresse valide.",
+                'suggestion' => null,
+            ];
+        }
+
+        // 5. Règles spécifiques des grands fournisseurs de messagerie
+        // GMAIL / GOOGLEMAIL
+        if ($domain === 'gmail.com' || $domain === 'googlemail.com') {
+            if (mb_strlen($user) < 6 || mb_strlen($user) > 30) {
+                return [
+                    'valid' => false,
+                    'message' => "Une adresse Gmail doit comporter entre 6 et 30 caractères avant '@{$domain}' (votre saisie: " . mb_strlen($user) . " car.).",
+                    'suggestion' => null,
+                ];
+            }
+            if (!preg_match('/^[a-z0-9.]+$/i', $user)) {
+                return [
+                    'valid' => false,
+                    'message' => "Une adresse Gmail ne peut contenir que des lettres, des chiffres et des points.",
+                    'suggestion' => null,
+                ];
+            }
+            if (str_starts_with($user, '.') || str_ends_with($user, '.')) {
+                return [
+                    'valid' => false,
+                    'message' => "Une adresse Gmail ne peut pas commencer ni se terminer par un point.",
+                    'suggestion' => null,
+                ];
+            }
+        }
+
+        // YAHOO
+        if (str_contains($domain, 'yahoo.') || $domain === 'ymail.com' || $domain === 'rocketmail.com') {
+            if (mb_strlen($user) < 4 || mb_strlen($user) > 32) {
+                return [
+                    'valid' => false,
+                    'message' => "Une adresse Yahoo doit comporter entre 4 et 32 caractères avant '@{$domain}'.",
+                    'suggestion' => null,
+                ];
+            }
+            if (!preg_match('/^[a-z]/i', $user)) {
+                return [
+                    'valid' => false,
+                    'message' => "Une adresse Yahoo doit obligatoirement commencer par une lettre.",
+                    'suggestion' => null,
+                ];
+            }
+        }
+
+        // MICROSOFT (Outlook, Hotmail, Live, MSN)
+        if (in_array($domain, ['outlook.com', 'outlook.fr', 'hotmail.com', 'hotmail.fr', 'live.com', 'live.fr', 'msn.com'], true)) {
+            if (mb_strlen($user) < 3 || mb_strlen($user) > 64) {
+                return [
+                    'valid' => false,
+                    'message' => "Une adresse Microsoft/Outlook doit comporter au moins 3 caractères avant '@{$domain}'.",
+                    'suggestion' => null,
+                ];
+            }
+            if (!preg_match('/^[a-z]/i', $user)) {
+                return [
+                    'valid' => false,
+                    'message' => "Une adresse Microsoft/Outlook doit commencer par une lettre.",
+                    'suggestion' => null,
+                ];
+            }
+        }
+
+        // 6. Vérification de l'extension de domaine TLD
         if (!preg_match('/^[a-z0-9.-]+\.[a-z]{2,}$/i', $domain)) {
             return [
                 'valid' => false,
@@ -146,6 +217,7 @@ class ValidRealEmail implements ValidationRule
             ];
         }
 
+        // 7. Détection des fautes de frappe de domaines courants
         if (isset(self::$typoSuggestions[$domain])) {
             $suggested = self::$typoSuggestions[$domain];
             return [
@@ -155,18 +227,20 @@ class ValidRealEmail implements ValidationRule
             ];
         }
 
+        // 8. Rejet des emails temporaires / jetables
         if (in_array($domain, self::$disposableDomains, true)) {
             return [
                 'valid' => false,
-                'message' => "Les adresses emails temporaires (@{$domain}) ne sont pas acceptées.",
+                'message' => "Les adresses emails temporaires / jetables (@{$domain}) ne sont pas acceptées.",
                 'suggestion' => null,
             ];
         }
 
+        // 9. Vérification DNS de l'existence réelle du domaine (MX / A)
         if (!self::domainExists($domain)) {
             return [
                 'valid' => false,
-                'message' => "Le serveur de messagerie '@{$domain}' n'existe pas ou ne peut pas recevoir d'emails.",
+                'message' => "Le serveur de messagerie '@{$domain}' n'existe pas sur Internet ou ne peut pas recevoir d'emails.",
                 'suggestion' => null,
             ];
         }
