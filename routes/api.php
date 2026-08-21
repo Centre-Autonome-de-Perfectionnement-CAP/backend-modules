@@ -26,8 +26,9 @@ Route::match(['get', 'post'], '/core/validate-email', function (\Illuminate\Http
 
     // Vérification de l'unicité avant envoi de l'OTP
     if (!empty($email)) {
-        // 1. Vérification dans les anciens étudiants (legacy_students)
-        $query = \App\Modules\LegacyStudent\Models\LegacyStudent::whereRaw('LOWER(email) = ?', [$email]);
+        // 1. Vérification dans les anciens étudiants (legacy_students) avec statut actif (pending ou validated)
+        $query = \App\Modules\LegacyStudent\Models\LegacyStudent::whereRaw('LOWER(email) = ?', [$email])
+            ->where('status', '!=', 'rejected');
         if (!empty($matricule)) {
             $query->where('matricule', '!=', $matricule);
         }
@@ -40,8 +41,12 @@ Route::match(['get', 'post'], '/core/validate-email', function (\Illuminate\Http
             ], 422);
         }
 
-        // 2. Vérification dans les étudiants récents (personal_information)
-        $existingPI = \App\Modules\Inscription\Models\PersonalInformation::whereRaw('LOWER(email) = ?', [$email])->first();
+        // 2. Vérification dans les étudiants récents (personal_information) avec dossier actif non rejeté
+        $existingPI = \App\Modules\Inscription\Models\PersonalInformation::whereRaw('LOWER(email) = ?', [$email])
+            ->whereHas('pendingStudents', function ($q) {
+                $q->where('status', '!=', 'rejected');
+            })
+            ->first();
         if ($existingPI) {
             return response()->json([
                 'valid' => false,

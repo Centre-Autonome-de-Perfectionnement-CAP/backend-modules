@@ -45,9 +45,10 @@ class OtpVerificationController extends Controller
         $purpose = $request->input('purpose', 'general');
         $matricule = trim($request->input('matricule', ''));
 
-        // Vérification de l'unicité de l'email pour les anciens étudiants
+        // Vérification de l'unicité de l'email pour les anciens étudiants (dossiers non rejetés)
         if ($purpose === 'legacy_student' && !empty($matricule)) {
             $otherStudent = \App\Modules\LegacyStudent\Models\LegacyStudent::whereRaw('LOWER(email) = ?', [$email])
+                ->where('status', '!=', 'rejected')
                 ->where('matricule', '!=', $matricule)
                 ->first();
 

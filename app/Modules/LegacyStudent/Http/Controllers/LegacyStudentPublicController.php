@@ -63,8 +63,9 @@ class LegacyStudentPublicController extends Controller
                     $email = trim(mb_strtolower($value));
                     $matricule = trim($request->input('matricule', ''));
 
-                    // 1. Vérification de l'unicité parmi les autres anciens étudiants
+                    // 1. Vérification de l'unicité parmi les autres anciens étudiants (dossiers actifs non rejetés)
                     $otherLegacy = \App\Modules\LegacyStudent\Models\LegacyStudent::whereRaw('LOWER(email) = ?', [$email])
+                        ->where('status', '!=', 'rejected')
                         ->where('matricule', '!=', $matricule)
                         ->first();
 
@@ -73,8 +74,11 @@ class LegacyStudentPublicController extends Controller
                         return;
                     }
 
-                    // 2. Vérification de l'unicité parmi les étudiants récents (personal_information)
+                    // 2. Vérification de l'unicité parmi les étudiants récents (dossiers actifs non rejetés)
                     $otherPI = \App\Modules\Inscription\Models\PersonalInformation::whereRaw('LOWER(email) = ?', [$email])
+                        ->whereHas('pendingStudents', function ($q) {
+                            $q->where('status', '!=', 'rejected');
+                        })
                         ->first();
 
                     if ($otherPI) {
