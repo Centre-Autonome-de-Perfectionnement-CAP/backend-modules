@@ -116,8 +116,6 @@ class OtpVerificationController extends Controller
             'success' => true,
             'message' => "Un code de vérification à 6 chiffres a été envoyé à {$email}.",
             'expires_in' => 600,
-            // En environnement local de dev, on renvoie aussi le code pour faciliter les tests
-            'debug_code' => app()->environment('local', 'testing') ? $code : null,
         ]);
     }
 
