@@ -21,7 +21,7 @@ class StoreContactRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255'],
+            'email' => ['required', 'string', 'max:255', new \App\Rules\ValidRealEmail()],
             'subject' => ['required', 'string', 'max:255'],
             'message' => ['required', 'string', 'min:10', 'max:5000'],
         ];

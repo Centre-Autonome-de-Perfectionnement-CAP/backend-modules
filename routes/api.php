@@ -13,5 +13,9 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-// Les routes des modules sont chargées via leurs ServiceProviders
-// Voir: app/Modules/*/Providers/*ServiceProvider.php
+// Route globale de vérification d'adresse email en temps réel
+Route::match(['get', 'post'], '/core/validate-email', function (\Illuminate\Http\Request $request) {
+    $email = $request->input('email', '');
+    $result = \App\Rules\ValidRealEmail::analyzeEmail((string) $email);
+    return response()->json($result, $result['valid'] ? 200 : 422);
+})->name('api.core.validate-email');

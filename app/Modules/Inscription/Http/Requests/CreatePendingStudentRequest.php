@@ -19,18 +19,20 @@ class CreatePendingStudentRequest extends FormRequest
      */
     public function rules(): array
     {
+        $emailRules = ['required', 'string', 'max:255', new \App\Rules\ValidRealEmail()];
+
+        // Pour la création, vérifier l'unicité de l'email
+        if ($this->isMethod('post')) {
+            $emailRules[] = 'unique:pending_students,email';
+        }
+
         $rules = [
-            'email' => 'required|email',
+            'email' => $emailRules,
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
             'phone' => 'required|string|max:20',
             'entry_diploma_id' => 'required|exists:entry_diplomas,id',
         ];
-
-        // Pour la création, vérifier l'unicité de l'email
-        if ($this->isMethod('post')) {
-            $rules['email'] .= '|unique:pending_students,email';
-        }
 
         // Pour la mise à jour, permettre la mise à jour du statut et du sponsoring
         if ($this->isMethod('put') || $this->isMethod('patch')) {

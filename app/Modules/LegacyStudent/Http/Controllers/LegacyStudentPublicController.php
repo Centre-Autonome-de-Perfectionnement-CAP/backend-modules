@@ -54,7 +54,7 @@ class LegacyStudentPublicController extends Controller
             'cycle' => 'required|string|max:100',
             'filiereId' => 'required|integer|exists:departments,id',
             'filiereIds' => 'nullable|array',
-            'email' => 'nullable|email|max:150',
+            'email' => ['nullable', 'string', 'max:150', new \App\Rules\ValidRealEmail()],
             'phone' => 'nullable|string|max:30',
         ], [
             'registrationYear.required' => 'L\'année d\'inscription est requise.',

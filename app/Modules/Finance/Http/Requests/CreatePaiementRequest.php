@@ -70,7 +70,7 @@ class CreatePaiementRequest extends FormRequest
             'date_versement' => 'nullable|date|before_or_equal:today',
             'quittance' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120', // Max 5MB
             'motif' => 'required|string',
-            'email' => 'nullable|email|max:255',
+            'email' => ['nullable', 'string', 'max:255', new \App\Rules\ValidRealEmail()],
             'contact' => 'nullable|string|max:255',
         ];
     }
