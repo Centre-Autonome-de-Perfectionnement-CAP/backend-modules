@@ -54,7 +54,37 @@ class LegacyStudentPublicController extends Controller
             'cycle' => 'required|string|max:100',
             'filiereId' => 'required|integer|exists:departments,id',
             'filiereIds' => 'nullable|array',
-            'email' => ['nullable', 'string', 'max:150', new \App\Rules\ValidRealEmail()],
+            'email' => [
+                'required',
+                'string',
+                'max:150',
+                new \App\Rules\ValidRealEmail(),
+                function ($attribute, $value, $fail) use ($request) {
+                    $email = trim(mb_strtolower($value));
+                    $matricule = trim($request->input('matricule', ''));
+
+                    // 1. Vérification de l'unicité parmi les autres anciens étudiants
+                    $otherLegacy = \App\Modules\LegacyStudent\Models\LegacyStudent::whereRaw('LOWER(email) = ?', [$email])
+                        ->where('matricule', '!=', $matricule)
+                        ->first();
+
+                    if ($otherLegacy) {
+                        $fail("Cette adresse email est déjà utilisée par un autre étudiant ({$otherLegacy->last_name} {$otherLegacy->first_name}). Chaque étudiant doit disposer de sa propre adresse email unique.");
+                        return;
+                    }
+
+                    // 2. Vérification de l'unicité parmi les étudiants récents (pending_students)
+                    $otherPending = \App\Modules\Inscription\Models\PendingStudent::whereRaw('LOWER(email) = ?', [$email])
+                        ->first();
+
+                    if ($otherPending) {
+                        $normLastName = mb_strtolower(trim($request->input('lastName', '')));
+                        if ($normLastName && mb_strtolower($otherPending->last_name) !== $normLastName) {
+                            $fail("Cette adresse email est déjà enregistrée dans le système pour un autre étudiant. Veuillez utiliser votre propre adresse email.");
+                        }
+                    }
+                }
+            ],
             'phone' => 'nullable|string|max:30',
         ], [
             'registrationYear.required' => 'L\'année d\'inscription est requise.',

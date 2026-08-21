@@ -43,6 +43,24 @@ class OtpVerificationController extends Controller
 
         $email = trim(mb_strtolower($request->input('email')));
         $purpose = $request->input('purpose', 'general');
+        $matricule = trim($request->input('matricule', ''));
+
+        // Vérification de l'unicité de l'email pour les anciens étudiants
+        if ($purpose === 'legacy_student' && !empty($matricule)) {
+            $otherStudent = \App\Modules\LegacyStudent\Models\LegacyStudent::whereRaw('LOWER(email) = ?', [$email])
+                ->where('matricule', '!=', $matricule)
+                ->first();
+
+            if ($otherStudent) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Cette adresse email est déjà utilisée par un autre étudiant ({$otherStudent->last_name} {$otherStudent->first_name}). Chaque étudiant doit obligatoirement avoir sa propre adresse email unique.",
+                    'errors' => [
+                        'email' => ["Cette adresse email est déjà associée à un autre dossier étudiant."],
+                    ],
+                ], 422);
+            }
+        }
 
         // Anti-flood : Vérifie si un code a été envoyé il y a moins de 30 secondes
         $recent = EmailOtpVerification::where('email', $email)
