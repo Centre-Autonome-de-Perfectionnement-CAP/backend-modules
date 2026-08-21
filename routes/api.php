@@ -13,11 +13,36 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-// Route globale de vérification d'adresse email en temps réel (DNS / Format)
+// Route globale de vérification d'adresse email en temps réel (DNS / Format / Unicité)
 Route::match(['get', 'post'], '/core/validate-email', function (\Illuminate\Http\Request $request) {
-    $email = $request->input('email', '');
+    $email = trim(mb_strtolower($request->input('email', '')));
+    $matricule = trim($request->input('matricule', ''));
+    $purpose = $request->input('purpose', '');
+
     $result = \App\Rules\ValidRealEmail::analyzeEmail((string) $email);
-    return response()->json($result, $result['valid'] ? 200 : 422);
+    if (!$result['valid']) {
+        return response()->json($result, 422);
+    }
+
+    // Vérification de l'unicité avant envoi de l'OTP
+    if (!empty($email)) {
+        if ($purpose === 'legacy_student' || !empty($matricule)) {
+            $query = \App\Modules\LegacyStudent\Models\LegacyStudent::whereRaw('LOWER(email) = ?', [$email]);
+            if (!empty($matricule)) {
+                $query->where('matricule', '!=', $matricule);
+            }
+            $existing = $query->first();
+            if ($existing) {
+                return response()->json([
+                    'valid' => false,
+                    'message' => "Cette adresse email est déjà associée à un autre dossier étudiant. Chaque étudiant doit obligatoirement utiliser sa propre adresse email.",
+                    'is_duplicate' => true,
+                ], 422);
+            }
+        }
+    }
+
+    return response()->json($result, 200);
 })->name('api.core.validate-email');
 
 // Routes de validation d'email par code OTP à 6 chiffres
