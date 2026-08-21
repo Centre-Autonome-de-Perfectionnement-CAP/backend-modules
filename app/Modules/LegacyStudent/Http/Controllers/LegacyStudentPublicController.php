@@ -69,7 +69,7 @@ class LegacyStudentPublicController extends Controller
                         ->first();
 
                     if ($otherLegacy) {
-                        $fail("Cette adresse email est déjà utilisée par un autre étudiant ({$otherLegacy->last_name} {$otherLegacy->first_name}). Chaque étudiant doit disposer de sa propre adresse email unique.");
+                        $fail("Cette adresse email est déjà associée à un autre dossier étudiant. Chaque étudiant doit obligatoirement utiliser sa propre adresse email.");
                         return;
                     }
 
@@ -80,7 +80,7 @@ class LegacyStudentPublicController extends Controller
                     if ($otherPending) {
                         $normLastName = mb_strtolower(trim($request->input('lastName', '')));
                         if ($normLastName && mb_strtolower($otherPending->last_name) !== $normLastName) {
-                            $fail("Cette adresse email est déjà enregistrée dans le système pour un autre étudiant. Veuillez utiliser votre propre adresse email.");
+                            $fail("Cette adresse email est déjà associée à un autre dossier étudiant. Chaque étudiant doit obligatoirement utiliser sa propre adresse email.");
                         }
                     }
                 }

@@ -54,7 +54,7 @@ class OtpVerificationController extends Controller
             if ($otherStudent) {
                 return response()->json([
                     'success' => false,
-                    'message' => "Cette adresse email est déjà utilisée par un autre étudiant ({$otherStudent->last_name} {$otherStudent->first_name}). Chaque étudiant doit obligatoirement avoir sa propre adresse email unique.",
+                    'message' => "Cette adresse email est déjà associée à un autre dossier étudiant. Chaque étudiant doit obligatoirement utiliser sa propre adresse email.",
                     'errors' => [
                         'email' => ["Cette adresse email est déjà associée à un autre dossier étudiant."],
                     ],
