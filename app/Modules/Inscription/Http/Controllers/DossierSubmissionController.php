@@ -357,11 +357,11 @@ class DossierSubmissionController extends Controller
         $email = (string) $request->input('email', '');
         $trackingCode = (string) $request->input('tracking_code', '');
 
-        if (empty($email) || empty($trackingCode)) {
-            return $this->errorResponse("L'email et le code de suivi sont requis.", 'MISSING_FIELDS', 422);
+        if (empty($email)) {
+            return $this->errorResponse("L'adresse email est requise.", 'MISSING_FIELDS', 422);
         }
 
-        $dossier = $this->submissionService->getDossierForUpdate($email, $trackingCode);
+        $dossier = $this->submissionService->getDossierForUpdate($email, $trackingCode ?: null);
 
         return $this->successResponse($dossier, 'Données du dossier récupérées avec succès.');
     }

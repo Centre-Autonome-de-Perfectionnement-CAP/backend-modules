@@ -427,16 +427,26 @@ class DossierSubmissionService
     /**
      * Récupère les données d'un dossier pour pré-remplir le formulaire de modification.
      */
-    public function getDossierForUpdate(string $email, string $trackingCode): array
+    public function getDossierForUpdate(string $email, ?string $trackingCode = null): array
     {
         $normalizedEmail = trim(mb_strtolower($email));
         
-        $pendingStudent = PendingStudent::whereHas('personalInformation', function ($q) use ($normalizedEmail) {
+        $query = PendingStudent::whereHas('personalInformation', function ($q) use ($normalizedEmail) {
             $q->whereRaw('LOWER(email) = ?', [$normalizedEmail]);
         })
-        ->where('tracking_code', strtoupper($trackingCode))
         ->with(['personalInformation', 'department.cycle', 'academicYear', 'entryDiploma'])
-        ->first();
+        ->latest();
+
+        if (!empty($trackingCode)) {
+            $cleanCode = trim($trackingCode);
+            $query->where(function ($q) use ($cleanCode) {
+                $q->where('tracking_code', $cleanCode)
+                  ->orWhereRaw('LOWER(tracking_code) = ?', [strtolower($cleanCode)])
+                  ->orWhereRaw('UPPER(tracking_code) = ?', [strtoupper($cleanCode)]);
+            });
+        }
+
+        $pendingStudent = $query->first();
 
         if (!$pendingStudent) {
             throw new ResourceNotFoundException('Dossier introuvable.');
@@ -485,22 +495,41 @@ class DossierSubmissionService
     public function updateExistingDossier(Request $request, array $fileFields): array
     {
         return DB::transaction(function () use ($request, $fileFields) {
-            $trackingCode = strtoupper(trim($request->input('tracking_code', '')));
-            $email = trim(mb_strtolower($request->input('email', '')));
+            $trackingCode = trim((string) $request->input('tracking_code', ''));
+            $email = trim(mb_strtolower((string) $request->input('email', '')));
 
-            $pendingStudent = PendingStudent::whereHas('personalInformation', function ($q) use ($email) {
+            $query = PendingStudent::whereHas('personalInformation', function ($q) use ($email) {
                 $q->whereRaw('LOWER(email) = ?', [$email]);
             })
-            ->where('tracking_code', $trackingCode)
-            ->where('status', 'pending')
             ->with(['personalInformation', 'department.cycle', 'academicYear', 'entryDiploma'])
-            ->first();
+            ->latest();
+
+            if (!empty($trackingCode)) {
+                $query->where(function ($q) use ($trackingCode) {
+                    $q->where('tracking_code', $trackingCode)
+                      ->orWhereRaw('LOWER(tracking_code) = ?', [strtolower($trackingCode)])
+                      ->orWhereRaw('UPPER(tracking_code) = ?', [strtoupper($trackingCode)]);
+                });
+            }
+
+            $pendingStudent = $query->first();
 
             if (!$pendingStudent) {
                 throw new BusinessException(
                     message: "Dossier introuvable ou vous n'avez pas l'autorisation de le modifier.",
                     errorCode: 'DOSSIER_NOT_FOUND'
                 );
+            }
+
+            $isValidated = (
+                $pendingStudent->status === 'validated' ||
+                $pendingStudent->cuca_opinion === 'favorable' ||
+                $pendingStudent->cuo_opinion === 'favorable' ||
+                $pendingStudent->studentPendingStudents()->exists()
+            );
+
+            if ($isValidated) {
+                throw new BusinessException('Ce dossier a déjà été validé et ne peut plus être modifié.', 'DOSSIER_ALREADY_VALIDATED');
             }
 
             $modifications = [];
