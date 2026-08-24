@@ -411,17 +411,30 @@ class StudentServiceController extends Controller
             'rejected'        => 'Rejetée',
         ];
 
+        // Découpage du nom si possible
+        $nameParts = explode(' ', trim($serviceRequest->student_name ?? ''), 2);
+        $lastName = $nameParts[0] ?? '';
+        $firstNames = $nameParts[1] ?? '';
+
         return response()->json([
-            'reference'      => 'REF-' . str_pad($serviceRequest->id, 6, '0', STR_PAD_LEFT),
-            'service_type'   => $serviceRequest->service_type,
-            'service_name'   => $serviceRequest->service_name,
-            'status'         => $serviceRequest->status,
-            'status_label'   => $statusLabels[$serviceRequest->status] ?? $serviceRequest->status,
-            'matricule'      => $serviceRequest->matricule,
-            'student_name'   => $serviceRequest->student_name,
-            'submitted_at'   => $serviceRequest->created_at?->toISOString(),
-            'processed_at'   => $serviceRequest->processed_at?->toISOString(),
+            'reference'        => 'REF-' . str_pad($serviceRequest->id, 6, '0', STR_PAD_LEFT),
+            'type'             => $serviceRequest->service_type,
+            'service_type'     => $serviceRequest->service_type,
+            'service_name'     => $serviceRequest->service_name,
+            'status'           => $serviceRequest->status,
+            'status_label'     => $statusLabels[$serviceRequest->status] ?? $serviceRequest->status,
+            'email'            => $serviceRequest->email,
+            'submitted_at'     => $serviceRequest->created_at?->toISOString(),
+            'processed_at'     => $serviceRequest->processed_at?->toISOString(),
+            'rejected_reason'  => $serviceRequest->rejection_reason,
             'rejection_reason' => $serviceRequest->rejection_reason,
+            'student'          => [
+                'last_name'     => $lastName,
+                'first_names'   => $firstNames,
+                'matricule'     => $serviceRequest->matricule,
+                'department'    => $serviceRequest->filiere_name,
+                'academic_year' => $serviceRequest->enrollment_year ? "{$serviceRequest->enrollment_year}-" . ($serviceRequest->enrollment_year + 1) : null,
+            ],
         ]);
     }
 
