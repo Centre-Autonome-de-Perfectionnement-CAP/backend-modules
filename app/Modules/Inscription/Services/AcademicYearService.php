@@ -405,35 +405,51 @@ class AcademicYearService
                 }
             } else {
                 // Pour les périodes de dépôt :
-                // 1. Supprimer les anciennes périodes de dépôt correspondant à cet intervalle
+                // Récupérer les lignes existantes de l'ancien groupe (par dates originales)
+                $oldQuery = SubmissionPeriod::where('academic_year_id', $academicYear->id);
+
                 if ($oldStartDate && $oldEndDate) {
-                    SubmissionPeriod::where('academic_year_id', $academicYear->id)
-                        ->whereDate('start_date', $oldStartDate)
-                        ->whereDate('end_date', $oldEndDate)
-                        ->delete();
+                    $oldQuery->whereDate('start_date', $oldStartDate)
+                             ->whereDate('end_date', $oldEndDate);
                 } elseif (!empty($data['id'])) {
                     $target = SubmissionPeriod::find($data['id']);
                     if ($target) {
-                        SubmissionPeriod::where('academic_year_id', $academicYear->id)
-                            ->whereDate('start_date', $target->start_date)
-                            ->whereDate('end_date', $target->end_date)
-                            ->delete();
+                        $oldQuery->whereDate('start_date', $target->start_date)
+                                 ->whereDate('end_date', $target->end_date);
                     }
                 }
 
-                // 2. Recréer les nouvelles périodes de soumission pour les départements sélectionnés
-                $departments = $data['departments'] ?? [];
-                if (empty($departments)) {
-                    // Fallback: tous les départements si non spécifié
-                    $departments = \App\Modules\Inscription\Models\Department::pluck('id')->toArray();
+                $oldRows = $oldQuery->get()->keyBy('department_id');
+                $oldDeptIds = $oldRows->keys()->toArray();
+
+                $newDeptIds = $data['departments'] ?? [];
+                if (empty($newDeptIds)) {
+                    $newDeptIds = \App\Modules\Inscription\Models\Department::pluck('id')->toArray();
                 }
 
-                foreach ($departments as $departmentId) {
+                // Supprimer uniquement les filières retirées du groupe
+                $toRemove = array_diff($oldDeptIds, $newDeptIds);
+                if (!empty($toRemove)) {
+                    SubmissionPeriod::whereIn('id', $oldRows->only($toRemove)->pluck('id'))->delete();
+                }
+
+                // Mettre à jour les filières qui restent dans le groupe
+                $toUpdate = array_intersect($oldDeptIds, $newDeptIds);
+                foreach ($toUpdate as $deptId) {
+                    $oldRows[$deptId]->update([
+                        'start_date' => $newStartDate,
+                        'end_date'   => $newEndDate,
+                    ]);
+                }
+
+                // Créer les nouvelles filières ajoutées au groupe
+                $toCreate = array_diff($newDeptIds, $oldDeptIds);
+                foreach ($toCreate as $deptId) {
                     SubmissionPeriod::create([
                         'academic_year_id' => $academicYear->id,
-                        'department_id' => $departmentId,
-                        'start_date' => $newStartDate,
-                        'end_date' => $newEndDate,
+                        'department_id'    => $deptId,
+                        'start_date'       => $newStartDate,
+                        'end_date'         => $newEndDate,
                     ]);
                 }
             }
