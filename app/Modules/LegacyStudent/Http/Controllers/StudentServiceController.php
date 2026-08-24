@@ -145,7 +145,7 @@ class StudentServiceController extends Controller
             ];
         }
 
-        return response()->json([
+        $payload = [
             'student'   => [
                 'last_name'     => $found['last_name'],
                 'first_names'   => $found['first_names'],
@@ -156,7 +156,12 @@ class StudentServiceController extends Controller
                 'source'        => $found['source'],
             ],
             'documents' => $documents,
-        ]);
+        ];
+
+        return response()->json(array_merge($payload, [
+            'success' => true,
+            'data'    => $payload,
+        ]));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -205,7 +210,7 @@ class StudentServiceController extends Controller
             ],
         ]];
 
-        return response()->json([
+        $payload = [
             'student' => [
                 'last_name'     => $found['last_name'],
                 'first_names'   => $found['first_names'],
@@ -216,7 +221,12 @@ class StudentServiceController extends Controller
                 'source'        => $found['source'],
             ],
             'years' => $years,
-        ]);
+        ];
+
+        return response()->json(array_merge($payload, [
+            'success' => true,
+            'data'    => $payload,
+        ]));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
