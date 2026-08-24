@@ -157,7 +157,6 @@ class TransitionService
             $this->requireMotif($p);
             $update['status']             = 'rejected';
             $update['rejected_reason']    = $p['motif'];
-            $update['secretaire_comment'] = $p['motif'];
             $update['rejected_by']        = 'Secrétaire';
             $mail = 'rejected';
         }
@@ -214,8 +213,7 @@ class TransitionService
             $update['responsable_division_type'] = $this->resolveResponsableDivisionType($demande->id);
 
             if ($isFlagged) {
-                $update['has_flag']          = true;
-                $update['comptable_comment'] = $p['motif'] ?? $p['comment'] ?? null;
+                $update['has_flag'] = true;
             }
         }
 
@@ -239,8 +237,7 @@ class TransitionService
             $update['status'] = $newStatus;
 
             if ($isFlagged) {
-                $update['has_flag']               = true;
-                $update['chef_division_comment']  = $p['motif'] ?? $p['comment'] ?? null;
+                $update['has_flag'] = true;
             }
         }
 
@@ -276,8 +273,6 @@ class TransitionService
             $update['status']                   = $newStatus;
             $update['rejected_reason']          = $p['motif'];
             $update['rejected_by']              = WorkflowConstants::ROLE_LABELS[$role] ?? $role;
-            $update['chef_cap_reviewed_at']     = now();
-            $update['processed_by_chef_cap_id'] = $user->id;
         }
 
         // ── SEC. DIRECTRICE ADJOINTE ──────────────────────────────────────────
