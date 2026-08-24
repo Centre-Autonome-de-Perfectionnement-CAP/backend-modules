@@ -155,9 +155,15 @@ class TransitionService
 
         elseif (in_array($action, ['secretaire_reject', 'secretaire_reject_final'])) {
             $this->requireMotif($p);
-            $update['status']             = 'rejected';
-            $update['rejected_reason']    = $p['motif'];
-            $update['rejected_by']        = 'Secrétaire';
+            $update['status']                   = 'rejected';
+            $update['rejected_reason']          = $p['motif'];
+            $update['rejected_by']              = 'Secrétaire';
+            // Un dossier rejeté définitivement sort du circuit de correction :
+            // sinon il reste marqué is_in_correction_circuit = true (navette active)
+            // en plus d'apparaître dans "rejeté" — double affichage incohérent.
+            $update['is_in_correction_circuit'] = false;
+            $update['correction_origin_role']   = null;
+            $update['correction_origin_status'] = null;
             $mail = 'rejected';
         }
 
