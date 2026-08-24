@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Traits\ApiResponse;
 use App\Traits\HasPagination;
+use App\Traits\RestrictsToRoles;
 
 /**
  * @OA\Tag(
@@ -24,12 +25,26 @@ use App\Traits\HasPagination;
 
 class PendingStudentController extends Controller
 {
-    use ApiResponse, HasPagination;
+    use ApiResponse, HasPagination, RestrictsToRoles;
+
+    /**
+     * AJOUT (audit sécurité) — aucune action n'avait de contrôle de rôle
+     * au-delà de "être connecté". Restriction appliquée UNIQUEMENT aux
+     * actions sans ambiguïté (suppression, changement de statut/niveau —
+     * des décisions institutionnelles, jamais du self-service candidat).
+     * store/update/submitDocuments/renamePiece NE SONT PAS touchés ici :
+     * je ne suis pas certain qu'ils ne fassent pas partie d'un parcours
+     * candidat en self-service (via tracking code) — à confirmer.
+     */
+    private const ALLOWED_ROLES = ['admin', 'chef-cap', 'responsable-division', 'secretaire'];
 
     public function __construct(
         protected PendingStudentService $pendingStudentService
     ) {
         $this->middleware('auth:sanctum');
+        $this->restrictToRoles(self::ALLOWED_ROLES, only: [
+            'destroy', 'updateStatus', 'updateLevel',
+        ]);
     }
 
     /**
@@ -264,7 +279,7 @@ class PendingStudentController extends Controller
     /**
  * Mettre à jour uniquement les statuss (exonéré, sponsorisé)
  */
-public function updatestatus(Request $request, PendingStudent $pendingStudent): JsonResponse
+    public function updateStatus(Request $request, PendingStudent $pendingStudent): JsonResponse
 {
     $validated = $request->validate([
         'exonere' => 'sometimes|in:Oui,Non',

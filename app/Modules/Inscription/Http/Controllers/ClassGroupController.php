@@ -8,16 +8,25 @@ use App\Modules\Inscription\Http\Requests\StoreClassGroupRequest;
 use App\Modules\Inscription\Http\Requests\GetClassGroupsRequest;
 use App\Modules\Inscription\Http\Requests\CreateDefaultGroupRequest;
 use App\Traits\ApiResponse;
+use App\Traits\RestrictsToRoles;
 use Illuminate\Http\JsonResponse;
 
 
 class ClassGroupController extends Controller{
-    use ApiResponse;
+    use ApiResponse, RestrictsToRoles;
+
+    /**
+     * AJOUT (audit sécurité) — store/destroy/createDefault n'avaient aucun
+     * contrôle de rôle. index/show/getStudents/getGroupsByClass (lecture)
+     * restent inchangés.
+     */
+    private const ALLOWED_ROLES = ['admin', 'chef-cap', 'responsable-division', 'secretaire'];
 
     public function __construct(
         protected ClassGroupService $classGroupService
     ) {
         $this->middleware('auth:sanctum');
+        $this->restrictToRoles(self::ALLOWED_ROLES, only: ['store', 'destroy', 'createDefault']);
     }
 
     public function index(GetClassGroupsRequest $request): JsonResponse {

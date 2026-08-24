@@ -1,0 +1,14 @@
+# Dépendances npm — régénérables via `npm install`, ne doivent jamais être
+# committées (92 Mo, ~4000 fichiers avant ce fix). Voir vendor/baileys/
+# VENDOR-NOTES.md pour la bibliothèque Baileys elle-même, volontairement
+# vendorisée et donc gardée en git (seul SON node_modules est ignoré ici).
+node_modules/
+vendor/baileys/node_modules/
+
+# Sortie de compilation TypeScript — régénérée par le build CI
+# (voir package.json scripts). Optionnel : gardez cette ligne si le
+# déploiement s'attend à trouver dist/ déjà buildé dans le repo.
+# dist/
+
+.env
+*.log

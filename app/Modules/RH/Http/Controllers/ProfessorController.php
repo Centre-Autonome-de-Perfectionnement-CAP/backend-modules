@@ -10,6 +10,7 @@ use App\Modules\RH\Http\Resources\ProfessorResource;
 use App\Modules\RH\Services\ProfessorService;
 use App\Traits\ApiResponse;
 use App\Traits\HasPagination;
+use App\Traits\RestrictsToRoles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,12 +19,23 @@ use Exception;
 
 class ProfessorController extends Controller
 {
-    use ApiResponse, HasPagination;
+    use ApiResponse, HasPagination, RestrictsToRoles;
+
+    /**
+     * AJOUT (audit sécurité) — store/update/destroy/updateAddress
+     * n'avaient AUCUNE protection : n'importe quel compte connecté
+     * (y compris un autre professeur) pouvait créer/modifier/supprimer
+     * la fiche de N'IMPORTE QUEL professeur. `index()` reste public sans
+     * authentification (déjà le cas avant ce correctif, via `->except`
+     * ci-dessous) — à confirmer si c'est voulu.
+     */
+    private const ALLOWED_ROLES = ['admin', 'chef-cap', 'rh'];
 
     public function __construct(
         protected ProfessorService $professorService
     ) {
         $this->middleware('auth:sanctum')->except(['index']);
+        $this->restrictToRoles(self::ALLOWED_ROLES, only: ['store', 'update', 'destroy', 'updateAddress']);
     }
 
     // ───────────────────────── LISTE

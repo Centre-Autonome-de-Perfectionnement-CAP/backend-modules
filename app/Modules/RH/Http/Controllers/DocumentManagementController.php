@@ -10,14 +10,24 @@ use App\Modules\RH\Http\Requests\UpdateDocumentRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Traits\ApiResponse;
+use App\Traits\RestrictsToRoles;
 
 class DocumentManagementController extends Controller
 {
-    use ApiResponse;
+    use ApiResponse, RestrictsToRoles;
+
+    /**
+     * AJOUT (audit sécurité) — ce contrôleur n'avait AUCUNE protection :
+     * n'importe quel compte connecté pouvait lister/créer/modifier/supprimer
+     * des documents RH.
+     */
+    private const ALLOWED_ROLES = ['admin', 'chef-cap', 'rh'];
 
     public function __construct(
         protected DocumentManagementService $documentService
-    ) {}
+    ) {
+        $this->restrictToRoles(self::ALLOWED_ROLES);
+    }
 
     public function index(Request $request): JsonResponse
     {

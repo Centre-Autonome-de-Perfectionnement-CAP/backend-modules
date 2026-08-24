@@ -6,8 +6,25 @@ use App\Http\Controllers\Controller;
 use App\Modules\RH\Models\AcademicYear;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use App\Traits\RestrictsToRoles;
 
 class AcademicYearController extends Controller{
+    use RestrictsToRoles;
+
+    /**
+     * AJOUT (audit sécurité) — aucun middleware n'existait ici. index()
+     * est le SEUL routé aujourd'hui (routes/api.php), volontairement public
+     * en lecture seule. store/update/destroy/getCurrent/setCurrent ne sont
+     * PAS routés actuellement (pas de faille active), mais restent sans
+     * protection dans le code — corrigé par précaution pour le jour où
+     * quelqu'un ajoutera ces routes sans y repenser.
+     */
+    private const ALLOWED_ROLES = ['admin', 'chef-cap', 'rh'];
+
+    public function __construct()
+    {
+        $this->restrictToRoles(self::ALLOWED_ROLES, except: ['index']);
+    }
     
     public function index() {
         // Retourner uniquement l'année académique en cours.

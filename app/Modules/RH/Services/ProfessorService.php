@@ -67,8 +67,16 @@ class ProfessorService
                 $data['uuid'] = (string) Str::uuid();
             }
 
-            // Hash password si fourni
-            if (!empty($data['password'])) {
+            // Comportement de main restauré à l'identique (décision du
+            // 24/08/2026) : mot de passe par défaut "password" pour tout
+            // nouveau compte sans mot de passe fourni. Un mot de passe
+            // aléatoire serait plus sûr en théorie, mais aucun flux
+            // d'invitation/email n'existe pour le transmettre au prof —
+            // il serait donc inutilisable. À revoir le jour où un tel
+            // flux existera.
+            if (empty($data['password'])) {
+                $data['password'] = Hash::make('password');
+            } else {
                 $data['password'] = Hash::make($data['password']);
             }
 

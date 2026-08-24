@@ -7,10 +7,27 @@ use App\Modules\RH\Models\ImportantInformation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Traits\ApiResponse;
+use App\Traits\RestrictsToRoles;
 
 class ImportantInformationController extends Controller
 {
-    use ApiResponse;
+    use ApiResponse, RestrictsToRoles;
+
+    /**
+     * AJOUT (audit sécurité) — indexAdmin/store/update/destroy/broadcast/
+     * getBroadcastStatus n'avaient AUCUNE protection : n'importe quel
+     * compte connecté pouvait créer/modifier/supprimer une annonce ou
+     * déclencher un broadcast WhatsApp. `index()` (lecture publique des
+     * annonces actives) reste volontairement non restreint.
+     */
+    private const ALLOWED_ROLES = ['admin', 'chef-cap', 'rh'];
+
+    public function __construct()
+    {
+        $this->restrictToRoles(self::ALLOWED_ROLES, only: [
+            'indexAdmin', 'store', 'update', 'destroy', 'broadcast', 'getBroadcastStatus',
+        ]);
+    }
 
     public function index(): JsonResponse
     {

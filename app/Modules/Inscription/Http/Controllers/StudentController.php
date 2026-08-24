@@ -8,6 +8,7 @@ use App\Modules\Inscription\Models\PersonalInformation;
 use Illuminate\Support\Facades\DB;
 use App\Traits\ApiResponse;
 use App\Traits\HasPagination;
+use App\Traits\RestrictsToRoles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -16,12 +17,25 @@ use App\Modules\Inscription\Models\PendingStudent;
 use App\Modules\Inscription\Models\StudentGroup;
 
 class StudentController extends Controller{
-    use ApiResponse, HasPagination;
+    use ApiResponse, HasPagination, RestrictsToRoles;
+
+    /**
+     * AJOUT (audit sécurité) — update/assignClassResponsible/
+     * removeClassResponsible n'avaient AUCUN contrôle de rôle au-delà de
+     * "être connecté" (déjà le cas sur main pour update ; les deux autres
+     * méthodes sont nouvelles). N'importe quel compte connecté pouvait
+     * modifier n'importe quel étudiant ou changer le responsable de classe.
+     * index/show/exports restent inchangés.
+     */
+    private const ALLOWED_ROLES = ['admin', 'chef-cap', 'responsable-division', 'secretaire'];
 
     public function __construct(
         protected StudentService $studentService
     ) {
         $this->middleware('auth:sanctum');
+        $this->restrictToRoles(self::ALLOWED_ROLES, only: [
+            'update', 'assignClassResponsible', 'removeClassResponsible',
+        ]);
     }
 
     public function index(Request $request): JsonResponse

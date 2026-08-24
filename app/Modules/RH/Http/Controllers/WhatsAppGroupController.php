@@ -7,10 +7,25 @@ use App\Modules\Inscription\Models\Department;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Traits\ApiResponse;
+use App\Traits\RestrictsToRoles;
 
 class WhatsAppGroupController extends Controller
 {
-    use ApiResponse;
+    use ApiResponse, RestrictsToRoles;
+
+    /**
+     * AJOUT (audit sécurité) — update/destroy n'avaient AUCUNE protection :
+     * n'importe quel compte connecté pouvait changer ou supprimer le lien
+     * WhatsApp d'une filière. `index()` n'est pas touché ici — il reste
+     * dans son état actuel (aucune authentification requise), comme avant
+     * ce correctif. À confirmer si c'est le comportement voulu.
+     */
+    private const ALLOWED_ROLES = ['admin', 'chef-cap', 'rh'];
+
+    public function __construct()
+    {
+        $this->restrictToRoles(self::ALLOWED_ROLES, only: ['update', 'destroy']);
+    }
 
     /**
      * Liste toutes les filières avec leurs liens WhatsApp

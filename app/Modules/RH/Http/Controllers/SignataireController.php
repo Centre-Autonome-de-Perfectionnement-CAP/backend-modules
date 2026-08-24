@@ -8,10 +8,25 @@ use App\Modules\RH\Http\Requests\CreateSignataireRequest;
 use App\Modules\RH\Http\Requests\UpdateSignataireRequest;
 use App\Modules\RH\Http\Resources\SignataireResource;
 use App\Modules\RH\Services\SignataireService;
+use App\Traits\RestrictsToRoles;
 
 class SignataireController extends Controller
 {
-    public function __construct(private SignataireService $service) {}
+    use RestrictsToRoles;
+
+    /**
+     * AJOUT (audit sécurité) — ce contrôleur n'avait AUCUNE protection :
+     * n'importe quel compte connecté pouvait lister/créer/modifier/supprimer
+     * un signataire de documents officiels. Restriction appliquée à TOUTES
+     * les actions (comme AdminUserController) — à confirmer si la lecture
+     * (index) doit rester plus largement accessible.
+     */
+    private const ALLOWED_ROLES = ['admin', 'chef-cap', 'rh'];
+
+    public function __construct(private SignataireService $service)
+    {
+        $this->restrictToRoles(self::ALLOWED_ROLES);
+    }
 
     public function index()
     {
