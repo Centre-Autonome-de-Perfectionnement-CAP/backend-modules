@@ -250,7 +250,7 @@ class DemandeSubmissionService
         if (!empty($demande->has_flag)) {
             $history = DB::table('document_request_histories')
                 ->where('document_request_id', $demande->id)
-                ->where('action', 'like', '%_flagged')
+                ->where('action_type', 'validation_flagged')
                 ->latest('id')
                 ->first();
             $flagReason = $history ? $history->comment : 'Dossier validé sous réserve.';
