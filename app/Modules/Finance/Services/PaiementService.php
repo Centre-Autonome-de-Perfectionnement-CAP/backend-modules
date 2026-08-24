@@ -76,7 +76,7 @@ class PaiementService
         
         if (!$student) {
             // Vérifier si c'est un ancien étudiant (< 2023)
-            $legacy = \App\Modules\LegacyStudent\Models\LegacyStudent::with('department')->where('matricule', $matricule)->first();
+            $legacy = \App\Modules\LegacyStudent\Models\LegacyStudent::with(['department', 'departments'])->where('matricule', $matricule)->first();
             if ($legacy) {
                 $filieres = [];
                 if ($legacy->department) {
@@ -84,6 +84,27 @@ class PaiementService
                         'id' => $legacy->department->id,
                         'nom' => $legacy->department->name . ($legacy->cycle ? " ({$legacy->cycle})" : ''),
                     ];
+                }
+                if ($legacy->departments) {
+                    foreach ($legacy->departments as $dept) {
+                        if (!in_array($dept->id, array_column($filieres, 'id'))) {
+                            $filieres[] = [
+                                'id' => $dept->id,
+                                'nom' => $dept->name . ($legacy->cycle ? " ({$legacy->cycle})" : ''),
+                            ];
+                        }
+                    }
+                }
+
+                // Fallback si la filière était enregistrée par id direct
+                if (empty($filieres) && $legacy->department_id) {
+                    $dept = \App\Modules\Inscription\Models\Department::find($legacy->department_id);
+                    if ($dept) {
+                        $filieres[] = [
+                            'id' => $dept->id,
+                            'nom' => $dept->name . ($legacy->cycle ? " ({$legacy->cycle})" : ''),
+                        ];
+                    }
                 }
 
                 return [
