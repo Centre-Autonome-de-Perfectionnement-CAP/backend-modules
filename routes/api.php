@@ -24,8 +24,8 @@ Route::match(['get', 'post'], '/core/validate-email', function (\Illuminate\Http
         return response()->json($result, 422);
     }
 
-    // Vérification de l'unicité avant envoi de l'OTP
-    if (!empty($email)) {
+    // Vérification de la liaison/unicité stricte UNIQUEMENT pour la déclaration des anciens étudiants
+    if (!empty($email) && $purpose === 'legacy_student') {
         // 1. Vérification dans les anciens étudiants (legacy_students) avec statut actif (pending ou validated)
         $query = \App\Modules\LegacyStudent\Models\LegacyStudent::whereRaw('LOWER(email) = ?', [$email])
             ->where('status', '!=', 'rejected');
@@ -48,31 +48,6 @@ Route::match(['get', 'post'], '/core/validate-email', function (\Illuminate\Http
             })
             ->first();
         if ($existingPI) {
-            $pendingDossier = \App\Modules\Inscription\Models\PendingStudent::where('personal_information_id', $existingPI->id)
-                ->where('status', 'pending')
-                ->with(['department.cycle', 'academicYear'])
-                ->latest()
-                ->first();
-
-            if ($pendingDossier && $purpose === 'inscription') {
-                return response()->json([
-                    'valid' => false,
-                    'has_pending_dossier' => true,
-                    'is_duplicate' => true,
-                    'message' => "Un dossier de candidature est déjà en cours d'examen pour cet email.",
-                    'dossier' => [
-                        'tracking_code' => $pendingDossier->tracking_code,
-                        'first_names' => $existingPI->first_names,
-                        'last_name' => $existingPI->last_name,
-                        'cycle' => $pendingDossier->department?->cycle?->name,
-                        'department_name' => $pendingDossier->department?->name,
-                        'initial_wave' => (int) ($pendingDossier->initial_wave ?? 1),
-                        'academic_year' => $pendingDossier->academicYear?->academic_year,
-                        'submitted_at' => $pendingDossier->created_at?->toISOString(),
-                    ]
-                ], 422);
-            }
-
             return response()->json([
                 'valid' => false,
                 'message' => "Cette adresse email est déjà associée à un autre dossier étudiant. Chaque étudiant doit obligatoirement utiliser sa propre adresse email.",
