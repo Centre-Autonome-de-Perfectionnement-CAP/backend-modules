@@ -12,6 +12,7 @@ use App\Modules\Inscription\Http\Requests\ExtendPeriodsRequest;
 use App\Modules\Inscription\Http\Resources\AcademicYearResource;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * @OA\Tag(
