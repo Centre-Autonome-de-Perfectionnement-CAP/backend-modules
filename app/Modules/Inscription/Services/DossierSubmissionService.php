@@ -360,8 +360,48 @@ class DossierSubmissionService
             throw new ResourceNotFoundException('Dossier non trouvé');
         }
 
+        $resolvedDocuments = [];
+        if (!empty($pendingStudent->documents) && is_array($pendingStudent->documents)) {
+            foreach ($pendingStudent->documents as $name => $val) {
+                $fileId = is_numeric($val) ? (int) $val : (is_array($val) ? ($val['id'] ?? null) : null);
+                $file = $fileId ? \App\Modules\Stockage\Models\File::find($fileId) : null;
+
+                if ($file) {
+                    $resolvedDocuments[$name] = [
+                        'id' => $file->id,
+                        'name' => $name,
+                        'original_name' => $file->original_name,
+                        'path' => 'files/' . ltrim($file->path, '/'),
+                        'url' => url('/storage/files/' . ltrim($file->path, '/')),
+                        'mime_type' => $file->mime_type,
+                        'size' => $file->size,
+                    ];
+                } elseif (is_string($val) && !is_numeric($val)) {
+                    $resolvedDocuments[$name] = [
+                        'name' => $name,
+                        'path' => $val,
+                        'url' => str_starts_with($val, 'http') ? $val : url('/storage/' . ltrim($val, '/')),
+                    ];
+                }
+            }
+        }
+
+        $photoUrl = null;
+        if (!empty($pendingStudent->photo)) {
+            $photoFile = is_numeric($pendingStudent->photo) ? \App\Modules\Stockage\Models\File::find((int) $pendingStudent->photo) : null;
+            if ($photoFile) {
+                $photoUrl = url('/storage/files/' . ltrim($photoFile->path, '/'));
+            } elseif (is_string($pendingStudent->photo)) {
+                $photoUrl = str_starts_with($pendingStudent->photo, 'http') ? $pendingStudent->photo : url('/storage/' . ltrim($pendingStudent->photo, '/'));
+            }
+        }
+
+        $dossierArray = $pendingStudent->toArray();
+        $dossierArray['documents'] = $resolvedDocuments;
+        $dossierArray['photo_url'] = $photoUrl;
+
         return [
-            'dossier' => $pendingStudent,
+            'dossier' => $dossierArray,
         ];
     }
 
