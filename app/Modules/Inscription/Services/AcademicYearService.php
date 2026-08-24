@@ -363,6 +363,128 @@ class AcademicYearService
     }
 
     /**
+     * Mettre à jour une période d'une année académique
+     */
+    public function updatePeriod(AcademicYear $academicYear, array $data): void
+    {
+        DB::transaction(function () use ($academicYear, $data) {
+            $type = $data['type'] ?? 'depot';
+            $oldStartDate = $data['old_start_date'] ?? $data['original_start_date'] ?? null;
+            $oldEndDate = $data['old_end_date'] ?? $data['original_end_date'] ?? null;
+            $newStartDate = $data['start_date'];
+            $newEndDate = $data['end_date'];
+
+            if ($type === 'reclamation') {
+                $periodId = $data['id'] ?? null;
+                $reclamation = null;
+                if ($periodId) {
+                    $reclamation = ReclamationPeriod::where('academic_year_id', $academicYear->id)->find($periodId);
+                }
+                if (!$reclamation && $oldStartDate) {
+                    $reclamation = ReclamationPeriod::where('academic_year_id', $academicYear->id)
+                        ->whereDate('start_date', $oldStartDate)
+                        ->first();
+                }
+                if (!$reclamation) {
+                    $reclamation = ReclamationPeriod::where('academic_year_id', $academicYear->id)->first();
+                }
+
+                if ($reclamation) {
+                    $reclamation->update([
+                        'start_date' => $newStartDate,
+                        'end_date' => $newEndDate,
+                        'is_active' => true,
+                    ]);
+                } else {
+                    ReclamationPeriod::create([
+                        'academic_year_id' => $academicYear->id,
+                        'start_date' => $newStartDate,
+                        'end_date' => $newEndDate,
+                        'is_active' => true,
+                    ]);
+                }
+            } else {
+                // Pour les périodes de dépôt :
+                // 1. Supprimer les anciennes périodes de dépôt correspondant à cet intervalle
+                if ($oldStartDate && $oldEndDate) {
+                    SubmissionPeriod::where('academic_year_id', $academicYear->id)
+                        ->whereDate('start_date', $oldStartDate)
+                        ->whereDate('end_date', $oldEndDate)
+                        ->delete();
+                } elseif (!empty($data['id'])) {
+                    $target = SubmissionPeriod::find($data['id']);
+                    if ($target) {
+                        SubmissionPeriod::where('academic_year_id', $academicYear->id)
+                            ->whereDate('start_date', $target->start_date)
+                            ->whereDate('end_date', $target->end_date)
+                            ->delete();
+                    }
+                }
+
+                // 2. Recréer les nouvelles périodes de soumission pour les départements sélectionnés
+                $departments = $data['departments'] ?? [];
+                if (empty($departments)) {
+                    // Fallback: tous les départements si non spécifié
+                    $departments = \App\Modules\Inscription\Models\Department::pluck('id')->toArray();
+                }
+
+                foreach ($departments as $departmentId) {
+                    SubmissionPeriod::create([
+                        'academic_year_id' => $academicYear->id,
+                        'department_id' => $departmentId,
+                        'start_date' => $newStartDate,
+                        'end_date' => $newEndDate,
+                    ]);
+                }
+            }
+
+            Log::info('Période mise à jour avec succès', [
+                'academic_year_id' => $academicYear->id,
+                'type' => $type,
+                'start_date' => $newStartDate,
+                'end_date' => $newEndDate,
+            ]);
+        });
+    }
+
+    /**
+     * Supprimer un groupe de périodes
+     */
+    public function deletePeriodGroup(AcademicYear $academicYear, array $data): void
+    {
+        DB::transaction(function () use ($academicYear, $data) {
+            $type = $data['type'] ?? 'depot';
+            $startDate = $data['start_date'] ?? null;
+            $endDate = $data['end_date'] ?? null;
+
+            if ($type === 'reclamation') {
+                if (!empty($data['id'])) {
+                    ReclamationPeriod::where('academic_year_id', $academicYear->id)->where('id', $data['id'])->delete();
+                } elseif ($startDate) {
+                    ReclamationPeriod::where('academic_year_id', $academicYear->id)
+                        ->whereDate('start_date', $startDate)
+                        ->delete();
+                }
+            } else {
+                if (!empty($data['id'])) {
+                    $target = SubmissionPeriod::find($data['id']);
+                    if ($target) {
+                        SubmissionPeriod::where('academic_year_id', $academicYear->id)
+                            ->whereDate('start_date', $target->start_date)
+                            ->whereDate('end_date', $target->end_date)
+                            ->delete();
+                    }
+                } elseif ($startDate && $endDate) {
+                    SubmissionPeriod::where('academic_year_id', $academicYear->id)
+                        ->whereDate('start_date', $startDate)
+                        ->whereDate('end_date', $endDate)
+                        ->delete();
+                }
+            }
+        });
+    }
+
+    /**
      * Récupérer toutes les périodes d'une année académique
      */
     public function getPeriods(AcademicYear $academicYear): array
@@ -382,14 +504,27 @@ class AcademicYearService
         foreach ($submissionPeriods as $key => $groupedPeriods) {
             $firstPeriod = $groupedPeriods->first();
             $departments = $groupedPeriods->map(function ($period) {
-                return $period->department->abbreviation ?? $period->department->name;
-            })->toArray();
+                return [
+                    'id' => $period->department?->id,
+                    'name' => $period->department?->name,
+                    'abbreviation' => $period->department?->abbreviation,
+                ];
+            })->filter(fn($d) => !empty($d['id']))->values()->toArray();
+
+            $departmentIds = $groupedPeriods->pluck('department_id')->filter()->values()->toArray();
 
             $periods[] = [
+                'id' => $firstPeriod->id,
                 'type' => 'depot',
                 'start' => $firstPeriod->start_date ? $firstPeriod->start_date->format('d/m/Y') : '',
                 'end' => $firstPeriod->end_date ? $firstPeriod->end_date->format('d/m/Y') : '',
-                'filieres' => $departments,
+                'start_raw' => $firstPeriod->start_date ? $firstPeriod->start_date->format('Y-m-d') : '',
+                'end_raw' => $firstPeriod->end_date ? $firstPeriod->end_date->format('Y-m-d') : '',
+                'filieres' => $groupedPeriods->map(function ($period) {
+                    return $period->department?->abbreviation ?? $period->department?->name ?? 'Filière';
+                })->toArray(),
+                'department_ids' => $departmentIds,
+                'departments' => $departments,
             ];
         }
 
@@ -398,10 +533,15 @@ class AcademicYearService
         
         foreach ($reclamationPeriods as $period) {
             $periods[] = [
+                'id' => $period->id,
                 'type' => 'reclamation',
                 'start' => $period->start_date ? $period->start_date->format('d/m/Y') : '',
                 'end' => $period->end_date ? $period->end_date->format('d/m/Y') : '',
-                'filieres' => [], // Les réclamations n'ont pas de départements spécifiques
+                'start_raw' => $period->start_date ? $period->start_date->format('Y-m-d') : '',
+                'end_raw' => $period->end_date ? $period->end_date->format('Y-m-d') : '',
+                'filieres' => [],
+                'department_ids' => [],
+                'departments' => [],
             ];
         }
 

@@ -145,27 +145,42 @@ class AcademicYearController extends Controller
     }
 
     /**
+     * Mettre à jour une période d'une année académique
+     */
+    public function updatePeriod(Request $request, AcademicYear $academicYear): JsonResponse
+    {
+        $this->academicYearService->updatePeriod($academicYear, $request->all());
+        return $this->updatedResponse(null, 'Période mise à jour avec succès');
+    }
+
+    /**
+     * Supprimer une période ou groupe de périodes
+     */
+    public function deletePeriodGroup(Request $request, AcademicYear $academicYear): JsonResponse
+    {
+        $this->academicYearService->deletePeriodGroup($academicYear, $request->all());
+        return $this->deletedResponse('Période supprimée avec succès');
+    }
+
+    /**
      * @OA\Put(
      *     path="/api/academic-years/{academicYear}/periods",
-     *     summary="Étendre la date de fin pour des périodes",
+     *     summary="Étendre ou modifier les périodes",
      *     tags={"Academic Years"},
      *     security={{"sanctum": {}}},
      *     @OA\Parameter(name="academicYear", in="path", required=true, @OA\Schema(type="integer")),
-     *     @OA\RequestBody(required=true,
-     *         @OA\JsonContent(
-     *             required={"start_date","old_end_date","new_end_date","departments"},
-     *             @OA\Property(property="start_date", type="string", format="date"),
-     *             @OA\Property(property="old_end_date", type="string", format="date"),
-     *             @OA\Property(property="new_end_date", type="string", format="date"),
-     *             @OA\Property(property="departments", type="array", @OA\Items(type="integer"))
-     *         )
-     *     ),
      *     @OA\Response(response=200, description="Mises à jour")
      * )
      */
-    public function extendPeriods(ExtendPeriodsRequest $request, AcademicYear $academicYear): JsonResponse
+    public function extendPeriods(Request $request, AcademicYear $academicYear): JsonResponse
     {
-        $updated = $this->academicYearService->extendPeriods($academicYear, $request->validated());
+        // Si la requête contient une mise à jour complète
+        if ($request->has('start_date') && $request->has('end_date')) {
+            $this->academicYearService->updatePeriod($academicYear, $request->all());
+            return $this->updatedResponse(null, 'Période modifiée avec succès');
+        }
+
+        $updated = $this->academicYearService->extendPeriods($academicYear, $request->all());
         return $this->updatedResponse(['updated_count' => $updated], 'Périodes étendues avec succès');
     }
 
@@ -187,24 +202,16 @@ class AcademicYearController extends Controller
     /**
      * @OA\Delete(
      *     path="/api/academic-years/{academicYear}/periods",
-     *     summary="Supprimer des périodes (combinaison de dates)",
+     *     summary="Supprimer des périodes",
      *     tags={"Academic Years"},
      *     security={{"sanctum": {}}},
      *     @OA\Parameter(name="academicYear", in="path", required=true, @OA\Schema(type="integer")),
-     *     @OA\RequestBody(required=true,
-     *         @OA\JsonContent(
-     *             required={"start_date","end_date","departments"},
-     *             @OA\Property(property="start_date", type="string", format="date"),
-     *             @OA\Property(property="end_date", type="string", format="date"),
-     *             @OA\Property(property="departments", type="array", @OA\Items(type="integer"))
-     *         )
-     *     ),
      *     @OA\Response(response=200, description="Supprimées")
      * )
      */
-    public function deletePeriods(ManagePeriodsRequest $request, AcademicYear $academicYear): JsonResponse
+    public function deletePeriods(Request $request, AcademicYear $academicYear): JsonResponse
     {
-        $deleted = $this->academicYearService->deletePeriods($academicYear, $request->validated());
-        return $this->deletedResponse("Périodes supprimées avec succès ({$deleted} période(s))");
+        $this->academicYearService->deletePeriodGroup($academicYear, $request->all());
+        return $this->deletedResponse('Période supprimée avec succès');
     }
 }
