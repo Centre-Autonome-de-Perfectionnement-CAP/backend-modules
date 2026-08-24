@@ -26,7 +26,10 @@ class DashboardController extends Controller
             $academicYear = null;
             
             if ($academicYearParam) {
-                $academicYear = AcademicYear::where('libelle', $academicYearParam)->first();
+                $academicYear = AcademicYear::where('libelle', $academicYearParam)
+                    ->orWhere('id', $academicYearParam)
+                    ->orWhere('academic_year', $academicYearParam)
+                    ->first();
             }
             $stats = $this->dashboardService->getFinancialStats($academicYear);
             

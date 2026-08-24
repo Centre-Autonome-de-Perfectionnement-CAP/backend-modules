@@ -18,23 +18,22 @@ class DashboardService
     {
         // Si pas d'année académique spécifiée, prendre l'année académique courante
         if (!$academicYear) {
-            $academicYear = AcademicYear::where('is_current', true)->first();
-            if (!$academicYear) {
-                // Fallback: prendre la dernière année académique
-                $academicYear = AcademicYear::orderBy('year_start', 'desc')->first();
-            }
+            $academicYear = AcademicYear::where('is_current', true)->first()
+                ?? AcademicYear::orderBy('year_start', 'desc')->first();
         }
         
         // Paiements non validés en attente
         $pendingPayments = Paiement::pending()->count();
         
-        // Frais encaissés dans l'année académique (somme des montants payés validés)
-        $collectedAmount = Paiement::approved()
-            ->whereBetween('payment_date', [
+        // Frais encaissés (somme des montants payés validés)
+        $collectedQuery = Paiement::approved();
+        if ($academicYear && $academicYear->year_start && $academicYear->year_end) {
+            $collectedQuery->whereBetween('payment_date', [
                 $academicYear->year_start,
                 $academicYear->year_end
-            ])
-            ->sum('amount');
+            ]);
+        }
+        $collectedAmount = (float) $collectedQuery->sum('amount');
         
         // Montant attendu (somme de la scolarité que doit payer chaque étudiant)
         $expectedAmount = $this->calculateExpectedAmount($academicYear);
@@ -59,7 +58,7 @@ class DashboardService
             'recovery_rate' => round($recoveryRate, 2),
             'monthly_payments' => $monthlyPayments,
             'payments_by_status' => $paymentsByStatus,
-            'academic_year' => $academicYear ? $academicYear->libelle : 'Année courante'
+            'academic_year' => $academicYear ? ($academicYear->libelle ?? $academicYear->academic_year) : 'Toutes les années'
         ];
     }
 
@@ -68,25 +67,18 @@ class DashboardService
      */
     private function calculateExpectedAmount($academicYear)
     {
-        // Utilise directement l'objet AcademicYear passé en paramètre
-        $academicYearRecord = $academicYear;
-        
-        if (!$academicYearRecord) {
-            return 0;
-        }
-        
         if (!$academicYear) {
             return 0;
         }
         
         // Compte les étudiants inscrits cette année (via les dossiers)
-        $studentsCount = Student::whereHas('studentPendingStudents.pendingStudent', function($query) use ($academicYearRecord) {
-            $query->where('academic_year_id', $academicYearRecord->id);
+        $studentsCount = Student::whereHas('studentPendingStudents.pendingStudent', function($query) use ($academicYear) {
+            $query->where('academic_year_id', $academicYear->id);
         })->count();
         
         // Récupère le montant de base de la scolarité
         $baseAmount = Amount::where('type', 'scolarite')
-            ->where('academic_year_id', $academicYearRecord->id)
+            ->where('academic_year_id', $academicYear->id)
             ->first();
         
         return $studentsCount * ($baseAmount ? $baseAmount->amount : 0);
@@ -97,11 +89,15 @@ class DashboardService
      */
     private function getMonthlyPayments($academicYear)
     {
-        return Paiement::approved()
-            ->whereBetween('payment_date', [
+        $query = Paiement::approved();
+        if ($academicYear && $academicYear->year_start && $academicYear->year_end) {
+            $query->whereBetween('payment_date', [
                 $academicYear->year_start,
                 $academicYear->year_end
-            ])
+            ]);
+        }
+
+        return $query
             ->select(
                 DB::raw(DatabaseAdapter::month('payment_date') . ' as month'),
                 DB::raw('SUM(amount) as total')
@@ -112,8 +108,8 @@ class DashboardService
             ->map(function($item) {
                 return [
                     'month' => $item->month,
-                    'month_name' => date('F', mktime(0, 0, 0, $item->month, 1)),
-                    'total' => $item->total
+                    'month_name' => date('F', mktime(0, 0, 0, (int) $item->month, 1)),
+                    'total' => (float) $item->total
                 ];
             });
     }

@@ -111,4 +111,25 @@ class DatabaseAdapter
         // Otherwise, it's not a valid ID
         return null;
     }
+
+    /**
+     * Get the appropriate MONTH extract expression for the current database.
+     *
+     * @param string $column The column name to extract the month from.
+     * @return string  The SQL fragment.
+     */
+    public static function month(string $column): string
+    {
+        $driver = self::getDriver();
+
+        if ($driver === 'pgsql') {
+            return "EXTRACT(MONTH FROM {$column})";
+        }
+
+        if ($driver === 'sqlite') {
+            return "CAST(strftime('%m', {$column}) AS INTEGER)";
+        }
+
+        return "MONTH({$column})";
+    }
 }
