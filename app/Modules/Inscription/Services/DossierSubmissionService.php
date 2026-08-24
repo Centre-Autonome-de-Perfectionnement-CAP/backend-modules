@@ -356,7 +356,7 @@ class DossierSubmissionService
     }
 
     /**
-     * Vérifie si un candidat a déjà un dossier en attente (status = pending) pour l'année académique.
+     * Vérifie si un candidat a déjà un dossier pour l'année académique.
      */
     public function checkExistingPendingDossier(string $email, ?int $academicYearId = null): ?array
     {
@@ -365,9 +365,19 @@ class DossierSubmissionService
         $query = PendingStudent::whereHas('personalInformation', function ($q) use ($normalizedEmail) {
             $q->whereRaw('LOWER(email) = ?', [$normalizedEmail]);
         })
-        ->where('status', 'pending')
         ->with(['personalInformation', 'department.cycle', 'academicYear', 'entryDiploma'])
         ->latest();
+
+        if (!$academicYearId) {
+            $currentYear = AcademicYear::where('is_current', true)->first();
+            if (!$currentYear) {
+                $now = now();
+                $currentYear = AcademicYear::where('year_start', '<=', $now)->where('year_end', '>=', $now)->first();
+            }
+            if ($currentYear) {
+                $academicYearId = $currentYear->id;
+            }
+        }
 
         if ($academicYearId) {
             $query->where('academic_year_id', $academicYearId);
@@ -378,6 +388,16 @@ class DossierSubmissionService
         if (!$pendingStudent) {
             return null;
         }
+
+        $isValidated = (
+            $pendingStudent->status === 'validated' ||
+            $pendingStudent->cuca_opinion === 'favorable' ||
+            $pendingStudent->cuo_opinion === 'favorable' ||
+            $pendingStudent->studentPendingStudents()->exists()
+        );
+
+        $isRejected = ($pendingStudent->status === 'rejected');
+        $canEdit = !$isValidated && !$isRejected;
 
         return [
             'exists' => true,
@@ -394,6 +414,10 @@ class DossierSubmissionService
             'academic_year_id' => $pendingStudent->academic_year_id,
             'academic_year' => $pendingStudent->academicYear?->academic_year,
             'initial_wave' => (int) ($pendingStudent->initial_wave ?? 1),
+            'status' => $pendingStudent->status,
+            'is_validated' => $isValidated,
+            'is_rejected' => $isRejected,
+            'can_edit' => $canEdit,
             'is_updated_by_student' => (bool) ($pendingStudent->is_updated_by_student ?? false),
             'submitted_at' => $pendingStudent->created_at?->toISOString(),
             'last_student_update_at' => $pendingStudent->last_student_update_at?->toISOString(),
@@ -411,12 +435,22 @@ class DossierSubmissionService
             $q->whereRaw('LOWER(email) = ?', [$normalizedEmail]);
         })
         ->where('tracking_code', strtoupper($trackingCode))
-        ->where('status', 'pending')
         ->with(['personalInformation', 'department.cycle', 'academicYear', 'entryDiploma'])
         ->first();
 
         if (!$pendingStudent) {
-            throw new ResourceNotFoundException('Dossier introuvable ou non modifiable.');
+            throw new ResourceNotFoundException('Dossier introuvable.');
+        }
+
+        $isValidated = (
+            $pendingStudent->status === 'validated' ||
+            $pendingStudent->cuca_opinion === 'favorable' ||
+            $pendingStudent->cuo_opinion === 'favorable' ||
+            $pendingStudent->studentPendingStudents()->exists()
+        );
+
+        if ($isValidated) {
+            throw new BusinessException('Ce dossier a déjà été validé et ne peut plus être modifié.', 'DOSSIER_ALREADY_VALIDATED');
         }
 
         $contacts = $pendingStudent->personalInformation?->contacts;
