@@ -36,11 +36,11 @@ class DossierSubmissionService
     public function submitDossier(Request $request, string $cycleName, array $validDiplomas, array $fileFields, bool $isPersonalInfoRequired = true): array
     {
         return DB::transaction(function () use ($request, $cycleName, $validDiplomas, $fileFields, $isPersonalInfoRequired) {
-            $currentDate = now()->toDateString();
+            $now = now();
             $submissionPeriod = SubmissionPeriod::where('academic_year_id', $request->academic_year_id)
                 ->where('department_id', $request->department_id)
-                ->where('start_date', '<=', $currentDate)
-                ->where('end_date', '>=', $currentDate)
+                ->where('start_date', '<=', $now)
+                ->where('end_date', '>=', $now)
                 ->first();
 
             if (!$submissionPeriod) {
@@ -221,13 +221,13 @@ class DossierSubmissionService
     public function submitComplementDossier(array $validated, string $trackingCode): array
     {
         return DB::transaction(function () use ($validated, $trackingCode) {
-            $currentDate = now()->toDateString();
+            $now = now();
             $pendingStudent = PendingStudent::where('tracking_code', $trackingCode)->firstOrFail();
 
             $submissionPeriod = SubmissionPeriod::where('academic_year_id', $pendingStudent->academic_year_id)
                 ->where('department_id', $pendingStudent->department_id)
-                ->where('start_date', '<=', $currentDate)
-                ->where('end_date', '>=', $currentDate)
+                ->where('start_date', '<=', $now)
+                ->where('end_date', '>=', $now)
                 ->first();
 
             if (!$submissionPeriod) {
