@@ -222,7 +222,12 @@ class DossierSubmissionService
     {
         return DB::transaction(function () use ($validated, $trackingCode) {
             $now = now();
-            $pendingStudent = PendingStudent::where('tracking_code', $trackingCode)->firstOrFail();
+            $cleanCode = trim($trackingCode);
+            $pendingStudent = PendingStudent::where(function ($q) use ($cleanCode) {
+                $q->where('tracking_code', $cleanCode)
+                  ->orWhereRaw('LOWER(tracking_code) = ?', [strtolower($cleanCode)])
+                  ->orWhereRaw('UPPER(tracking_code) = ?', [strtoupper($cleanCode)]);
+            })->firstOrFail();
 
             $submissionPeriod = SubmissionPeriod::where('academic_year_id', $pendingStudent->academic_year_id)
                 ->where('department_id', $pendingStudent->department_id)
@@ -335,6 +340,7 @@ class DossierSubmissionService
 
     public function getDossierByTrackingCode(string $trackingCode): array
     {
+        $cleanCode = trim($trackingCode);
         $pendingStudent = PendingStudent::with([
             'personalInformation',
             'department.cycle',
@@ -343,7 +349,11 @@ class DossierSubmissionService
             'studentPendingStudents.student.pendingStudents.personalInformation',
             'studentPendingStudents.academicPaths'
         ])
-        ->where('tracking_code', strtoupper($trackingCode))
+        ->where(function ($q) use ($cleanCode) {
+            $q->where('tracking_code', $cleanCode)
+              ->orWhereRaw('LOWER(tracking_code) = ?', [strtolower($cleanCode)])
+              ->orWhereRaw('UPPER(tracking_code) = ?', [strtoupper($cleanCode)]);
+        })
         ->first();
 
         if (!$pendingStudent) {
