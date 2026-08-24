@@ -443,7 +443,7 @@ class StudentServiceController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * Recherche d'une demande de complément de dossier par reference ou matricule.
+     * Recherche d'une demande de complément de dossier par référence ou matricule.
      * GET /api/attestations/demandes/complement/find?reference=...  ou  ?matricule=...
      */
     public function findComplement(Request $request): JsonResponse
@@ -455,7 +455,7 @@ class StudentServiceController extends Controller
             return response()->json(['message' => 'La référence ou le matricule est requis.'], 400);
         }
 
-        $query = LegacyStudentServiceRequest::where('service_type', 'complement_dossier');
+        $query = LegacyStudentServiceRequest::query();
 
         if ($reference) {
             $id = (int) preg_replace('/[^0-9]/', '', $reference);
@@ -464,21 +464,57 @@ class StudentServiceController extends Controller
             $query->where('matricule', $matricule);
         }
 
-        $request = $query->orderByDesc('created_at')->first();
+        $requests = $query->orderByDesc('created_at')->get();
 
-        if (!$request) {
-            return response()->json(['message' => 'Aucune demande de complément trouvée.'], 404);
+        if ($requests->isEmpty()) {
+            // Si recherche par matricule et aucune demande trouvée, vérifions si l'étudiant existe au moins
+            if ($matricule) {
+                $foundStudent = $this->findStudentByMatricule($matricule);
+                if (!$foundStudent) {
+                    return response()->json(['message' => 'Aucun étudiant trouvé avec ce matricule.'], 404);
+                }
+            }
+            return response()->json(['message' => 'Aucune demande trouvée pour cette recherche.'], 404);
         }
 
+        $typeLabels = [
+            'attestation_passage'     => 'Attestation de Passage',
+            'attestation_definitive'  => 'Attestation Définitive',
+            'attestation_inscription' => 'Attestation d\'Inscription',
+            'bulletin_annuel'         => 'Bulletin Annuel',
+            'quitus_memoire'          => 'Quitus de Mémoire',
+            'succes'                  => 'Attestation de Succès',
+            'definitive'              => 'Attestation Définitive',
+            'inscription'             => 'Attestation d\'Inscription',
+            'passage'                 => 'Attestation de Passage',
+            'complement_dossier'      => 'Complément de Dossier',
+        ];
+
+        $results = $requests->map(function ($r) use ($typeLabels) {
+            $nameParts = explode(' ', trim($r->student_name ?? ''), 2);
+            $lastName = $nameParts[0] ?? '';
+            $firstNames = $nameParts[1] ?? '';
+
+            return [
+                'reference'    => 'REF-' . str_pad($r->id, 6, '0', STR_PAD_LEFT),
+                'type'         => $r->service_type,
+                'type_label'   => $typeLabels[$r->service_type] ?? ($r->service_name ?: $r->service_type),
+                'submitted_at' => $r->created_at?->toISOString(),
+                'status'       => $r->status,
+                'student'      => [
+                    'last_name'     => $lastName,
+                    'first_names'   => $firstNames,
+                    'matricule'     => $r->matricule,
+                    'level'         => 'Étudiant',
+                    'department'    => $r->filiere_name ?? '',
+                    'academic_year' => $r->enrollment_year ? "{$r->enrollment_year}-" . ($r->enrollment_year + 1) : null,
+                ],
+            ];
+        })->values()->toArray();
+
         return response()->json([
-            'success'      => true,
-            'id'           => $request->id,
-            'reference'    => 'REF-' . str_pad($request->id, 6, '0', STR_PAD_LEFT),
-            'matricule'    => $request->matricule,
-            'student_name' => $request->student_name,
-            'status'       => $request->status,
-            'service_type' => $request->service_type,
-            'submitted_at' => $request->created_at?->toISOString(),
+            'success' => true,
+            'data'    => $results,
         ]);
     }
 
