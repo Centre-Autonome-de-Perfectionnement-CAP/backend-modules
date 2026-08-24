@@ -23,13 +23,23 @@ class AcademicYearResource extends JsonResource
                     ->update(['is_current' => false]);
             }
         }
+
+        // Calculer le statut lisible
+        if ($isCurrent) {
+            $status = 'active';
+        } elseif ($now->lt($this->year_start)) {
+            $status = 'upcoming';
+        } else {
+            $status = 'ended';
+        }
         
         return [
-            'id' => $this->id,
-            'libelle' => $this->academic_year,
+            'id'         => $this->id,
+            'libelle'    => $this->academic_year,
             'date_debut' => $this->year_start,
-            'date_fin' => $this->year_end,
+            'date_fin'   => $this->year_end,
             'is_current' => $isCurrent,
+            'status'     => $status,
         ];
     }
 }
