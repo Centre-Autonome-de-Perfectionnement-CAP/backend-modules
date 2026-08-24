@@ -2,6 +2,7 @@
 
 use App\Modules\LegacyStudent\Http\Controllers\LegacyStudentPublicController;
 use App\Modules\LegacyStudent\Http\Controllers\LegacyStudentAdminController;
+use App\Modules\LegacyStudent\Http\Controllers\StudentServiceController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -13,17 +14,39 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('api')->group(function () {
 
     // ── Routes publiques (déclaration étudiant et filières) ─────────────────
-    // Supporte /api/legacy-students/* et /api/v1/legacy-students/*
     Route::get('/legacy-students/available-filieres', [LegacyStudentPublicController::class, 'availableFilieres']);
     Route::get('/v1/legacy-students/available-filieres', [LegacyStudentPublicController::class, 'availableFilieres']);
     Route::post('/legacy-students/register', [LegacyStudentPublicController::class, 'register']);
     Route::post('/v1/legacy-students/register', [LegacyStudentPublicController::class, 'register']);
-    // Recherche par nom/prénom/date dans legacy_students (fallback du lookup-id)
     Route::post('/legacy-students/lookup-by-name', [LegacyStudentPublicController::class, 'lookupByName']);
     Route::post('/v1/legacy-students/lookup-by-name', [LegacyStudentPublicController::class, 'lookupByName']);
-    // Statuts documents étudiants (anciens étudiants)
-    Route::get('/attestations/status', [LegacyStudentPublicController::class, 'attestationsStatus']);
-    Route::get('/bulletins/status', [LegacyStudentPublicController::class, 'bulletinsStatus']);
+
+    // ── Endpoints unifiés de services étudiants ────────────────────────────
+    // Recherche par matricule dans les DEUX tables (récents + anciens)
+
+    // Statut attestations (remplace l'ancien endpoint legacy-only)
+    Route::get('/attestations/status', [StudentServiceController::class, 'attestationsStatus']);
+
+    // Statut bulletins — NOUVEAU endpoint attendu par DemandesBulletinForm
+    Route::get('/attestations/bulletin-status', [StudentServiceController::class, 'bulletinStatus']);
+
+    // Soumission demande d'attestation — NOUVEAU
+    Route::post('/attestations/demandes', [StudentServiceController::class, 'submitAttestation']);
+
+    // Soumission demande de bulletin — NOUVEAU
+    Route::post('/attestations/bulletins', [StudentServiceController::class, 'submitBulletin']);
+
+    // Suivi d'une demande par référence — NOUVEAU
+    Route::get('/attestations/demandes/suivi', [StudentServiceController::class, 'suiviDemande']);
+
+    // Rechercher une demande de complément — NOUVEAU
+    Route::get('/attestations/demandes/complement/find', [StudentServiceController::class, 'findComplement']);
+
+    // Soumettre un complément de dossier — NOUVEAU
+    Route::post('/attestations/demandes/complement', [StudentServiceController::class, 'submitComplement']);
+
+    // Rétrocompatibilité — ancien endpoint bulletins (conservé)
+    Route::get('/bulletins/status', [StudentServiceController::class, 'bulletinStatus']);
 
     // ── Routes admin (gestion scolarité) ───────────────────────────────────
     Route::prefix('admin/legacy-students')->group(function () {
