@@ -58,6 +58,8 @@ class PendingStudentResource extends JsonResource
             'gender' => $this->personalInformation?->gender,
             'status' => $status,
             'initial_wave' => (int) ($this->initial_wave ?? 1),
+            'transferred_from_wave' => $this->transferred_from_wave,
+            'transfer_history' => $this->transfer_history ?? [],
             'is_updated_by_student' => (bool) ($this->is_updated_by_student ?? false),
             'last_student_update_at' => $this->last_student_update_at?->toISOString(),
             'student_update_summary' => $this->student_update_summary ?? [],

@@ -31,6 +31,7 @@ Route::prefix('api/inscription')->group(function () {
             Route::patch('/{pendingStudent}/financial-status', [PendingStudentController::class, 'updateStatus']);
             Route::patch('/{pendingStudent}/level', [PendingStudentController::class, 'updateLevel']);
             Route::patch('/{pendingStudent}/pieces/rename', [PendingStudentController::class, 'renamePiece']);
+            Route::patch('/{pendingStudent}/transfer-wave', [PendingStudentController::class, 'transferWave']);
         });
         Route::post('/', [PendingStudentController::class, 'store']);
         Route::post('/{pendingStudent}/documents', [PendingStudentController::class, 'submitDocuments']);

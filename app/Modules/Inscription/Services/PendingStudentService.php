@@ -495,6 +495,59 @@ class PendingStudentService
     }
     
     /**
+     * Transférer un dossier de candidature vers une autre vague
+     */
+    public function transferWave(PendingStudent $pendingStudent, int $toWave, ?string $reason = null, $user = null): PendingStudent
+    {
+        $fromWave = (int) ($pendingStudent->initial_wave ?? 1);
+
+        if ($fromWave === $toWave) {
+            throw new \App\Exceptions\BusinessException(
+                message: "Le candidat est déjà dans la Vague {$toWave}.",
+                errorCode: 'SAME_WAVE_TRANSFER'
+            );
+        }
+
+        $history = $pendingStudent->transfer_history ?? [];
+
+        $actorName = 'Scolarité / Administration';
+        if ($user) {
+            $actorName = trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''));
+            if (empty($actorName)) {
+                $actorName = $user->email ?? 'Agent Scolarité';
+            }
+        }
+
+        $history[] = [
+            'from_wave' => $fromWave,
+            'to_wave' => $toWave,
+            'transferred_at' => now()->toDateTimeString(),
+            'transferred_by' => $actorName,
+            'reason' => $reason ?: "Transfert de la Vague {$fromWave} vers la Vague {$toWave}",
+        ];
+
+        $pendingStudent->transferred_from_wave = $pendingStudent->transferred_from_wave ?? $fromWave;
+        $pendingStudent->initial_wave = $toWave;
+        $pendingStudent->transfer_history = $history;
+        $pendingStudent->save();
+
+        Log::info('Candidat transféré de vague', [
+            'pending_student_id' => $pendingStudent->id,
+            'tracking_code' => $pendingStudent->tracking_code,
+            'from_wave' => $fromWave,
+            'to_wave' => $toWave,
+            'transferred_by' => $actorName,
+        ]);
+
+        return $pendingStudent->fresh([
+            'entryDiploma',
+            'personalInformation',
+            'department',
+            'academicYear'
+        ]);
+    }
+
+    /**
      * Générer un numéro d'étudiant unique
      */
     private function generateStudentIdNumber(): string

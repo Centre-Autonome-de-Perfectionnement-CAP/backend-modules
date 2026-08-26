@@ -36,6 +36,8 @@ class PendingStudent extends Model
         'exonere',
         'status',
         'initial_wave',
+        'transferred_from_wave',
+        'transfer_history',
         'is_updated_by_student',
         'last_student_update_at',
         'student_update_summary',
@@ -48,6 +50,8 @@ class PendingStudent extends Model
     protected $casts = [
         'documents' => 'array',
         'initial_wave' => 'integer',
+        'transferred_from_wave' => 'integer',
+        'transfer_history' => 'array',
         'is_updated_by_student' => 'boolean',
         'last_student_update_at' => 'datetime',
         'student_update_summary' => 'array',

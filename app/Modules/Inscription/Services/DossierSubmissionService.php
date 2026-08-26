@@ -492,6 +492,16 @@ class DossierSubmissionService
         $isRejected = ($pendingStudent->status === 'rejected');
         $canEdit = !$isValidated && !$isRejected;
 
+        $academicYearService = app(AcademicYearService::class);
+        $currentActiveWave = $academicYearService->resolveWave(
+            (int) $pendingStudent->academic_year_id,
+            (int) $pendingStudent->department_id,
+            now()
+        );
+
+        $initialWave = (int) ($pendingStudent->initial_wave ?? 1);
+        $canTransferWave = ($currentActiveWave !== $initialWave);
+
         return [
             'exists' => true,
             'id' => $pendingStudent->id,
@@ -506,7 +516,11 @@ class DossierSubmissionService
             'entry_diploma_id' => $pendingStudent->entry_diploma_id,
             'academic_year_id' => $pendingStudent->academic_year_id,
             'academic_year' => $pendingStudent->academicYear?->academic_year,
-            'initial_wave' => (int) ($pendingStudent->initial_wave ?? 1),
+            'initial_wave' => $initialWave,
+            'current_active_wave' => $currentActiveWave,
+            'can_transfer_wave' => $canTransferWave,
+            'transferred_from_wave' => $pendingStudent->transferred_from_wave,
+            'transfer_history' => $pendingStudent->transfer_history ?? [],
             'status' => $pendingStudent->status,
             'is_validated' => $isValidated,
             'is_rejected' => $isRejected,
@@ -758,7 +772,34 @@ class DossierSubmissionService
                 $modifications[] = "Photo d'identité";
             }
 
-            // 4. Marquer le dossier comme mis à jour par le candidat (initial_wave reste inchangée)
+            // 4. Gestion du transfert vers la vague actuelle si demandé
+            if ($request->boolean('transfer_to_current_wave') || $request->input('transfer_to_current_wave') === '1') {
+                $academicYearService = app(AcademicYearService::class);
+                $currentWave = $academicYearService->resolveWave(
+                    (int) $pendingStudent->academic_year_id,
+                    (int) $pendingStudent->department_id,
+                    now()
+                );
+
+                $fromWave = (int) ($pendingStudent->initial_wave ?? 1);
+                if ($currentWave !== $fromWave) {
+                    $history = $pendingStudent->transfer_history ?? [];
+                    $history[] = [
+                        'from_wave' => $fromWave,
+                        'to_wave' => $currentWave,
+                        'transferred_at' => now()->toDateTimeString(),
+                        'transferred_by' => 'Candidat (Mise à jour portail)',
+                        'reason' => "Transfert automatique lors de la mise à jour du dossier en Vague {$currentWave}",
+                    ];
+
+                    $pendingStudent->transferred_from_wave = $pendingStudent->transferred_from_wave ?? $fromWave;
+                    $pendingStudent->initial_wave = $currentWave;
+                    $pendingStudent->transfer_history = $history;
+                    $modifications[] = "Transfert de vague : Vague {$fromWave} → Vague {$currentWave}";
+                }
+            }
+
+            // 5. Marquer le dossier comme mis à jour par le candidat
             $existingSummary = $pendingStudent->student_update_summary ?? [];
             if (!is_array($existingSummary)) {
                 $existingSummary = [];
