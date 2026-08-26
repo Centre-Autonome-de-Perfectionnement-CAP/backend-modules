@@ -605,6 +605,19 @@ class DossierSubmissionService
                 );
             }
 
+            // Vérification du jeton OTP si présent
+            $verificationToken = $request->input('verification_token', $request->input('_verificationToken'));
+            if (!empty($verificationToken)) {
+                $otpService = app(\App\Modules\Core\Services\OtpService::class);
+                if (!$otpService->validateToken((string)$verificationToken, $email)) {
+                    throw new BusinessException(
+                        message: "Le jeton de vérification est invalide ou a expiré.",
+                        errorCode: 'INVALID_VERIFICATION_TOKEN',
+                        statusCode: 403
+                    );
+                }
+            }
+
             $isValidated = (
                 $pendingStudent->status === 'approved' ||
                 $pendingStudent->cuca_opinion === 'favorable' ||
@@ -618,17 +631,64 @@ class DossierSubmissionService
 
             $modifications = [];
 
-            // 1. Mise à jour des contacts
+            // 1. Mise à jour de l'état civil et des contacts
             $personalInfo = $pendingStudent->personalInformation;
-            if ($request->has('contacts')) {
-                $newContacts = $request->input('contacts');
-                if (is_array($newContacts)) {
-                    $cleaned = array_values(array_filter($newContacts, fn($c) => !empty(trim((string)$c))));
-                    if (!empty($cleaned)) {
-                        $personalInfo->contacts = $cleaned;
-                        $personalInfo->save();
-                        $modifications[] = 'Contacts / Téléphone';
+            if ($personalInfo) {
+                $piUpdated = false;
+
+                if ($request->filled('last_name') && strtoupper(trim($request->last_name)) !== $personalInfo->last_name) {
+                    $personalInfo->last_name = strtoupper(trim($request->last_name));
+                    $modifications[] = 'Nom : ' . $personalInfo->last_name;
+                    $piUpdated = true;
+                }
+
+                if ($request->filled('first_names')) {
+                    $capFirstNames = StringUtilityService::capitalize($request->first_names);
+                    if ($capFirstNames !== $personalInfo->first_names) {
+                        $personalInfo->first_names = $capFirstNames;
+                        $modifications[] = 'Prénoms : ' . $capFirstNames;
+                        $piUpdated = true;
                     }
+                }
+
+                if ($request->filled('birth_date') && $request->birth_date !== $personalInfo->birth_date) {
+                    $personalInfo->birth_date = $request->birth_date;
+                    $modifications[] = 'Date de naissance';
+                    $piUpdated = true;
+                }
+
+                if ($request->filled('birth_place') && $request->birth_place !== $personalInfo->birth_place) {
+                    $personalInfo->birth_place = $request->birth_place;
+                    $modifications[] = 'Lieu de naissance';
+                    $piUpdated = true;
+                }
+
+                if ($request->filled('birth_country') && $request->birth_country !== $personalInfo->birth_country) {
+                    $personalInfo->birth_country = $request->birth_country;
+                    $modifications[] = 'Pays de naissance';
+                    $piUpdated = true;
+                }
+
+                if ($request->filled('gender') && $request->gender !== $personalInfo->gender) {
+                    $personalInfo->gender = $request->gender;
+                    $modifications[] = 'Genre';
+                    $piUpdated = true;
+                }
+
+                if ($request->has('contacts')) {
+                    $newContacts = $request->input('contacts');
+                    if (is_array($newContacts)) {
+                        $cleaned = array_values(array_filter($newContacts, fn($c) => !empty(trim((string)$c))));
+                        if (!empty($cleaned) && $cleaned !== $personalInfo->contacts) {
+                            $personalInfo->contacts = $cleaned;
+                            $modifications[] = 'Contacts / Téléphone';
+                            $piUpdated = true;
+                        }
+                    }
+                }
+
+                if ($piUpdated) {
+                    $personalInfo->save();
                 }
             }
 
