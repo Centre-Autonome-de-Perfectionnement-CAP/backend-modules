@@ -254,11 +254,19 @@ class AcademicYearService
     public function getYearsForDepartment(int $departmentId)
     {
         $now = now();
-        
-        return AcademicYear::whereHas('submissionPeriods', function ($query) use ($departmentId, $now) {
+        $today = $now->toDateString();
+
+        return AcademicYear::whereHas('submissionPeriods', function ($query) use ($departmentId, $now, $today) {
             $query->where('department_id', $departmentId)
-                  ->where('start_date', '<=', $now)
-                  ->where('end_date', '>=', $now);
+                  ->where(function ($q) use ($now, $today) {
+                      $q->where(function ($sub) use ($now) {
+                          $sub->where('start_date', '<=', $now)
+                              ->where('end_date', '>=', $now);
+                      })->orWhere(function ($sub) use ($today) {
+                          $sub->whereDate('start_date', '<=', $today)
+                              ->whereDate('end_date', '>=', $today);
+                      });
+                  });
         })->orderBy('year_start', 'desc')->get();
     }
 

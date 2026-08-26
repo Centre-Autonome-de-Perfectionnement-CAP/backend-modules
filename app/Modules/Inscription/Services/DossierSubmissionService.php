@@ -39,10 +39,18 @@ class DossierSubmissionService
     {
         return DB::transaction(function () use ($request, $cycleName, $validDiplomas, $fileFields, $isPersonalInfoRequired) {
             $now = now();
+            $today = $now->toDateString();
             $submissionPeriod = SubmissionPeriod::where('academic_year_id', $request->academic_year_id)
                 ->where('department_id', $request->department_id)
-                ->where('start_date', '<=', $now)
-                ->where('end_date', '>=', $now)
+                ->where(function ($q) use ($now, $today) {
+                    $q->where(function ($sub) use ($now) {
+                        $sub->where('start_date', '<=', $now)
+                            ->where('end_date', '>=', $now);
+                    })->orWhere(function ($sub) use ($today) {
+                        $sub->whereDate('start_date', '<=', $today)
+                            ->whereDate('end_date', '>=', $today);
+                    });
+                })
                 ->first();
 
             if (!$submissionPeriod) {
