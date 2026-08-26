@@ -8,6 +8,7 @@ use App\Modules\Inscription\Http\Requests\SubmitIngenieurPrepaDossierRequest;
 use App\Modules\Inscription\Http\Requests\SubmitIngenieurSpecialiteDossierRequest;
 use App\Modules\Inscription\Http\Requests\SubmitLicenceDossierRequest;
 use App\Modules\Inscription\Http\Requests\SubmitMasterDossierRequest;
+use App\Modules\Inscription\Constants\DocumentFields;
 use App\Modules\Inscription\Models\PendingStudent;
 use App\Modules\Inscription\Models\SubmissionPeriod;
 use App\Modules\Inscription\Services\DossierSubmissionService;
@@ -129,23 +130,11 @@ class DossierSubmissionController extends Controller
             'all_inputs' => $request->except(['photo', 'demande_da', 'cv', 'acte_naissance', 'diplome_bac', 'diplome_licence', 'attestation_travail', 'quittance_rectorat', 'quittance_cap', 'attestation_depot_dossier'])
         ]);
 
-        $fileFields = [
-                'demande_da' => 'Demande manuscrite adressée au D/EPAC',
-                'cv' => 'Curriculum Vitae',
-                'acte_naissance' => "Photocopie de l’extrait d’acte de naissance légalisé ou sécurisé",
-                'diplome_bac' => 'Photocopie légalisée du diplôme BAC ou équivalent',
-                'diplome_licence' => 'Photocopie légalisée du diplôme de la licence professionnelle',
-                'attestation_travail' => 'Attestation de travail',
-                'quittance_rectorat' => 'Quittance Rectorat de 2.000F',
-                'quittance_cap' => 'Quittance de 10.000F',
-                'attestation_depot_dossier' => 'Attestation de dépôt de dossier pour diplômes étrangers',
-            ];
-
         $result = $this->submissionService->submitDossier(
             $request,
             'Licence Professionnelle',
             ['Baccalauréat Scientifique', 'BTS', 'DTI', 'DUT', 'DEAT'],
-            $fileFields
+            DocumentFields::LICENCE
         );
 
         return $this->createdResponse($result, 'Dossier Licence soumis avec succès');
@@ -170,24 +159,11 @@ class DossierSubmissionController extends Controller
      */
     public function submitMasterDossier(SubmitMasterDossierRequest $request): JsonResponse
     {
-        $fileFields = [
-                'demande_da' => 'Demande manuscrite adressée au D/EPAC',
-                'cv' => 'Curriculum Vitae',
-                'acte_naissance' => "Photocopie de l’extrait d’acte de naissance légalisé ou sécurisé",
-                'diplome_bac' => 'Photocopie légalisée du diplôme BAC',
-                'diplome_license' => 'Photocopie légalisée du diplôme de la licence professionnelle',
-                'attestation_travail' => 'Attestation de travail',
-                'quittance_rectorat' => 'Quittance Rectorat de 2.000F',
-                'quittance_cap' => 'Quittance de 20.000F',
-                'attestation_depot_dossier' => 'Attestation de dépôt de dossier pour diplômes étrangers',
-                'attestation_anglais' => 'Attestation d’Anglais pour le secteur biologique',
-            ];
-
         $result = $this->submissionService->submitDossier(
             $request,
             'Master Professionnel',
             ['Licence Professionnelle'],
-            $fileFields
+            DocumentFields::MASTER
         );
 
         return $this->createdResponse($result, 'Dossier Master soumis avec succès');
@@ -212,23 +188,11 @@ class DossierSubmissionController extends Controller
      */
     public function submitIngenieurPrepaDossier(SubmitIngenieurPrepaDossierRequest $request): JsonResponse
     {
-        $fileFields = [
-                'demande_da' => 'Demande manuscrite adressée au D/EPAC',
-                'cv' => 'Curriculum Vitae',
-                'acte_naissance' => "Photocopie de l’extrait d’acte de naissance légalisé ou sécurisé",
-                'diplome_bac' => 'Photocopie légalisée du diplôme BAC',
-                'diplome_licence' => 'Photocopie légalisée du diplôme de la licence',
-                'attestation_travail' => 'Attestation de travail',
-                // 'quittance_rectorat' => 'Quittance Rectorat de 2.000F',
-                'quittance_cap' => 'Quittance de 15.000F',
-                'attestation_depot_dossier' => 'Attestation de dépôt de dossier pour diplômes étrangers',
-            ];
-
         $result = $this->submissionService->submitDossier(
             $request,
             'Ingénierie',
             ['Licence Professionnelle'],
-            $fileFields
+            DocumentFields::INGENIEUR_PREPA
         );
 
         return $this->createdResponse($result, 'Dossier Ingénieur Prépa soumis avec succès');
@@ -258,17 +222,11 @@ class DossierSubmissionController extends Controller
             $request->department_id
         );
 
-        $fileFields = [
-            'certificat_prepa' => 'Certificat de Classes Préparatoires',
-            'quittance_rectorat' => 'Quittance Rectorat',
-            'quittance_cap' => 'Quittance CAP',
-        ];
-
         $result = $this->submissionService->submitDossier(
             $request,
             'Ingénierie',
             ['Certificat de Classes Préparatoires', 'Quittance Rectorat', 'Quittance CAP'],
-            $fileFields,
+            DocumentFields::INGENIEUR_SPECIALITE,
             false
         );
 
@@ -376,20 +334,7 @@ class DossierSubmissionController extends Controller
             'tracking_code' => 'required|string',
         ]);
 
-        $fileFields = [
-            'demande_da' => 'Demande DA',
-            'cv' => 'CV',
-            'acte_naissance' => 'Acte de Naissance',
-            'diplome_bac' => 'Diplôme BAC',
-            'attestation_travail' => 'Attestation de Travail',
-            'quittance_rectorat' => 'Quittance Rectorat',
-            'quittance_cap' => 'Quittance CAP',
-            'diplome_licence' => 'Diplôme Licence',
-            'attestation_anglais' => 'Attestation Anglais',
-            'certificat_prepa' => 'Certificat de Classes Préparatoires',
-        ];
-
-        $result = $this->submissionService->updateExistingDossier($request, $fileFields);
+        $result = $this->submissionService->updateExistingDossier($request, DocumentFields::allFields());
 
         return $this->successResponse($result, 'Dossier mis à jour avec succès.');
     }

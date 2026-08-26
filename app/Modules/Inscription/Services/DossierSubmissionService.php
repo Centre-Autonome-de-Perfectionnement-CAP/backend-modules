@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inscription\Services;
 
+use App\Modules\Inscription\Constants\DocumentFields;
 use App\Modules\Inscription\Models\AcademicPath;
 use App\Modules\Inscription\Models\AcademicYear;
 use App\Modules\Inscription\Models\Department;
@@ -30,7 +31,8 @@ class DossierSubmissionService
 {
     public function __construct(
         private FileStorageService $fileStorageService,
-        private PdfService $pdfService
+        private PdfService $pdfService,
+        private AcademicYearService $academicYearService
     ) {
     }
     public function submitDossier(Request $request, string $cycleName, array $validDiplomas, array $fileFields, bool $isPersonalInfoRequired = true): array
@@ -45,9 +47,27 @@ class DossierSubmissionService
 
             if (!$submissionPeriod) {
                 throw new BusinessException(
-                    message: 'Pas de période de soumission active pour la filière sélectionnée et cette année académique',
-                    errorCode: 'SUBMISSION_PERIOD_CLOSED'
+                    message: "Pas de période de soumission active pour la filière sélectionnée et cette année académique",
+                    errorCode: 'NO_ACTIVE_SUBMISSION_PERIOD'
                 );
+            }
+
+            // Vérifier les doublons de dossier pour cette année académique
+            if ($isPersonalInfoRequired && !empty($request->email)) {
+                $normalizedEmail = trim(mb_strtolower($request->email));
+                $existingDossier = PendingStudent::where('academic_year_id', $request->academic_year_id)
+                    ->whereHas('personalInformation', function ($q) use ($normalizedEmail) {
+                        $q->whereRaw('LOWER(email) = ?', [$normalizedEmail]);
+                    })
+                    ->first();
+
+                if ($existingDossier) {
+                    throw new BusinessException(
+                        message: "Un dossier de candidature a déjà été soumis avec cette adresse email ({$request->email}) pour cette année académique.",
+                        errorCode: 'DOSSIER_ALREADY_EXISTS',
+                        statusCode: 409
+                    );
+                }
             }
 
             $department = Department::findOrFail($request->department_id);
@@ -74,23 +94,31 @@ class DossierSubmissionService
 
             $personalInformation = null;
             if ($isPersonalInfoRequired) {
-                Log::info('Creating PersonalInformation', [
-                    'birth_date' => $request->birth_date,
-                    'birth_place' => $request->birth_place,
-                    'birth_country' => $request->birth_country,
-                    'all_data' => $request->all()
-                ]);
+                $normalizedEmail = trim(mb_strtolower($request->email));
+                $personalInformation = PersonalInformation::whereRaw('LOWER(email) = ?', [$normalizedEmail])->first();
 
-                $personalInformation = PersonalInformation::create([
-                    'last_name' => strtoupper(trim($request->last_name)),
-                    'first_names' => StringUtilityService::capitalize($request->first_names),
-                    'email' => $request->email,
-                    'birth_date' => $request->birth_date ?? null,
-                    'birth_place' => $request->birth_place ?? null,
-                    'birth_country' => $request->birth_country ?? 'Bénin',
-                    'gender' => $request->gender,
-                    'contacts' => $request->contacts, 
-                ]);
+                if ($personalInformation) {
+                    $personalInformation->update([
+                        'last_name' => strtoupper(trim($request->last_name)),
+                        'first_names' => StringUtilityService::capitalize($request->first_names),
+                        'birth_date' => $request->birth_date ?? $personalInformation->birth_date,
+                        'birth_place' => $request->birth_place ?? $personalInformation->birth_place,
+                        'birth_country' => $request->birth_country ?? $personalInformation->birth_country,
+                        'gender' => $request->gender ?? $personalInformation->gender,
+                        'contacts' => $request->contacts ?? $personalInformation->contacts,
+                    ]);
+                } else {
+                    $personalInformation = PersonalInformation::create([
+                        'last_name' => strtoupper(trim($request->last_name)),
+                        'first_names' => StringUtilityService::capitalize($request->first_names),
+                        'email' => $normalizedEmail,
+                        'birth_date' => $request->birth_date ?? null,
+                        'birth_place' => $request->birth_place ?? null,
+                        'birth_country' => $request->birth_country ?? 'Bénin',
+                        'gender' => $request->gender,
+                        'contacts' => $request->contacts, 
+                    ]);
+                }
             } else {
                 $student = Student::where('student_id_number', $request->student_id_number)->firstOrFail();
                 $studentPendingStudent = StudentPendingStudent::where('student_id', $student->id)
@@ -129,13 +157,18 @@ class DossierSubmissionService
                 $photoPath = $photoFile->id;
             }
 
+            $initialWave = $this->academicYearService->resolveWave(
+                (int) $request->academic_year_id,
+                (int) $request->department_id,
+                $now
+            );
+
             $pendingStudent = PendingStudent::create([
                 'personal_information_id' => $personalInformation->id,
                 'tracking_code' => 'CAP-' . Str::random(10),
                 'cuca_opinion' => 'pending',
                 'cuca_comment' => null,
                 'cuo_opinion' => null,
-                'rejection_reason' => null,
                 'cuco_mail_sent' => false,
                 'documents' => $documents, 
                 'level' => $request->study_level,
@@ -143,6 +176,7 @@ class DossierSubmissionService
                 'photo' => $photoPath,
                 'academic_year_id' => $request->academic_year_id,
                 'department_id' => $request->department_id,
+                'initial_wave' => $initialWave,
             ]);
 
             // Génération de la fiche de confirmation et envoi par email
@@ -440,7 +474,7 @@ class DossierSubmissionService
         }
 
         $isValidated = (
-            $pendingStudent->status === 'validated' ||
+            $pendingStudent->status === 'approved' ||
             $pendingStudent->cuca_opinion === 'favorable' ||
             $pendingStudent->cuo_opinion === 'favorable' ||
             $pendingStudent->studentPendingStudents()->exists()
@@ -503,7 +537,7 @@ class DossierSubmissionService
         }
 
         $isValidated = (
-            $pendingStudent->status === 'validated' ||
+            $pendingStudent->status === 'approved' ||
             $pendingStudent->cuca_opinion === 'favorable' ||
             $pendingStudent->cuo_opinion === 'favorable' ||
             $pendingStudent->studentPendingStudents()->exists()
@@ -572,7 +606,7 @@ class DossierSubmissionService
             }
 
             $isValidated = (
-                $pendingStudent->status === 'validated' ||
+                $pendingStudent->status === 'approved' ||
                 $pendingStudent->cuca_opinion === 'favorable' ||
                 $pendingStudent->cuo_opinion === 'favorable' ||
                 $pendingStudent->studentPendingStudents()->exists()
@@ -618,7 +652,11 @@ class DossierSubmissionService
 
             // 3. Remplacement des fichiers / pièces jointes
             $documents = $pendingStudent->documents ?? [];
-            foreach ($fileFields as $field => $documentName) {
+            $cycleName = $pendingStudent->department?->cycle?->name;
+            $cycleFields = DocumentFields::forCycle($cycleName);
+            $effectiveFields = !empty($fileFields) ? $fileFields : $cycleFields;
+
+            foreach ($effectiveFields as $field => $documentName) {
                 if ($request->hasFile($field) && $request->file($field)->isValid()) {
                     $file = $this->fileStorageService->uploadFile(
                         $request->file($field),
@@ -626,8 +664,16 @@ class DossierSubmissionService
                         'public',
                         "dossiers/updates"
                     );
-                    $documents[$documentName] = $file->id;
-                    $modifications[] = "Document : {$documentName}";
+
+                    $canonicalName = $cycleFields[$field] ?? $documentName;
+
+                    // Supprimer les alias précédents pour éviter toute duplication
+                    foreach ([$documentName, $canonicalName, $field] as $k) {
+                        unset($documents[$k]);
+                    }
+
+                    $documents[$canonicalName] = $file->id;
+                    $modifications[] = "Document : {$canonicalName}";
                 }
             }
             $pendingStudent->documents = $documents;
@@ -691,13 +737,33 @@ class DossierSubmissionService
 
                 $this->pdfService->saveWithTemplate('fiche-confirmation-inscription', $pdfData, $pdfPath);
 
+                $mailData = [
+                    'department' => $department?->name ?? 'EPAC',
+                    'academic_year' => $academicYear?->academic_year ?? '',
+                    'tracking_code' => $pendingStudent->tracking_code,
+                    'study_level' => $pendingStudent->level,
+                    'first_names' => $personalInfo->first_names,
+                    'last_name' => $personalInfo->last_name,
+                    'email' => $personalInfo->email,
+                    'contacts' => $personalInfo->contacts,
+                    'cycle_name' => $cycleName,
+                    'submission_datetime' => $submissionDatetime . ' (Mise à jour)',
+                ];
+
                 if (filter_var($personalInfo->email, FILTER_VALIDATE_EMAIL)) {
-                    Mail::to($personalInfo->email)->queue(
-                        new DossierSubmissionWithAttachment($personalInfo, $pendingStudent, $pdfPath)
+                    Mail::to($personalInfo->email)->send(
+                        new DossierSubmissionWithAttachment($mailData, $pdfPath)
                     );
+                }
+
+                if (file_exists($pdfPath)) {
+                    unlink($pdfPath);
                 }
             } catch (\Throwable $e) {
                 Log::error('Erreur lors de la génération PDF ou envoi email de mise à jour: ' . $e->getMessage());
+                if (isset($pdfPath) && file_exists($pdfPath)) {
+                    @unlink($pdfPath);
+                }
             }
 
             return [
@@ -709,4 +775,32 @@ class DossierSubmissionService
             ];
         });
     }
+
+    /**
+     * Récupère les périodes de soumission actives pour un cycle donné.
+     */
+    public function getActiveSubmissionPeriods(string $cycleName): array
+    {
+        $now = now();
+        return SubmissionPeriod::whereHas('department.cycle', function ($q) use ($cycleName) {
+                $q->where('name', $cycleName);
+            })
+            ->where('start_date', '<=', $now)
+            ->where('end_date', '>=', $now)
+            ->with(['department', 'academicYear'])
+            ->get()
+            ->map(function ($p) {
+                return [
+                    'id' => $p->id,
+                    'department' => $p->department?->name,
+                    'department_id' => $p->department_id,
+                    'academic_year' => $p->academicYear?->academic_year,
+                    'academic_year_id' => $p->academic_year_id,
+                    'start_date' => $p->start_date ? $p->start_date->format('Y-m-d H:i:s') : null,
+                    'end_date' => $p->end_date ? $p->end_date->format('Y-m-d H:i:s') : null,
+                ];
+            })
+            ->toArray();
+    }
 }
+

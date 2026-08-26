@@ -39,23 +39,37 @@ class PendingStudentService
             $query->where('level', $filters['level']);
         }
 
-        // Filtre par cohorte
-        if (!empty($filters['cohort']) && !empty($filters['academic_year_id'])) {
-            // Récupérer les périodes de soumission distinctes pour cette année académique
-            $periods = \DB::table('submission_periods')
-                ->where('academic_year_id', $filters['academic_year_id'])
-                ->select('start_date', 'end_date')
-                ->distinct()
-                ->orderBy('start_date')
-                ->get();
-            
-            // Trouver la période correspondant à la cohorte demandée
-            $cohortIndex = (int)$filters['cohort'] - 1;
-            if (isset($periods[$cohortIndex])) {
-                $period = $periods[$cohortIndex];
-                $query->whereDate('pending_students.created_at', '>=', $period->start_date)
-                      ->whereDate('pending_students.created_at', '<=', $period->end_date);
-            }
+        // Filtre par cohorte / vague
+        if (!empty($filters['cohort'])) {
+            $cohortNum = (int) $filters['cohort'];
+            $query->where(function ($q) use ($cohortNum, $filters) {
+                $q->where('initial_wave', $cohortNum);
+                
+                // Fallback pour anciens enregistrements sans initial_wave
+                if (!empty($filters['academic_year_id'])) {
+                    $periodQuery = \DB::table('submission_periods')
+                        ->where('academic_year_id', $filters['academic_year_id']);
+
+                    if (!empty($filters['department_id']) && is_numeric($filters['department_id'])) {
+                        $periodQuery->where('department_id', $filters['department_id']);
+                    }
+
+                    $periods = $periodQuery->select('start_date', 'end_date')
+                        ->distinct()
+                        ->orderBy('start_date')
+                        ->get();
+
+                    $cohortIndex = $cohortNum - 1;
+                    if (isset($periods[$cohortIndex])) {
+                        $period = $periods[$cohortIndex];
+                        $q->orWhere(function ($sub) use ($period) {
+                            $sub->whereNull('initial_wave')
+                                ->where('created_at', '>=', \Carbon\Carbon::parse($period->start_date)->startOfDay())
+                                ->where('created_at', '<=', \Carbon\Carbon::parse($period->end_date)->endOfDay());
+                        });
+                    }
+                }
+            });
         }
 
         // Recherche
@@ -466,34 +480,18 @@ class PendingStudentService
      */
     private function determineCohort(PendingStudent $pendingStudent): ?string
     {
-        // Récupérer les périodes distinctes pour cette année académique ET cette filière
-        $periods = DB::table('submission_periods')
-            ->where('academic_year_id', $pendingStudent->academic_year_id)
-            ->where('department_id', $pendingStudent->department_id)
-            ->select('start_date', 'end_date')
-            ->groupBy('start_date', 'end_date')
-            ->orderBy('start_date', 'asc')
-            ->get();
-        
-        if ($periods->isEmpty()) {
-            return '1'; // Par défaut cohorte 1
+        if (!empty($pendingStudent->initial_wave)) {
+            return (string) $pendingStudent->initial_wave;
         }
-        
-        // Trouver dans quelle période le pending_student a été créé
-        $createdAt = $pendingStudent->created_at;
-        $cohortNumber = 1;
-        
-        foreach ($periods as $index => $period) {
-            $startDate = \Carbon\Carbon::parse($period->start_date);
-            $endDate = \Carbon\Carbon::parse($period->end_date);
-            
-            if ($createdAt->between($startDate, $endDate)) {
-                $cohortNumber = $index + 1;
-                break;
-            }
-        }
-        
-        return (string)$cohortNumber;
+
+        $academicYearService = app(AcademicYearService::class);
+        $wave = $academicYearService->resolveWave(
+            (int) $pendingStudent->academic_year_id,
+            (int) $pendingStudent->department_id,
+            $pendingStudent->created_at
+        );
+
+        return (string) $wave;
     }
     
     /**

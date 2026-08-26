@@ -517,7 +517,12 @@ class AcademicYearService
                 return $startDate . '_' . $endDate;
             });
 
-        foreach ($submissionPeriods as $key => $groupedPeriods) {
+        $waveIndex = 1;
+        $sortedPeriods = $submissionPeriods->sortBy(function ($group) {
+            return $group->first()->start_date?->timestamp ?? 0;
+        });
+
+        foreach ($sortedPeriods as $key => $groupedPeriods) {
             $firstPeriod = $groupedPeriods->first();
             $departments = $groupedPeriods->map(function ($period) {
                 return [
@@ -532,6 +537,7 @@ class AcademicYearService
             $periods[] = [
                 'id' => $firstPeriod->id,
                 'type' => 'depot',
+                'wave_number' => $waveIndex++,
                 'start' => $firstPeriod->start_date ? $firstPeriod->start_date->format('d/m/Y') : '',
                 'end' => $firstPeriod->end_date ? $firstPeriod->end_date->format('d/m/Y') : '',
                 'start_raw' => $firstPeriod->start_date ? $firstPeriod->start_date->format('Y-m-d') : '',
@@ -541,6 +547,7 @@ class AcademicYearService
                 })->toArray(),
                 'department_ids' => $departmentIds,
                 'departments' => $departments,
+                'is_active' => (bool) ($firstPeriod->is_active ?? true),
             ];
         }
 
@@ -563,4 +570,144 @@ class AcademicYearService
 
         return $periods;
     }
+
+    /**
+     * Déterminer le numéro de vague (cohorte) pour un département et une date donnés.
+     * Les bornes sont inclusives et le calcul est scopé par filière.
+     */
+    public function resolveWave(int $academicYearId, int $departmentId, ?\Carbon\Carbon $date = null): int
+    {
+        $targetDate = $date ? $date->copy() : now();
+
+        $periods = SubmissionPeriod::where('academic_year_id', $academicYearId)
+            ->where('department_id', $departmentId)
+            ->orderBy('start_date', 'asc')
+            ->get();
+
+        if ($periods->isEmpty()) {
+            return 1;
+        }
+
+        foreach ($periods as $index => $period) {
+            $startDate = \Carbon\Carbon::parse($period->start_date);
+            $endDate = \Carbon\Carbon::parse($period->end_date);
+            
+            // Si l'heure de fin est minuit pile, étendre jusqu'à la fin de la journée (23:59:59)
+            if ($endDate->format('H:i:s') === '00:00:00') {
+                $endDate = $endDate->copy()->endOfDay();
+            }
+
+            if ($targetDate->between($startDate, $endDate)) {
+                return $index + 1;
+            }
+        }
+
+        // Si avant la 1ère période -> vague 1
+        $firstPeriod = $periods->first();
+        if ($targetDate->lt(\Carbon\Carbon::parse($firstPeriod->start_date))) {
+            return 1;
+        }
+
+        // Si entre deux vagues ou après la dernière, trouver la vague correspondante
+        $candidateWave = 1;
+        foreach ($periods as $index => $period) {
+            $startDate = \Carbon\Carbon::parse($period->start_date);
+            if ($targetDate->gte($startDate)) {
+                $candidateWave = $index + 1;
+            }
+        }
+
+        return $candidateWave;
+    }
+
+    /**
+     * Récupérer les périodes de soumission actuellement actives
+     */
+    public function getActiveSubmissionPeriods()
+    {
+        $now = now();
+        return SubmissionPeriod::where('start_date', '<=', $now)
+            ->where('end_date', '>=', $now)
+            ->with(['academicYear', 'department'])
+            ->get();
+    }
+
+    /**
+     * Récupérer les périodes de réclamation actuellement actives
+     */
+    public function getActiveReclamationPeriods()
+    {
+        $now = now();
+        return ReclamationPeriod::where('start_date', '<=', $now)
+            ->where('end_date', '>=', $now)
+            ->with('academicYear')
+            ->get();
+    }
+
+    /**
+     * Vérifie le statut de soumission pour une année académique
+     */
+    public function checkSubmissionStatus(?int $academicYearId = null): array
+    {
+        $now = now();
+        $academicYear = $academicYearId ? AcademicYear::find($academicYearId) : $this->getCurrent();
+
+        if (!$academicYear) {
+            return [
+                'is_open' => false,
+                'academic_year' => null,
+                'submission_period' => null,
+                'current_time' => $now->toISOString(),
+            ];
+        }
+
+        $activePeriod = SubmissionPeriod::where('academic_year_id', $academicYear->id)
+            ->where('start_date', '<=', $now)
+            ->where('end_date', '>=', $now)
+            ->first();
+
+        $isOpen = $activePeriod !== null || (
+            $academicYear->submission_start &&
+            $academicYear->submission_end &&
+            $now->between($academicYear->submission_start, $academicYear->submission_end)
+        );
+
+        return [
+            'is_open' => (bool) $isOpen,
+            'academic_year' => $academicYear,
+            'submission_period' => $activePeriod,
+            'current_time' => $now->toISOString(),
+        ];
+    }
+
+    /**
+     * Vérifie le statut de réclamation pour une année académique
+     */
+    public function checkReclamationStatus(?int $academicYearId = null): array
+    {
+        $now = now();
+        $academicYear = $academicYearId ? AcademicYear::find($academicYearId) : $this->getCurrent();
+
+        if (!$academicYear) {
+            return [
+                'is_open' => false,
+                'academic_year' => null,
+                'reclamation_period' => null,
+                'current_time' => $now->toISOString(),
+            ];
+        }
+
+        $activePeriod = ReclamationPeriod::where('academic_year_id', $academicYear->id)
+            ->where('start_date', '<=', $now)
+            ->where('end_date', '>=', $now)
+            ->first();
+
+        return [
+            'is_open' => $activePeriod !== null,
+            'academic_year' => $academicYear,
+            'reclamation_period' => $activePeriod,
+            'current_time' => $now->toISOString(),
+        ];
+    }
 }
+

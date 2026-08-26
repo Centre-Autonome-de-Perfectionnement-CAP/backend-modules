@@ -20,20 +20,35 @@ class PendingStudentExportService
             $query->where('department_id', $filters['filiere']);
         }
         
-        if (!empty($filters['cohort']) && $filters['cohort'] !== 'all' && !empty($filters['year']) && is_numeric($filters['year'])) {
-            $periods = \DB::table('submission_periods')
-                ->where('academic_year_id', $filters['year'])
-                ->select('start_date', 'end_date')
-                ->groupBy('start_date', 'end_date')
-                ->orderBy('start_date')
-                ->get();
-            
-            $cohortIndex = (int)$filters['cohort'] - 1;
-            if (isset($periods[$cohortIndex])) {
-                $period = $periods[$cohortIndex];
-                $query->whereDate('created_at', '>=', $period->start_date)
-                      ->whereDate('created_at', '<=', $period->end_date);
-            }
+        if (!empty($filters['cohort']) && $filters['cohort'] !== 'all') {
+            $cohortNum = (int) $filters['cohort'];
+            $query->where(function ($q) use ($cohortNum, $filters) {
+                $q->where('initial_wave', $cohortNum);
+
+                if (!empty($filters['year']) && is_numeric($filters['year'])) {
+                    $periodQuery = \DB::table('submission_periods')
+                        ->where('academic_year_id', $filters['year']);
+
+                    if (!empty($filters['filiere']) && is_numeric($filters['filiere'])) {
+                        $periodQuery->where('department_id', $filters['filiere']);
+                    }
+
+                    $periods = $periodQuery->select('start_date', 'end_date')
+                        ->distinct()
+                        ->orderBy('start_date')
+                        ->get();
+
+                    $cohortIndex = $cohortNum - 1;
+                    if (isset($periods[$cohortIndex])) {
+                        $period = $periods[$cohortIndex];
+                        $q->orWhere(function ($sub) use ($period) {
+                            $sub->whereNull('initial_wave')
+                                ->where('created_at', '>=', \Carbon\Carbon::parse($period->start_date)->startOfDay())
+                                ->where('created_at', '<=', \Carbon\Carbon::parse($period->end_date)->endOfDay());
+                        });
+                    }
+                }
+            });
         }
         
         $pendingCount = $query->where('status', 'pending')->count();
@@ -72,20 +87,35 @@ class PendingStudentExportService
             }
         }
         
-        if (!empty($filters['cohort']) && $filters['cohort'] !== 'all' && !empty($filters['year']) && is_numeric($filters['year'])) {
-            $periods = \DB::table('submission_periods')
-                ->where('academic_year_id', $filters['year'])
-                ->select('start_date', 'end_date')
-                ->groupBy('start_date', 'end_date')
-                ->orderBy('start_date')
-                ->get();
-            
-            $cohortIndex = (int)$filters['cohort'] - 1;
-            if (isset($periods[$cohortIndex])) {
-                $period = $periods[$cohortIndex];
-                $query->whereDate('created_at', '>=', $period->start_date)
-                      ->whereDate('created_at', '<=', $period->end_date);
-            }
+        if (!empty($filters['cohort']) && $filters['cohort'] !== 'all') {
+            $cohortNum = (int) $filters['cohort'];
+            $query->where(function ($q) use ($cohortNum, $filters) {
+                $q->where('initial_wave', $cohortNum);
+
+                if (!empty($filters['year']) && is_numeric($filters['year'])) {
+                    $periodQuery = \DB::table('submission_periods')
+                        ->where('academic_year_id', $filters['year']);
+
+                    if (!empty($filters['filiere']) && is_numeric($filters['filiere'])) {
+                        $periodQuery->where('department_id', $filters['filiere']);
+                    }
+
+                    $periods = $periodQuery->select('start_date', 'end_date')
+                        ->distinct()
+                        ->orderBy('start_date')
+                        ->get();
+
+                    $cohortIndex = $cohortNum - 1;
+                    if (isset($periods[$cohortIndex])) {
+                        $period = $periods[$cohortIndex];
+                        $q->orWhere(function ($sub) use ($period) {
+                            $sub->whereNull('initial_wave')
+                                ->where('created_at', '>=', \Carbon\Carbon::parse($period->start_date)->startOfDay())
+                                ->where('created_at', '<=', \Carbon\Carbon::parse($period->end_date)->endOfDay());
+                        });
+                    }
+                }
+            });
         }
         
         $pendingStudents = $query->get();

@@ -68,7 +68,7 @@ Route::prefix('api/inscription')->group(function () {
         });
     });
 
-    Route::prefix('dossiers')->group(function () {
+    Route::prefix('dossiers')->middleware('throttle:30,1')->group(function () {
         Route::get('/periods', [DossierSubmissionController::class, 'getSubmissionPeriods']);
         Route::get('/check-existing', [DossierSubmissionController::class, 'checkExistingDossier']);
         Route::post('/fetch-for-update', [DossierSubmissionController::class, 'getDossierForUpdate']);

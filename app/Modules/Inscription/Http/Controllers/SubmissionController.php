@@ -29,7 +29,12 @@ class SubmissionController extends Controller
     public function __construct(
         protected AcademicYearService $academicYearService
     ) {
-        $this->middleware('auth:sanctum')->except(['getAcademicYears', 'getAcademicYear']);
+        $this->middleware('auth:sanctum')->except([
+            'getActiveSubmissionPeriods',
+            'getActiveReclamationPeriods',
+            'checkSubmissionStatus',
+            'checkReclamationStatus',
+        ]);
     }
 
     /**
