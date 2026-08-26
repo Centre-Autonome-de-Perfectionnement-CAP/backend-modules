@@ -19,8 +19,11 @@ Route::prefix('api/stockage')->group(function () {
 
 // Routes publiques (fichiers publics et partages)
 Route::prefix('files')->group(function () {
-    // Fichiers publics
+    // Fichiers publics (liste)
     Route::get('public', [FileController::class, 'publicFiles'])->name('api.files.public');
+
+    // Accès public à un fichier de candidature (module Inscription) sans authentification
+    Route::get('inscription/{file}', [FileController::class, 'publicView'])->name('api.files.inscription.view');
     
     // Accès aux partages (sans authentification)
     Route::prefix('share')->group(function () {

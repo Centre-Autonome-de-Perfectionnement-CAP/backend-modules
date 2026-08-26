@@ -106,6 +106,18 @@ class AcademicYearController extends Controller
     }
 
     /**
+     * Définir une année académique comme active / courante
+     */
+    public function setCurrent(AcademicYear $academicYear): JsonResponse
+    {
+        $updated = $this->academicYearService->setCurrent($academicYear);
+        return $this->successResponse(
+            new AcademicYearResource($updated),
+            'Année académique définie comme active avec succès'
+        );
+    }
+
+    /**
      * @OA\Delete(
      *     path="/api/academic-years/{academicYear}",
      *     summary="Supprimer une année académique",

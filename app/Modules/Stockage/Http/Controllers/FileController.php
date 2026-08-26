@@ -29,7 +29,7 @@ class FileController extends Controller
         protected FileStorageService $storageService,
         protected PermissionService $permissionService
     ) {
-        $this->middleware('auth:sanctum');
+        $this->middleware('auth:sanctum')->except(['publicFiles', 'publicView']);
     }
 
     /**
@@ -600,6 +600,36 @@ class FileController extends Controller
             'meta' => [
                 'total' => $files->count(),
             ],
+        ]);
+    }
+
+    /**
+     * Affichage public d'un fichier de candidature (module Inscription, sans authentification).
+     * Seuls les fichiers dont module_name = 'Inscription' et visibility = 'public' sont accessibles.
+     */
+    public function publicView(File $file)
+    {
+        // Sécurité : autoriser les fichiers publics ou appartenant aux dossiers de candidature
+        $isAllowed = (
+            $file->visibility === 'public' ||
+            $file->module_name === 'Inscription' ||
+            str_starts_with((string)$file->collection, 'dossiers')
+        );
+
+        if (!$isAllowed) {
+            abort(403, 'Accès refusé.');
+        }
+
+        if (!$file->exists()) {
+            abort(404, 'Fichier introuvable sur le disque.');
+        }
+
+        $content = \Illuminate\Support\Facades\Storage::disk($file->disk)->get($file->path);
+
+        return response($content, 200, [
+            'Content-Type'        => $file->mime_type ?: 'application/octet-stream',
+            'Content-Disposition' => 'inline; filename="' . $file->original_name . '"',
+            'Cache-Control'       => 'no-store',
         ]);
     }
 }

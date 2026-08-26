@@ -60,6 +60,8 @@ Route::prefix('api/inscription')->group(function () {
             Route::post('/', [AcademicYearController::class, 'store']);
             Route::put('/{academicYear}', [AcademicYearController::class, 'update']);
             Route::delete('/{academicYear}', [AcademicYearController::class, 'destroy']);
+            Route::patch('/{academicYear}/set-current', [AcademicYearController::class, 'setCurrent']);
+            Route::post('/{academicYear}/set-current', [AcademicYearController::class, 'setCurrent']);
 
             Route::get('/{academicYear}/periods', [AcademicYearController::class, 'getPeriods']);
             Route::post('/{academicYear}/periods', [AcademicYearController::class, 'addPeriods']);

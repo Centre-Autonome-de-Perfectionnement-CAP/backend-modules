@@ -409,20 +409,21 @@ class DossierSubmissionService
                 $file = $fileId ? \App\Modules\Stockage\Models\File::find($fileId) : null;
 
                 if ($file) {
+                    // URL publique lisible par le candidat sans authentification
+                    $publicUrl = route('api.files.inscription.view', ['file' => $file->id]);
                     $resolvedDocuments[$name] = [
-                        'id' => $file->id,
-                        'name' => $name,
+                        'id'            => $file->id,
+                        'name'          => $name,
                         'original_name' => $file->original_name,
-                        'path' => 'files/' . ltrim($file->path, '/'),
-                        'url' => url('/storage/files/' . ltrim($file->path, '/')),
-                        'mime_type' => $file->mime_type,
-                        'size' => $file->size,
+                        'url'           => $publicUrl,
+                        'mime_type'     => $file->mime_type,
+                        'size'          => $file->size,
                     ];
                 } elseif (is_string($val) && !is_numeric($val)) {
                     $resolvedDocuments[$name] = [
                         'name' => $name,
                         'path' => $val,
-                        'url' => str_starts_with($val, 'http') ? $val : url('/storage/' . ltrim($val, '/')),
+                        'url'  => str_starts_with($val, 'http') ? $val : url('/storage/' . ltrim($val, '/')),
                     ];
                 }
             }
