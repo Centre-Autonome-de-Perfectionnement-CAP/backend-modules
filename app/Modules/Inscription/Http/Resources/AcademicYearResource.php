@@ -13,18 +13,18 @@ class AcademicYearResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        /**
+        
         $now = now();
         $isCurrent = $now->between($this->year_start, $this->year_end);
-        if ($this->is_current !== $isCurrent) {
+        /**if ($this->is_current !== $isCurrent) {
             $this->resource->update(['is_current' => $isCurrent]);
             if ($isCurrent) {
                 AcademicYear::where('id', '!=', $this->id)
                     ->where('is_current', true)
                     ->update(['is_current' => false]);
-            }
-        }
-        */
+            } 
+        }*/
+        
         return [
             'id' => $this->id,
             'libelle' => $this->academic_year,
