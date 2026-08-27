@@ -144,7 +144,7 @@ class DemandeSubmissionService
             'updated_at'                 => now(),
         ]);
 
-        $demande = DB::table('document_requests')->where('id', $id)->first();
+        $demande = DB::table('document_requests as dr')->leftJoin('academic_years as ay', 'dr.academic_year_id', '=', 'ay.id')->where('dr.id', $id)->select(['dr.*', 'ay.academic_year'])->first();
 
         // Notification : ne doit jamais faire échouer la réponse HTTP.
         try {
@@ -215,7 +215,7 @@ class DemandeSubmissionService
             'updated_at'                 => now(),
         ]);
 
-        $demande = DB::table('document_requests')->where('id', $id)->first();
+        $demande = DB::table('document_requests as dr')->leftJoin('academic_years as ay', 'dr.academic_year_id', '=', 'ay.id')->where('dr.id', $id)->select(['dr.*', 'ay.academic_year'])->first();
 
         try {
             $this->notificationService->sendSoumission($demande);

@@ -76,7 +76,31 @@ final class WorkflowConstants
         'attestation_definitive'  => 'Attestation Définitive',
         'attestation_inscription' => "Attestation d'Inscription",
         'bulletin_notes'          => 'Bulletin de Notes',
+        'bulletin_annuel'         => 'Bulletin Annuel',
     ];
+
+    /**
+     * Résout le libellé humain d'un type de document.
+     *
+     * CORRECTIF : 'bulletin_annuel' était absent de TYPE_LABELS, donc tous les
+     * messages (WhatsApp/mail) générés par NotificationService affichaient le
+     * slug brut "bulletin_annuel" au lieu d'un libellé lisible.
+     *
+     * Pour ce type précis, l'année académique du dossier est ajoutée au
+     * libellé (ex: "Bulletin Annuel 2024-2025") car "Bulletin Annuel" seul
+     * est ambigu — contrairement aux attestations où l'année n'a pas
+     * cette importance dans le message.
+     */
+    public static function typeLabel(string $type, ?string $academicYear = null): string
+    {
+        $label = self::TYPE_LABELS[$type] ?? $type;
+
+        if ($type === 'bulletin_annuel' && $academicYear) {
+            $label .= ' ' . $academicYear;
+        }
+
+        return $label;
+    }
 
     public const ACTION_LABELS = [
         'secretaire_validate'            => 'Validation',

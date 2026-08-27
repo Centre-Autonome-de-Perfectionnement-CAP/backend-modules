@@ -45,6 +45,7 @@ class DocumentRequestController extends Controller
         protected DocumentRequestQueryService $queryService,
         protected DocumentStorageService      $storageService,
         protected SecretaryFileService        $secretaryFileService,
+        protected \App\Modules\Demandes\Services\ContactDemandeurService $contactDemandeurService,
     ) {}
 
     // ── Listing (INCHANGÉ — format brut conservé) ─────────────────────────────
@@ -198,6 +199,35 @@ class DocumentRequestController extends Controller
             'message'         => 'Fichier supprimé.',
             'secretary_files' => $secretaryFiles,
         ]);
+    }
+
+    // ── AJOUT : message libre secrétaire → demandeur (WhatsApp + email) ──────────
+
+    public function contactDemandeur(Request $request, int $id): JsonResponse
+    {
+        $demande = DocumentRequest::findOrFail($id);
+        // Réutilise la policy existante : secrétaire/admin uniquement,
+        // même règle que pour la gestion des fichiers secrétaire.
+        $this->authorize('manageSecretaryFiles', $demande);
+
+        $request->validate([
+            'message'        => 'required|string|max:3000',
+            'attachments'    => 'nullable|array|max:5',
+            'attachments.*'  => 'file|max:10240', // 10 Mo par pièce jointe
+        ]);
+
+        try {
+            $result = $this->contactDemandeurService->send(
+                $demande,
+                $request->input('message'),
+                $request->file('attachments', []),
+                $request,
+            );
+        } catch (BusinessException $e) {
+            return $this->errorResponse($e->getMessage(), $e->getStatusCode());
+        }
+
+        return $this->successResponse($result, 'Envoi traité.');
     }
 
     // ══════════════════════════════════════════════════════════════════════════

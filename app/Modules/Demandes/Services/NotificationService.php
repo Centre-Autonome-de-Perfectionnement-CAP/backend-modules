@@ -94,7 +94,7 @@ class NotificationService
      */
     public function sendSoumission(object $demande): void
     {
-        $typeLabel    = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $typeLabel    = WorkflowConstants::typeLabel($demande->type, $demande->academic_year ?? null);
         $etudiantInfo = $this->fetchEtudiantInfo($demande->id);
         $etudiantNom  = $this->buildNom($etudiantInfo);
         $matricule    = $etudiantInfo->matricule ?? '';
@@ -175,7 +175,7 @@ class NotificationService
      */
     public function sendRejected(object $demande, string $motif): void
     {
-        $typeLabel    = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $typeLabel    = WorkflowConstants::typeLabel($demande->type, $demande->academic_year ?? null);
         $etudiantInfo = $this->fetchEtudiantInfo($demande->id);
         $etudiantNom  = $this->buildNom($etudiantInfo);
 
@@ -186,7 +186,7 @@ class NotificationService
             view:    'core::emails.demande-rejected',
             vars:    [
                 'reference' => $demande->reference,
-                'type'      => WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type,
+                'type'      => WorkflowConstants::typeLabel($demande->type, $demande->academic_year ?? null),
                 'motif'     => $motif,
             ],
             context: "rejet:{$demande->reference}",
@@ -207,7 +207,7 @@ class NotificationService
      */
     public function sendSousReserve(object $demande, string $motif): void
     {
-        $typeLabel    = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $typeLabel    = WorkflowConstants::typeLabel($demande->type, $demande->academic_year ?? null);
         $etudiantInfo = $this->fetchEtudiantInfo($demande->id);
         $etudiantNom  = $this->buildNom($etudiantInfo);
 
@@ -239,7 +239,7 @@ class NotificationService
      */
     public function sendReady(object $demande): void
     {
-        $typeLabel    = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $typeLabel    = WorkflowConstants::typeLabel($demande->type, $demande->academic_year ?? null);
         $etudiantInfo = $this->fetchEtudiantInfo($demande->id);
         $etudiantNom  = $this->buildNom($etudiantInfo);
 
@@ -250,7 +250,7 @@ class NotificationService
             view:    'core::emails.demande-ready',
             vars:    [
                 'reference' => $demande->reference,
-                'type'      => WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type,
+                'type'      => WorkflowConstants::typeLabel($demande->type, $demande->academic_year ?? null),
             ],
             context: "pret:{$demande->reference}",
         );
@@ -270,7 +270,7 @@ class NotificationService
      */
     public function sendDelivered(object $demande): void
     {
-        $typeLabel    = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $typeLabel    = WorkflowConstants::typeLabel($demande->type, $demande->academic_year ?? null);
         $etudiantInfo = $this->fetchEtudiantInfo($demande->id);
         $etudiantNom  = $this->buildNom($etudiantInfo);
 
@@ -281,7 +281,7 @@ class NotificationService
             view:    'core::emails.demande-delivered',
             vars:    [
                 'reference' => $demande->reference,
-                'type'      => WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type,
+                'type'      => WorkflowConstants::typeLabel($demande->type, $demande->academic_year ?? null),
             ],
             context: "remis:{$demande->reference}",
         );
@@ -393,7 +393,7 @@ class NotificationService
         $etudiantNom       = trim(($etudiantInfo->first_names ?? '') . ' ' . ($etudiantInfo->last_name ?? '')) ?: 'Étudiant(e)';
         $matricule         = $etudiantInfo->matricule ?? '';
         $expediteurNomRole = (WorkflowConstants::ROLE_LABELS[$expediteurRole] ?? $expediteurRole ?? 'Acteur');
-        $typeDocument      = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $typeDocument      = WorkflowConstants::typeLabel($demande->type, $demande->academic_year ?? null);
         $destinataireRole  = WorkflowConstants::ROLE_LABELS[$targetRoleSlug] ?? $targetRoleSlug;
         $isCorrection      = !empty($demande->is_in_correction_circuit);
 
@@ -461,7 +461,7 @@ class NotificationService
     public function notifySecretaireAfterDirecteurSign(object $demande): void
     {
         $secretaires  = $this->findUsersWithRole('secretaire', null);
-        $typeLabel    = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $typeLabel    = WorkflowConstants::typeLabel($demande->type, $demande->academic_year ?? null);
         $etudiantInfo = $this->fetchEtudiantInfo($demande->id);
         $etudiantNom  = $this->buildNom($etudiantInfo);
         $matricule    = $etudiantInfo->matricule ?? '';
@@ -512,7 +512,7 @@ class NotificationService
     public function notifySecretaryOfDirectionTransmission(object $demande): void
     {
         $secretaires  = $this->findUsersWithRole('secretaire', null);
-        $typeLabel    = WorkflowConstants::TYPE_LABELS[$demande->type] ?? $demande->type;
+        $typeLabel    = WorkflowConstants::typeLabel($demande->type, $demande->academic_year ?? null);
         $etudiantInfo = $this->fetchEtudiantInfo($demande->id);
         $etudiantNom  = $this->buildNom($etudiantInfo);
         $matricule    = $etudiantInfo->matricule ?? '';

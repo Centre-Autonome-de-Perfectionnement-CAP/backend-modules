@@ -30,10 +30,21 @@ use App\Modules\Core\Services\WhatsAppBridgeClient;
  */
 class WhatsAppService
 {
-    // ── Liens (à adapter au vrai domaine de production) ─────────────────────
-    // Un seul endroit à modifier après déploiement.
-    private const URL_SUIVI      = 'http://cap.the-haute-societyy.com/student-services?type=suivi';
-    private const URL_COMPLEMENT = 'http://cap.the-haute-societyy.com/student-services?type=complement-dossier';
+    // ── Liens (adaptés dynamiquement à l'environnement) ─────────────────────
+    // CORRECTIF : les URLs étaient codées en dur sur un domaine de dev
+    // ("cap.the-haute-societyy.com") qui ne correspond ni à la prod ni au
+    // local. On utilise désormais FRONTEND_URL (config('app.frontend_url')),
+    // déjà défini dans config/app.php avec fallback localhost:5173 — un seul
+    // endroit à changer (le .env) pour prod/local/staging.
+    private function urlSuivi(): string
+    {
+        return rtrim(config('app.frontend_url'), '/') . '/student-services?type=suivi';
+    }
+
+    private function urlComplement(): string
+    {
+        return rtrim(config('app.frontend_url'), '/') . '/student-services?type=complement-dossier';
+    }
 
     public function __construct(
         private WhatsAppBridgeClient $bridge,
@@ -44,6 +55,21 @@ class WhatsAppService
     public function send(string $phone, string $message, string $context = ''): bool
     {
         return $this->bridge->send($phone, $message, $context);
+    }
+
+    /**
+     * Envoie un fichier WhatsApp (pièce jointe) — passthrough vers le bridge.
+     * Utilisé par ContactDemandeurService (message libre secrétaire → demandeur).
+     */
+    public function sendFile(
+        string $phone,
+        string $disk,
+        string $path,
+        string $fileName,
+        string $caption = '',
+        string $context = '',
+    ): bool {
+        return $this->bridge->sendFile($phone, $disk, $path, $fileName, $caption, $context);
     }
 
     public function normalizePhone(string $phone): ?string
@@ -77,7 +103,7 @@ class WhatsAppService
             'Veuillez conserver cette référence : elle vous sera utile pour tout suivi ou réclamation.',
             "Vous serez notifié(e) en temps réel sur l'état de votre demande.",
             '',
-            'Suivi de votre dossier sur : ' . self::URL_SUIVI . "?ref={$reference}",
+            'Suivi de votre dossier sur : ' . $this->urlSuivi() . "&ref={$reference}",
         ]);
     }
 
@@ -95,7 +121,7 @@ class WhatsAppService
         }
         $lines[] = 'Elles ont été transmises au secrétariat pour vérification.';
         $lines[] = '';
-        $lines[] = 'Suivi de votre dossier sur : ' . self::URL_SUIVI . "?ref={$reference}";
+        $lines[] = 'Suivi de votre dossier sur : ' . $this->urlSuivi() . "&ref={$reference}";
         return implode("\n", $lines);
     }
 
@@ -127,7 +153,7 @@ class WhatsAppService
             "Bonjour {$nomEtudiant},",
             "Votre demande de *{$typeLabel}* (Réf : *{$reference}*) nécessite un complément.",
             "Motif : {$motif}",
-            'Merci de soumettre les pièces manquantes via ce lien : ' . self::URL_COMPLEMENT . "?ref={$reference}",
+            'Merci de soumettre les pièces manquantes via ce lien : ' . $this->urlComplement() . "&ref={$reference}",
         ]);
     }
 

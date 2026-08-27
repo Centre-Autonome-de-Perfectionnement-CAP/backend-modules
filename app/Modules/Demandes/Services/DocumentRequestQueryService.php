@@ -44,6 +44,7 @@ class DocumentRequestQueryService
         'dr.status',
         'dr.has_flag',
         'dr.email',
+        'dr.demandeur_whatsapp',
         'dr.files',
         'dr.complement_files',
         'dr.secretary_files',

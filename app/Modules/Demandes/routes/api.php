@@ -50,6 +50,9 @@ Route::prefix('api/attestations')->middleware('auth:sanctum')->group(function ()
     Route::patch('document-requests/{id}/secretary-files/{fileId}',  [DocumentRequestController::class, 'updateSecretaryFileComment'])->whereNumber('id');
     Route::delete('document-requests/{id}/secretary-files/{fileId}',[DocumentRequestController::class, 'deleteSecretaryFile'])->whereNumber('id');
 
+    // ── Message libre secrétaire → demandeur (WhatsApp + email) ────────────────
+    Route::post('document-requests/{id}/contact-demandeur', [DocumentRequestController::class, 'contactDemandeur'])->whereNumber('id');
+
     // ── Transitions workflow ─────────────────────────────────────────────────────
     Route::post('document-requests/{id}/transition', DocumentRequestTransitionController::class)->whereNumber('id');
 

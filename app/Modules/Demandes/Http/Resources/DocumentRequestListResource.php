@@ -29,6 +29,7 @@ class DocumentRequestListResource extends JsonResource
             'status'    => $this->status,
             'has_flag'  => (bool) $this->has_flag,
             'email'     => $this->email,
+            'demandeur_whatsapp' => $this->demandeur_whatsapp,
 
             // Fichiers bruts (déjà JSON dans la colonne)
             'files'             => $this->files,

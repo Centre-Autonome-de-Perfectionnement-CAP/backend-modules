@@ -93,7 +93,15 @@ class TransitionService
         });
 
         // ── Mails (hors transaction, comme dans l'original) ───────────────────
-        $fresh = DB::table('document_requests')->where('id', $id)->first();
+        // JOIN academic_years : document_requests n'a qu'un academic_year_id (FK),
+        // pas de colonne academic_year directe. Sans cette jointure,
+        // $fresh->academic_year est toujours null (ex: WorkflowConstants::typeLabel()
+        // qui en a besoin pour afficher "Bulletin Annuel 2024-2025").
+        $fresh = DB::table('document_requests as dr')
+            ->leftJoin('academic_years as ay', 'dr.academic_year_id', '=', 'ay.id')
+            ->where('dr.id', $id)
+            ->select(['dr.*', 'ay.academic_year'])
+            ->first();
 
         match ($mailTrigger) {
             'rejected'                          => $this->notificationService->sendRejected($fresh, $payload['motif'] ?? ''),
@@ -104,7 +112,14 @@ class TransitionService
             default                             => null,
         };
 
-        if ($newStatus) {
+        if ($newStatus && $mailTrigger !== 'directeur_signed_notify_secretaire') {
+            // CORRECTIF : sur directeur_sign / directeur_sign_flagged, la secrétaire
+            // recevait DEUX messages redondants — "Signature validée" (ci-dessus,
+            // via notifySecretaireAfterDirecteurSign) ET le message générique
+            // "Dossier à traiter" de notifyNextActor (elle est le prochain acteur
+            // après la signature du directeur). Le premier message contient déjà
+            // l'appel à l'action ("Merci de préparer... et de le marquer prêt"),
+            // donc on n'envoie plus le second dans ce cas précis.
             $this->notificationService->notifyNextActor(
                 demande:                 $fresh,
                 newStatus:               $newStatus,
