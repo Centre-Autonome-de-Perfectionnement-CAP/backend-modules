@@ -1,0 +1,1 @@
+import{r as d,a7 as l,R as m,a8 as n,a9 as e}from"./index-BxHF3bsF.js";const r=d.forwardRef((a,s)=>{var{children:t,className:o}=a,c=l(a,["children","className"]);return m.createElement("div",Object.assign({className:n("card-footer",o)},c,{ref:s}),t)});r.propTypes={children:e.node,className:e.string};r.displayName="CCardFooter";export{r as C};
