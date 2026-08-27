@@ -34,8 +34,40 @@ class ProfessorController extends Controller
     public function __construct(
         protected ProfessorService $professorService
     ) {
-        $this->middleware('auth:sanctum')->except(['index']);
+        $this->middleware('auth:sanctum')->except(['index', 'forSelect']);
         $this->restrictToRoles(self::ALLOWED_ROLES, only: ['store', 'update', 'destroy', 'updateAddress']);
+    }
+
+    // ───────────────────────── LISTE COMPLÈTE (pour selects, ex: création de contrat)
+    // Pas de pagination ici volontairement : un select doit pouvoir proposer
+    // TOUS les profs de la base, pas seulement la page triée par date de
+    // création (qui masquait les profs plus anciens, ceux qui ont
+    // justement des programmes assignés).
+    public function forSelect(Request $request): JsonResponse
+    {
+        try {
+            $query = Professor::query()->select('id', 'first_name', 'last_name', 'email', 'status');
+
+            if (!empty($request->input('status'))) {
+                $query->where('status', $request->input('status'));
+            }
+
+            $professors = $query->orderBy('last_name')->orderBy('first_name')->get();
+
+            return $this->successResponse(
+                $professors->map(fn($p) => [
+                    'id'         => $p->id,
+                    'first_name' => $p->first_name,
+                    'last_name'  => $p->last_name,
+                    'full_name'  => trim("{$p->first_name} {$p->last_name}"),
+                    'email'      => $p->email,
+                    'status'     => $p->status,
+                ]),
+                'Liste complète des professeurs récupérée avec succès.'
+            );
+        } catch (Exception $e) {
+            return $this->errorResponse('Erreur lors de la récupération des professeurs : ' . $e->getMessage());
+        }
     }
 
     // ───────────────────────── LISTE

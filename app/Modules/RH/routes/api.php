@@ -16,6 +16,8 @@ use App\Modules\RH\Http\Controllers\WhatsAppGroupController;
 Route::prefix('rh')->group(function () {
 
     Route::get('professors',             [ProfessorController::class, 'index']);
+    // Liste complète non paginée, pour les selects (ex: création de contrat RH)
+    Route::get('professors-select',      [ProfessorController::class, 'forSelect']);
     Route::get('grades',                 [GradeController::class, 'index']);
     Route::get('files/{file}',           [FileController::class, 'viewDocument']);
     Route::get('documents',              [DocumentManagementController::class, 'index']);
