@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Modules\Cours\Models\Program;
 use App\Modules\EmploiDuTemps\Models\ScheduledCourse;
+use App\Modules\EmploiDuTemps\Models\EmploiDuTemps;
 use App\Models\User;
 
 class TextbookEntry extends Model
@@ -16,6 +17,7 @@ class TextbookEntry extends Model
     protected $fillable = [
         'program_id',
         'scheduled_course_id',
+        'emploi_du_temps_id',
         'session_date',
         'start_time',
         'end_time',
@@ -58,11 +60,21 @@ class TextbookEntry extends Model
     }
 
     /**
-     * Relation avec le cours planifié
+     * Relation avec le cours planifié (ancien système — conservé pour les
+     * entrées déjà créées avant l'unification).
      */
     public function scheduledCourse()
     {
         return $this->belongsTo(ScheduledCourse::class);
+    }
+
+    /**
+     * Relation avec la séance d'emploi du temps (nouveau système —
+     * utilisé pour toute nouvelle entrée).
+     */
+    public function emploiDuTemps()
+    {
+        return $this->belongsTo(EmploiDuTemps::class);
     }
 
     /**

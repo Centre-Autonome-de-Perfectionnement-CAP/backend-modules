@@ -31,7 +31,7 @@ class ContratController extends Controller
      * est confirmé partout ailleurs dans le code (WorkflowConstants, etc.).
      */
     private const ADMIN_ROLES       = ['admin', 'chef-cap', 'rh'];
-    private const MONOGRAPHIE_ROLES = ['admin', 'chef-cap', 'responsable-division', 'chef-division', 'rh'];
+    private const MONOGRAPHIE_ROLES = ['admin', 'chef-cap', 'responsable-division', 'chef-division', 'rh', 'rd-fad', 'rd-fc'];
 
     private function assertAdmin(Request $request): void
     {
@@ -43,13 +43,20 @@ class ContratController extends Controller
         }
     }
 
-    private function assertCanManageMonographie(Request $request): void
+    private function assertCanManageMonographie(Request $request, ?Contrat $contrat = null): void
     {
         $user = $request->user();
         $slug = $user?->roles?->first()?->slug;
 
         if (!$user || !in_array($slug, self::MONOGRAPHIE_ROLES, true)) {
             abort(403, 'Accès réservé aux administrateurs et responsables de division.');
+        }
+
+        // AJOUT — cloisonnement par division : rd-fad/rd-fc ne peuvent agir
+        // que sur les contrats de LEUR division.
+        $divisionByRole = ['rd-fad' => 'RD-FAD', 'rd-fc' => 'RD-FC'];
+        if ($contrat && isset($divisionByRole[$slug]) && $contrat->division !== $divisionByRole[$slug]) {
+            abort(403, 'Ce contrat appartient à une autre division.');
         }
     }
 
@@ -291,13 +298,25 @@ class ContratController extends Controller
     {
         $this->assertCanManageMonographie($request);
 
-        $contrats = Contrat::with([
+        $query = Contrat::with([
             'professor',
             'cycle',
             'academicYear',
             'courseElementProfessors.courseElement.teachingUnit',
             'courseElementProfessors.classGroup',
-        ])->latest()->get();
+        ]);
+
+        // AJOUT — cloisonnement par division : un responsable de division
+        // (rd-fad / rd-fc) ne voit que les contrats de SA division.
+        // admin/chef-cap/rh/chef-division/responsable-division (générique)
+        // gardent une vue complète, intentionnellement.
+        $slug = $request->user()?->roles?->first()?->slug;
+        $divisionByRole = ['rd-fad' => 'RD-FAD', 'rd-fc' => 'RD-FC'];
+        if (isset($divisionByRole[$slug])) {
+            $query->where('division', $divisionByRole[$slug]);
+        }
+
+        $contrats = $query->latest()->get();
 
         return response()->json([
             'success' => true,
@@ -384,9 +403,9 @@ if (!empty($validated['course_element_professor_ids'])) {
 
     public function show(Request $request, $id)
     {
-        $this->assertCanManageMonographie($request);
-
         $contrat = Contrat::findOrFail($id);
+        $this->assertCanManageMonographie($request, $contrat);
+
         return response()->json([
             'success' => true,
             'data'    => $this->formatContrat($contrat),
@@ -741,7 +760,7 @@ if (array_key_exists('course_element_professor_ids', $validated)) {
             return response()->json(['success' => true, 'data' => []]);
         }
 
-        $contrats = Contrat::where('status', '!=', 'pending')->with([
+        $contrats = Contrat::with([
             'professor',
             'cycle',
             'academicYear',
@@ -1043,7 +1062,11 @@ if (array_key_exists('course_element_professor_ids', $validated)) {
      */
     public function updateProgramMonographie(Request $request, $contratId, $programId)
     {
-        $this->assertCanManageMonographie($request);
+        if (is_numeric($contratId)) {
+            $this->assertCanManageMonographie($request, Contrat::find($contratId));
+        } else {
+            $this->assertCanManageMonographie($request);
+        }
 
         try {
             $validated = $request->validate([
