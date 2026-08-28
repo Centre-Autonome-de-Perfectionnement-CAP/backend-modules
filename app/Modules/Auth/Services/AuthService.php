@@ -7,6 +7,7 @@ use App\Modules\Inscription\Models\PersonalInformation;
 use App\Modules\RH\Models\Professor;
 use App\Modules\Inscription\Models\ClassGroup;
 use App\Modules\Inscription\Models\Student;
+use App\Modules\Inscription\Models\PendingStudent;
 use App\Modules\Inscription\Models\StudentGroup;
 use App\Modules\Inscription\Models\AcademicYear;
 use Illuminate\Support\Facades\Hash;
@@ -75,22 +76,23 @@ class AuthService{
             ];
         }
 
-        // Vérifier dans la table personal_information (responsables de classe - role_id = 9)
-        $personalInfo = PersonalInformation::where('email', $credentials['email'])
-            ->where('role_id', 9)
-            ->first();
+        // Vérifier dans la table personal_information (étudiants / responsables de classe)
+        $personalInfo = PersonalInformation::where('email', $credentials['email'])->first();
 
-        if ($personalInfo && Hash::check($credentials['password'], $personalInfo->password)) {
-            
+        if ($personalInfo && !empty($personalInfo->password) && Hash::check($credentials['password'], $personalInfo->password)) {
             $personalInfo->tokens()->delete();
             $token = $personalInfo->createToken('auth_token')->plainTextToken;
 
             // Récupérer toutes les classes associées à ce responsable
             $classes = $this->getResponsableClasses($personalInfo->id);
 
-            Log::info('Responsable de classe connecté', [
+            $roleSlug = ($personalInfo->role_id == 9 || !empty($classes)) ? 'responsable' : 'etudiant';
+            $roleDisplayName = $roleSlug === 'responsable' ? 'Responsable de classe' : 'Étudiant';
+
+            Log::info('Compte personal_information connecté', [
                 'personal_information_id' => $personalInfo->id,
                 'email'                   => $personalInfo->email,
+                'role'                    => $roleSlug,
                 'nombre_classes'          => count($classes),
             ]);
 
@@ -103,10 +105,10 @@ class AuthService{
                     'last_name'         => $personalInfo->last_name,
                     'email'             => $personalInfo->email,
                     'phone'             => $this->extractPhoneFromContacts($personalInfo->contacts),
-                    'role'              => 'responsable',
-                    'role_display_name' => 'Responsable de classe',
+                    'role'              => $roleSlug,
+                    'role_display_name' => $roleDisplayName,
                     'role_id'           => $personalInfo->role_id,
-                    'user_type'         => 'responsable',
+                    'user_type'         => $roleSlug,
                     'classes'           => $classes,
                 ],
             ];
@@ -124,58 +126,68 @@ class AuthService{
     private function getResponsableClasses(int $personalInfoId): array
     {
         try {
-            // Récupérer toutes les classes où ce responsable est assigné
-            // Cette requête dépend de la structure de votre base de données
-            // Voici une approche basée sur les relations que vous avez montrées
-            
-            $classes = ClassGroup::whereHas('studentGroups', function($query) use ($personalInfoId) {
-                // Si la table student_groups a une colonne responsable_id
-                $query->where('responsable_id', $personalInfoId);
-            })
-            ->orWhereHas('department', function($query) use ($personalInfoId) {
-                // Alternative: si le responsable est lié via le département
-                $query->where('responsable_id', $personalInfoId);
-            })
-            ->with(['academicYear', 'department.cycle'])
-            ->orderBy('academic_year_id', 'desc')
-            ->orderBy('study_level')
-            ->orderBy('group_name')
-            ->get();
+            $pendingStudentIds = PendingStudent::where('personal_information_id', $personalInfoId)->pluck('id');
+
+            if ($pendingStudentIds->isEmpty()) {
+                return [];
+            }
+
+            $studentIds = DB::table('student_pending_student')
+                ->whereIn('pending_student_id', $pendingStudentIds)
+                ->pluck('student_id')
+                ->unique();
+
+            if ($studentIds->isEmpty()) {
+                return [];
+            }
+
+            $classGroupIds = StudentGroup::whereIn('student_id', $studentIds)
+                ->pluck('class_group_id')
+                ->unique();
+
+            if ($classGroupIds->isEmpty()) {
+                return [];
+            }
+
+            $classes = ClassGroup::whereIn('id', $classGroupIds)
+                ->with(['academicYear', 'department.cycle'])
+                ->orderByDesc('academic_year_id')
+                ->orderBy('study_level')
+                ->orderBy('group_name')
+                ->get();
 
             if ($classes->isEmpty()) {
-                // Si aucune classe trouvée avec les relations ci-dessus,
-                // on peut essayer de récupérer toutes les classes et filtrer
-                // ou retourner un tableau vide
                 return [];
             }
 
             // Organiser les classes par année académique
             $classesByYear = [];
             foreach ($classes as $class) {
-                $yearId = $class->academic_year_id;
-                $yearName = $class->academicYear ? $class->academicYear->name : 'Année inconnue';
-                
+                $yearId   = $class->academic_year_id;
+                $yearName = optional($class->academicYear)->academic_year
+                            ?? optional($class->academicYear)->libelle
+                            ?? optional($class->academicYear)->name
+                            ?? 'Année inconnue';
+
                 if (!isset($classesByYear[$yearId])) {
                     $classesByYear[$yearId] = [
-                        'academic_year_id' => $yearId,
+                        'academic_year_id'   => $yearId,
                         'academic_year_name' => $yearName,
-                        'classes' => []
+                        'classes'            => [],
                     ];
                 }
 
                 // Compter le nombre d'étudiants dans cette classe
-                $studentCount = StudentGroup::where('class_group_id', $class->id)
-                    ->whereHas('student')
-                    ->count();
+                $studentCount = StudentGroup::where('class_group_id', $class->id)->count();
 
                 $classesByYear[$yearId]['classes'][] = [
-                    'id' => $class->id,
-                    'group_name' => $class->group_name,
-                    'study_level' => $class->study_level,
-                    'filiere' => $class->department->name ?? 'N/A',
-                    'cycle' => $class->department->cycle->name ?? 'N/A',
-                    'total_etudiants' => $studentCount,
-                    'academic_year_id' => $class->academic_year_id,
+                    'id'                 => $class->id,
+                    'group_name'         => $class->group_name,
+                    'study_level'        => $class->study_level,
+                    'filiere'            => $class->department->name ?? 'N/A',
+                    'cycle'              => $class->department->cycle->name ?? 'N/A',
+                    'total_etudiants'    => $studentCount,
+                    'academic_year_id'   => $class->academic_year_id,
                     'academic_year_name' => $yearName,
                     'validation_average' => $class->validation_average,
                 ];

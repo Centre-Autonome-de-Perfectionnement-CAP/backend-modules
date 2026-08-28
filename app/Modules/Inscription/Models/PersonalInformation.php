@@ -11,6 +11,8 @@ class PersonalInformation extends Authenticatable
 {
     use HasFactory, HasUuid, HasApiTokens;
 
+    protected $table = 'personal_information';
+
     protected $fillable = [
         'last_name',
         'first_names',
