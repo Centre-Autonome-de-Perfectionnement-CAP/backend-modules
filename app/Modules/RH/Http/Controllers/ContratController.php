@@ -331,22 +331,77 @@ class ContratController extends Controller
         $this->assertAdmin($request);
 
         $validated = $request->validate([
-            'division'                       => 'nullable|string',
+            'division'                       => 'required|string',
             'professor_id'                   => 'required|integer|exists:professors,id',
-            'academic_year_id'               => 'required|integer',
-            'cycle_id'                       => 'nullable|integer',
-            'regroupement'                   => 'nullable|string',
+            'academic_year_id'               => 'required|integer|exists:academic_years,id',
+            'cycle_id'                       => 'required|integer|exists:cycles,id',
+            'regroupement'                   => 'required|string',
             'start_date'                     => 'required|date',
             'end_date'                       => 'nullable|date|after_or_equal:start_date',
             'notes'                          => 'nullable|string',
-            'course_element_professor_ids'   => 'nullable|array',
-            'course_element_professor_ids.*' => 'integer',
+            'course_element_professor_ids'   => 'required|array|min:1',
+            'course_element_professor_ids.*' => 'integer|exists:course_element_professor,id',
             'program_amounts'                => 'nullable|array',
             'program_amounts.*'              => 'nullable|numeric|min:0',
             'program_hours'                  => 'nullable|array',
             'program_hours.*'                => 'nullable|numeric|min:0',
             'amount'                         => 'nullable|numeric|min:0',
+        ], [
+            'course_element_professor_ids.required' => 'Veuillez ajouter au moins un cours au contrat.',
+            'course_element_professor_ids.min'      => 'Veuillez ajouter au moins un cours au contrat.',
+            'cycle_id.required'                     => 'Le cycle est obligatoire.',
+            'division.required'                     => 'La division est obligatoire.',
+            'regroupement.required'                 => 'Le regroupement est obligatoire.',
         ]);
+
+        // ── Anti-doublon strict : vérifier si un contrat actif identique existe déjà ──
+        $existingDuplicate = Contrat::where('professor_id', $validated['professor_id'])
+            ->where('academic_year_id', $validated['academic_year_id'])
+            ->where('cycle_id', $validated['cycle_id'])
+            ->where('division', $validated['division'])
+            ->where('regroupement', $validated['regroupement'])
+            ->whereNotIn('status', ['cancelled', 'resiliated'])
+            ->first();
+
+        if ($existingDuplicate) {
+            return response()->json([
+                'success' => false,
+                'message' => "Un contrat actif (N° {$existingDuplicate->contrat_number}) existe déjà pour ce professeur avec la même année académique, le même cycle, le même regroupement et la même division.",
+            ], 422);
+        }
+
+        // ── Vérification de la cohérence relationnelle des cours ──
+        $cepsWithHours = \App\Modules\Cours\Models\CourseElementProfessor::with([
+            'courseElement',
+            'classGroup.department.cycle',
+        ])
+        ->whereIn('id', $validated['course_element_professor_ids'])
+        ->get()
+        ->keyBy('id');
+
+        foreach ($validated['course_element_professor_ids'] as $cepId) {
+            $cep = $cepsWithHours->get($cepId);
+            if (!$cep) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Le cours sélectionné (#{$cepId}) est introuvable.",
+                ], 422);
+            }
+            if ($cep->professor_id != $validated['professor_id']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Le cours \"{$cep->courseElement?->name}\" n'est pas assigné à cet enseignant.",
+                ], 422);
+            }
+            $courseCycleId = $cep->classGroup?->department?->cycle_id;
+            if ($courseCycleId && $courseCycleId != $validated['cycle_id']) {
+                $courseCycleName = $cep->classGroup?->department?->cycle?->name ?? "Cycle #{$courseCycleId}";
+                return response()->json([
+                    'success' => false,
+                    'message' => "Incohérence : le cours \"{$cep->courseElement?->name}\" appartient au cycle {$courseCycleName} et ne peut pas être ajouté à un contrat de cycle différent.",
+                ], 422);
+            }
+        }
 
         // Calcul automatique du montant total depuis program_amounts et program_hours
         $programAmounts = $request->input('program_amounts', []);
@@ -362,21 +417,14 @@ class ContratController extends Controller
         ) : [];
 
         $totalAmount = 0;
-        if (!empty($validated['course_element_professor_ids'])) {
-            $cepsWithHours = \App\Modules\Cours\Models\CourseElementProfessor::with('courseElement')
-                ->whereIn('id', $validated['course_element_professor_ids'])
-                ->get()
-                ->keyBy('id');
+        foreach ($validated['course_element_professor_ids'] as $cepId) {
+            $amt = isset($programAmounts[(string)$cepId]) ? (float) $programAmounts[(string)$cepId] : 0;
+            $hrs = isset($programHours[(string)$cepId]) && $programHours[(string)$cepId] !== ''
+                ? (float) $programHours[(string)$cepId]
+                : ($cepsWithHours[$cepId]?->courseElement?->hours ?? 0);
 
-            foreach ($validated['course_element_professor_ids'] as $cepId) {
-                $amt = isset($programAmounts[(string)$cepId]) ? (float) $programAmounts[(string)$cepId] : 0;
-                $hrs = isset($programHours[(string)$cepId]) && $programHours[(string)$cepId] !== ''
-                    ? (float) $programHours[(string)$cepId]
-                    : ($cepsWithHours[$cepId]?->courseElement?->hours ?? 0);
-
-                if ($amt > 0) {
-                    $totalAmount += ($hrs > 0 ? $amt * $hrs : $amt);
-                }
+            if ($amt > 0) {
+                $totalAmount += ($hrs > 0 ? $amt * $hrs : $amt);
             }
         }
 
@@ -405,35 +453,28 @@ class ContratController extends Controller
         $contrat = Contrat::create($validated);
 
         // Attachement des programmes avec amount_program, hours et program_id par pivot
-        if (!empty($validated['course_element_professor_ids'])) {
-            $ceps = Program::whereIn('course_element_professor_id', $validated['course_element_professor_ids'])
-                ->pluck('id', 'id');
+        $ceps = Program::whereIn('course_element_professor_id', $validated['course_element_professor_ids'])
+            ->pluck('id', 'id');
 
-            $cepsWithHours = \App\Modules\Cours\Models\CourseElementProfessor::with('courseElement')
-                ->whereIn('id', $validated['course_element_professor_ids'])
-                ->get()
-                ->keyBy('id');
+        $syncData = [];
+        foreach ($validated['course_element_professor_ids'] as $cepId) {
+            $amt   = isset($programAmounts[(string)$cepId]) ? (float) $programAmounts[(string)$cepId] : null;
+            $hours = isset($programHours[(string)$cepId]) && $programHours[(string)$cepId] !== ''
+                ? (float) $programHours[(string)$cepId]
+                : ($cepsWithHours[$cepId]?->courseElement?->hours ?? null);
 
-            $syncData = [];
-            foreach ($validated['course_element_professor_ids'] as $cepId) {
-                $amt   = isset($programAmounts[(string)$cepId]) ? (float) $programAmounts[(string)$cepId] : null;
-                $hours = isset($programHours[(string)$cepId]) && $programHours[(string)$cepId] !== ''
-                    ? (float) $programHours[(string)$cepId]
-                    : ($cepsWithHours[$cepId]?->courseElement?->hours ?? null);
-
-                // Si les heures ont été saisies/modifiées, les enregistrer aussi sur l'ECUE
-                if ($hours !== null && $cepsWithHours[$cepId]?->courseElement) {
-                    $cepsWithHours[$cepId]->courseElement->update(['hours' => (int) $hours]);
-                }
-
-                $syncData[$cepId] = [
-                    'amount_program' => $amt,
-                    'hours'          => $hours,
-                    'program_id'     => $ceps[$cepId] ?? null,
-                ];
+            // Si les heures ont été saisies/modifiées, les enregistrer aussi sur l'ECUE
+            if ($hours !== null && $cepsWithHours[$cepId]?->courseElement) {
+                $cepsWithHours[$cepId]->courseElement->update(['hours' => (int) $hours]);
             }
-            $contrat->courseElementProfessors()->sync($syncData);
+
+            $syncData[$cepId] = [
+                'amount_program' => $amt,
+                'hours'          => $hours,
+                'program_id'     => $ceps[$cepId] ?? null,
+            ];
         }
+        $contrat->courseElementProfessors()->sync($syncData);
 
         return response()->json([
             'success' => true,
@@ -471,23 +512,80 @@ class ContratController extends Controller
         }
 
         $validated = $request->validate([
-            'division'                       => 'nullable|string',
+            'division'                       => 'required|string',
             'professor_id'                   => 'required|integer|exists:professors,id',
-            'academic_year_id'               => 'required|integer',
-            'cycle_id'                       => 'nullable|integer',
-            'regroupement'                   => 'nullable|string',
+            'academic_year_id'               => 'required|integer|exists:academic_years,id',
+            'cycle_id'                       => 'required|integer|exists:cycles,id',
+            'regroupement'                   => 'required|string',
             'start_date'                     => 'required|date',
             'end_date'                       => 'nullable|date|after_or_equal:start_date',
             'notes'                          => 'nullable|string',
             'status'                         => 'sometimes|string|in:pending,transfered,signed,ongoing,completed,cancelled',
-            'course_element_professor_ids'   => 'nullable|array',
-            'course_element_professor_ids.*' => 'integer',
+            'course_element_professor_ids'   => 'required|array|min:1',
+            'course_element_professor_ids.*' => 'integer|exists:course_element_professor,id',
             'program_amounts'                => 'nullable|array',
             'program_amounts.*'              => 'nullable|numeric|min:0',
             'program_hours'                  => 'nullable|array',
             'program_hours.*'                => 'nullable|numeric|min:0',
             'amount'                         => 'nullable|numeric|min:0',
+        ], [
+            'course_element_professor_ids.required' => 'Veuillez ajouter au moins un cours au contrat.',
+            'course_element_professor_ids.min'      => 'Veuillez ajouter au moins un cours au contrat.',
+            'cycle_id.required'                     => 'Le cycle est obligatoire.',
+            'division.required'                     => 'La division est obligatoire.',
+            'regroupement.required'                 => 'Le regroupement est obligatoire.',
         ]);
+
+        // ── Anti-doublon strict sur modification ──
+        $existingDuplicate = Contrat::where('professor_id', $validated['professor_id'])
+            ->where('academic_year_id', $validated['academic_year_id'])
+            ->where('cycle_id', $validated['cycle_id'])
+            ->where('division', $validated['division'])
+            ->where('regroupement', $validated['regroupement'])
+            ->whereNotIn('status', ['cancelled', 'resiliated'])
+            ->where('id', '!=', $contrat->id)
+            ->first();
+
+        if ($existingDuplicate) {
+            return response()->json([
+                'success' => false,
+                'message' => "Un autre contrat actif (N° {$existingDuplicate->contrat_number}) existe déjà pour cette combinaison de critères.",
+            ], 422);
+        }
+
+        // ── Vérification de la cohérence relationnelle des cours ──
+        $ids = $validated['course_element_professor_ids'] ?? [];
+        $cepsWithHours = \App\Modules\Cours\Models\CourseElementProfessor::with([
+            'courseElement',
+            'classGroup.department.cycle',
+        ])
+        ->whereIn('id', $ids)
+        ->get()
+        ->keyBy('id');
+
+        foreach ($ids as $cepId) {
+            $cep = $cepsWithHours->get($cepId);
+            if (!$cep) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Le cours sélectionné (#{$cepId}) est introuvable.",
+                ], 422);
+            }
+            if ($cep->professor_id != $validated['professor_id']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Le cours \"{$cep->courseElement?->name}\" n'est pas assigné à cet enseignant.",
+                ], 422);
+            }
+            $courseCycleId = $cep->classGroup?->department?->cycle_id;
+            if ($courseCycleId && $courseCycleId != $validated['cycle_id']) {
+                $courseCycleName = $cep->classGroup?->department?->cycle?->name ?? "Cycle #{$courseCycleId}";
+                return response()->json([
+                    'success' => false,
+                    'message' => "Incohérence : le cours \"{$cep->courseElement?->name}\" appartient au cycle {$courseCycleName} et ne peut pas être ajouté à un contrat de cycle différent.",
+                ], 422);
+            }
+        }
 
         // Calcul automatique du montant total depuis program_amounts et program_hours
         $programAmounts = $request->input('program_amounts', []);
@@ -503,22 +601,14 @@ class ContratController extends Controller
         ) : [];
 
         $totalAmount = 0;
-        $ids = $validated['course_element_professor_ids'] ?? [];
-        if (!empty($ids)) {
-            $cepsWithHours = \App\Modules\Cours\Models\CourseElementProfessor::with('courseElement')
-                ->whereIn('id', $ids)
-                ->get()
-                ->keyBy('id');
+        foreach ($ids as $cepId) {
+            $amt = isset($programAmounts[(string)$cepId]) ? (float) $programAmounts[(string)$cepId] : 0;
+            $hrs = isset($programHours[(string)$cepId]) && $programHours[(string)$cepId] !== ''
+                ? (float) $programHours[(string)$cepId]
+                : ($cepsWithHours[$cepId]?->courseElement?->hours ?? 0);
 
-            foreach ($ids as $cepId) {
-                $amt = isset($programAmounts[(string)$cepId]) ? (float) $programAmounts[(string)$cepId] : 0;
-                $hrs = isset($programHours[(string)$cepId]) && $programHours[(string)$cepId] !== ''
-                    ? (float) $programHours[(string)$cepId]
-                    : ($cepsWithHours[$cepId]?->courseElement?->hours ?? 0);
-
-                if ($amt > 0) {
-                    $totalAmount += ($hrs > 0 ? $amt * $hrs : $amt);
-                }
+            if ($amt > 0) {
+                $totalAmount += ($hrs > 0 ? $amt * $hrs : $amt);
             }
         }
 
@@ -541,13 +631,6 @@ class ContratController extends Controller
         if (array_key_exists('course_element_professor_ids', $validated)) {
             $ceps = $ids
                 ? Program::whereIn('course_element_professor_id', $ids)->pluck('id', 'id')
-                : collect();
-
-            $cepsWithHours = $ids
-                ? \App\Modules\Cours\Models\CourseElementProfessor::with('courseElement')
-                    ->whereIn('id', $ids)
-                    ->get()
-                    ->keyBy('id')
                 : collect();
 
             $syncData = [];
@@ -801,31 +884,50 @@ class ContratController extends Controller
 
         $programs = \App\Modules\Cours\Models\CourseElementProfessor::with([
             'courseElement.teachingUnit',
-            'classGroup',
+            'classGroup.academicYear',
+            'classGroup.department.cycle',
         ])->where('professor_id', $professorId)->get();
 
         return response()->json([
             'success' => true,
-            'data'    => $programs->map(fn($p) => [
-                'id'             => $p->id,
-                'is_primary'     => $p->is_primary ?? false,
-                'label'          => $p->courseElement->name ?? '',
-                'course_element' => $p->courseElement ? [
-                    'id'           => $p->courseElement->id,
-                    'name'         => $p->courseElement->name,
-                     'code'         => $p->courseElement->code,
-                    'hours'        => $p->courseElement->hours ?? 0,
-                    'teaching_unit' => $p->courseElement->teachingUnit ? [
-                        'id'   => $p->courseElement->teachingUnit->id,
-                        'name' => $p->courseElement->teachingUnit->name,
-                        'code' => $p->courseElement->teachingUnit->code ?? '',
+            'data'    => $programs->map(function ($p) {
+                $element      = $p->courseElement;
+                $classGroup   = $p->classGroup;
+                $department   = $classGroup?->department;
+                $cycle        = $department?->cycle;
+                $academicYear = $classGroup?->academicYear;
+
+                return [
+                    'id'                 => $p->id,
+                    'is_primary'         => $p->is_primary ?? false,
+                    'label'              => $element?->name ?? '',
+                    'academic_year_id'   => $academicYear?->id ?? null,
+                    'academic_year_name' => $academicYear?->academic_year ?? $academicYear?->libelle ?? null,
+                    'cycle_id'           => $cycle?->id ?? null,
+                    'cycle_name'         => $cycle?->name ?? null,
+                    'department_id'      => $department?->id ?? null,
+                    'department_name'    => $department?->name ?? null,
+                    'class_group_id'     => $classGroup?->id ?? null,
+                    'class_group_name'   => $classGroup?->group_name ?? $classGroup?->name ?? null,
+                    'course_element'     => $element ? [
+                        'id'            => $element->id,
+                        'name'          => $element->name,
+                        'code'          => $element->code,
+                        'hours'         => $element->hours ?? 0,
+                        'credits'       => $element->credits ?? null,
+                        'teaching_unit' => $element->teachingUnit ? [
+                            'id'   => $element->teachingUnit->id,
+                            'name' => $element->teachingUnit->name,
+                            'code' => $element->teachingUnit->code ?? '',
+                        ] : null,
                     ] : null,
-                ] : null,
-                'class_group' => $p->classGroup ? [
-                    'id'   => $p->classGroup->id,
-                    'name' => $p->classGroup->name,
-                ] : null,
-            ])->values(),
+                    'class_group'        => $classGroup ? [
+                        'id'         => $classGroup->id,
+                        'name'       => $classGroup->name ?? $classGroup->group_name,
+                        'group_name' => $classGroup->group_name,
+                    ] : null,
+                ];
+            })->values(),
         ]);
     }
 
