@@ -14,6 +14,7 @@ class CourseElementResource extends JsonResource
             'name' => $this->name,
             'code' => $this->code,
             'credits' => $this->credits,
+            'hours' => $this->hours ?? 0,
             'teaching_unit_id' => $this->teaching_unit_id,
             'teaching_unit' => $this->whenLoaded('teachingUnit', function () {
                 return [

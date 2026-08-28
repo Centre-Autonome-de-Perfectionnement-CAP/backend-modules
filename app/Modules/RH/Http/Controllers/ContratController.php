@@ -343,16 +343,50 @@ class ContratController extends Controller
             'course_element_professor_ids.*' => 'integer',
             'program_amounts'                => 'nullable|array',
             'program_amounts.*'              => 'nullable|numeric|min:0',
+            'program_hours'                  => 'nullable|array',
+            'program_hours.*'                => 'nullable|numeric|min:0',
+            'amount'                         => 'nullable|numeric|min:0',
         ]);
 
-        // Calcul automatique du montant total depuis program_amounts
-       $programAmounts = $request->input('program_amounts', []);
-$programAmounts = array_combine(
-    array_map('strval', array_keys($programAmounts)),
-    array_values($programAmounts)
-);
-        $totalAmount    = collect($programAmounts)->sum(fn($v) => (float) $v);
-        $validated['amount'] = $totalAmount > 0 ? $totalAmount : 0;
+        // Calcul automatique du montant total depuis program_amounts et program_hours
+        $programAmounts = $request->input('program_amounts', []);
+        $programAmounts = is_array($programAmounts) ? array_combine(
+            array_map('strval', array_keys($programAmounts)),
+            array_values($programAmounts)
+        ) : [];
+
+        $programHours = $request->input('program_hours', []);
+        $programHours = is_array($programHours) ? array_combine(
+            array_map('strval', array_keys($programHours)),
+            array_values($programHours)
+        ) : [];
+
+        $totalAmount = 0;
+        if (!empty($validated['course_element_professor_ids'])) {
+            $cepsWithHours = \App\Modules\Cours\Models\CourseElementProfessor::with('courseElement')
+                ->whereIn('id', $validated['course_element_professor_ids'])
+                ->get()
+                ->keyBy('id');
+
+            foreach ($validated['course_element_professor_ids'] as $cepId) {
+                $amt = isset($programAmounts[(string)$cepId]) ? (float) $programAmounts[(string)$cepId] : 0;
+                $hrs = isset($programHours[(string)$cepId]) && $programHours[(string)$cepId] !== ''
+                    ? (float) $programHours[(string)$cepId]
+                    : ($cepsWithHours[$cepId]?->courseElement?->hours ?? 0);
+
+                if ($amt > 0) {
+                    $totalAmount += ($hrs > 0 ? $amt * $hrs : $amt);
+                }
+            }
+        }
+
+        if ($totalAmount > 0) {
+            $validated['amount'] = $totalAmount;
+        } elseif (isset($validated['amount'])) {
+            $validated['amount'] = (float) $validated['amount'];
+        } else {
+            $validated['amount'] = 0;
+        }
 
         // Génération du numéro de contrat
         $lastContrat = Contrat::latest('id')->first();
@@ -370,28 +404,36 @@ $programAmounts = array_combine(
 
         $contrat = Contrat::create($validated);
 
-        // Attachement des programmes avec amount_program et program_id par pivot
-if (!empty($validated['course_element_professor_ids'])) {
-    $ceps = Program::whereIn('course_element_professor_id', $validated['course_element_professor_ids'])
-        ->pluck('id', 'id');
+        // Attachement des programmes avec amount_program, hours et program_id par pivot
+        if (!empty($validated['course_element_professor_ids'])) {
+            $ceps = Program::whereIn('course_element_professor_id', $validated['course_element_professor_ids'])
+                ->pluck('id', 'id');
 
-    $cepsWithHours = \App\Modules\Cours\Models\CourseElementProfessor::with('courseElement')
-        ->whereIn('id', $validated['course_element_professor_ids'])
-        ->get()
-        ->keyBy('id');
+            $cepsWithHours = \App\Modules\Cours\Models\CourseElementProfessor::with('courseElement')
+                ->whereIn('id', $validated['course_element_professor_ids'])
+                ->get()
+                ->keyBy('id');
 
-    $syncData = [];
-    foreach ($validated['course_element_professor_ids'] as $cepId) {
-        $amt   = isset($programAmounts[(string)$cepId]) ? (float) $programAmounts[(string)$cepId] : null;
-        $hours = $cepsWithHours[$cepId]?->courseElement?->hours ?? null;
-        $syncData[$cepId] = [
-            'amount_program' => $amt,
-            'hours'          => $hours,
-            'program_id'     => $ceps[$cepId] ?? null,
-        ];
-    }
-    $contrat->courseElementProfessors()->sync($syncData);
-}
+            $syncData = [];
+            foreach ($validated['course_element_professor_ids'] as $cepId) {
+                $amt   = isset($programAmounts[(string)$cepId]) ? (float) $programAmounts[(string)$cepId] : null;
+                $hours = isset($programHours[(string)$cepId]) && $programHours[(string)$cepId] !== ''
+                    ? (float) $programHours[(string)$cepId]
+                    : ($cepsWithHours[$cepId]?->courseElement?->hours ?? null);
+
+                // Si les heures ont été saisies/modifiées, les enregistrer aussi sur l'ECUE
+                if ($hours !== null && $cepsWithHours[$cepId]?->courseElement) {
+                    $cepsWithHours[$cepId]->courseElement->update(['hours' => (int) $hours]);
+                }
+
+                $syncData[$cepId] = [
+                    'amount_program' => $amt,
+                    'hours'          => $hours,
+                    'program_id'     => $ceps[$cepId] ?? null,
+                ];
+            }
+            $contrat->courseElementProfessors()->sync($syncData);
+        }
 
         return response()->json([
             'success' => true,
@@ -442,16 +484,51 @@ if (!empty($validated['course_element_professor_ids'])) {
             'course_element_professor_ids.*' => 'integer',
             'program_amounts'                => 'nullable|array',
             'program_amounts.*'              => 'nullable|numeric|min:0',
+            'program_hours'                  => 'nullable|array',
+            'program_hours.*'                => 'nullable|numeric|min:0',
+            'amount'                         => 'nullable|numeric|min:0',
         ]);
 
-        // Calcul automatique du montant total depuis program_amounts
+        // Calcul automatique du montant total depuis program_amounts et program_hours
         $programAmounts = $request->input('program_amounts', []);
-$programAmounts = array_combine(
-    array_map('strval', array_keys($programAmounts)),
-    array_values($programAmounts)
-);
-        $totalAmount    = collect($programAmounts)->sum(fn($v) => (float) $v);
-        $validated['amount'] = $totalAmount > 0 ? $totalAmount : ($contrat->amount ?? 0);
+        $programAmounts = is_array($programAmounts) ? array_combine(
+            array_map('strval', array_keys($programAmounts)),
+            array_values($programAmounts)
+        ) : [];
+
+        $programHours = $request->input('program_hours', []);
+        $programHours = is_array($programHours) ? array_combine(
+            array_map('strval', array_keys($programHours)),
+            array_values($programHours)
+        ) : [];
+
+        $totalAmount = 0;
+        $ids = $validated['course_element_professor_ids'] ?? [];
+        if (!empty($ids)) {
+            $cepsWithHours = \App\Modules\Cours\Models\CourseElementProfessor::with('courseElement')
+                ->whereIn('id', $ids)
+                ->get()
+                ->keyBy('id');
+
+            foreach ($ids as $cepId) {
+                $amt = isset($programAmounts[(string)$cepId]) ? (float) $programAmounts[(string)$cepId] : 0;
+                $hrs = isset($programHours[(string)$cepId]) && $programHours[(string)$cepId] !== ''
+                    ? (float) $programHours[(string)$cepId]
+                    : ($cepsWithHours[$cepId]?->courseElement?->hours ?? 0);
+
+                if ($amt > 0) {
+                    $totalAmount += ($hrs > 0 ? $amt * $hrs : $amt);
+                }
+            }
+        }
+
+        if ($totalAmount > 0) {
+            $validated['amount'] = $totalAmount;
+        } elseif (isset($validated['amount'])) {
+            $validated['amount'] = (float) $validated['amount'];
+        } else {
+            $validated['amount'] = $contrat->amount ?? 0;
+        }
 
         $contrat->update($validated);
 
@@ -461,33 +538,38 @@ $programAmounts = array_combine(
             $contrat->update(['rejection_reason' => null]);
         }
 
-        // APRÈS
-if (array_key_exists('course_element_professor_ids', $validated)) {
-    $ids = $validated['course_element_professor_ids'] ?? [];
+        if (array_key_exists('course_element_professor_ids', $validated)) {
+            $ceps = $ids
+                ? Program::whereIn('course_element_professor_id', $ids)->pluck('id', 'id')
+                : collect();
 
-    $ceps = $ids
-        ? Program::whereIn('id', $ids)->pluck('id', 'id')
-        : collect();
+            $cepsWithHours = $ids
+                ? \App\Modules\Cours\Models\CourseElementProfessor::with('courseElement')
+                    ->whereIn('id', $ids)
+                    ->get()
+                    ->keyBy('id')
+                : collect();
 
-    $cepsWithHours = $ids
-        ? \App\Modules\Cours\Models\CourseElementProfessor::with('courseElement')
-            ->whereIn('id', $ids)
-            ->get()
-            ->keyBy('id')
-        : collect();
+            $syncData = [];
+            foreach ($ids as $cepId) {
+                $amt   = isset($programAmounts[(string)$cepId]) ? (float) $programAmounts[(string)$cepId] : null;
+                $hours = isset($programHours[(string)$cepId]) && $programHours[(string)$cepId] !== ''
+                    ? (float) $programHours[(string)$cepId]
+                    : ($cepsWithHours[$cepId]?->courseElement?->hours ?? null);
 
-    $syncData = [];
-    foreach ($ids as $cepId) {
-        $amt   = isset($programAmounts[(string)$cepId]) ? (float) $programAmounts[(string)$cepId] : null;
-        $hours = $cepsWithHours[$cepId]?->courseElement?->hours ?? null;
-        $syncData[$cepId] = [
-            'amount_program' => $amt,
-            'hours'          => $hours,
-            'program_id'     => $ceps[$cepId] ?? null,
-        ];
-    }
-    $contrat->courseElementProfessors()->sync($syncData);
-}
+                // Si les heures ont été saisies/modifiées, les enregistrer aussi sur l'ECUE
+                if ($hours !== null && isset($cepsWithHours[$cepId]) && $cepsWithHours[$cepId]->courseElement) {
+                    $cepsWithHours[$cepId]->courseElement->update(['hours' => (int) $hours]);
+                }
+
+                $syncData[$cepId] = [
+                    'amount_program' => $amt,
+                    'hours'          => $hours,
+                    'program_id'     => $ceps[$cepId] ?? null,
+                ];
+            }
+            $contrat->courseElementProfessors()->sync($syncData);
+        }
 
         return response()->json([
             'success' => true,
