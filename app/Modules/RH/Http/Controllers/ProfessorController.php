@@ -46,7 +46,12 @@ class ProfessorController extends Controller
     public function forSelect(Request $request): JsonResponse
     {
         try {
-            $query = Professor::query()->select('id', 'first_name', 'last_name', 'email', 'status');
+            $query = Professor::query()
+                ->select('id', 'first_name', 'last_name', 'email', 'status')
+                // Seuls les profs ayant au moins un ECUE assigné dans le module Cours
+                // sont retournés ici — garantit que le select de création de contrat
+                // n'affiche que des profs pour lesquels on pourra choisir des programmes.
+                ->whereHas('courseElementProfessors');
 
             if (!empty($request->input('status'))) {
                 $query->where('status', $request->input('status'));
