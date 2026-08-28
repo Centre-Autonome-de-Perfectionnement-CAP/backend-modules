@@ -100,15 +100,6 @@ class SelectController extends Controller
             $query->where('class_group_id', $request->class_group_id);
         }
 
-        $query->whereHas('courseElementProfessor.professor.contrats', function ($q) use ($request) {
-
-            $q->whereIn('status', ['signed', 'ongoing']);
-
-            if ($request->filled('academic_year_id')) {
-                $q->where('academic_year_id', $request->academic_year_id);
-            }
-        });
-
         $programs = $query->orderBy('id')->get();
 
         $result = $programs->map(function ($p) {
