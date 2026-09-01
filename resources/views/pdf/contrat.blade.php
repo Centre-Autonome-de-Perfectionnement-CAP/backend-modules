@@ -148,7 +148,7 @@ body {
 <table class="header-table">
     <tr>
         <td class="header-logo">
-            <img src="assets/epac.png" alt="EPAC" style="max-width:100%;height:auto;max-height:80px;">
+            <img src="{{ public_path('app-cap-frontend/images/epac-1.png') }}" alt="EPAC" style="max-width:100%;height:auto;max-height:80px;">
         </td>
         <td class="header-text">
             <div class="bold">UNIVERSITE D'ABOMEY-CALAVI</div>
@@ -157,7 +157,7 @@ body {
             <div>………………………………</div>
         </td>
         <td class="header-logo">
-            <img src="assets/cap.png" alt="CAP" style="max-width:100%;height:auto;max-height:80px;">
+            <img src="{{ public_path('app-cap-frontend/images/cap.png') }}" alt="CAP" style="max-width:100%;height:auto;max-height:80px;">
         </td>
     </tr>
 </table>

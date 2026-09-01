@@ -114,12 +114,14 @@ class DocumentRequestController extends Controller
         }
     }
 
-    // ── Aperçu / téléchargement (INCHANGÉ) ─────────────────────────────────────
+    // ── Aperçu / téléchargement (optimisé : requête minimale) ─────────────────
 
     public function previewFile(Request $request, int $id, string $source, string $key)
     {
         try {
-            $demande = $this->queryService->findOrFail($id);
+            // OPTIMISATION : on ne charge que les colonnes de fichiers,
+            // pas les 10 sous-requêtes corrélées du findOrFail() complet.
+            $demande = $this->queryService->findForPreview($id);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->notFoundResponse($e->getMessage());
         }

@@ -16,9 +16,14 @@ use App\Modules\RH\Models\Professor;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Barryvdh\DomPDF\Facade\Pdf;
+use App\Modules\RH\Services\ContratStorageService;
 
 class ContratController extends Controller
 {
+    public function __construct(
+        private readonly ContratStorageService $storage
+    ) {}
+
     /**
      * AJOUT (16/08/2026) — contrôle de rôle fin, absent jusqu'ici (route
      * protégée par auth:sanctum seul, n'importe quel compte connecté
@@ -74,20 +79,15 @@ class ContratController extends Controller
 
     private function processAndStoreSignature(Request $request, Contrat $contrat): string
     {
-        // ── Extension : toujours PNG pour conserver la transparence ──────────
-        $folder   = 'signatures';
-        $filename = $folder . '/' . Str::uuid() . '-contrat-' . $contrat->id . '.png';
-
-        // ── Vider l'ancienne signature si elle existe ─────────────────────────
-        if ($contrat->professor_signature_path) {
-            Storage::disk('public')->delete($contrat->professor_signature_path);
-        }
+        // Délègue le stockage au ContratStorageService.
+        // CORRECTIF : removeWhiteBackground() était appelée ici mais jamais
+        // définie dans ce controller → fatal error. Elle est maintenant dans
+        // ContratStorageService::removeWhiteBackground().
 
         // ── Source 1 : image base64 (canvas dessiné à la main) ──────────────
         if ($request->filled('signature_data')) {
             $base64Data = $request->input('signature_data');
 
-            // Retirer le préfixe data:image/png;base64, s'il est présent
             if (str_contains($base64Data, ',')) {
                 $base64Data = explode(',', $base64Data, 2)[1];
             }
@@ -98,23 +98,26 @@ class ContratController extends Controller
                 throw new \Exception('Données base64 invalides.');
             }
 
-            // Supprimer l'arrière-plan blanc (GD)
-            $imageData = $this->removeWhiteBackground($imageData);
+            $imageData = $this->storage->removeWhiteBackground($imageData);
 
-            Storage::disk('public')->put($filename, $imageData);
-            return $filename;
+            return $this->storage->storeSignature(
+                $contrat->contrat_number,
+                $imageData,
+                $contrat->professor_signature_path
+            );
         }
 
         // ── Source 2 : fichier uploadé ────────────────────────────────────────
         if ($request->hasFile('signature_file')) {
             $file      = $request->file('signature_file');
             $imageData = file_get_contents($file->getRealPath());
+            $imageData = $this->storage->removeWhiteBackground($imageData, $file->getMimeType());
 
-            // Supprimer l'arrière-plan blanc/clair
-            $imageData = $this->removeWhiteBackground($imageData, $file->getMimeType());
-
-            Storage::disk('public')->put($filename, $imageData);
-            return $filename;
+            return $this->storage->storeSignature(
+                $contrat->contrat_number,
+                $imageData,
+                $contrat->professor_signature_path
+            );
         }
 
         throw new \Exception('Aucune source de signature valide.');
@@ -144,7 +147,12 @@ class ContratController extends Controller
     {
         $this->assertAdmin($request);
 
-        $contrat = Contrat::with(['professor', 'academicYear', 'cycle'])->find($id);
+        $contrat = Contrat::with([
+            'professor',
+            'academicYear',
+            'cycle',
+            'courseElementProfessors.courseElement',
+        ])->find($id);
 
         if (!$contrat) {
             return response()->json(['success' => false, 'message' => 'Contrat introuvable'], 404);
@@ -166,21 +174,63 @@ class ContratController extends Controller
 
         try {
             $professor    = $contrat->professor;
-            $frontendBase = rtrim(config('app.frontend_url', 'http://localhost:3000'), '/');
-            $contratUrl   = "{$frontendBase}/services/notes/professor/contrats/{$contrat->uuid}";
+            $frontendBase = rtrim(config('app.frontend_url', 'http://localhost:5173'), '/');
+
+            // Lien direct vers le contrat (pour signer)
+            $contratUrl = "{$frontendBase}/services/notes/professor/contrats/{$contrat->uuid}";
+
+            // Lien de connexion à l'espace professeur (dynamique selon l'env)
+            $loginUrl = "{$frontendBase}/services/professor/login";
+
+            // Libellé lisible de la division
+            $divisionLabel = match ($contrat->division) {
+                'RD-FAD' => 'Formation à Distance (RD-FAD)',
+                'RD-FC'  => 'Formation Continue (RD-FC)',
+                default  => $contrat->division ?? '—',
+            };
+
+            // Regroupement lisible
+            $regroupementLabel = match ($contrat->regroupement) {
+                '1'     => 'Regroupement I',
+                '2'     => 'Regroupement II',
+                default => '—',
+            };
+
+            // Période
+            $startDate = $contrat->start_date
+                ? \Carbon\Carbon::parse($contrat->start_date)->format('d/m/Y')
+                : '—';
+            $endDate = $contrat->end_date
+                ? \Carbon\Carbon::parse($contrat->end_date)->format('d/m/Y')
+                : '—';
+
+            // Programmes : "CODE : Intitulé"
+            $programmes = $contrat->courseElementProfessors
+                ->map(fn($cep) => $cep->courseElement
+                    ? trim($cep->courseElement->code . ' : ' . $cep->courseElement->name)
+                    : null)
+                ->filter()
+                ->values()
+                ->toArray();
 
             $details = [
-                'title'             => "Contrat N°{$contrat->contrat_number} — Signature requise",
-                'professor_name'    => $professor->full_name,
-                'contrat_number'    => $contrat->contrat_number,
-                'academic_year'     => $contrat->academicYear?->academic_year ?? '—',
-                'amount'            => number_format($contrat->amount, 0, ',', ' '),
-                'start_date'        => \Carbon\Carbon::parse($contrat->start_date)->format('d/m/Y'),
-                'division'          => $contrat->division ?? '—',
-                'cycle'             => $contrat->cycle?->name ?? '—',
-                'regroupement'      => $contrat->regroupement === '1' ? 'I' : ($contrat->regroupement === '2' ? 'II' : '—'),
-                'contrat_url'       => $contratUrl,
-                'link_expiry_hours' => 72,
+                'title'              => "Contrat N°{$contrat->contrat_number} — Signature requise",
+                'professor_name'     => $professor->full_name,
+                'professor_email'    => $professor->email,
+                'contrat_number'     => $contrat->contrat_number,
+                'academic_year'      => $contrat->academicYear?->academic_year ?? '—',
+                'amount'             => number_format($contrat->amount, 0, ',', ' '),
+                'start_date'         => $startDate,
+                'end_date'           => $endDate,
+                'division'           => $contrat->division ?? '—',
+                'division_label'     => $divisionLabel,
+                'cycle'              => $contrat->cycle?->name ?? '—',
+                'regroupement'       => $contrat->regroupement === '1' ? 'I' : ($contrat->regroupement === '2' ? 'II' : '—'),
+                'regroupement_label' => $regroupementLabel,
+                'programmes'         => $programmes,
+                'contrat_url'        => $contratUrl,
+                'login_url'          => $loginUrl,
+                'link_expiry_hours'  => 72,
             ];
 
             Mail::to($professor->email)->send(new \App\Mail\ContratTransferred($details));
@@ -230,16 +280,49 @@ class ContratController extends Controller
      */
     private function buildTransferWhatsAppMessage(array $details): string
     {
+        // Ligne des programmes : "- CODE : Intitulé"
+        $programmesLines = !empty($details['programmes'])
+            ? implode("\n", array_map(fn($p) => "- {$p}", $details['programmes']))
+            : '- (aucun programme renseigné)';
+
         return
             "Bonjour {$details['professor_name']},\n\n" .
-            "Votre contrat N°{$details['contrat_number']} ({$details['academic_year']}) " .
-            "est prêt et nécessite votre signature.\n\n" .
-            "📄 Montant : {$details['amount']} FCFA\n" .
-            "📅 Date de début : {$details['start_date']}\n\n" .
-            "Consultez et signez votre contrat ici (valable {$details['link_expiry_hours']}h) :\n" .
-            "{$details['contrat_url']}\n\n" .
-            "Le PDF de votre contrat vous est également transmis dans le message suivant.\n\n" .
-            "— Centre Autonome de Perfectionnement (CAP)";
+
+            "Le Centre Autonome de Perfectionnement (CAP) de l'École Polytechnique " .
+            "d'Abomey-Calavi vous a adressé un contrat d'enseignement pour l'année " .
+            "académique {$details['academic_year']}. Veuillez en prendre connaissance " .
+            "et procéder à sa validation dans les meilleurs délais.\n\n" .
+
+            "Votre contrat de prestation N° {$details['contrat_number']} est disponible " .
+            "et en attente de votre signature.\n\n" .
+
+            "Détails du contrat :\n" .
+            "Division : {$details['division_label']}\n" .
+            "Regroupement : {$details['regroupement_label']}\n" .
+            "Cycle : {$details['cycle']}\n" .
+            "Période : du {$details['start_date']} au {$details['end_date']}\n" .
+            "Montant : {$details['amount']} FCFA\n\n" .
+
+            "Programmes concernés :\n" .
+            "{$programmesLines}\n\n" .
+
+            "Procédure de signature :\n" .
+            "1. Connectez-vous à votre espace sur le lien ci-dessous\n" .
+            "2. Consultez votre e-mail ({$details['professor_email']}) pour le lien de signature sécurisé\n" .
+            "3. Vérifiez toutes les informations du contrat\n" .
+            "4. Signez électroniquement\n\n" .
+
+            "Accéder à votre espace :\n" .
+            "{$details['login_url']}\n\n" .
+
+            "⚠️ Attention : Ce lien est valable pendant {$details['link_expiry_hours']} heures " .
+            "à compter de la réception de ce message. Passé ce délai, veuillez contacter " .
+            "le service RH du CAP.\n\n" .
+
+            "Ce lien est strictement personnel et confidentiel.\n\n" .
+
+            "Cordialement,\n" .
+            "Service des Ressources Humaines — CAP-EPAC";
     }
 
     private function formatContrat(Contrat $c): array
@@ -715,19 +798,26 @@ class ContratController extends Controller
         $signatureType = $request->input('signature_type');
 
         if ($signatureType === 'drawn' && $request->filled('signature_data')) {
-            $dataUrl = $request->input('signature_data');
-            $base64  = preg_replace('/^data:image\/\w+;base64,/', '', $dataUrl);
-            $binary  = base64_decode($base64);
-
-            $filename      = 'signatures/sig_' . $contrat->id . '_' . time() . '.png';
-            Storage::disk('public')->put($filename, $binary);
-            $signaturePath = $filename;
+            $dataUrl   = $request->input('signature_data');
+            $base64    = preg_replace('/^data:image\/\w+;base64,/', '', $dataUrl);
+            $binary    = base64_decode($base64);
+            // removeWhiteBackground + stockage via le service
+            $binary        = $this->storage->removeWhiteBackground($binary);
+            $signaturePath = $this->storage->storeSignature(
+                $contrat->contrat_number,
+                $binary,
+                $contrat->professor_signature_path
+            );
 
         } elseif ($signatureType === 'uploaded' && $request->hasFile('signature_file')) {
-            $file          = $request->file('signature_file');
-            $filename      = 'signatures/sig_' . $contrat->id . '_' . time() . '.' . $file->getClientOriginalExtension();
-            $file->storeAs('signatures', basename($filename), 'public');
-            $signaturePath = $filename;
+            $file      = $request->file('signature_file');
+            $imageData = file_get_contents($file->getRealPath());
+            $imageData = $this->storage->removeWhiteBackground($imageData, $file->getMimeType());
+            $signaturePath = $this->storage->storeSignature(
+                $contrat->contrat_number,
+                $imageData,
+                $contrat->professor_signature_path
+            );
         }
         // Pour 'manual' (signer après impression) : pas de signature numérique
 
@@ -809,6 +899,128 @@ class ContratController extends Controller
         ], 404);
     }
 
+    // ─── STREAM PDF CONTRAT (admin/prof connecté, par ID) ─────────────────────
+    //
+    // Remplace l'accès direct via le symlink /storage/contrats/xxx.pdf
+    // qui retournait une page blanche car le fichier était servi sans les
+    // bons headers ou était vide (DomPDF échouait sur les logos relatifs).
+    // Cette route streame le fichier via Laravel avec les headers corrects.
+
+    public function streamPdf(Request $request, $id)
+    {
+        $this->assertCanManageMonographie($request);
+
+        $contrat = Contrat::findOrFail($id);
+
+        if (!$contrat->pdf_path || !Storage::disk('public')->exists($contrat->pdf_path)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Aucun PDF disponible pour ce contrat.',
+            ], 404);
+        }
+
+        $disposition = $request->boolean('download') ? 'attachment' : 'inline';
+        $filename    = 'Contrat_' . $contrat->contrat_number . '.pdf';
+
+        return Storage::disk('public')->response(
+            $contrat->pdf_path,
+            $filename,
+            ['Content-Type' => 'application/pdf'],
+            $disposition
+        );
+    }
+
+    // ─── STREAM SUPPORT DE COURS (admin/prof connecté) ────────────────────────
+    //
+    // Les supports sont stockés dans supports/{uuid}-support-{contratId}-{programId}.pdf
+    // Accessible au professeur et à l'admin via auth:sanctum.
+
+    public function streamSupport(Request $request, $contratId, $programId, $index)
+    {
+        $pivot = \DB::table('contrat_programs')
+            ->where('contrat_id', $contratId)
+            ->where('course_element_professor_id', $programId)
+            ->first();
+
+        if (!$pivot) {
+            return response()->json(['success' => false, 'message' => 'Programme introuvable.'], 404);
+        }
+
+        $supports = json_decode($pivot->course_support_file ?? '[]', true) ?? [];
+        $index    = (int) $index;
+
+        if (!isset($supports[$index])) {
+            return response()->json(['success' => false, 'message' => 'Support introuvable.'], 404);
+        }
+
+        $filePath = $supports[$index]['file'] ?? null;
+
+        if (!$filePath || !Storage::disk('public')->exists($filePath)) {
+            return response()->json(['success' => false, 'message' => 'Fichier introuvable sur le serveur.'], 404);
+        }
+
+        $disposition = $request->boolean('download') ? 'attachment' : 'inline';
+        $filename    = ($supports[$index]['title'] ?? 'support') . '.pdf';
+
+        return Storage::disk('public')->response(
+            $filePath,
+            $filename,
+            ['Content-Type' => 'application/pdf'],
+            $disposition
+        );
+    }
+
+    // ─── STREAM FACTURE NORMALISÉE ─────────────────────────────────────────────
+
+    public function streamFacture(Request $request, $contratId, $index)
+    {
+        $contrat = Contrat::findOrFail($contratId);
+
+        // Vérifier que l'utilisateur est le professeur du contrat ou un admin
+        $user      = $request->user();
+        $professor = Professor::where('email', $user->email)->first();
+        $isOwner   = $professor && $professor->id === $contrat->professor_id;
+        $userSlug  = $user?->roles?->first()?->slug;
+        $isAdmin   = in_array($userSlug, self::ADMIN_ROLES + self::MONOGRAPHIE_ROLES, true);
+
+        if (!$isOwner && !$isAdmin) {
+            return response()->json(['success' => false, 'message' => 'Accès non autorisé.'], 403);
+        }
+
+        $factures = $contrat->factures_normalisees ?? [];
+        $index    = (int) $index;
+
+        if (!isset($factures[$index])) {
+            return response()->json(['success' => false, 'message' => 'Facture introuvable.'], 404);
+        }
+
+        $item = $factures[$index];
+
+        // Rétrocompatibilité : ancienne entrée string
+        if (is_string($item)) {
+            $filePath = 'factures_normalisees/' . $item;
+            $name     = $item;
+        } else {
+            $filePath = $item['path'] ?? null;
+            $name     = $item['name'] ?? 'facture';
+        }
+
+        if (!$filePath || !Storage::disk('public')->exists($filePath)) {
+            return response()->json(['success' => false, 'message' => 'Fichier introuvable sur le serveur.'], 404);
+        }
+
+        $ext         = pathinfo($filePath, PATHINFO_EXTENSION) ?: 'pdf';
+        $disposition = $request->boolean('download') ? 'attachment' : 'inline';
+        $mimeType    = Storage::disk('public')->mimeType($filePath) ?: 'application/octet-stream';
+
+        return Storage::disk('public')->response(
+            $filePath,
+            $name,
+            ['Content-Type' => $mimeType],
+            $disposition
+        );
+    }
+
     // ─── AUTHORIZE (admin) ────────────────────────────────────────────────────
 
     public function authorizeContrat(Request $request, $id)
@@ -849,18 +1061,15 @@ class ContratController extends Controller
             'pdf_file' => 'required|file|mimes:pdf|max:10240', // max 10 Mo
         ]);
 
-        // Supprimer l'ancien PDF s'il existe
-        if ($contrat->pdf_path && Storage::disk('public')->exists($contrat->pdf_path)) {
-            Storage::disk('public')->delete($contrat->pdf_path);
+        // Supprimer l'ancien PDF s'il existe (quel que soit son chemin legacy)
+        if ($contrat->pdf_path) {
+            $this->storage->delete($contrat->pdf_path);
         }
 
-        $file     = $request->file('pdf_file');
-        $basename = 'pdf_' . $contrat->id . '_' . time() . '.pdf';
-        $file->storeAs('contrats', $basename, 'public');
-        $filename = 'contrats/' . $basename;
+        $pdfPath = $this->storage->storePdfUpload($contrat->contrat_number, $request->file('pdf_file'));
 
         $contrat->update([
-            'pdf_path'        => $filename,
+            'pdf_path'        => $pdfPath,
             'pdf_uploaded_at' => now(),
         ]);
 
@@ -963,7 +1172,6 @@ class ContratController extends Controller
     private function generateAndStorePdf(Contrat $contrat): void
     {
         try {
-            // Charger les relations nécessaires
             $contrat->load([
                 'professor',
                 'cycle',
@@ -976,22 +1184,19 @@ class ContratController extends Controller
                 throw new \Exception('Contrat invalide');
             }
 
-            // Générer le HTML via Blade
             $html = view('pdf.contrat', ['contrat' => $contrat])->render();
 
             if (empty($html)) {
                 throw new \Exception('Le rendu HTML est vide');
             }
 
-            $filename = 'contrats/contrat_' . $contrat->id . '_' . time() . '.pdf';
-
             // ───────────── DomPDF ─────────────
             if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
                 try {
-                    $pdf = Pdf::loadHTML($html)->setPaper('a4', 'portrait');
-                    Storage::disk('public')->put($filename, $pdf->output());
+                    $pdf      = Pdf::loadHTML($html)->setPaper('a4', 'portrait');
+                    $pdfPath  = $this->storage->storePdfContent($contrat->contrat_number, $pdf->output());
                     $contrat->update([
-                        'pdf_path'        => $filename,
+                        'pdf_path'        => $pdfPath,
                         'pdf_uploaded_at' => now(),
                     ]);
                     Log::info("PDF généré avec DomPDF pour contrat #{$contrat->id}");
@@ -1004,11 +1209,11 @@ class ContratController extends Controller
             // ───────────── Snappy ─────────────
             if (app()->bound('snappy.pdf')) {
                 try {
-                    $snappy = app('snappy.pdf');
-                    $output = $snappy->getOutputFromHtml($html);
-                    Storage::disk('public')->put($filename, $output);
+                    $snappy  = app('snappy.pdf');
+                    $output  = $snappy->getOutputFromHtml($html);
+                    $pdfPath = $this->storage->storePdfContent($contrat->contrat_number, $output);
                     $contrat->update([
-                        'pdf_path'        => $filename,
+                        'pdf_path'        => $pdfPath,
                         'pdf_uploaded_at' => now(),
                     ]);
                     Log::info("PDF généré avec Snappy pour contrat #{$contrat->id}");
@@ -1146,15 +1351,18 @@ class ContratController extends Controller
         // Charger les supports existants
         $supports = json_decode($pivot->course_support_file ?? '[]', true) ?? [];
 
-        // Stocker le fichier PDF
-        $file     = $request->file('pdf_file');
-        $basename = \Illuminate\Support\Str::uuid() . '-support-' . $contratId . '-' . $programId . '.pdf';
-        $path     = 'supports/' . $basename;
-        $file->storeAs('supports', $basename, 'public');
+        // Stocker le fichier PDF via le service (structure normalisée)
+        $title = $request->input('title');
+        $path  = $this->storage->storeSupportFile(
+            $contrat->contrat_number,
+            (int) $programId,
+            $request->file('pdf_file'),
+            $title
+        );
 
         // Ajouter l'entrée au tableau
         $supports[] = [
-            'title' => $request->input('title'),
+            'title' => $title,
             'file'  => $path,
         ];
 
@@ -1172,9 +1380,9 @@ class ContratController extends Controller
             'success' => true,
             'message' => 'Support de cours ajouté avec succès.',
             'data'    => [
-                'title' => $request->input('title'),
+                'title' => $title,
                 'file'  => $path,
-                'url'   => Storage::disk('public')->url($path),
+                'url'   => $this->storage->url($path),
             ],
         ], 201);
     }
@@ -1212,10 +1420,10 @@ class ContratController extends Controller
             ], 404);
         }
 
-        // Supprimer le fichier physique
+        // Supprimer le fichier physique via le service
         $filePath = $supports[$index]['file'] ?? null;
-        if ($filePath && Storage::disk('public')->exists($filePath)) {
-            Storage::disk('public')->delete($filePath);
+        if ($filePath) {
+            $this->storage->delete($filePath);
         }
 
         // Retirer du tableau et ré-indexer
@@ -1374,31 +1582,32 @@ class ContratController extends Controller
         // Si remplacement confirmé : supprimer les anciens fichiers du disque
         if ($replace) {
             foreach ($existing as $item) {
-                if (!empty($item['path']) && \Storage::disk('public')->exists($item['path'])) {
-                    \Storage::disk('public')->delete($item['path']);
+                if (!empty($item['path'])) {
+                    $this->storage->delete($item['path']);
                 }
             }
             $existing = [];
         }
 
-        // Uploader les nouveaux fichiers
+        // Uploader les nouveaux fichiers via le service
         $defaultTypes = ['facture', 'rib'];
         $newEntries   = [];
 
         foreach ($request->file('factures_normalisees') as $index => $file) {
             $original = $file->getClientOriginalName();
-            $safe     = preg_replace('/[^a-zA-Z0-9._-]/', '_', $original);
-            $filename = time() . '_' . \Str::uuid() . '_' . $safe;
-
-            $file->storeAs('factures_normalisees', $filename, 'public');
-
             $fileType = $request->input("type.{$index}") ?? ($defaultTypes[$index] ?? 'autre');
+
+            $path = $this->storage->storeFacture(
+                $contrat->contrat_number,
+                $file,
+                $fileType
+            );
 
             $newEntries[] = [
                 'name' => $original,
-                'path' => 'factures_normalisees/' . $filename,
+                'path' => $path,
                 'type' => $fileType,
-                'url'  => \Storage::disk('public')->url('factures_normalisees/' . $filename),
+                'url'  => $this->storage->url($path),
             ];
         }
 

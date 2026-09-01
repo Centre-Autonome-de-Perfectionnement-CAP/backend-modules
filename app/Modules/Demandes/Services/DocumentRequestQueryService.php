@@ -284,6 +284,34 @@ class DocumentRequestQueryService
         return $query->orderBy('dr.created_at', 'asc')->paginate($perPage);
     }
 
+    // ── Détail léger — pour previewFile uniquement ────────────────────────────
+
+    /**
+     * Retourne UNIQUEMENT les colonnes de fichiers nécessaires pour previewFile.
+     * Évite les 10 sous-requêtes corrélées sur document_request_histories
+     * qui alourdissaient inutilement chaque ouverture de pièce jointe.
+     */
+    public function findForPreview(int $id): object
+    {
+        $demande = DB::table('document_requests as dr')
+            ->where('dr.id', $id)
+            ->select([
+                'dr.id',
+                'dr.files',
+                'dr.complement_files',
+                'dr.secretary_files',
+                'dr.type',
+                'dr.reference',
+            ])
+            ->first();
+
+        if (!$demande) {
+            throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Demande #{$id} introuvable.");
+        }
+
+        return $demande;
+    }
+
     // ── Détail ────────────────────────────────────────────────────────────────
 
     public function findOrFail(int $id): object

@@ -1,4 +1,4 @@
-<?php
+﻿﻿<?php
 
 namespace App\Modules\CahierTexte\Http\Controllers;
 
@@ -691,9 +691,10 @@ class TextbookEntryController extends Controller{
             $regroupement      = (int) $request->regroupement;
             $regroupementLabel = $regroupement === 1 ? '1ER' : '2ÈME';
 
-            $yearLabel = $academicYear->label
-                ?? $academicYear->name
-                ?? $academicYear->year
+            // CORRECTIF : les colonnes s'appellent 'academic_year' et 'libelle',
+            // pas 'label' / 'name' / 'year' (inexistantes sur ce modèle).
+            $yearLabel = $academicYear->libelle
+                ?? $academicYear->academic_year
                 ?? 'ANNEE';
 
             /*
@@ -730,14 +731,20 @@ class TextbookEntryController extends Controller{
             |--------------------------------------------------------------------------
             | 3. ContratProgram
             |--------------------------------------------------------------------------
+            | CORRECTIF : on sélectionne aussi course_element_professor_id car
+            | program_id est nullable (contrats créés avant mai 2026 ne l'ont pas).
+            | La résolution des heures se fait en deux passes :
+            |   a) via program_id directement (si renseigné)
+            |   b) via course_element_professor_id → Program (fallback fiable)
             */
             $contractPrograms = ContratProgram::query()
                 ->whereIn('contrat_id', $contractIds)
                 ->get([
                     'contrat_id',
+                    'course_element_professor_id',
                     'program_id',
                     'number_monographie',
-                    'amount_monographie'
+                    'amount_monographie',
                 ]);
 
             if ($contractPrograms->isEmpty()) {
@@ -752,39 +759,55 @@ class TextbookEntryController extends Controller{
                 ], 404);
             }
 
-            $programIds = $contractPrograms->pluck('program_id')->unique();
+            // Tous les CEP ids utilisés dans ces contrats
+            $cepIdsFromContracts = $contractPrograms
+                ->pluck('course_element_professor_id')
+                ->filter()
+                ->unique();
 
             /*
             |--------------------------------------------------------------------------
-            | 4. Heures effectuées
+            | 4. Résolution program_id → heures effectuées
             |--------------------------------------------------------------------------
+            | On cherche les programs via course_element_professor_id (toujours
+            | présent) plutôt que via program_id (nullable).
+            | Un CEP peut avoir plusieurs programs (une par class_group), mais pour
+            | les heures effectuées on somme sur TOUS les programs du CEP afin de ne
+            | jamais rater des séances.
             */
+            $programsByCep = Program::query()
+                ->whereIn('course_element_professor_id', $cepIdsFromContracts)
+                ->get(['id', 'course_element_professor_id', 'semester'])
+                ->groupBy('course_element_professor_id');
+
+            // Tous les program ids résolus (pour les heures)
+            $allProgramIds = $programsByCep->flatten()->pluck('id')->unique();
+
+            // Heures validées, groupées par program_id
             $hoursByProgram = \App\Modules\CahierTexte\Models\TextbookEntry::query()
-                ->whereIn('program_id', $programIds)
+                ->whereIn('program_id', $allProgramIds)
                 ->where('status', 'validated')
                 ->selectRaw('program_id, SUM(hours_taught) as total_hours')
                 ->groupBy('program_id')
                 ->get()
                 ->keyBy('program_id');
 
+            // Agrégation : heures totales par CEP (somme sur tous les programs du CEP)
+            $hoursByCep = [];
+            foreach ($programsByCep as $cepId => $progs) {
+                $total = 0.0;
+                foreach ($progs as $prog) {
+                    $total += (float) ($hoursByProgram[$prog->id]->total_hours ?? 0);
+                }
+                $hoursByCep[$cepId] = $total;
+            }
+
             /*
             |--------------------------------------------------------------------------
-            | 5. Programmes
+            | 5. Programmes (déjà chargés via $programsByCep — juste réindexer)
             |--------------------------------------------------------------------------
             */
-            $programs = Program::query()
-                ->whereIn('id', $programIds)
-                ->get([
-                    'id',
-                    'course_element_professor_id',
-                    'semester',
-                ])
-                ->keyBy('id');
-
-            $cepIds = $programs
-                ->pluck('course_element_professor_id')
-                ->filter()
-                ->unique();
+            $programs = $programsByCep->flatten()->keyBy('id');
 
             /*
             |--------------------------------------------------------------------------
@@ -792,11 +815,12 @@ class TextbookEntryController extends Controller{
             |--------------------------------------------------------------------------
             */
             $courseElementProfessors = CourseElementProfessor::query()
-                ->whereIn('id', $cepIds)
+                ->whereIn('id', $cepIdsFromContracts)
                 ->get([
                     'id',
                     'course_element_id',
-                    'professor_id'
+                    'professor_id',
+                    'class_group_id',
                 ])
                 ->keyBy('id');
 
@@ -822,7 +846,8 @@ class TextbookEntryController extends Controller{
                     'first_name',
                     'last_name',
                     'bank',
-                    'rib_number'
+                    'rib_number',
+                    'hourly_rate',
                 ])
                 ->keyBy('id');
 
@@ -843,21 +868,33 @@ class TextbookEntryController extends Controller{
 
             /*
             |--------------------------------------------------------------------------
-            | 9. Departments
+            | 9. Filières — résolution via ClassGroup → Department
             |--------------------------------------------------------------------------
+            | CORRECTIF : l'ancien code cherchait $departments[$contract->cycle_id]
+            | alors que $departments était keyBy('id') par department.id — ces deux
+            | IDs sont différents → filière toujours vide.
+            |
+            | Nouveau chemin : CEP.class_group_id → ClassGroup.department_id → Department
+            | C'est la seule façon fiable d'obtenir la filière d'un cours.
             */
-            $cycleIds = $contracts
-                ->pluck('cycle_id')
+            $classGroupIds = $courseElementProfessors
+                ->pluck('class_group_id')
+                ->filter()
+                ->unique();
+
+            $classGroups = ClassGroup::query()
+                ->whereIn('id', $classGroupIds)
+                ->get(['id', 'department_id'])
+                ->keyBy('id');
+
+            $departmentIds = $classGroups
+                ->pluck('department_id')
                 ->filter()
                 ->unique();
 
             $departments = Department::query()
-                ->whereIn('cycle_id', $cycleIds)
-                ->get([
-                    'id',
-                    'name',
-                    'abbreviation'
-                ])
+                ->whereIn('id', $departmentIds)
+                ->get(['id', 'name', 'abbreviation'])
                 ->keyBy('id');
 
             /*
@@ -880,30 +917,30 @@ class TextbookEntryController extends Controller{
                         continue;
                     }
 
-                    $program = $programs[$cp->program_id] ?? null;
-
-                    if (!$program) {
-                        Log::warning('Programme introuvable', [
-                            'program_id' => $cp->program_id
-                        ]);
-                        continue;
-                    }
-
-                    $cep = $courseElementProfessors[$program->course_element_professor_id] ?? null;
+                    // CORRECTIF : on passe directement par course_element_professor_id
+                    // (toujours présent), sans dépendre de program_id (nullable).
+                    $cepId = $cp->course_element_professor_id;
+                    $cep   = $courseElementProfessors[$cepId] ?? null;
 
                     if (!$cep) {
                         Log::warning('CourseElementProfessor introuvable', [
-                            'cep_id' => $program->course_element_professor_id
+                            'cep_id' => $cepId
                         ]);
                         continue;
                     }
 
-                    $professor  = $professors[$cep->professor_id] ?? null;
-                    $course     = $courseElements[$cep->course_element_id] ?? null;
-                    $department = $departments[$contract->cycle_id] ?? null;
+                    $professor = $professors[$cep->professor_id] ?? null;
+                    $course    = $courseElements[$cep->course_element_id] ?? null;
 
-                    $hoursEffectuees = (float) ($hoursByProgram[$cp->program_id]->total_hours ?? 0);
-                    $hoursPlanned = (float) ($course?->hours ?? 0);
+                    // Filiere : CEP -> ClassGroup -> Department
+                    $classGroup = $classGroups[$cep->class_group_id] ?? null;
+                    $department = $classGroup
+                        ? ($departments[$classGroup->department_id] ?? null)
+                        : null;
+
+                    // Heures effectuees : agregat sur tous les programs du CEP
+                    $hoursEffectuees = (float) ($hoursByCep[$cepId] ?? 0);
+                    $hoursPlanned    = (float) ($course?->hours ?? 0);
                     $tauxHoraire     = (float) ($professor->hourly_rate ?? 6000);
 
                     $montantHeures = $hoursEffectuees * $tauxHoraire;
@@ -931,18 +968,12 @@ class TextbookEntryController extends Controller{
                             'montant_total' => 0,
                         ];
                     }
-                    Log::info('DEBUG course object', [
-    'course' => $course ? $course->toArray() : null,
-    'cep'    => $cep ? $cep->toArray() : null,
-    'program'=> $program ? $program->toArray() : null,
-]);
-
                     $rows[$profKey]['courses'][] = [
                         'course_name'          => $course->name ?? '',
                         'filiere'              => $department->abbreviation
                             ?? $department->name
                             ?? '',
-                        'hours_planned' => (float) ($course?->hours ?? 0),
+                        'hours_planned'        => $hoursPlanned,
                         'hours_done'           => $hoursEffectuees,
                         'taux_horaire'         => $tauxHoraire,
                         'montant_heures'       => $montantHeures,
@@ -956,7 +987,7 @@ class TextbookEntryController extends Controller{
 
                 } catch (\Throwable $innerException) {
 
-                    Log::error('Erreur lors du traitement d’un programme', [
+                    Log::error('Erreur lors du traitement d'un programme', [
                         'contract_program' => $cp,
                         'message'          => $innerException->getMessage(),
                         'trace'            => $innerException->getTraceAsString(),

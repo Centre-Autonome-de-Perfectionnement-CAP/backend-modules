@@ -125,21 +125,32 @@ class ValidationService
 
     /**
      * Récupère le fichier de quittance
+     *
+     * CORRECTIF : Storage::exists() / Storage::path() sans disk cible le disk
+     * "local" (storage/app/private) par défaut, alors que les quittances sont
+     * stockées sur le disk "public" (storage/app/public). Le fichier était
+     * introuvable → exception → HTTP 500.
      */
     public function getReceiptFile($paymentId)
     {
         $payment = Paiement::findOrFail($paymentId);
 
-        if (!$payment->receipt_path || !Storage::exists($payment->receipt_path)) {
-            throw new \Exception('Quittance non trouvée');
+        if (!$payment->receipt_path) {
+            throw new \Exception('Aucune quittance associée à ce paiement.');
+        }
+
+        $disk = Storage::disk('public');
+
+        if (!$disk->exists($payment->receipt_path)) {
+            throw new \Exception('Quittance non trouvée sur le serveur.');
         }
 
         // Nettoyer le nom du fichier en remplaçant les caractères interdits
         $cleanReference = str_replace(['/', '\\'], '_', $payment->reference);
 
         return [
-            'path' => Storage::path($payment->receipt_path),
-            'filename' => 'quittance_' . $cleanReference . '.' . pathinfo($payment->receipt_path, PATHINFO_EXTENSION)
+            'path'     => $disk->path($payment->receipt_path),
+            'filename' => 'quittance_' . $cleanReference . '.' . pathinfo($payment->receipt_path, PATHINFO_EXTENSION),
         ];
     }
 }

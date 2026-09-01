@@ -107,6 +107,18 @@ Route::prefix('rh')->group(function () {
             'contrats/{contratId}/programs/{programId}/supports/{index}',
             [ContratController::class, 'deleteProgramSupport']
         );
+        // ─── Stream PDF contrat (inline ou téléchargement) ────────────────────
+        Route::get('contrats/{id}/pdf',     [ContratController::class, 'streamPdf']);
+        // ─── Stream support de cours ──────────────────────────────────────────
+        Route::get(
+            'contrats/{contratId}/programs/{programId}/supports/{index}/stream',
+            [ContratController::class, 'streamSupport']
+        );
+        // ─── Stream facture normalisée ────────────────────────────────────────
+        Route::get(
+            'contrats/{contratId}/factures/{index}/stream',
+            [ContratController::class, 'streamFacture']
+        );
         Route::put(
             'contrats/{contratId}/programs/{programId}/monographie',
             [ContratController::class, 'updateProgramMonographie']
