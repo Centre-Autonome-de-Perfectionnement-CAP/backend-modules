@@ -847,7 +847,8 @@ class TextbookEntryController extends Controller{
                     'last_name',
                     'bank',
                     'rib_number',
-                    'hourly_rate',
+                    // hourly_rate n'est pas une colonne en base — on utilise
+                    // le fallback 6000 FCFA défini dans la boucle ci-dessous.
                 ])
                 ->keyBy('id');
 
