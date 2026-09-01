@@ -1,4 +1,4 @@
-﻿﻿<?php
+<?php
 
 namespace App\Modules\CahierTexte\Http\Controllers;
 
@@ -987,7 +987,7 @@ class TextbookEntryController extends Controller{
 
                 } catch (\Throwable $innerException) {
 
-                    Log::error('Erreur lors du traitement d'un programme', [
+                    Log::error("Erreur lors du traitement d'un programme", [
                         'contract_program' => $cp,
                         'message'          => $innerException->getMessage(),
                         'trace'            => $innerException->getTraceAsString(),

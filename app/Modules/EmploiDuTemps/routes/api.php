@@ -83,4 +83,12 @@ Route::prefix('emploi-du-temps')->group(function () {
 
     Route::post('emploi-du-temps/{emploiDuTemps}/cancel',     [EmploiDuTempsController::class, 'cancel']);
     Route::get('emploi-du-temps/{emploiDuTemps}/occurrences', [EmploiDuTempsController::class, 'occurrences']);
+
+    // ── Vues planning par entité (appelées par le frontend via schedule-view) ──
+    // Ces routes existaient dans ScheduledCourseController mais n'étaient pas
+    // exposées sous le chemin attendu par le frontend.
+    Route::get('schedule-view/professor/{professorId}',       [ScheduledCourseController::class, 'getByProfessor']);
+    Route::get('schedule-view/class-group/{classGroupId}',    [ScheduledCourseController::class, 'getByClassGroup']);
+    Route::get('schedule-view/room/{roomId}',                 [ScheduledCourseController::class, 'getByRoom']);
+
 }); // Fin du groupe api/emploi-temps
