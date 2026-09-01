@@ -214,6 +214,16 @@ class PdfController extends Controller
             ], 500);
         }
 
+        // Vérification que shell_exec est disponible
+        if (!function_exists('shell_exec') || in_array('shell_exec', array_map('trim', explode(',', ini_get('disable_functions'))))) {
+            @unlink($jsonTmpFile);
+            \Log::warning('[PdfController] shell_exec désactivé — impossible de générer le PDF via Python.');
+            return response()->json([
+                'message' => 'La génération PDF via Python est indisponible sur ce serveur (shell_exec désactivé).',
+                'hint'    => 'Contactez l\'administrateur serveur pour activer shell_exec ou utilisez la route /schedule/class-group/{id}/pdf.',
+            ], 500);
+        }
+
         // Construction de la commande (passer le fichier JSON plutôt que le JSON brut)
         $cmd = sprintf(
             '%s %s --json-file %s --output %s 2>&1',

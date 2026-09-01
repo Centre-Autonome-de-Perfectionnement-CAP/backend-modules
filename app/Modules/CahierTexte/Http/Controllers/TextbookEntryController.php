@@ -777,7 +777,7 @@ class TextbookEntryController extends Controller{
             */
             $programsByCep = Program::query()
                 ->whereIn('course_element_professor_id', $cepIdsFromContracts)
-                ->get(['id', 'course_element_professor_id', 'semester'])
+                ->get(['id', 'course_element_professor_id', 'class_group_id', 'semester'])
                 ->groupBy('course_element_professor_id');
 
             // Tous les program ids résolus (pour les heures)
@@ -869,18 +869,27 @@ class TextbookEntryController extends Controller{
 
             /*
             |--------------------------------------------------------------------------
-            | 9. Filières — résolution via ClassGroup → Department
+            | 9. Filières — résolution via Program → ClassGroup → Department
             |--------------------------------------------------------------------------
-            | CORRECTIF : l'ancien code cherchait $departments[$contract->cycle_id]
-            | alors que $departments était keyBy('id') par department.id — ces deux
-            | IDs sont différents → filière toujours vide.
-            |
-            | Nouveau chemin : CEP.class_group_id → ClassGroup.department_id → Department
-            | C'est la seule façon fiable d'obtenir la filière d'un cours.
+            | CORRECTIF v2 : CEP.class_group_id est nullable sur beaucoup de lignes.
+            | La source fiable est Program.class_group_id (toujours renseigné car
+            | c'est une FK non-nullable dans la migration programs).
+            | On charge les ClassGroups depuis les programs déjà chargés (étape 4).
             */
-            $classGroupIds = $courseElementProfessors
+            $classGroupIdsFromPrograms = $programsByCep
+                ->flatten()
                 ->pluck('class_group_id')
                 ->filter()
+                ->unique();
+
+            // Fallback : aussi les class_group_id des CEPs (si programs vide)
+            $classGroupIdsCep = $courseElementProfessors
+                ->pluck('class_group_id')
+                ->filter()
+                ->unique();
+
+            $classGroupIds = $classGroupIdsFromPrograms
+                ->merge($classGroupIdsCep)
                 ->unique();
 
             $classGroups = ClassGroup::query()
@@ -897,6 +906,20 @@ class TextbookEntryController extends Controller{
                 ->whereIn('id', $departmentIds)
                 ->get(['id', 'name', 'abbreviation'])
                 ->keyBy('id');
+
+            // Index CEP → department (via le premier program du CEP)
+            // Utilisé dans la boucle pour résoudre la filière sans dépendre
+            // de CEP.class_group_id (souvent null).
+            $departmentByCep = [];
+            foreach ($programsByCep as $cepId => $progs) {
+                foreach ($progs as $prog) {
+                    $cg = $classGroups[$prog->class_group_id] ?? null;
+                    if ($cg) {
+                        $departmentByCep[$cepId] = $departments[$cg->department_id] ?? null;
+                        break; // On prend le premier program qui a une filière
+                    }
+                }
+            }
 
             /*
             |--------------------------------------------------------------------------
@@ -933,11 +956,8 @@ class TextbookEntryController extends Controller{
                     $professor = $professors[$cep->professor_id] ?? null;
                     $course    = $courseElements[$cep->course_element_id] ?? null;
 
-                    // Filiere : CEP -> ClassGroup -> Department
-                    $classGroup = $classGroups[$cep->class_group_id] ?? null;
-                    $department = $classGroup
-                        ? ($departments[$classGroup->department_id] ?? null)
-                        : null;
+                    // Filiere : via departmentByCep (resolu depuis Program → ClassGroup → Department)
+                    $department = $departmentByCep[$cepId] ?? null;
 
                     // Heures effectuees : agregat sur tous les programs du CEP
                     $hoursEffectuees = (float) ($hoursByCep[$cepId] ?? 0);
