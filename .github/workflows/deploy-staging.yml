@@ -104,10 +104,14 @@ jobs:
             rm -f $RELEASE_DIR/.env
             ln -nfs $SHARED_DIR/.env $RELEASE_DIR/.env
 
-            # Symlink .env pour le Node — il remonte l'arborescence pour le
-            # trouver automatiquement (voir node/src/config.ts), mais un
-            # symlink explicite à la racine du module est plus robuste.
+            # Symlink .env pour le Node
             ln -nfs $SHARED_DIR/.env $RELEASE_DIR/app/Modules/WhatsApp/node/.env || true
+
+            # Symlink public/storage → shared storage/app/public
+            echo "🔗 Creating public/storage symlink..."
+            rm -rf $RELEASE_DIR/public/storage
+            ln -nfs $SHARED_DIR/storage/app/public $RELEASE_DIR/public/storage
+            echo "   public/storage → $SHARED_DIR/storage/app/public"
             
             # Set permissions
             echo "🔐 Setting permissions..."

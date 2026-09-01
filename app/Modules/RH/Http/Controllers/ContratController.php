@@ -899,6 +899,37 @@ class ContratController extends Controller
         ], 404);
     }
 
+    // ─── STREAM SIGNATURE (prof ou admin connecté) ────────────────────────────
+
+    public function streamSignature(Request $request, $id)
+    {
+        $contrat = Contrat::findOrFail($id);
+
+        // Accessible au propriétaire (prof) ou à un admin/responsable
+        $user      = $request->user();
+        $professor = Professor::where('email', $user->email)->first();
+        $isOwner   = $professor && $professor->id === $contrat->professor_id;
+        $userSlug  = $user?->roles?->first()?->slug;
+        $isAdmin   = in_array($userSlug, array_merge(self::ADMIN_ROLES, self::MONOGRAPHIE_ROLES), true);
+
+        if (!$isOwner && !$isAdmin) {
+            return response()->json(['success' => false, 'message' => 'Accès non autorisé.'], 403);
+        }
+
+        if (!$contrat->professor_signature_path || !Storage::disk('public')->exists($contrat->professor_signature_path)) {
+            return response()->json(['success' => false, 'message' => 'Signature introuvable.'], 404);
+        }
+
+        $mimeType = Storage::disk('public')->mimeType($contrat->professor_signature_path) ?: 'image/png';
+
+        return Storage::disk('public')->response(
+            $contrat->professor_signature_path,
+            'signature.png',
+            ['Content-Type' => $mimeType],
+            'inline'
+        );
+    }
+
     // ─── STREAM PDF CONTRAT (admin/prof connecté, par ID) ─────────────────────
     //
     // Remplace l'accès direct via le symlink /storage/contrats/xxx.pdf

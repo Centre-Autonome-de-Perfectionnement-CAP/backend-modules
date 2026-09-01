@@ -108,7 +108,9 @@ Route::prefix('rh')->group(function () {
             [ContratController::class, 'deleteProgramSupport']
         );
         // ─── Stream PDF contrat (inline ou téléchargement) ────────────────────
-        Route::get('contrats/{id}/pdf',     [ContratController::class, 'streamPdf']);
+        Route::get('contrats/{id}/pdf',              [ContratController::class, 'streamPdf']);
+        // ─── Stream signature ─────────────────────────────────────────────────
+        Route::get('contrats/{id}/signature',        [ContratController::class, 'streamSignature']);
         // ─── Stream support de cours ──────────────────────────────────────────
         Route::get(
             'contrats/{contratId}/programs/{programId}/supports/{index}/stream',
