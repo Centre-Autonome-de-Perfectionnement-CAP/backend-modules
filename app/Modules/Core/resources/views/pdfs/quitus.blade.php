@@ -103,14 +103,36 @@
 </head>
 <body>
     <div class="header">
-
-        <img src='{{ public_path("assets/epac.png") }}' alt="logo-epac" class="logo-header epac">
-        <img src='{{ public_path("assets/cap.png") }}' alt="logo-cap"  class="logo-header">
+        @php
+            $epacLogo = storage_path("images/epac.png");
+            $capLogo = storage_path("images/cap.png");
+            $epacBase64 = file_exists($epacLogo) && filesize($epacLogo) > 0 ? 'data:image/png;base64,' . base64_encode(file_get_contents($epacLogo)) : '';
+            $capBase64 = file_exists($capLogo) && filesize($capLogo) > 0 ? 'data:image/png;base64,' . base64_encode(file_get_contents($capLogo)) : '';
+        @endphp
+        @if($epacBase64)
+        <img src='{{ $epacBase64 }}' alt="logo-epac" class="logo-header epac">
+        @endif
+        @if($capBase64)
+        <img src='{{ $capBase64 }}' alt="logo-cap"  class="logo-header">
+        @endif
         <h3 style="margin:0px">Université d'Abomey-Calavi</h3>
 
-        <img src='{{ public_path("assets/banner.png") }}' alt="header-separator-img" style="margin:0px ;">
+        @php
+            $bannerImg = storage_path("images/banner.png");
+            $hasBanner = file_exists($bannerImg) && filesize($bannerImg) > 0;
+            $bannerBase64 = $hasBanner ? 'data:image/png;base64,' . base64_encode(file_get_contents($bannerImg)) : '';
+        @endphp
+        @if($bannerBase64)
+        <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
+        @else
+        <hr style="margin: 2px 0;">
+        @endif
         <h2 style="margin:0">Ecole Polytechnique d'Abomey-Calavi</h2>
-        <img src='{{ storage_path("assets/banner.png") }}' alt="header-separator-img" style="margin:0px;">
+         @if($bannerBase64)
+    <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
+    @else
+    <hr style="margin: 2px 0;">
+    @endif
         <h1 style="margin:0;">Centre Autonome de Perfectionnement</h1>
         <p>
             01 BP 2009 COTONOU - TEl. 21 36 14 32/21 36 09 93 - Email. epac.uac@epac.uac.bj
