@@ -67,11 +67,12 @@ class DossierSubmissionService
                     ->whereHas('personalInformation', function ($q) use ($normalizedEmail) {
                         $q->whereRaw('LOWER(email) = ?', [$normalizedEmail]);
                     })
+                    ->where('status', '!=', 'rejected')
                     ->first();
 
                 if ($existingDossier) {
                     throw new BusinessException(
-                        message: "Un dossier de candidature a déjà été soumis avec cette adresse email ({$request->email}) pour cette année académique.",
+                        message: "Un dossier de candidature a déjà été soumis avec cette adresse email ({$request->email}) pour cette année académique. Vous pouvez le transférer vers la vague active ou le mettre à jour.",
                         errorCode: 'DOSSIER_ALREADY_EXISTS',
                         statusCode: 409
                     );
@@ -454,29 +455,45 @@ class DossierSubmissionService
     public function checkExistingPendingDossier(string $email, ?int $academicYearId = null): ?array
     {
         $normalizedEmail = trim(mb_strtolower($email));
+        $now = now();
         
-        $query = PendingStudent::whereHas('personalInformation', function ($q) use ($normalizedEmail) {
+        $baseQuery = PendingStudent::whereHas('personalInformation', function ($q) use ($normalizedEmail) {
             $q->whereRaw('LOWER(email) = ?', [$normalizedEmail]);
         })
         ->with(['personalInformation', 'department.cycle', 'academicYear', 'entryDiploma'])
         ->latest();
 
-        if (!$academicYearId) {
-            $currentYear = AcademicYear::where('is_current', true)->first();
-            if (!$currentYear) {
-                $now = now();
-                $currentYear = AcademicYear::where('year_start', '<=', $now)->where('year_end', '>=', $now)->first();
-            }
-            if ($currentYear) {
-                $academicYearId = $currentYear->id;
-            }
-        }
-
+        $targetYear = null;
         if ($academicYearId) {
-            $query->where('academic_year_id', $academicYearId);
+            $targetYear = AcademicYear::find($academicYearId);
+        } else {
+            // Priorité : is_current > période de soumission active aujourd'hui > année calendaire active > dernière année
+            $targetYear = AcademicYear::where('is_current', true)->first();
+            if (!$targetYear) {
+                $targetYear = AcademicYear::where('submission_start', '<=', $now)
+                    ->where('submission_end', '>=', $now)
+                    ->first();
+            }
+            if (!$targetYear) {
+                $targetYear = AcademicYear::where('year_start', '<=', $now)
+                    ->where('year_end', '>=', $now)
+                    ->first();
+            }
+            if (!$targetYear) {
+                $targetYear = AcademicYear::latest('id')->first();
+            }
         }
 
-        $pendingStudent = $query->first();
+        // 1. Chercher en priorité un dossier dans l'année cible
+        $pendingStudent = null;
+        if ($targetYear) {
+            $pendingStudent = (clone $baseQuery)->where('academic_year_id', $targetYear->id)->first();
+        }
+
+        // 2. Si aucun dossier dans l'année cible, récupérer le tout dernier dossier du candidat (ex: vague/année précédente)
+        if (!$pendingStudent) {
+            $pendingStudent = (clone $baseQuery)->first();
+        }
 
         if (!$pendingStudent) {
             return null;
@@ -490,17 +507,19 @@ class DossierSubmissionService
         );
 
         $isRejected = ($pendingStudent->status === 'rejected');
-        $canEdit = !$isValidated && !$isRejected;
+        // Un dossier validé est verrouillé ; un dossier rejeté ou en cours peut être modifié/transféré
+        $canEdit = !$isValidated;
 
+        $targetYearId = $targetYear ? (int) $targetYear->id : (int) $pendingStudent->academic_year_id;
         $academicYearService = app(AcademicYearService::class);
         $currentActiveWave = $academicYearService->resolveWave(
-            (int) $pendingStudent->academic_year_id,
+            $targetYearId,
             (int) $pendingStudent->department_id,
-            now()
+            $now
         );
 
         $initialWave = (int) ($pendingStudent->initial_wave ?? 1);
-        $canTransferWave = ($currentActiveWave !== $initialWave);
+        $canTransferWave = !$isValidated && ($currentActiveWave !== $initialWave || (int)$pendingStudent->academic_year_id !== $targetYearId);
 
         return [
             'exists' => true,

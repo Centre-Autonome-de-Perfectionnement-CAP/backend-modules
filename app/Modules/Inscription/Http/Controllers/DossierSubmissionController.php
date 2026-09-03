@@ -63,13 +63,13 @@ class DossierSubmissionController extends Controller
         $validCycles = ['Licence', 'Master', 'Ingénieur'];
 
         if (!in_array($cycleName, $validCycles)) {
-            return $this->errorResponse('Cycle invalide spécifié', 'INVALID_CYCLE', 400);
+            return $this->errorResponse('Cycle invalide spécifié', 400, 'INVALID_CYCLE');
         }
 
         $periods = $this->submissionService->getActiveSubmissionPeriods($cycleName);
 
         if (empty($periods)) {
-            return $this->errorResponse("Aucune période active pour {$cycleName}", 'NO_ACTIVE_PERIOD', 404);
+            return $this->errorResponse("Aucune période active pour {$cycleName}", 404, 'NO_ACTIVE_PERIOD');
         }
 
         return $this->successResponse($periods, 'Périodes récupérées avec succès');
@@ -292,7 +292,7 @@ class DossierSubmissionController extends Controller
         $academicYearId = $request->query('academic_year_id') ? (int) $request->query('academic_year_id') : null;
 
         if (empty($email)) {
-            return $this->errorResponse("L'adresse email est requise.", 'EMAIL_REQUIRED', 422);
+            return $this->errorResponse("L'adresse email est requise.", 422, 'EMAIL_REQUIRED');
         }
 
         $existing = $this->submissionService->checkExistingPendingDossier($email, $academicYearId);
@@ -316,7 +316,7 @@ class DossierSubmissionController extends Controller
         $trackingCode = (string) $request->input('tracking_code', '');
 
         if (empty($email)) {
-            return $this->errorResponse("L'adresse email est requise.", 'MISSING_FIELDS', 422);
+            return $this->errorResponse("L'adresse email est requise.", 422, 'MISSING_FIELDS');
         }
 
         $dossier = $this->submissionService->getDossierForUpdate($email, $trackingCode ?: null);
