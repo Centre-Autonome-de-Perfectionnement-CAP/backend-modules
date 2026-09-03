@@ -519,7 +519,7 @@ class DossierSubmissionService
         );
 
         $initialWave = (int) ($pendingStudent->initial_wave ?? 1);
-        $canTransferWave = !$isValidated && ($currentActiveWave !== $initialWave || (int)$pendingStudent->academic_year_id !== $targetYearId);
+        $canTransferWave = ($currentActiveWave !== $initialWave || (int)$pendingStudent->academic_year_id !== $targetYearId);
 
         return [
             'exists' => true,
@@ -990,9 +990,7 @@ class DossierSubmissionService
                 $pendingStudent->studentPendingStudents()->exists()
             );
 
-            if ($isValidated) {
-                throw new BusinessException('Ce dossier a déjà été validé et ne peut plus être transféré.', 'DOSSIER_ALREADY_VALIDATED');
-            }
+            // Si le dossier est validé, on autorise le transfert vers la nouvelle vague sans lever d'exception
 
             $academicYearService = app(AcademicYearService::class);
             $currentWave = $academicYearService->resolveWave(
@@ -1049,13 +1047,18 @@ class DossierSubmissionService
                 'to_wave' => $currentWave,
             ]);
 
+            $validatedNotice = $isValidated 
+                ? " (Votre dossier est déjà validé par la scolarité et cette validation reste acquise en Vague {$currentWave})."
+                : "";
+
             return [
                 'success' => true,
                 'already_in_wave' => false,
                 'tracking_code' => $pendingStudent->tracking_code,
                 'from_wave' => $fromWave,
                 'new_wave' => $currentWave,
-                'message' => "Votre dossier a été transféré avec succès vers la Vague {$currentWave}.",
+                'is_validated' => $isValidated,
+                'message' => "Votre dossier a été transféré avec succès vers la Vague {$currentWave}.{$validatedNotice}",
             ];
         });
     }
