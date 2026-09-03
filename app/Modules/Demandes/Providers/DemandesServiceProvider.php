@@ -12,6 +12,7 @@ use App\Modules\Demandes\Services\NotificationService;
 use App\Modules\Demandes\Services\TransitionService;
 use App\Modules\Demandes\Services\WhatsAppService;
 use App\Modules\Demandes\Services\SecretaryFileService;
+use App\Modules\Demandes\Services\ContactDemandeurService;
 
 /**
  * CORRECTIF (v2) — basé sur le DemandesServiceProvider réel.
@@ -53,6 +54,10 @@ class DemandesServiceProvider extends ServiceProvider
 
         // ── AJOUT (B1.1) : service extrait de DocumentRequestController ───────
         $this->app->singleton(SecretaryFileService::class);
+
+        // ── ContactDemandeurService : enregistrement explicite pour éviter
+        // une BindingResolutionException avec le cache activé en production.
+        $this->app->singleton(ContactDemandeurService::class);
     }
 
 
