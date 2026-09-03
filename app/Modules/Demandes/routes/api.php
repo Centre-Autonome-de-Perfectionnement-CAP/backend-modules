@@ -31,6 +31,21 @@ use App\Modules\Demandes\Http\Controllers\DocumentRequestBadgeController;
 
 Route::prefix('api/attestations')->middleware('auth:sanctum')->group(function () {
 
+    // ── DIAGNOSTIC TEMPORAIRE — À SUPPRIMER après investigation ───────────────
+    Route::get('document-requests/diag-contact', function () {
+        try {
+            $service = app(\App\Modules\Demandes\Services\ContactDemandeurService::class);
+            return response()->json(['ok' => true, 'class' => get_class($service)]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'error' => $e->getMessage(),
+                'class' => get_class($e),
+                'file'  => $e->getFile() . ':' . $e->getLine(),
+                'trace' => array_slice(explode("\n", $e->getTraceAsString()), 0, 10),
+            ], 500);
+        }
+    });
+
     // ── Routes à chemin fixe — DOIVENT précéder {id} ──────────────────────────
     Route::get('document-requests/stats',        DocumentRequestStatsController::class);
     Route::get('document-requests/badge-count',  DocumentRequestBadgeController::class);
