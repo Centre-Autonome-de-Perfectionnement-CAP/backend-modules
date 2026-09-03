@@ -88,11 +88,7 @@ class ContactDemandeurService
             $result['whatsapp'] = $this->sendWhatsApp($demande, $nomDemandeur, $message, $secretaireName, $stored);
         }
 
-        // ── Email ─────────────────────────────────────────────────────────────
-        if (!empty($demande->email)) {
-            $result['email']['attempted'] = true;
-            $result['email'] = $this->sendEmail($demande, $nomDemandeur, $typeLabel, $message, $secretaireName, $stored);
-        }
+        // ── Email désactivé temporairement (canal WhatsApp uniquement) ────────
 
         return $result;
     }
