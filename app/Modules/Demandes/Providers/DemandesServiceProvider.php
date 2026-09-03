@@ -13,6 +13,7 @@ use App\Modules\Demandes\Services\TransitionService;
 use App\Modules\Demandes\Services\WhatsAppService;
 use App\Modules\Demandes\Services\SecretaryFileService;
 use App\Modules\Demandes\Services\ContactDemandeurService;
+use App\Modules\Core\Services\WhatsAppBridgeClient;
 
 /**
  * CORRECTIF (v2) — basé sur le DemandesServiceProvider réel.
@@ -51,6 +52,16 @@ class DemandesServiceProvider extends ServiceProvider
                 $app->make(NotificationService::class),
             );
         });
+
+        // ── WhatsAppService : résolution explicite de la dépendance Core\WhatsAppBridgeClient
+        // qui étend WhatsApp\WhatsAppBridgeClient (singleton dans WhatsAppServiceProvider).
+        // Sans ce binding, Laravel ne sait pas résoudre la sous-classe en prod avec cache.
+        // On lie Core\WhatsAppBridgeClient sur la même instance que WhatsApp\WhatsAppBridgeClient.
+        $this->app->singleton(WhatsAppBridgeClient::class, function ($app) {
+            return $app->make(\App\Modules\WhatsApp\Services\WhatsAppBridgeClient::class);
+        });
+
+        $this->app->singleton(WhatsAppService::class);
 
         // ── AJOUT (B1.1) : service extrait de DocumentRequestController ───────
         $this->app->singleton(SecretaryFileService::class);
