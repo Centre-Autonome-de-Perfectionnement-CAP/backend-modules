@@ -24,35 +24,115 @@ class ValidationService
     public function getPendingPayments($filters = [])
     {
         $query = Paiement::with([
-            'student', 
-            'studentPendingStudent.pendingStudent.personalInformation'
+            'student.pendingStudents.personalInformation', 
+            'studentPendingStudent.pendingStudent.personalInformation',
+            'legacyStudent'
         ]);
         
         // Filtrer par statut
         $status = $filters['status'] ?? 'pending';
-        if ($status === 'pending') {
-            $query->pending();
-        } elseif ($status === 'approved') {
+        if ($status === 'approved') {
             $query->where('status', 'approved');
         } elseif ($status === 'rejected') {
             $query->where('status', 'rejected');
+        } else {
+            $query->where('status', 'pending');
         }
         
-        if (isset($filters['search']) && !empty($filters['search'])) {
-            $search = $filters['search'];
-            $query->where(function($q) use ($search) {
-                $q->where('student_id_number', 'like', "%$search%")
-                  ->orWhere('reference', 'like', "%$search%")
-                  ->orWhereHas('studentPendingStudent.pendingStudent.personalInformation', function($sq) use ($search) {
-                      $sq->where('first_names', 'like', "%$search%")
-                        ->orWhere('last_name', 'like', "%$search%");
-                  });
-            });
+        if (!empty($filters['search'])) {
+            $this->applySearchFilter($query, $filters['search']);
         }
         
         $perPage = $filters['per_page'] ?? 15;
         
         return $query->orderBy('updated_at', 'desc')->paginate($perPage);
+    }
+
+    /**
+     * Obtenir les totaux par statut (avec filtre de recherche éventuel)
+     */
+    public function getCounts(?string $search = null): array
+    {
+        $createBaseQuery = function() use ($search) {
+            $q = Paiement::query();
+            if (!empty($search)) {
+                $this->applySearchFilter($q, $search);
+            }
+            return $q;
+        };
+
+        return [
+            'pending' => $createBaseQuery()->where('status', 'pending')->count(),
+            'approved' => $createBaseQuery()->where('status', 'approved')->count(),
+            'rejected' => $createBaseQuery()->where('status', 'rejected')->count(),
+            'all' => $createBaseQuery()->count(),
+        ];
+    }
+
+    /**
+     * Applique les critères de recherche textuelle globale sur la requête
+     */
+    protected function applySearchFilter($query, string $search): void
+    {
+        $search = trim($search);
+        $terms = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        $query->where(function($q) use ($search, $terms) {
+            $q->where('student_id_number', 'like', "%$search%")
+              ->orWhere('reference', 'like', "%$search%")
+              ->orWhere('account_number', 'like', "%$search%")
+              ->orWhere('email', 'like', "%$search%")
+              ->orWhere('contact', 'like', "%$search%")
+              ->orWhere('purpose', 'like', "%$search%")
+              ->orWhereHas('studentPendingStudent.pendingStudent.personalInformation', function($sq) use ($search, $terms) {
+                  $sq->where(function($sub) use ($search, $terms) {
+                      $sub->where('first_names', 'like', "%$search%")
+                          ->orWhere('last_name', 'like', "%$search%");
+                      if (count($terms) > 1) {
+                          $sub->orWhere(function($multi) use ($terms) {
+                              foreach ($terms as $term) {
+                                  $multi->where(function($t) use ($term) {
+                                      $t->where('first_names', 'like', "%$term%")
+                                        ->orWhere('last_name', 'like', "%$term%");
+                                  });
+                              }
+                          });
+                      }
+                  });
+              })
+              ->orWhereHas('student.pendingStudents.personalInformation', function($sq) use ($search, $terms) {
+                  $sq->where(function($sub) use ($search, $terms) {
+                      $sub->where('first_names', 'like', "%$search%")
+                          ->orWhere('last_name', 'like', "%$search%");
+                      if (count($terms) > 1) {
+                          $sub->orWhere(function($multi) use ($terms) {
+                              foreach ($terms as $term) {
+                                  $multi->where(function($t) use ($term) {
+                                      $t->where('first_names', 'like', "%$term%")
+                                        ->orWhere('last_name', 'like', "%$term%");
+                                  });
+                              }
+                          });
+                      }
+                  });
+              })
+              ->orWhereHas('legacyStudent', function($sq) use ($search, $terms) {
+                  $sq->where(function($sub) use ($search, $terms) {
+                      $sub->where('first_name', 'like', "%$search%")
+                          ->orWhere('last_name', 'like', "%$search%");
+                      if (count($terms) > 1) {
+                          $sub->orWhere(function($multi) use ($terms) {
+                              foreach ($terms as $term) {
+                                  $multi->where(function($t) use ($term) {
+                                      $t->where('first_name', 'like', "%$term%")
+                                        ->orWhere('last_name', 'like', "%$term%");
+                                  });
+                              }
+                          });
+                      }
+                  });
+              });
+        });
     }
 
     /**

@@ -36,6 +36,10 @@ class LegacyStudentAdminController extends Controller
             $query->where('status', $status);
         }
 
+        if ($cycle = $request->input('cycle')) {
+            $query->where('cycle', $cycle);
+        }
+
         if ($year = $request->input('enrollment_year')) {
             $query->where('enrollment_year', $year);
         }

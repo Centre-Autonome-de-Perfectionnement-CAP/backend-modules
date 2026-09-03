@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace App\Modules\LegacyStudent\Imports;
 
@@ -67,7 +67,7 @@ class LegacyStudentsImport implements ToCollection, WithHeadingRow
             'first_name'      => ['required', 'string', 'max:100'],
             'email'           => ['nullable', 'email', 'max:150'],
             'phone'           => ['nullable', 'string', 'max:50'],
-            'enrollment_year' => ['required', 'integer', 'min:1970', 'max:2022'],
+            'enrollment_year' => ['required', 'integer', 'min:1970', 'max:2025'],
             'filiere_name'    => ['nullable', 'string'],
         ]);
 

@@ -23,12 +23,14 @@ class ValidationController extends Controller
     public function getPendingPayments(Request $request)
     {
         try {
-            $filters = $request->only(['search', 'page', 'per_page']);
+            $filters = $request->only(['search', 'page', 'per_page', 'status']);
             $payments = $this->validationService->getPendingPayments($filters);
+            $counts = $this->validationService->getCounts($filters['search'] ?? null);
             
             return response()->json([
                 'success' => true,
-                'data' => $payments
+                'data' => $payments,
+                'counts' => $counts
             ]);
         } catch (\Exception $e) {
             return response()->json([

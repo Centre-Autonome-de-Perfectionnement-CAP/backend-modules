@@ -20,7 +20,9 @@ class LegacyStudentPublicController extends Controller
      */
     public function availableFilieres(): JsonResponse
     {
-        $filieres = Department::select('id', 'name', 'abbreviation')->get();
+        $filieres = Department::with('cycle:id,name,type')
+            ->select('id', 'name', 'abbreviation', 'cycle_id')
+            ->get();
 
         if ($filieres->isEmpty()) {
             $defaultFilieres = [
