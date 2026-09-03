@@ -338,4 +338,22 @@ class DossierSubmissionController extends Controller
 
         return $this->successResponse($result, 'Dossier mis à jour avec succès.');
     }
+
+    /**
+     * Transfère directement le dossier existant vers la vague active en cours (sans modification des champs).
+     */
+    public function transferWaveByCandidate(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'tracking_code' => 'required|string',
+        ]);
+
+        $result = $this->submissionService->transferDossierWaveByCandidate(
+            (string) $request->input('email'),
+            (string) $request->input('tracking_code')
+        );
+
+        return $this->successResponse($result, $result['message'] ?? 'Dossier transféré avec succès.');
+    }
 }

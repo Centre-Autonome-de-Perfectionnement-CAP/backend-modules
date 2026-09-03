@@ -575,6 +575,57 @@ class DossierSubmissionService
             $contacts = json_decode($contacts, true) ?: [$contacts];
         }
 
+        $allFields = DocumentFields::allFields();
+        $resolvedDocuments = [];
+        $documentsByField = [];
+
+        if (!empty($pendingStudent->documents) && is_array($pendingStudent->documents)) {
+            foreach ($pendingStudent->documents as $name => $val) {
+                $fileId = is_numeric($val) ? (int) $val : (is_array($val) ? ($val['id'] ?? null) : null);
+                $file = $fileId ? \App\Modules\Stockage\Models\File::find($fileId) : null;
+
+                $docInfo = null;
+                if ($file) {
+                    $publicUrl = route('api.files.inscription.view', ['file' => $file->id]);
+                    $docInfo = [
+                        'id'            => $file->id,
+                        'name'          => $name,
+                        'original_name' => $file->original_name,
+                        'url'           => $publicUrl,
+                        'mime_type'     => $file->mime_type,
+                        'size'          => $file->size,
+                    ];
+                } elseif (is_string($val) && !is_numeric($val)) {
+                    $docInfo = [
+                        'name' => $name,
+                        'path' => $val,
+                        'url'  => str_starts_with($val, 'http') ? $val : url('/storage/' . ltrim($val, '/')),
+                    ];
+                }
+
+                if ($docInfo) {
+                    $resolvedDocuments[$name] = $docInfo;
+
+                    // Associer au champ correspondant du formulaire (ex: demande_da, cv, etc.)
+                    foreach ($allFields as $fieldKey => $docLabel) {
+                        if ($docLabel === $name || $fieldKey === $name) {
+                            $documentsByField[$fieldKey] = $docInfo;
+                        }
+                    }
+                }
+            }
+        }
+
+        $photoUrl = null;
+        if (!empty($pendingStudent->photo)) {
+            $photoFile = is_numeric($pendingStudent->photo) ? \App\Modules\Stockage\Models\File::find((int) $pendingStudent->photo) : null;
+            if ($photoFile) {
+                $photoUrl = route('api.files.inscription.view', ['file' => $photoFile->id]);
+            } elseif (is_string($pendingStudent->photo)) {
+                $photoUrl = str_starts_with($pendingStudent->photo, 'http') ? $pendingStudent->photo : url('/storage/' . ltrim($pendingStudent->photo, '/'));
+            }
+        }
+
         return [
             'tracking_code' => $pendingStudent->tracking_code,
             'initial_wave' => (int) ($pendingStudent->initial_wave ?? 1),
@@ -591,8 +642,10 @@ class DossierSubmissionService
             'academic_year_id' => $pendingStudent->academic_year_id,
             'study_level' => $pendingStudent->level,
             'entry_diploma_id' => $pendingStudent->entry_diploma_id,
-            'documents' => $pendingStudent->documents ?? [],
+            'documents' => $resolvedDocuments,
+            'documents_by_field' => $documentsByField,
             'has_photo' => !empty($pendingStudent->photo),
+            'photo_url' => $photoUrl,
         ];
     }
 
@@ -882,6 +935,108 @@ class DossierSubmissionService
                 'tracking_code' => $pendingStudent->tracking_code,
                 'initial_wave' => (int) ($pendingStudent->initial_wave ?? 1),
                 'modifications' => $modifications,
+            ];
+        });
+    }
+
+    /**
+     * Permet au candidat de transférer directement son dossier existant vers la vague active
+     * sans avoir besoin de modifier ni re-saisir les informations.
+     */
+    public function transferDossierWaveByCandidate(string $email, string $trackingCode): array
+    {
+        return DB::transaction(function () use ($email, $trackingCode) {
+            $normalizedEmail = trim(mb_strtolower($email));
+            $cleanCode = trim($trackingCode);
+
+            $pendingStudent = PendingStudent::whereHas('personalInformation', function ($q) use ($normalizedEmail) {
+                $q->whereRaw('LOWER(email) = ?', [$normalizedEmail]);
+            })
+            ->where(function ($q) use ($cleanCode) {
+                $q->where('tracking_code', $cleanCode)
+                  ->orWhereRaw('LOWER(tracking_code) = ?', [strtolower($cleanCode)])
+                  ->orWhereRaw('UPPER(tracking_code) = ?', [strtoupper($cleanCode)]);
+            })
+            ->with(['personalInformation', 'department.cycle', 'academicYear', 'entryDiploma'])
+            ->first();
+
+            if (!$pendingStudent) {
+                throw new BusinessException("Dossier introuvable.", 'DOSSIER_NOT_FOUND', 404);
+            }
+
+            $isValidated = (
+                $pendingStudent->status === 'approved' ||
+                $pendingStudent->cuca_opinion === 'favorable' ||
+                $pendingStudent->cuo_opinion === 'favorable' ||
+                $pendingStudent->studentPendingStudents()->exists()
+            );
+
+            if ($isValidated) {
+                throw new BusinessException('Ce dossier a déjà été validé et ne peut plus être transféré.', 'DOSSIER_ALREADY_VALIDATED');
+            }
+
+            $academicYearService = app(AcademicYearService::class);
+            $currentWave = $academicYearService->resolveWave(
+                (int) $pendingStudent->academic_year_id,
+                (int) $pendingStudent->department_id,
+                now()
+            );
+
+            $fromWave = (int) ($pendingStudent->initial_wave ?? 1);
+
+            if ($currentWave === $fromWave) {
+                return [
+                    'success' => true,
+                    'already_in_wave' => true,
+                    'tracking_code' => $pendingStudent->tracking_code,
+                    'current_wave' => $currentWave,
+                    'message' => "Votre dossier est déjà assigné à la Vague {$currentWave}.",
+                ];
+            }
+
+            // Enregistrer l'historique du transfert
+            $history = $pendingStudent->transfer_history ?? [];
+            if (!is_array($history)) {
+                $history = [];
+            }
+            $history[] = [
+                'from_wave' => $fromWave,
+                'to_wave' => $currentWave,
+                'transferred_at' => now()->toDateTimeString(),
+                'transferred_by' => 'Candidat (Portail)',
+                'reason' => "Transfert direct vers la Vague {$currentWave} via le portail candidat",
+            ];
+
+            $pendingStudent->transferred_from_wave = $pendingStudent->transferred_from_wave ?? $fromWave;
+            $pendingStudent->initial_wave = $currentWave;
+            $pendingStudent->transfer_history = $history;
+            $pendingStudent->is_updated_by_student = true;
+            $pendingStudent->last_student_update_at = now();
+
+            $existingSummary = $pendingStudent->student_update_summary ?? [];
+            if (!is_array($existingSummary)) {
+                $existingSummary = [];
+            }
+            $existingSummary[] = [
+                'updated_at' => now()->toISOString(),
+                'changes' => ["Transfert direct de vague : Vague {$fromWave} → Vague {$currentWave}"],
+            ];
+            $pendingStudent->student_update_summary = $existingSummary;
+            $pendingStudent->save();
+
+            Log::info("Dossier transféré directement par le candidat", [
+                'tracking_code' => $pendingStudent->tracking_code,
+                'from_wave' => $fromWave,
+                'to_wave' => $currentWave,
+            ]);
+
+            return [
+                'success' => true,
+                'already_in_wave' => false,
+                'tracking_code' => $pendingStudent->tracking_code,
+                'from_wave' => $fromWave,
+                'new_wave' => $currentWave,
+                'message' => "Votre dossier a été transféré avec succès vers la Vague {$currentWave}.",
             ];
         });
     }

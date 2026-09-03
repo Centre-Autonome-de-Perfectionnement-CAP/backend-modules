@@ -44,7 +44,7 @@ class LegacyStudentPublicController extends Controller
     public function register(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'registrationYear' => 'required|integer|max:2022',
+            'registrationYear' => 'required|integer|max:2025',
             'matricule' => 'required|string|max:50',
             'lastName' => 'required|string|max:100',
             'firstName' => 'required|string|max:100',

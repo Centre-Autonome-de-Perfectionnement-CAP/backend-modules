@@ -522,12 +522,16 @@ class AcademicYearService
             ->groupBy(function ($period) {
                 $startDate = $period->start_date ? $period->start_date->format('Y-m-d') : 'null';
                 $endDate = $period->end_date ? $period->end_date->format('Y-m-d') : 'null';
-                return $startDate . '_' . $endDate;
+                $batch = $period->created_at ? $period->created_at->format('Y-m-d_H:i') : 'batch';
+                return $startDate . '_' . $endDate . '_' . $batch;
             });
 
         $waveIndex = 1;
         $sortedPeriods = $submissionPeriods->sortBy(function ($group) {
-            return $group->first()->start_date?->timestamp ?? 0;
+            $first = $group->first();
+            $startTimestamp = $first->start_date?->timestamp ?? 0;
+            $createdTimestamp = $first->created_at?->timestamp ?? 0;
+            return [$startTimestamp, $createdTimestamp];
         });
 
         foreach ($sortedPeriods as $key => $groupedPeriods) {

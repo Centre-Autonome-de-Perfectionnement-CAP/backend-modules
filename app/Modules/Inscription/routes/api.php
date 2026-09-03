@@ -76,6 +76,7 @@ Route::prefix('api/inscription')->group(function () {
         Route::get('/check-existing', [DossierSubmissionController::class, 'checkExistingDossier']);
         Route::post('/fetch-for-update', [DossierSubmissionController::class, 'getDossierForUpdate']);
         Route::post('/update-existing', [DossierSubmissionController::class, 'updateExistingDossier']);
+        Route::post('/transfer-wave', [DossierSubmissionController::class, 'transferWaveByCandidate']);
         Route::post('/licence', [DossierSubmissionController::class, 'submitLicenceDossier']);
         Route::post('/master', [DossierSubmissionController::class, 'submitMasterDossier']);
         Route::post('/ingenieur/prepa', [DossierSubmissionController::class, 'submitIngenieurPrepaDossier']);
