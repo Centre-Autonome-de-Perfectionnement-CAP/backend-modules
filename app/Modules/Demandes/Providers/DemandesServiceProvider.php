@@ -53,12 +53,13 @@ class DemandesServiceProvider extends ServiceProvider
             );
         });
 
-        // ── WhatsAppService : résolution explicite de la dépendance Core\WhatsAppBridgeClient
-        // qui étend WhatsApp\WhatsAppBridgeClient (singleton dans WhatsAppServiceProvider).
-        // Sans ce binding, Laravel ne sait pas résoudre la sous-classe en prod avec cache.
-        // On lie Core\WhatsAppBridgeClient sur la même instance que WhatsApp\WhatsAppBridgeClient.
+        // ── WhatsAppService et ses dépendances ────────────────────────────────
+        // Core\WhatsAppBridgeClient est un alias de WhatsApp\WhatsAppBridgeClient.
+        // On l'enregistre explicitement pour que Laravel le résolve en prod avec cache.
         $this->app->singleton(WhatsAppBridgeClient::class, function ($app) {
-            return $app->make(\App\Modules\WhatsApp\Services\WhatsAppBridgeClient::class);
+            // Résolution directe sans passer par le container pour eviter
+            // une dépendance circulaire si WhatsAppServiceProvider n'est pas encore chargé.
+            return new \App\Modules\WhatsApp\Services\WhatsAppBridgeClient();
         });
 
         $this->app->singleton(WhatsAppService::class);
