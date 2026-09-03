@@ -1,0 +1,1 @@
+var r=["512 512","<path fill='var(--ci-primary-color, currentcolor)' d='M238.627 496H192V253.828l-168-200V16h456v37.612l-160 200v161.015ZM224 464h1.373L288 401.373V242.388L443.51 48H60.9L224 242.172Z' class='ci-primary'/>"];export{r as c};
