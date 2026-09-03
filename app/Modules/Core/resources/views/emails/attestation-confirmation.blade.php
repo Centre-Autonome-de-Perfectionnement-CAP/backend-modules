@@ -114,7 +114,7 @@
         @endif
       </div>
 
-      <a href="https://cap-epac.online/student-services?type=suivi-demandes&ref={{ $reference }}" class="btn">
+      <a href="{{ rtrim(config('app.frontend_url', 'http://localhost:5173'), '/') }}/student-services?type=suivi-demandes&ref={{ $reference }}" class="btn">
         Suivre l'avancement en ligne
       </a>
     </div>

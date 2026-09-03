@@ -152,7 +152,7 @@ class DocumentRequestController extends Controller
 
         $request->validate([
             'files'           => 'required|array|min:1',
-            'files.*.file'    => 'required|file|max:5120|mimes:pdf,jpg,jpeg,png',
+            'files.*.file'    => 'required|file|max:10240|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx',
             'files.*.name'    => 'required|string|max:200',
             'files.*.comment' => 'nullable|string|max:1000',
         ]);
@@ -203,6 +203,31 @@ class DocumentRequestController extends Controller
         ]);
     }
 
+    // ── Remplacement du fichier physique d'une pièce jointe secrétaire ───────
+
+    public function replaceSecretaryFile(Request $request, int $id, string $fileId): JsonResponse
+    {
+        $demande = DocumentRequest::findOrFail($id);
+        $this->authorize('manageSecretaryFiles', $demande);
+
+        $request->validate([
+            'file'    => 'required|file|max:10240|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx',
+            'name'    => 'nullable|string|max:255',
+            'comment' => 'nullable|string|max:1000',
+        ]);
+
+        try {
+            $secretaryFiles = $this->secretaryFileService->replaceFile($demande, $fileId, $request);
+        } catch (BusinessException $e) {
+            return $this->errorResponse($e->getMessage(), $e->getStatusCode());
+        }
+
+        return $this->successResponse([
+            'message'         => 'Fichier remplacé.',
+            'secretary_files' => $secretaryFiles,
+        ]);
+    }
+
     // ── AJOUT : message libre secrétaire → demandeur (WhatsApp + email) ──────────
 
     public function contactDemandeur(Request $request, int $id): JsonResponse
@@ -227,6 +252,13 @@ class DocumentRequestController extends Controller
             );
         } catch (BusinessException $e) {
             return $this->errorResponse($e->getMessage(), $e->getStatusCode());
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('[contactDemandeur] Erreur inattendue', [
+                'id'    => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return $this->errorResponse('Erreur lors de l\'envoi : ' . $e->getMessage(), 500);
         }
 
         return $this->successResponse($result, 'Envoi traité.');

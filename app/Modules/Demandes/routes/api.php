@@ -46,9 +46,10 @@ Route::prefix('api/attestations')->middleware('auth:sanctum')->group(function ()
          ->whereNumber('id');
 
     // ── Fichiers secrétaire ─────────────────────────────────────────────────────
-    Route::post('document-requests/{id}/secretary-files',            [DocumentRequestController::class, 'uploadSecretaryFiles'])->whereNumber('id');
-    Route::patch('document-requests/{id}/secretary-files/{fileId}',  [DocumentRequestController::class, 'updateSecretaryFileComment'])->whereNumber('id');
-    Route::delete('document-requests/{id}/secretary-files/{fileId}',[DocumentRequestController::class, 'deleteSecretaryFile'])->whereNumber('id');
+    Route::post('document-requests/{id}/secretary-files',                    [DocumentRequestController::class, 'uploadSecretaryFiles'])->whereNumber('id');
+    Route::patch('document-requests/{id}/secretary-files/{fileId}',          [DocumentRequestController::class, 'updateSecretaryFileComment'])->whereNumber('id');
+    Route::post('document-requests/{id}/secretary-files/{fileId}/replace',   [DocumentRequestController::class, 'replaceSecretaryFile'])->whereNumber('id');
+    Route::delete('document-requests/{id}/secretary-files/{fileId}',         [DocumentRequestController::class, 'deleteSecretaryFile'])->whereNumber('id');
 
     // ── Message libre secrétaire → demandeur (WhatsApp + email) ────────────────
     Route::post('document-requests/{id}/contact-demandeur', [DocumentRequestController::class, 'contactDemandeur'])->whereNumber('id');

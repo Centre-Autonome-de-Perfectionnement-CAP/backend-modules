@@ -53,7 +53,7 @@ class DocumentRequestBadgeController extends Controller
     {
         if ($role === 'secretaire') {
             return (int) DB::table('document_requests')
-                ->whereIn('status', ['submitted', 'secretary_correction'])
+                ->whereIn('status', ['submitted', 'secretary_correction', 'secretary_final_review'])
                 ->count();
         }
 

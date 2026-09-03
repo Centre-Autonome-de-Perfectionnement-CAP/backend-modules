@@ -138,6 +138,63 @@ class SecretaryFileService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
+    // REMPLACEMENT DE FICHIER
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Remplace le fichier physique d'une entrée secrétaire existante.
+     * Le commentaire est conservé (ou mis à jour si fourni).
+     *
+     * @throws BusinessException
+     */
+    public function replaceFile(DocumentRequest $demande, string $fileId, Request $request): array
+    {
+        $this->assertStatusAllowed($demande, 'le remplacement de fichier');
+
+        $file = $request->file('file');
+        if (!$file || !$file->isValid()) {
+            throw new BusinessException('Aucun fichier valide fourni.', 'NO_FILE', 422);
+        }
+
+        $secretaryFiles = $demande->secretary_files ?? [];
+        $found          = false;
+
+        foreach ($secretaryFiles as &$entry) {
+            if (($entry['id'] ?? '') === $fileId) {
+                // Supprimer l'ancien fichier physique si présent
+                if (!empty($entry['path'])) {
+                    $this->storageService->deleteFile($entry['path']);
+                }
+
+                // Stocker le nouveau fichier avec le même ID pour conserver la continuité
+                $newPath = $this->storageService->storeSecretaireFile(
+                    $demande->type, $demande->reference, $file, $fileId
+                );
+
+                $entry['path']          = $newPath;
+                $entry['original_name'] = strip_tags(
+                    $request->input('name') ?: $file->getClientOriginalName()
+                );
+                if ($request->has('comment')) {
+                    $entry['comment'] = strip_tags($request->input('comment') ?? '');
+                }
+                $entry['replaced_at'] = now()->toIso8601String();
+                $found = true;
+                break;
+            }
+        }
+        unset($entry);
+
+        if (!$found) {
+            throw new BusinessException('Fichier introuvable.', 'FILE_NOT_FOUND', 404);
+        }
+
+        $demande->update(['secretary_files' => $secretaryFiles]);
+
+        return $secretaryFiles;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     // HELPER
     // ══════════════════════════════════════════════════════════════════════════
 

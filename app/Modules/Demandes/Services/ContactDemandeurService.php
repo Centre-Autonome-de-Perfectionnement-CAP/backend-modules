@@ -52,6 +52,18 @@ class ContactDemandeurService
         }
 
         $nomDemandeur = trim(($demande->last_name ?? '') . ' ' . ($demande->first_names ?? '')) ?: 'Demandeur';
+        if ($nomDemandeur === 'Demandeur') {
+            // last_name/first_names ne sont pas des colonnes directes sur document_requests —
+            // il faut les récupérer via la jointure personal_information.
+            $info = \Illuminate\Support\Facades\DB::table('document_requests as dr')
+                ->join('student_pending_student as sps', 'dr.student_pending_student_id', '=', 'sps.id')
+                ->join('pending_students as ps', 'sps.pending_student_id', '=', 'ps.id')
+                ->join('personal_information as pi', 'ps.personal_information_id', '=', 'pi.id')
+                ->where('dr.id', $demande->id)
+                ->select('pi.last_name', 'pi.first_names')
+                ->first();
+            $nomDemandeur = trim(($info->first_names ?? '') . ' ' . ($info->last_name ?? '')) ?: 'Demandeur';
+        }
         $typeLabel    = WorkflowConstants::typeLabel($demande->type, $demande->academic_year ?? null);
         $secretaire   = $request->user();
         $secretaireName = trim($secretaire?->name ?? $secretaire?->first_name . ' ' . $secretaire?->last_name) ?: 'Le secrétariat';

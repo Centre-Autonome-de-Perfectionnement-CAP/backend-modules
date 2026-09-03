@@ -57,7 +57,7 @@
 
       <div class="cta-container">
         @php
-            $suiviUrl = config('app.url') . '/app-cap/student-services?ref=' . $reference;
+            $suiviUrl = rtrim(config('app.frontend_url', 'http://localhost:5173'), '/') . '/student-services?type=suivi-demandes&ref=' . $reference;
         @endphp
         <a href="{{ $suiviUrl }}" class="cta-button">Suivre ma demande</a>
       </div>

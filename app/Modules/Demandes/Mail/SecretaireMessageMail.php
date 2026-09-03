@@ -43,7 +43,7 @@ class SecretaireMessageMail extends Mailable
     public function content(): Content
     {
         return new Content(
-            view: 'emails.secretaire-message',
+            view: 'core::emails.secretaire-message',
             with: [
                 'reference'      => $this->reference,
                 'typeLabel'      => $this->typeLabel,
