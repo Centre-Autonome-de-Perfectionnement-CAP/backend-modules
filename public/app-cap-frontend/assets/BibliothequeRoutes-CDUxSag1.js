@@ -1,1 +1,0 @@
-import{j as e,r as a,t as r,v as t,N as s,w as o}from"./index-MKZBtWMJ.js";const l=()=>e.jsx(a.Suspense,{fallback:e.jsx(o,{fullPage:!0,message:"Chargement du module Bibliothèque..."}),children:e.jsxs(r,{children:[e.jsx(t,{path:"/",element:e.jsx(s,{to:"/bibliotheque/dashboard",replace:!0})}),e.jsx(t,{path:"*",element:e.jsx(s,{to:"/404",replace:!0})})]})});export{l as default};

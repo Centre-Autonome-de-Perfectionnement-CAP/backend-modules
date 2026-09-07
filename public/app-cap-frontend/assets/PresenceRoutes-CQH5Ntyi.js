@@ -1,0 +1,1 @@
+import{j as e,r as a,t as r,v as s,N as t,w as n}from"./index-_j6BXexD.js";const u=()=>e.jsx(a.Suspense,{fallback:e.jsx(n,{fullPage:!0,message:"Chargement du module Présence..."}),children:e.jsxs(r,{children:[e.jsx(s,{path:"/",element:e.jsx(t,{to:"/presence/dashboard",replace:!0})}),e.jsx(s,{path:"*",element:e.jsx(t,{to:"/404",replace:!0})})]})});export{u as default};
