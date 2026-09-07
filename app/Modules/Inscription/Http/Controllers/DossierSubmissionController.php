@@ -290,12 +290,13 @@ class DossierSubmissionController extends Controller
     {
         $email = (string) $request->query('email', '');
         $academicYearId = $request->query('academic_year_id') ? (int) $request->query('academic_year_id') : null;
+        $targetCycle = (string) $request->query('target_cycle', $request->query('cycle', ''));
 
         if (empty($email)) {
             return $this->errorResponse("L'adresse email est requise.", 422, 'EMAIL_REQUIRED');
         }
 
-        $existing = $this->submissionService->checkExistingPendingDossier($email, $academicYearId);
+        $existing = $this->submissionService->checkExistingPendingDossier($email, $academicYearId, $targetCycle);
 
         if (!$existing) {
             return $this->successResponse(['exists' => false], 'Aucun dossier en attente trouvé.');

@@ -60,25 +60,6 @@ class DossierSubmissionService
                 );
             }
 
-            // Vérifier les doublons de dossier pour cette année académique
-            if ($isPersonalInfoRequired && !empty($request->email)) {
-                $normalizedEmail = trim(mb_strtolower($request->email));
-                $existingDossier = PendingStudent::where('academic_year_id', $request->academic_year_id)
-                    ->whereHas('personalInformation', function ($q) use ($normalizedEmail) {
-                        $q->whereRaw('LOWER(email) = ?', [$normalizedEmail]);
-                    })
-                    ->where('status', '!=', 'rejected')
-                    ->first();
-
-                if ($existingDossier) {
-                    throw new BusinessException(
-                        message: "Un dossier de candidature a déjà été soumis avec cette adresse email ({$request->email}) pour cette année académique. Vous pouvez le transférer vers la vague active ou le mettre à jour.",
-                        errorCode: 'DOSSIER_ALREADY_EXISTS',
-                        statusCode: 409
-                    );
-                }
-            }
-
             $department = Department::findOrFail($request->department_id);
             Log::debug('DEBUG', [
                     'department->cycle?->name' => $department->cycle?->name,
@@ -89,6 +70,46 @@ class DossierSubmissionService
                     message: "La filière choisie ne fait pas partie du cycle {$cycleName}",
                     errorCode: 'INVALID_DEPARTMENT_CYCLE'
                 );
+            }
+
+            // Vérifier les doublons de dossier pour ce MÊME cycle et cette année académique
+            if ($isPersonalInfoRequired && !empty($request->email)) {
+                $normalizedEmail = trim(mb_strtolower($request->email));
+                $isTargetPrepa = str_starts_with($department->abbreviation ?? '', 'P-') || stripos($department->name ?? '', 'prépa') !== false;
+
+                $existingQuery = PendingStudent::where('academic_year_id', $request->academic_year_id)
+                    ->whereHas('personalInformation', function ($q) use ($normalizedEmail) {
+                        $q->whereRaw('LOWER(email) = ?', [$normalizedEmail]);
+                    })
+                    ->where('status', '!=', 'rejected');
+
+                if ($department->cycle_id) {
+                    $existingQuery->whereHas('department', function ($dq) use ($department, $isTargetPrepa) {
+                        $dq->where('cycle_id', $department->cycle_id);
+                        if ($department->cycle_id == 3) {
+                            // Cycle Ingénierie : différencier Prépa vs Spécialité
+                            if ($isTargetPrepa) {
+                                $dq->where(function ($sub) {
+                                    $sub->where('abbreviation', 'like', 'P-%')
+                                        ->orWhere('name', 'like', '%Prépa%');
+                                });
+                            } else {
+                                $dq->where('abbreviation', 'not like', 'P-%')
+                                   ->where('name', 'not like', '%Prépa%');
+                            }
+                        }
+                    });
+                }
+
+                $existingDossier = $existingQuery->first();
+
+                if ($existingDossier) {
+                    throw new BusinessException(
+                        message: "Un dossier de candidature pour ce cycle ({$cycleName}) a déjà été soumis avec cette adresse email ({$request->email}) pour cette année académique. Vous pouvez le transférer vers la vague active ou le mettre à jour.",
+                        errorCode: 'DOSSIER_ALREADY_EXISTS',
+                        statusCode: 409
+                    );
+                }
             }
 
             if ($request->has('entry_diploma_id')) {
@@ -452,7 +473,11 @@ class DossierSubmissionService
     /**
      * Vérifie si un candidat a déjà un dossier pour l'année académique.
      */
-    public function checkExistingPendingDossier(string $email, ?int $academicYearId = null): ?array
+    /**
+     * Vérifie si un candidat a déjà un dossier en attente pour l'année académique,
+     * et détecte s'il s'agit d'un même cycle (report/transfert) ou d'une progression de cycle (Licence -> Master, Prépa -> Spécialité).
+     */
+    public function checkExistingPendingDossier(string $email, ?int $academicYearId = null, ?string $targetCycle = null): ?array
     {
         $normalizedEmail = trim(mb_strtolower($email));
         $now = now();
@@ -484,19 +509,82 @@ class DossierSubmissionService
             }
         }
 
-        // 1. Chercher en priorité un dossier dans l'année cible
-        $pendingStudent = null;
-        if ($targetYear) {
-            $pendingStudent = (clone $baseQuery)->where('academic_year_id', $targetYear->id)->first();
+        // Identifier le cycle cible demandé
+        $targetCycleNorm = strtolower(trim($targetCycle ?? ''));
+        $targetCycleKey = null;
+        $targetCycleLabel = null;
+        if (str_contains($targetCycleNorm, 'master')) {
+            $targetCycleKey = 'master';
+            $targetCycleLabel = 'Master';
+        } elseif (str_contains($targetCycleNorm, 'prepa')) {
+            $targetCycleKey = 'ingenieur_prepa';
+            $targetCycleLabel = 'Prépa Ingénieur';
+        } elseif (str_contains($targetCycleNorm, 'specialite') || str_contains($targetCycleNorm, 'specialité') || str_contains($targetCycleNorm, 'ing')) {
+            $targetCycleKey = 'ingenieur_specialite';
+            $targetCycleLabel = 'Cycle Ingénieur Spécialité';
+        } elseif (str_contains($targetCycleNorm, 'licence')) {
+            $targetCycleKey = 'licence';
+            $targetCycleLabel = 'Licence Professionnelle';
         }
 
-        // 2. Si aucun dossier dans l'année cible, récupérer le tout dernier dossier du candidat (ex: vague/année précédente)
+        // Helper pour qualifier le cycle d'un dossier
+        $getCycleInfo = function ($ps) {
+            if (!$ps || !$ps->department) return ['key' => 'licence', 'label' => 'Licence Professionnelle'];
+            $dept = $ps->department;
+            $isPrepa = str_starts_with($dept->abbreviation ?? '', 'P-') || stripos($dept->name ?? '', 'prépa') !== false;
+            if ($isPrepa) {
+                return ['key' => 'ingenieur_prepa', 'label' => 'Prépa Ingénieur'];
+            }
+            $cycleName = $dept->cycle?->name ?? '';
+            if ($cycleName === 'Master') {
+                return ['key' => 'master', 'label' => 'Master'];
+            }
+            if ($cycleName === 'Ingénierie') {
+                return ['key' => 'ingenieur_specialite', 'label' => 'Cycle Ingénieur Spécialité'];
+            }
+            return ['key' => 'licence', 'label' => 'Licence Professionnelle'];
+        };
+
+        // 1. Chercher d'abord un dossier correspondant au MÊME cycle cible dans l'année active
+        $pendingStudent = null;
+        $allDossiers = (clone $baseQuery)->get();
+        if ($allDossiers->isEmpty()) {
+            return null;
+        }
+
+        if ($targetCycleKey) {
+            // Priorité A : Même cycle dans l'année active
+            if ($targetYear) {
+                $pendingStudent = $allDossiers->first(function ($d) use ($targetYear, $targetCycleKey, $getCycleInfo) {
+                    return (int)$d->academic_year_id === (int)$targetYear->id && $getCycleInfo($d)['key'] === $targetCycleKey;
+                });
+            }
+            // Priorité B : Même cycle dans une année passée (report de dossier possible)
+            if (!$pendingStudent) {
+                $pendingStudent = $allDossiers->first(function ($d) use ($targetCycleKey, $getCycleInfo) {
+                    return $getCycleInfo($d)['key'] === $targetCycleKey;
+                });
+            }
+        }
+
+        // Priorité C : Si rien trouvé pour le cycle cible, récupérer le tout dernier dossier (progression de cycle)
         if (!$pendingStudent) {
-            $pendingStudent = (clone $baseQuery)->first();
+            $pendingStudent = $allDossiers->first();
         }
 
         if (!$pendingStudent) {
             return null;
+        }
+
+        $existingCycleInfo = $getCycleInfo($pendingStudent);
+        $existingCycleKey = $existingCycleInfo['key'];
+        $existingCycleLabel = $existingCycleInfo['label'];
+
+        $isSameCycle = true;
+        $isCycleProgression = false;
+        if ($targetCycleKey) {
+            $isSameCycle = ($targetCycleKey === $existingCycleKey);
+            $isCycleProgression = !$isSameCycle;
         }
 
         $isValidated = (
@@ -507,7 +595,6 @@ class DossierSubmissionService
         );
 
         $isRejected = ($pendingStudent->status === 'rejected');
-        // Un dossier validé est verrouillé ; un dossier rejeté ou en cours peut être modifié/transféré
         $canEdit = !$isValidated;
 
         $targetYearId = $targetYear ? (int) $targetYear->id : (int) $pendingStudent->academic_year_id;
@@ -519,7 +606,59 @@ class DossierSubmissionService
         );
 
         $initialWave = (int) ($pendingStudent->initial_wave ?? 1);
-        $canTransferWave = ($currentActiveWave !== $initialWave || (int)$pendingStudent->academic_year_id !== $targetYearId);
+        $isOlderAcademicYear = ($targetYear && (int)$pendingStudent->academic_year_id !== (int)$targetYear->id);
+
+        // Le transfert de vague / report est proposé quand c'est le même cycle et qu'une vague ou une année est active
+        $canTransferWave = $isSameCycle && ($currentActiveWave !== $initialWave || $isOlderAcademicYear);
+        $canTransferToCurrentYear = $isSameCycle && $isOlderAcademicYear;
+
+        // Données pour le pré-remplissage fluide lors d'une progression de cycle
+        $rawContacts = $pendingStudent->personalInformation?->contacts;
+        $contactsList = [];
+        $phone = null;
+        $address = null;
+
+        if (is_string($rawContacts)) {
+            $decoded = json_decode($rawContacts, true);
+            $rawContacts = is_array($decoded) ? $decoded : [$rawContacts];
+        }
+
+        if (is_array($rawContacts)) {
+            if (isset($rawContacts['phone'])) {
+                $phone = (string)$rawContacts['phone'];
+                $address = $rawContacts['address'] ?? null;
+                $contactsList = [$phone];
+            } else {
+                foreach ($rawContacts as $c) {
+                    if (is_string($c) && trim($c) !== '') {
+                        $contactsList[] = trim($c);
+                    }
+                }
+                $phone = $contactsList[0] ?? null;
+            }
+        }
+
+        $formattedBirthDate = null;
+        if ($pendingStudent->personalInformation?->birth_date) {
+            $bd = $pendingStudent->personalInformation->birth_date;
+            $formattedBirthDate = $bd instanceof \DateTimeInterface
+                ? $bd->format('Y-m-d')
+                : date('Y-m-d', strtotime((string)$bd));
+        }
+
+        $prefillData = [
+            'last_name' => $pendingStudent->personalInformation?->last_name,
+            'first_names' => $pendingStudent->personalInformation?->first_names,
+            'email' => $pendingStudent->personalInformation?->email,
+            'birth_date' => $formattedBirthDate,
+            'birth_place' => $pendingStudent->personalInformation?->birth_place,
+            'birth_country' => $pendingStudent->personalInformation?->birth_country ?? 'Bénin',
+            'gender' => $pendingStudent->personalInformation?->gender,
+            'nationality' => $pendingStudent->personalInformation?->nationality,
+            'phone' => $phone,
+            'contacts' => !empty($contactsList) ? $contactsList : ($phone ? [$phone] : ['']),
+            'address' => $address,
+        ];
 
         return [
             'exists' => true,
@@ -538,6 +677,17 @@ class DossierSubmissionService
             'initial_wave' => $initialWave,
             'current_active_wave' => $currentActiveWave,
             'can_transfer_wave' => $canTransferWave,
+            'can_transfer_to_current_year' => $canTransferToCurrentYear,
+            'is_older_year' => $isOlderAcademicYear,
+            'target_academic_year' => $targetYear?->academic_year,
+            'target_academic_year_id' => $targetYear?->id,
+            'is_same_cycle' => $isSameCycle,
+            'is_cycle_progression' => $isCycleProgression,
+            'existing_cycle_key' => $existingCycleKey,
+            'existing_cycle_label' => $existingCycleLabel,
+            'target_cycle_key' => $targetCycleKey,
+            'target_cycle_label' => $targetCycleLabel,
+            'prefill_data' => $prefillData,
             'transferred_from_wave' => $pendingStudent->transferred_from_wave,
             'transfer_history' => $pendingStudent->transfer_history ?? [],
             'status' => $pendingStudent->status,
@@ -992,21 +1142,36 @@ class DossierSubmissionService
 
             // Si le dossier est validé, on autorise le transfert vers la nouvelle vague sans lever d'exception
 
+            $targetYear = AcademicYear::where('is_current', true)->first();
+            if (!$targetYear) {
+                $targetYear = AcademicYear::where('submission_start', '<=', now())
+                    ->where('submission_end', '>=', now())
+                    ->first();
+            }
+            if (!$targetYear) {
+                $targetYear = AcademicYear::latest('id')->first();
+            }
+
+            $targetYearId = $targetYear ? (int)$targetYear->id : (int)$pendingStudent->academic_year_id;
+            $fromYearId = (int)$pendingStudent->academic_year_id;
+            $isYearChanged = ($targetYear && $fromYearId !== $targetYearId);
+
             $academicYearService = app(AcademicYearService::class);
             $currentWave = $academicYearService->resolveWave(
-                (int) $pendingStudent->academic_year_id,
+                $targetYearId,
                 (int) $pendingStudent->department_id,
                 now()
             );
 
             $fromWave = (int) ($pendingStudent->initial_wave ?? 1);
 
-            if ($currentWave === $fromWave) {
+            if (!$isYearChanged && $currentWave === $fromWave) {
                 return [
                     'success' => true,
                     'already_in_wave' => true,
                     'tracking_code' => $pendingStudent->tracking_code,
                     'current_wave' => $currentWave,
+                    'academic_year' => $pendingStudent->academicYear?->academic_year,
                     'message' => "Votre dossier est déjà assigné à la Vague {$currentWave}.",
                 ];
             }
@@ -1016,16 +1181,25 @@ class DossierSubmissionService
             if (!is_array($history)) {
                 $history = [];
             }
+            $reasonText = $isYearChanged
+                ? "Report de candidature vers l'année active ({$targetYear?->academic_year}) Vague {$currentWave}"
+                : "Transfert direct vers la Vague {$currentWave} via le portail candidat";
+
             $history[] = [
                 'from_wave' => $fromWave,
                 'to_wave' => $currentWave,
+                'from_academic_year_id' => $fromYearId,
+                'to_academic_year_id' => $targetYearId,
                 'transferred_at' => now()->toDateTimeString(),
                 'transferred_by' => 'Candidat (Portail)',
-                'reason' => "Transfert direct vers la Vague {$currentWave} via le portail candidat",
+                'reason' => $reasonText,
             ];
 
             $pendingStudent->transferred_from_wave = $pendingStudent->transferred_from_wave ?? $fromWave;
             $pendingStudent->initial_wave = $currentWave;
+            if ($isYearChanged) {
+                $pendingStudent->academic_year_id = $targetYearId;
+            }
             $pendingStudent->transfer_history = $history;
             $pendingStudent->is_updated_by_student = true;
             $pendingStudent->last_student_update_at = now();
@@ -1034,9 +1208,12 @@ class DossierSubmissionService
             if (!is_array($existingSummary)) {
                 $existingSummary = [];
             }
+            $changeMsg = $isYearChanged
+                ? "Report vers l'année {$targetYear?->academic_year} (Vague {$currentWave})"
+                : "Transfert direct de vague : Vague {$fromWave} → Vague {$currentWave}";
             $existingSummary[] = [
                 'updated_at' => now()->toISOString(),
-                'changes' => ["Transfert direct de vague : Vague {$fromWave} → Vague {$currentWave}"],
+                'changes' => [$changeMsg],
             ];
             $pendingStudent->student_update_summary = $existingSummary;
             $pendingStudent->save();
@@ -1045,10 +1222,15 @@ class DossierSubmissionService
                 'tracking_code' => $pendingStudent->tracking_code,
                 'from_wave' => $fromWave,
                 'to_wave' => $currentWave,
+                'from_year' => $fromYearId,
+                'to_year' => $targetYearId,
             ]);
 
             $validatedNotice = $isValidated 
                 ? " (Votre dossier est déjà validé par la scolarité et cette validation reste acquise en Vague {$currentWave})."
+                : "";
+            $yearNotice = $isYearChanged
+                ? " et reporté vers l'année académique {$targetYear?->academic_year}"
                 : "";
 
             return [
@@ -1057,8 +1239,9 @@ class DossierSubmissionService
                 'tracking_code' => $pendingStudent->tracking_code,
                 'from_wave' => $fromWave,
                 'new_wave' => $currentWave,
+                'academic_year' => $targetYear?->academic_year ?? $pendingStudent->academicYear?->academic_year,
                 'is_validated' => $isValidated,
-                'message' => "Votre dossier a été transféré avec succès vers la Vague {$currentWave}.{$validatedNotice}",
+                'message' => "Votre dossier a été transféré avec succès vers la Vague {$currentWave}{$yearNotice}.{$validatedNotice}",
             ];
         });
     }
