@@ -22,36 +22,8 @@ class DecisionService
         $academicYear = AcademicYear::find($academicYearId);
         $department = Department::with('cycle')->find($departmentId);
         
-        $academicPathQuery = AcademicPath::where('academic_year_id', $academicYearId)
-            ->where('study_level', $level);
-        
-        if ($cohort) {
-            $academicPathQuery->where('cohort', $cohort);
-        }
-        
-        $studentPendingStudentIds = $academicPathQuery->pluck('student_pending_student_id')->toArray();
-        
-        $studentIds = \App\Modules\Inscription\Models\StudentPendingStudent::whereIn('id', $studentPendingStudentIds)
-            ->pluck('student_id')->toArray();
-        
-        $classGroupIds = \App\Modules\Inscription\Models\StudentGroup::whereIn('student_id', $studentIds)
-            ->pluck('class_group_id')->unique()->toArray();
-        
-        $classGroupIds = \App\Modules\Inscription\Models\ClassGroup::whereIn('id', $classGroupIds)
-            ->where('academic_year_id', $academicYearId)
-            ->where('department_id', $departmentId)
-            ->where('study_level', $level)
-            ->pluck('id')->toArray();
-        
-        $programsSem1 = Program::whereIn('class_group_id', $classGroupIds)
-            ->where('semester', 1)
-            ->with('courseElementProfessor.courseElement')
-            ->get();
-
-        $programsSem2 = Program::whereIn('class_group_id', $classGroupIds)
-            ->where('semester', 2)
-            ->with('courseElementProfessor.courseElement')
-            ->get();
+        $programsSem1 = $this->getProgramsForSemester($academicYearId, $departmentId, $level, 1);
+        $programsSem2 = $this->getProgramsForSemester($academicYearId, $departmentId, $level, 2);
 
         $uniqueProgramsSem1 = $this->deduplicatePrograms($programsSem1);
         $uniqueProgramsSem2 = $this->deduplicatePrograms($programsSem2);
@@ -160,12 +132,12 @@ class DecisionService
     }
 
     /**
-     * Récupère les IDs de ClassGroup pour un département, une année et un niveau
+     * Récupère les IDs de ClassGroup pour un département et un niveau
+     * Note: Le filtre par année a été retiré dans le service de délibération
      */
-    public function getClassGroupIds(int $academicYearId, int $departmentId, ?string $level = null): array
+    public function getClassGroupIds(?int $academicYearId, int $departmentId, ?string $level = null): array
     {
-        $classGroupQuery = \App\Modules\Inscription\Models\ClassGroup::where('academic_year_id', $academicYearId)
-            ->where('department_id', $departmentId);
+        $classGroupQuery = \App\Modules\Inscription\Models\ClassGroup::where('department_id', $departmentId);
 
         if (!empty($level) && $level !== 'all') {
             $equivalentLevels = self::getEquivalentLevels($level);
@@ -180,9 +152,10 @@ class DecisionService
     }
 
     /**
-     * Récupère les programmes pour une sélection donnée (année, filière, niveau, semestre)
+     * Récupère les programmes pour une sélection donnée (filière, niveau, semestre)
+     * Note: Le filtre par année a été retiré dans le service de délibération
      */
-    public function getProgramsForSemester(int $academicYearId, int $departmentId, ?string $level = null, int $semester = 1)
+    public function getProgramsForSemester(?int $academicYearId, int $departmentId, ?string $level = null, int $semester = 1)
     {
         $equivalentLevels = self::getEquivalentLevels($level);
         $classGroupIds = $this->getClassGroupIds($academicYearId, $departmentId, $level);
@@ -197,25 +170,12 @@ class DecisionService
             }
         }
 
-        // Fallback: via classGroup matching department and academic year
-        $programs = (clone $baseQuery)->whereHas('classGroup', function ($cg) use ($academicYearId, $departmentId, $equivalentLevels) {
-            $cg->where('academic_year_id', $academicYearId)
-               ->where('department_id', $departmentId);
+        // Fallback: via classGroup matching department and level
+        $programs = (clone $baseQuery)->whereHas('classGroup', function ($cg) use ($departmentId, $equivalentLevels) {
+            $cg->where('department_id', $departmentId);
             if (!empty($equivalentLevels)) {
                 $cg->whereIn('study_level', $equivalentLevels);
             }
-        })->get();
-
-        if ($programs->isNotEmpty()) {
-            return $programs;
-        }
-
-        // Fallback: via academic_year_id directly on programs
-        $programs = (clone $baseQuery)->where(function ($q) use ($academicYearId, $departmentId) {
-            $q->where('academic_year_id', $academicYearId)
-              ->whereHas('classGroup', function ($cg) use ($departmentId) {
-                  $cg->where('department_id', $departmentId);
-              });
         })->get();
 
         if ($programs->isNotEmpty()) {
@@ -300,8 +260,9 @@ class DecisionService
 
     /**
      * Récupère la collection de parcours académiques (avec fallback automatique sur les étudiants inscrits)
+     * Note: Le filtre par année a été retiré dans le service de délibération
      */
-    public function getAcademicPaths(int $academicYearId, int $departmentId, ?string $level = null, ?string $cohort = null)
+    public function getAcademicPaths(?int $academicYearId, int $departmentId, ?string $level = null, ?string $cohort = null)
     {
         $equivalentLevels = self::getEquivalentLevels($level);
 
@@ -309,7 +270,6 @@ class DecisionService
             'studentPendingStudent.pendingStudent.personalInformation',
             'studentPendingStudent.student'
         ])
-        ->where('academic_year_id', $academicYearId)
         ->where(function ($q) use ($departmentId) {
             $q->whereHas('studentPendingStudent.pendingStudent', function ($psQuery) use ($departmentId) {
                 $psQuery->where('department_id', $departmentId);
@@ -356,21 +316,24 @@ class DecisionService
               ->orWhereNull('year_decision');
         });
 
-        $academicPaths = $query->get();
+        // Dédupliquer les AcademicPaths par étudiant (le plus récent en premier)
+        $academicPaths = $query->orderBy('id', 'desc')->get()->unique(function ($ap) {
+            return $ap->studentPendingStudent?->student_id ?? $ap->student_pending_student_id;
+        })->values();
 
-        // Récupérer également les StudentPendingStudent de cette année non encore enregistrés dans academic_paths
-        $allExistingSpsForYear = AcademicPath::where('academic_year_id', $academicYearId)
-            ->pluck('student_pending_student_id')
-            ->filter()
-            ->toArray();
+        // Récupérer également les StudentPendingStudent non encore enregistrés dans academic_paths
+        $existingStudentIds = $academicPaths->map(function ($ap) {
+            return $ap->studentPendingStudent?->student_id;
+        })->filter()->toArray();
+
+        $existingSpsIds = $academicPaths->pluck('student_pending_student_id')->filter()->toArray();
 
         $spsQuery = \App\Modules\Inscription\Models\StudentPendingStudent::with([
             'pendingStudent.personalInformation',
             'student'
         ])
-        ->whereHas('pendingStudent', function ($q) use ($academicYearId, $departmentId, $equivalentLevels, $cohort) {
-            $q->where('academic_year_id', $academicYearId)
-              ->where('department_id', $departmentId);
+        ->whereHas('pendingStudent', function ($q) use ($departmentId, $equivalentLevels, $cohort) {
+            $q->where('department_id', $departmentId);
             if (!empty($equivalentLevels)) {
                 $q->whereIn('level', $equivalentLevels);
             }
@@ -382,16 +345,23 @@ class DecisionService
             }
         });
 
-        if (!empty($allExistingSpsForYear)) {
-            $spsQuery->whereNotIn('id', $allExistingSpsForYear);
+        if (!empty($existingSpsIds)) {
+            $spsQuery->whereNotIn('id', $existingSpsIds);
+        }
+        if (!empty($existingStudentIds)) {
+            $spsQuery->whereNotIn('student_id', $existingStudentIds);
         }
 
-        $extraSps = $spsQuery->get();
+        $extraSps = $spsQuery->get()->unique(function ($sps) {
+            return $sps->student_id ?? $sps->id;
+        });
+
         foreach ($extraSps as $sps) {
             $apLevel = $level ?: ($sps->pendingStudent?->level ?? '1');
+            $defaultYearId = $academicYearId ?: ($sps->pendingStudent?->academic_year_id ?? 1);
             $ap = AcademicPath::firstOrCreate([
                 'student_pending_student_id' => $sps->id,
-                'academic_year_id' => $academicYearId,
+                'academic_year_id' => $defaultYearId,
             ], [
                 'study_level' => $apLevel,
                 'cohort' => $cohort ?: ($sps->pendingStudent?->initial_wave ? (string)$sps->pendingStudent->initial_wave : '1'),
@@ -938,8 +908,7 @@ class DecisionService
         \Log::info('Date de délibération', ['date' => $dateToUse->format('Y-m-d')]);
 
         // Mettre à jour la moyenne minimale dans les ClassGroups concernés
-        \App\Modules\Inscription\Models\ClassGroup::where('academic_year_id', $academicYearId)
-            ->where('department_id', $departmentId)
+        \App\Modules\Inscription\Models\ClassGroup::where('department_id', $departmentId)
             ->where('study_level', $level)
             ->update(['validation_average' => $validationAverage]);
 
