@@ -114,47 +114,156 @@ class DecisionService
         return collect(array_values($uniquePrograms));
     }
 
-    private function getStudentsForYear($academicYearId, $departmentId, $level, $cohort, $programsSem1, $programsSem2, $hasSem1, $hasSem2, $validationAverage)
+    /**
+     * Récupère les IDs de ClassGroup pour un département, une année et un niveau
+     */
+    public function getClassGroupIds(int $academicYearId, int $departmentId, ?string $level = null): array
     {
-        $academicPathQuery = AcademicPath::where('academic_year_id', $academicYearId)
-            ->where('study_level', $level);
-        
-        if ($cohort) {
-            $academicPathQuery->where('cohort', $cohort);
-        }
-        
-        $studentPendingStudentIds = $academicPathQuery->pluck('student_pending_student_id')->toArray();
-        
-        $studentIds = \App\Modules\Inscription\Models\StudentPendingStudent::whereIn('id', $studentPendingStudentIds)
-            ->pluck('student_id')->toArray();
-        
-        $classGroupIds = \App\Modules\Inscription\Models\StudentGroup::whereIn('student_id', $studentIds)
-            ->pluck('class_group_id')->unique()->toArray();
-        
-        $classGroupIds = \App\Modules\Inscription\Models\ClassGroup::whereIn('id', $classGroupIds)
-            ->where('academic_year_id', $academicYearId)
-            ->where('department_id', $departmentId)
-            ->where('study_level', $level)
-            ->pluck('id')->toArray();
+        $classGroupQuery = \App\Modules\Inscription\Models\ClassGroup::where('academic_year_id', $academicYearId)
+            ->where('department_id', $departmentId);
 
+        if (!empty($level) && $level !== 'all') {
+            $ids = (clone $classGroupQuery)->where(function ($q) use ($level) {
+                $q->where('study_level', $level);
+                if (preg_match('/^L?(\d+)/i', $level, $m)) {
+                    $num = $m[1];
+                    $q->orWhere('study_level', $num)
+                      ->orWhere('study_level', 'L' . $num)
+                      ->orWhere('study_level', "{$num}ème Année")
+                      ->orWhere('study_level', "{$num}ère Année");
+                }
+            })->pluck('id')->toArray();
+
+            if (!empty($ids)) {
+                return $ids;
+            }
+        }
+
+        return $classGroupQuery->pluck('id')->toArray();
+    }
+
+    /**
+     * Récupère la collection de parcours académiques (avec fallback automatique sur les étudiants inscrits)
+     */
+    public function getAcademicPaths(int $academicYearId, int $departmentId, ?string $level = null, ?string $cohort = null)
+    {
         $query = AcademicPath::with([
             'studentPendingStudent.pendingStudent.personalInformation',
             'studentPendingStudent.student'
         ])
-        ->whereHas('studentPendingStudent.student', function ($q) use ($studentIds) {
-            $q->whereIn('id', $studentIds);
-        })
         ->where('academic_year_id', $academicYearId)
-        ->where('study_level', $level)
-        ->where(function ($q) {
-            $q->where('year_decision', '!=', 'failed')->orWhereNull('year_decision');
+        ->where(function ($q) use ($departmentId) {
+            $q->whereHas('studentPendingStudent.pendingStudent', function ($psQuery) use ($departmentId) {
+                $psQuery->where('department_id', $departmentId);
+            })
+            ->orWhereHas('studentPendingStudent.student.studentGroups.classGroup', function ($cgQuery) use ($departmentId) {
+                $cgQuery->where('department_id', $departmentId);
+            });
         });
 
-        if ($cohort) {
-            $query->where('cohort', $cohort);
+        if (!empty($level) && $level !== 'all') {
+            $query->where(function ($q) use ($level) {
+                $q->where('study_level', $level)
+                  ->orWhereHas('studentPendingStudent.pendingStudent', function ($ps) use ($level) {
+                      $ps->where('level', $level);
+                  });
+                if (preg_match('/^L?(\d+)/i', $level, $m)) {
+                    $num = $m[1];
+                    $q->orWhere('study_level', $num)
+                      ->orWhere('study_level', 'L' . $num)
+                      ->orWhere('study_level', "{$num}ème Année")
+                      ->orWhere('study_level', "{$num}ère Année")
+                      ->orWhereHas('studentPendingStudent.pendingStudent', function ($ps) use ($num) {
+                          $ps->where('level', $num)
+                             ->orWhere('level', 'L' . $num)
+                             ->orWhere('level', "{$num}ème Année")
+                             ->orWhere('level', "{$num}ère Année");
+                      });
+                }
+            });
         }
 
+        if (!empty($cohort) && $cohort !== 'all') {
+            $cohortStr = (string)$cohort;
+            $cohortNum = preg_replace('/[^0-9]/', '', $cohortStr);
+            $query->where(function ($q) use ($cohortStr, $cohortNum) {
+                $q->where('cohort', $cohortStr)
+                  ->orWhere('cohort', 'Cohorte ' . $cohortStr)
+                  ->orWhere('cohort', 'Vague ' . $cohortStr);
+                if (!empty($cohortNum)) {
+                    $q->orWhere('cohort', $cohortNum)
+                      ->orWhere('cohort', 'Cohorte ' . $cohortNum)
+                      ->orWhere('cohort', 'Vague ' . $cohortNum)
+                      ->orWhereHas('studentPendingStudent.pendingStudent', function ($ps) use ($cohortNum) {
+                          $ps->where('initial_wave', (int)$cohortNum);
+                      });
+                }
+            });
+        }
+
+        $query->where(function ($q) {
+            $q->where('year_decision', '!=', 'failed')
+              ->orWhereNull('year_decision');
+        });
+
         $academicPaths = $query->get();
+
+        // Récupérer également les StudentPendingStudent non encore dans academic_paths pour cette sélection
+        $existingSpsIds = $academicPaths->pluck('student_pending_student_id')->filter()->toArray();
+
+        $spsQuery = \App\Modules\Inscription\Models\StudentPendingStudent::with([
+            'pendingStudent.personalInformation',
+            'student'
+        ])
+        ->whereHas('pendingStudent', function ($q) use ($academicYearId, $departmentId, $level, $cohort) {
+            $q->where('academic_year_id', $academicYearId)
+              ->where('department_id', $departmentId);
+            if (!empty($level) && $level !== 'all') {
+                $q->where(function ($lq) use ($level) {
+                    $lq->where('level', $level);
+                    if (preg_match('/^L?(\d+)/i', $level, $m)) {
+                        $num = $m[1];
+                        $lq->orWhere('level', $num)
+                           ->orWhere('level', 'L' . $num)
+                           ->orWhere('level', "{$num}ème Année")
+                           ->orWhere('level', "{$num}ère Année")
+                           ->orWhere('level', "Niveau {$num}");
+                    }
+                });
+            }
+            if (!empty($cohort) && $cohort !== 'all') {
+                $cohortNum = (int) preg_replace('/[^0-9]/', '', (string)$cohort);
+                if ($cohortNum > 0) {
+                    $q->where('initial_wave', $cohortNum);
+                }
+            }
+        });
+
+        if (!empty($existingSpsIds)) {
+            $spsQuery->whereNotIn('id', $existingSpsIds);
+        }
+
+        $extraSps = $spsQuery->get();
+        foreach ($extraSps as $sps) {
+            $ap = AcademicPath::firstOrCreate([
+                'student_pending_student_id' => $sps->id,
+                'academic_year_id' => $academicYearId,
+            ], [
+                'study_level' => $level ?: ($sps->pendingStudent?->level ?? 'L1'),
+                'cohort' => $cohort ?: ($sps->pendingStudent?->initial_wave ? (string)$sps->pendingStudent->initial_wave : '1'),
+                'financial_status' => $sps->pendingStudent?->exonere ? 'Exonéré' : 'Non exonéré',
+            ]);
+            $ap->setRelation('studentPendingStudent', $sps);
+            $academicPaths->push($ap);
+        }
+
+        return $academicPaths;
+    }
+
+    private function getStudentsForYear($academicYearId, $departmentId, $level, $cohort, $programsSem1, $programsSem2, $hasSem1, $hasSem2, $validationAverage)
+    {
+        $classGroupIds = $this->getClassGroupIds($academicYearId, $departmentId, $level);
+        $academicPaths = $this->getAcademicPaths($academicYearId, $departmentId, $level, $cohort);
         
         $allProgramsSem1 = [];
         if ($hasSem1) {
@@ -328,26 +437,7 @@ class DecisionService
         
         $etudiants = $this->getStudentsBySemesterOldSystem($academicYearId, $departmentId, $level, $cohort, $semester);
         
-        $academicPathQuery = AcademicPath::where('academic_year_id', $academicYearId)
-            ->where('study_level', $level);
-        
-        if ($cohort) {
-            $academicPathQuery->where('cohort', $cohort);
-        }
-        
-        $studentPendingStudentIds = $academicPathQuery->pluck('student_pending_student_id')->toArray();
-        
-        $studentIds = \App\Modules\Inscription\Models\StudentPendingStudent::whereIn('id', $studentPendingStudentIds)
-            ->pluck('student_id')->toArray();
-        
-        $classGroupIds = \App\Modules\Inscription\Models\StudentGroup::whereIn('student_id', $studentIds)
-            ->pluck('class_group_id')->unique()->toArray();
-        
-        $classGroupIds = \App\Modules\Inscription\Models\ClassGroup::whereIn('id', $classGroupIds)
-            ->where('academic_year_id', $academicYearId)
-            ->where('department_id', $departmentId)
-            ->where('study_level', $level)
-            ->pluck('id')->toArray();
+        $classGroupIds = $this->getClassGroupIds($academicYearId, $departmentId, $level);
         
         $programsQuery = Program::whereIn('class_group_id', $classGroupIds)
             ->where('semester', $semester)
@@ -483,74 +573,35 @@ class DecisionService
         ];
     }
 
-    public function getStudentsBySemester(int $academicYearId, int $departmentId, ?string $level, ?string $cohort, int $semester): array
+    public function getStudentsBySemester(int $academicYearId, int $departmentId, ?string $level, ?string $cohort = null, int $semester = 1): array
     {
         \Log::info('DecisionService: Récupération étudiants semestre', compact('academicYearId', 'departmentId', 'level', 'cohort', 'semester'));
         
-        $academicPathQuery = AcademicPath::where('academic_year_id', $academicYearId)
-            ->where('study_level', $level);
+        $classGroupIds = $this->getClassGroupIds($academicYearId, $departmentId, $level);
         
-        if ($cohort) {
-            $academicPathQuery->where('cohort', $cohort);
-        }
-        
-        $studentPendingStudentIds = $academicPathQuery->pluck('student_pending_student_id')->toArray();
-        
-        if (empty($studentPendingStudentIds)) {
-            return [];
-        }
-        
-        $studentIds = \App\Modules\Inscription\Models\StudentPendingStudent::whereIn('id', $studentPendingStudentIds)
-            ->pluck('student_id')->toArray();
-        
-        $classGroupIds = \App\Modules\Inscription\Models\StudentGroup::whereIn('student_id', $studentIds)
-            ->pluck('class_group_id')->unique()->toArray();
-        
-        $classGroupIds = \App\Modules\Inscription\Models\ClassGroup::whereIn('id', $classGroupIds)
-            ->where('academic_year_id', $academicYearId)
-            ->where('department_id', $departmentId)
-            ->where('study_level', $level)
-            ->pluck('id')->toArray();
-        
-        if (empty($classGroupIds)) {
-            return [];
-        }
-        
-        $programsData = Program::whereIn('class_group_id', $classGroupIds)
-            ->where('semester', $semester)
-            ->with('courseElementProfessor.courseElement')
-            ->get();
+        $programsData = empty($classGroupIds)
+            ? collect([])
+            : Program::whereIn('class_group_id', $classGroupIds)
+                ->where('semester', $semester)
+                ->with('courseElementProfessor.courseElement')
+                ->get();
 
-        $studentIds = \App\Modules\Inscription\Models\StudentGroup::whereIn('class_group_id', $classGroupIds)
-            ->pluck('student_id')
-            ->unique()
-            ->toArray();
+        $academicPaths = $this->getAcademicPaths($academicYearId, $departmentId, $level, $cohort);
 
-        $query = AcademicPath::with([
-            'studentPendingStudent.pendingStudent.personalInformation',
-            'studentPendingStudent.student'
-        ])
-        ->whereHas('studentPendingStudent.student', function ($q) use ($studentIds) {
-            $q->whereIn('id', $studentIds);
-        })
-        ->where('academic_year_id', $academicYearId)
-        ->where('study_level', $level)
-        ->where(function ($q) {
-            $q->where('year_decision', '!=', 'failed')
-              ->orWhereNull('year_decision');
-        });
-
-        if ($cohort) {
-            $query->where('cohort', $cohort);
-        }
-
-        $academicPaths = $query->get();
-
-        return $academicPaths->map(function ($academicPath) use ($programsData, $semester) {
+        return $academicPaths->map(function ($academicPath) use ($programsData, $semester, $level) {
             $studentPending = $academicPath->studentPendingStudent;
             $pendingStudent = $studentPending?->pendingStudent;
             $personalInfo = $pendingStudent?->personalInformation;
             $student = $studentPending?->student;
+
+            $nom = $personalInfo?->last_name ?? '';
+            $prenoms = $personalInfo?->first_names ?? '';
+            $matricule = $student?->student_id_number ?? 'N/A';
+
+            if (empty($nom) && empty($prenoms)) {
+                $nom = 'Étudiant';
+                $prenoms = $matricule;
+            }
 
             $gradeDetails = [];
             $totalCredits = 0;
@@ -558,50 +609,55 @@ class DecisionService
             $moyenneSum = 0;
             $programCount = 0;
 
-            foreach ($programsData as $program) {
-                $grade = LmdSystemGrade::where('student_pending_student_id', $academicPath->student_pending_student_id)
-                    ->where('program_id', $program->id)
-                    ->first();
+            if ($programsData->isNotEmpty()) {
+                foreach ($programsData as $program) {
+                    $grade = LmdSystemGrade::where('student_pending_student_id', $academicPath->student_pending_student_id)
+                        ->where('program_id', $program->id)
+                        ->first();
 
-                if ($grade) {
-                    $gradesArray = is_array($grade->grades) ? $grade->grades : [];
-                    $gradeDetails[$program->id] = [
-                        'grades' => $gradesArray,
-                        'average' => $grade->average ?? 0
-                    ];
-                    $moyenneSum += ($grade->average ?? 0);
-                    $programCount++;
-                    
-                    if ($grade->validated) {
-                        $earnedCredits += 3;
+                    if ($grade) {
+                        $gradesArray = is_array($grade->grades) ? $grade->grades : [];
+                        $gradeDetails[$program->id] = [
+                            'grades' => $gradesArray,
+                            'average' => $grade->average ?? 0
+                        ];
+                        $moyenneSum += ($grade->average ?? 0);
+                        $programCount++;
+                        
+                        if ($grade->validated) {
+                            $earnedCredits += 3;
+                        }
+                        $totalCredits += 3;
+                    } else {
+                        $gradeDetails[$program->id] = [
+                            'grades' => [],
+                            'average' => 0
+                        ];
+                        $totalCredits += 3;
                     }
-                    $totalCredits += 3;
-                } else {
-                    $gradeDetails[$program->id] = [
-                        'grades' => [],
-                        'average' => 0
-                    ];
                 }
             }
 
             $moyenneGenerale = $programCount > 0 ? $moyenneSum / $programCount : 0;
 
-            return (object)[
-                'id' => $student?->id,
-                'matricule' => $student?->student_id_number ?? 'N/A',
-                'nom' => $personalInfo?->last_name ?? 'N/A',
-                'prenoms' => $personalInfo?->first_names ?? 'N/A',
+            return [
+                'id' => $student?->id ?? $academicPath->id,
+                'student_id' => $student?->id ?? $academicPath->id,
+                'student_pending_student_id' => $academicPath->student_pending_student_id,
+                'matricule' => $matricule,
+                'nom' => $nom,
+                'prenoms' => $prenoms,
+                'prenom' => $prenoms,
+                'level' => $academicPath->study_level ?? $level ?? 'L1',
                 'moyenne' => round($moyenneGenerale, 2),
                 'credits' => $earnedCredits,
-                'totalCredits' => $totalCredits,
+                'totalCredits' => $totalCredits > 0 ? $totalCredits : 30,
                 'gradeDetails' => $gradeDetails
             ];
-        })->filter(function ($item) {
-            return $item->nom !== 'N/A' && $item->prenoms !== 'N/A';
         })->sortBy('nom')->values()->toArray();
     }
 
-    public function getStudentsByYear(int $academicYearId, int $departmentId, ?string $level, ?string $cohort): array
+    public function getStudentsByYear(int $academicYearId, int $departmentId, ?string $level, ?string $cohort = null): array
     {
         \Log::info('DecisionService: Récupération étudiants année', compact('academicYearId', 'departmentId', 'level', 'cohort'));
         
@@ -610,155 +666,149 @@ class DecisionService
 
         $studentsById = [];
         
-        foreach ($sem1Students as $student) {
-            $studentsById[$student['id']] = [
-                'id' => $student['id'],
-                'student_id' => $student['student_id'],
+        foreach ($sem1Students as $item) {
+            $student = (array) $item;
+            $id = $student['id'];
+            $studentsById[$id] = [
+                'id' => $id,
+                'student_id' => $id,
+                'student_pending_student_id' => $student['student_pending_student_id'] ?? null,
+                'matricule' => $student['matricule'] ?? 'N/A',
                 'nom' => $student['nom'],
-                'prenom' => $student['prenom'],
+                'prenoms' => $student['prenoms'] ?? $student['prenom'] ?? '',
+                'prenom' => $student['prenoms'] ?? $student['prenom'] ?? '',
+                'level' => $student['level'] ?? $level ?? 'L1',
                 'moyenne_s1' => $student['moyenne'],
+                'moyenneS1' => $student['moyenne'],
                 'credits_s1' => $student['credits'],
+                'creditsS1' => $student['credits'],
                 'moyenne_s2' => 0,
+                'moyenneS2' => 0,
                 'credits_s2' => 0,
+                'creditsS2' => 0,
                 'moyenne_annuelle' => 0,
-                'credits_total' => 0
+                'moyenneAnnuelle' => 0,
+                'credits_total' => 0,
+                'totalCredits' => ($student['totalCredits'] ?? 30) * 2,
             ];
         }
 
-        foreach ($sem2Students as $student) {
-            if (isset($studentsById[$student['id']])) {
-                $studentsById[$student['id']]['moyenne_s2'] = $student['moyenne'];
-                $studentsById[$student['id']]['credits_s2'] = $student['credits'];
+        foreach ($sem2Students as $item) {
+            $student = (array) $item;
+            $id = $student['id'];
+            if (isset($studentsById[$id])) {
+                $studentsById[$id]['moyenne_s2'] = $student['moyenne'];
+                $studentsById[$id]['moyenneS2'] = $student['moyenne'];
+                $studentsById[$id]['credits_s2'] = $student['credits'];
+                $studentsById[$id]['creditsS2'] = $student['credits'];
             } else {
-                $studentsById[$student['id']] = [
-                    'id' => $student['id'],
-                    'student_id' => $student['student_id'],
+                $studentsById[$id] = [
+                    'id' => $id,
+                    'student_id' => $id,
+                    'student_pending_student_id' => $student['student_pending_student_id'] ?? null,
+                    'matricule' => $student['matricule'] ?? 'N/A',
                     'nom' => $student['nom'],
-                    'prenom' => $student['prenom'],
+                    'prenoms' => $student['prenoms'] ?? $student['prenom'] ?? '',
+                    'prenom' => $student['prenoms'] ?? $student['prenom'] ?? '',
+                    'level' => $student['level'] ?? $level ?? 'L1',
                     'moyenne_s1' => 0,
+                    'moyenneS1' => 0,
                     'credits_s1' => 0,
+                    'creditsS1' => 0,
                     'moyenne_s2' => $student['moyenne'],
+                    'moyenneS2' => $student['moyenne'],
                     'credits_s2' => $student['credits'],
+                    'creditsS2' => $student['credits'],
                     'moyenne_annuelle' => 0,
-                    'credits_total' => 0
+                    'moyenneAnnuelle' => 0,
+                    'credits_total' => 0,
+                    'totalCredits' => ($student['totalCredits'] ?? 30) * 2,
                 ];
             }
         }
 
         foreach ($studentsById as &$student) {
-            $student['moyenne_annuelle'] = ($student['moyenne_s1'] + $student['moyenne_s2']) / 2;
-            $student['credits_total'] = $student['credits_s1'] + $student['credits_s2'];
+            $moyAnnuelle = round(($student['moyenne_s1'] + $student['moyenne_s2']) / 2, 2);
+            $creditsTotal = $student['credits_s1'] + $student['credits_s2'];
+            $student['moyenne_annuelle'] = $moyAnnuelle;
+            $student['moyenneAnnuelle'] = $moyAnnuelle;
+            $student['credits_total'] = $creditsTotal;
         }
 
         return array_values($studentsById);
     }
 
-    public function getStudentsBySemesterOldSystem(int $academicYearId, int $departmentId, ?string $level, ?string $cohort, int $semester): array
+    public function getStudentsBySemesterOldSystem(int $academicYearId, int $departmentId, ?string $level, ?string $cohort = null, int $semester = 1): array
     {
         \Log::info('DecisionService: Récupération étudiants semestre (Old System)', compact('academicYearId', 'departmentId', 'level', 'cohort', 'semester'));
         
-        $academicPathQuery = AcademicPath::where('academic_year_id', $academicYearId)
-            ->where('study_level', $level);
+        $classGroupIds = $this->getClassGroupIds($academicYearId, $departmentId, $level);
         
-        if ($cohort) {
-            $academicPathQuery->where('cohort', $cohort);
-        }
-        
-        $studentPendingStudentIds = $academicPathQuery->pluck('student_pending_student_id')->toArray();
-        
-        if (empty($studentPendingStudentIds)) {
-            return [];
-        }
-        
-        $studentIds = \App\Modules\Inscription\Models\StudentPendingStudent::whereIn('id', $studentPendingStudentIds)
-            ->pluck('student_id')->toArray();
-        
-        $classGroupIds = \App\Modules\Inscription\Models\StudentGroup::whereIn('student_id', $studentIds)
-            ->pluck('class_group_id')->unique()->toArray();
-        
-        $classGroupIds = \App\Modules\Inscription\Models\ClassGroup::whereIn('id', $classGroupIds)
-            ->where('academic_year_id', $academicYearId)
-            ->where('department_id', $departmentId)
-            ->where('study_level', $level)
-            ->pluck('id')->toArray();
-        
-        if (empty($classGroupIds)) {
-            return [];
-        }
-        
-        $programsData = Program::whereIn('class_group_id', $classGroupIds)
-            ->where('semester', $semester)
-            ->with('courseElementProfessor.courseElement')
-            ->get();
+        $programsData = empty($classGroupIds)
+            ? collect([])
+            : Program::whereIn('class_group_id', $classGroupIds)
+                ->where('semester', $semester)
+                ->with('courseElementProfessor.courseElement')
+                ->get();
 
-        $studentIds = \App\Modules\Inscription\Models\StudentGroup::whereIn('class_group_id', $classGroupIds)
-            ->pluck('student_id')
-            ->unique()
-            ->toArray();
+        $academicPaths = $this->getAcademicPaths($academicYearId, $departmentId, $level, $cohort);
 
-        $query = AcademicPath::with([
-            'studentPendingStudent.pendingStudent.personalInformation',
-            'studentPendingStudent.student'
-        ])
-        ->whereHas('studentPendingStudent.student', function ($q) use ($studentIds) {
-            $q->whereIn('id', $studentIds);
-        })
-        ->where('academic_year_id', $academicYearId)
-        ->where('study_level', $level)
-        ->where(function ($q) {
-            $q->where('year_decision', '!=', 'failed')
-              ->orWhereNull('year_decision');
-        });
-
-        if ($cohort) {
-            $query->where('cohort', $cohort);
-        }
-
-        $academicPaths = $query->get();
-
-        return $academicPaths->map(function ($academicPath) use ($programsData, $semester) {
+        return $academicPaths->map(function ($academicPath) use ($programsData, $semester, $level) {
             $studentPending = $academicPath->studentPendingStudent;
             $pendingStudent = $studentPending?->pendingStudent;
             $personalInfo = $pendingStudent?->personalInformation;
             $student = $studentPending?->student;
 
+            $nom = $personalInfo?->last_name ?? '';
+            $prenoms = $personalInfo?->first_names ?? '';
+            $matricule = $student?->student_id_number ?? 'N/A';
+
+            if (empty($nom) && empty($prenoms)) {
+                $nom = 'Étudiant';
+                $prenoms = $matricule;
+            }
+
             $gradeDetails = [];
             $moyenneSum = 0;
             $programCount = 0;
 
-            foreach ($programsData as $program) {
-                $grade = OldSystemGrade::where('student_pending_student_id', $academicPath->student_pending_student_id)
-                    ->where('program_id', $program->id)
-                    ->first();
+            if ($programsData->isNotEmpty()) {
+                foreach ($programsData as $program) {
+                    $grade = OldSystemGrade::where('student_pending_student_id', $academicPath->student_pending_student_id)
+                        ->where('program_id', $program->id)
+                        ->first();
 
-                if ($grade) {
-                    $gradesArray = is_array($grade->grades) ? $grade->grades : [];
-                    $gradeDetails[$program->id] = [
-                        'grades' => $gradesArray,
-                        'average' => $grade->average ?? 0
-                    ];
-                    $moyenneSum += ($grade->average ?? 0);
-                    $programCount++;
-                } else {
-                    $gradeDetails[$program->id] = [
-                        'grades' => [],
-                        'average' => 0
-                    ];
+                    if ($grade) {
+                        $gradesArray = is_array($grade->grades) ? $grade->grades : [];
+                        $gradeDetails[$program->id] = [
+                            'grades' => $gradesArray,
+                            'average' => $grade->average ?? 0
+                        ];
+                        $moyenneSum += ($grade->average ?? 0);
+                        $programCount++;
+                    } else {
+                        $gradeDetails[$program->id] = [
+                            'grades' => [],
+                            'average' => 0
+                        ];
+                    }
                 }
             }
 
             $moyenneGenerale = $programCount > 0 ? $moyenneSum / $programCount : 0;
 
-            return (object)[
-                'id' => $student?->id,
-                'matricule' => $student?->student_id_number ?? 'N/A',
-                'nom' => $personalInfo?->last_name ?? 'N/A',
-                'prenoms' => $personalInfo?->first_names ?? 'N/A',
+            return [
+                'id' => $student?->id ?? $academicPath->id,
+                'student_id' => $student?->id ?? $academicPath->id,
+                'student_pending_student_id' => $academicPath->student_pending_student_id,
+                'matricule' => $matricule,
+                'nom' => $nom,
+                'prenoms' => $prenoms,
+                'prenom' => $prenoms,
+                'level' => $academicPath->study_level ?? $level ?? 'L1',
                 'moyenne' => round($moyenneGenerale, 2),
                 'gradeDetails' => $gradeDetails
             ];
-        })->filter(function ($item) {
-            return $item->nom !== 'N/A' && $item->prenoms !== 'N/A';
         })->sortBy('nom')->values()->toArray();
     }
 
@@ -766,13 +816,17 @@ class DecisionService
     {
         $count = 0;
         foreach ($decisions as $decision) {
-            $academicPath = AcademicPath::where('student_pending_student_id', $decision['student_pending_student_id'])
-                ->first();
-            
-            if ($academicPath) {
-                $academicPath->semester_decision = $decision['semester_decision'];
-                $academicPath->save();
-                $count++;
+            $spsId = $decision['student_pending_student_id'] ?? null;
+            if (!$spsId && !empty($decision['student_id'])) {
+                $spsId = \App\Modules\Inscription\Models\StudentPendingStudent::where('student_id', $decision['student_id'])->value('id');
+            }
+            if ($spsId) {
+                $academicPath = AcademicPath::where('student_pending_student_id', $spsId)->first();
+                if ($academicPath) {
+                    $academicPath->semester_decision = $decision['semester_decision'] ?? $decision['decision'] ?? null;
+                    $academicPath->save();
+                    $count++;
+                }
             }
         }
         return $count;
@@ -784,14 +838,18 @@ class DecisionService
         $dateToUse = $deliberationDate ? \Carbon\Carbon::parse($deliberationDate) : now();
         
         foreach ($decisions as $decision) {
-            $academicPath = AcademicPath::where('student_pending_student_id', $decision['student_pending_student_id'])
-                ->first();
-            
-            if ($academicPath) {
-                $academicPath->year_decision = $decision['year_decision'];
-                $academicPath->deliberation_date = $dateToUse;
-                $academicPath->save();
-                $count++;
+            $spsId = $decision['student_pending_student_id'] ?? null;
+            if (!$spsId && !empty($decision['student_id'])) {
+                $spsId = \App\Modules\Inscription\Models\StudentPendingStudent::where('student_id', $decision['student_id'])->value('id');
+            }
+            if ($spsId) {
+                $academicPath = AcademicPath::where('student_pending_student_id', $spsId)->first();
+                if ($academicPath) {
+                    $academicPath->year_decision = $decision['year_decision'] ?? $decision['decision'] ?? null;
+                    $academicPath->deliberation_date = $dateToUse;
+                    $academicPath->save();
+                    $count++;
+                }
             }
         }
         return $count;
@@ -821,15 +879,7 @@ class DecisionService
             ->first();
         \Log::info('Année académique suivante', ['next_year_id' => $nextYear?->id, 'next_year_label' => $nextYear?->academic_year]);
 
-        $academicPathQuery = AcademicPath::with(['studentPendingStudent.pendingStudent.department', 'studentPendingStudent.student'])
-            ->where('academic_year_id', $academicYearId)
-            ->where('study_level', $level);
-        
-        if ($cohort) {
-            $academicPathQuery->where('cohort', $cohort);
-        }
-
-        $academicPaths = $academicPathQuery->get();
+        $academicPaths = $this->getAcademicPaths($academicYearId, $departmentId, $level, $cohort);
         \Log::info('Nombre de parcours académiques trouvés', ['count' => $academicPaths->count()]);
         \Log::info('Données étudiants reçues', ['count' => count($studentData)]);
         

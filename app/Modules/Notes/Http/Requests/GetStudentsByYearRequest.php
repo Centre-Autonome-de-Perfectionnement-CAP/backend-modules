@@ -17,7 +17,7 @@ class GetStudentsByYearRequest extends FormRequest
             'academic_year_id' => 'required|integer|exists:academic_years,id',
             'department_id' => 'required|integer|exists:departments,id',
             'level' => 'required|string',
-            'cohort' => 'required|string',
+            'cohort' => 'nullable|string',
         ];
     }
 }
