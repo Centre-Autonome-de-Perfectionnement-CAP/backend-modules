@@ -115,6 +115,51 @@ class DecisionService
     }
 
     /**
+     * Retourne toutes les variantes textuelles et numériques équivalentes pour un niveau donné
+     * Ex: '1' ou 'L1' -> ['1', 'L1', 'M1', 'D1', '1ère Année', '1ere Annee', 'Niveau 1', 'Licence 1', ...]
+     */
+    public static function getEquivalentLevels(?string $level): array
+    {
+        if (empty($level) || $level === 'all') {
+            return [];
+        }
+
+        $levels = [(string)$level];
+        $trimmed = trim((string)$level);
+
+        if (preg_match('/(\d+)/', $trimmed, $matches)) {
+            $num = $matches[1];
+            $variants = [
+                $num,
+                'L' . $num,
+                'M' . $num,
+                'D' . $num,
+                $num . 'ère Année',
+                $num . 'ere Annee',
+                $num . 'ère annee',
+                $num . 'ere annee',
+                $num . 'ème Année',
+                $num . 'eme Annee',
+                $num . 'ème annee',
+                $num . 'eme annee',
+                'Niveau ' . $num,
+                'niveau ' . $num,
+                'Licence ' . $num,
+                'licence ' . $num,
+                'Master ' . $num,
+                'master ' . $num,
+                'Doctorat ' . $num,
+                'doctorat ' . $num,
+                'Année ' . $num,
+                'annee ' . $num,
+            ];
+            $levels = array_unique(array_merge($levels, $variants));
+        }
+
+        return array_values($levels);
+    }
+
+    /**
      * Récupère les IDs de ClassGroup pour un département, une année et un niveau
      */
     public function getClassGroupIds(int $academicYearId, int $departmentId, ?string $level = null): array
@@ -123,16 +168,8 @@ class DecisionService
             ->where('department_id', $departmentId);
 
         if (!empty($level) && $level !== 'all') {
-            $ids = (clone $classGroupQuery)->where(function ($q) use ($level) {
-                $q->where('study_level', $level);
-                if (preg_match('/^L?(\d+)/i', $level, $m)) {
-                    $num = $m[1];
-                    $q->orWhere('study_level', $num)
-                      ->orWhere('study_level', 'L' . $num)
-                      ->orWhere('study_level', "{$num}ème Année")
-                      ->orWhere('study_level', "{$num}ère Année");
-                }
-            })->pluck('id')->toArray();
+            $equivalentLevels = self::getEquivalentLevels($level);
+            $ids = (clone $classGroupQuery)->whereIn('study_level', $equivalentLevels)->pluck('id')->toArray();
 
             if (!empty($ids)) {
                 return $ids;
@@ -143,10 +180,131 @@ class DecisionService
     }
 
     /**
+     * Récupère les programmes pour une sélection donnée (année, filière, niveau, semestre)
+     */
+    public function getProgramsForSemester(int $academicYearId, int $departmentId, ?string $level = null, int $semester = 1)
+    {
+        $equivalentLevels = self::getEquivalentLevels($level);
+        $classGroupIds = $this->getClassGroupIds($academicYearId, $departmentId, $level);
+
+        $baseQuery = Program::where('semester', $semester)
+            ->with(['courseElementProfessor.courseElement.teachingUnit', 'courseElementProfessor.professor', 'classGroup']);
+
+        if (!empty($classGroupIds)) {
+            $programs = (clone $baseQuery)->whereIn('class_group_id', $classGroupIds)->get();
+            if ($programs->isNotEmpty()) {
+                return $programs;
+            }
+        }
+
+        // Fallback: via classGroup matching department and academic year
+        $programs = (clone $baseQuery)->whereHas('classGroup', function ($cg) use ($academicYearId, $departmentId, $equivalentLevels) {
+            $cg->where('academic_year_id', $academicYearId)
+               ->where('department_id', $departmentId);
+            if (!empty($equivalentLevels)) {
+                $cg->whereIn('study_level', $equivalentLevels);
+            }
+        })->get();
+
+        if ($programs->isNotEmpty()) {
+            return $programs;
+        }
+
+        // Fallback: via academic_year_id directly on programs
+        $programs = (clone $baseQuery)->where(function ($q) use ($academicYearId, $departmentId) {
+            $q->where('academic_year_id', $academicYearId)
+              ->whereHas('classGroup', function ($cg) use ($departmentId) {
+                  $cg->where('department_id', $departmentId);
+              });
+        })->get();
+
+        if ($programs->isNotEmpty()) {
+            return $programs;
+        }
+
+        // Ultimate fallback: all programs of department and semester
+        return (clone $baseQuery)->whereHas('classGroup', function ($cg) use ($departmentId) {
+            $cg->where('department_id', $departmentId);
+        })->get();
+    }
+
+    /**
+     * Récupère la note d'un étudiant pour un programme, en cherchant dans LmdSystemGrade et OldSystemGrade
+     */
+    public function getStudentGradeData(array $spsIds, $program): ?array
+    {
+        if (empty($spsIds)) {
+            return null;
+        }
+
+        $programId = is_object($program) ? $program->id : (int)$program;
+        $courseElementId = is_object($program) ? ($program->courseElementProfessor?->course_element_id ?? null) : null;
+
+        $siblingProgramIds = [$programId];
+        if ($courseElementId) {
+            $siblings = Program::whereHas('courseElementProfessor', function ($cep) use ($courseElementId) {
+                $cep->where('course_element_id', $courseElementId);
+            })->pluck('id')->toArray();
+            $siblingProgramIds = array_unique(array_merge($siblingProgramIds, $siblings));
+        }
+
+        // 1. Chercher dans LmdSystemGrade
+        $lmdGrade = LmdSystemGrade::whereIn('student_pending_student_id', $spsIds)
+            ->whereIn('program_id', $siblingProgramIds)
+            ->orderByRaw('CASE WHEN program_id = ' . (int)$programId . ' THEN 0 ELSE 1 END')
+            ->orderByRaw('CASE WHEN retake_average IS NOT NULL THEN retake_average ELSE average END DESC')
+            ->first();
+
+        if ($lmdGrade && ($lmdGrade->average !== null || $lmdGrade->retake_average !== null || !empty($lmdGrade->grades) || !empty($lmdGrade->retake_grades))) {
+            $finalAvg = $lmdGrade->retake_average ?? $lmdGrade->average ?? 0;
+            $rawGrades = (is_array($lmdGrade->retake_grades) && !empty($lmdGrade->retake_grades))
+                ? $lmdGrade->retake_grades
+                : (is_array($lmdGrade->grades) ? $lmdGrade->grades : []);
+            
+            $isValidated = (bool)($lmdGrade->validated || $finalAvg >= 10);
+
+            return [
+                'grades' => $rawGrades,
+                'average' => (float)$finalAvg,
+                'retake_average' => $lmdGrade->retake_average,
+                'validated' => $isValidated,
+                'is_retake' => $lmdGrade->retake_average !== null,
+                'system' => 'lmd',
+            ];
+        }
+
+        // 2. Chercher dans OldSystemGrade
+        $oldGrade = OldSystemGrade::whereIn('student_pending_student_id', $spsIds)
+            ->whereIn('program_id', $siblingProgramIds)
+            ->orderByRaw('CASE WHEN program_id = ' . (int)$programId . ' THEN 0 ELSE 1 END')
+            ->orderBy('average', 'desc')
+            ->first();
+
+        if ($oldGrade && ($oldGrade->average !== null || !empty($oldGrade->grades))) {
+            $finalAvg = (float)($oldGrade->average ?? 0);
+            $rawGrades = is_array($oldGrade->grades) ? $oldGrade->grades : [];
+            $isValidated = $finalAvg >= 10;
+
+            return [
+                'grades' => $rawGrades,
+                'average' => $finalAvg,
+                'retake_average' => null,
+                'validated' => $isValidated,
+                'is_retake' => false,
+                'system' => 'old',
+            ];
+        }
+
+        return null;
+    }
+
+    /**
      * Récupère la collection de parcours académiques (avec fallback automatique sur les étudiants inscrits)
      */
     public function getAcademicPaths(int $academicYearId, int $departmentId, ?string $level = null, ?string $cohort = null)
     {
+        $equivalentLevels = self::getEquivalentLevels($level);
+
         $query = AcademicPath::with([
             'studentPendingStudent.pendingStudent.personalInformation',
             'studentPendingStudent.student'
@@ -161,25 +319,17 @@ class DecisionService
             });
         });
 
-        if (!empty($level) && $level !== 'all') {
-            $query->where(function ($q) use ($level) {
-                $q->where('study_level', $level)
-                  ->orWhereHas('studentPendingStudent.pendingStudent', function ($ps) use ($level) {
-                      $ps->where('level', $level);
-                  });
-                if (preg_match('/^L?(\d+)/i', $level, $m)) {
-                    $num = $m[1];
-                    $q->orWhere('study_level', $num)
-                      ->orWhere('study_level', 'L' . $num)
-                      ->orWhere('study_level', "{$num}ème Année")
-                      ->orWhere('study_level', "{$num}ère Année")
-                      ->orWhereHas('studentPendingStudent.pendingStudent', function ($ps) use ($num) {
-                          $ps->where('level', $num)
-                             ->orWhere('level', 'L' . $num)
-                             ->orWhere('level', "{$num}ème Année")
-                             ->orWhere('level', "{$num}ère Année");
+        if (!empty($equivalentLevels)) {
+            $query->where(function ($q) use ($equivalentLevels) {
+                $q->whereIn('study_level', $equivalentLevels)
+                  ->orWhere(function ($sub) use ($equivalentLevels) {
+                      $sub->where(function ($emptyCheck) {
+                          $emptyCheck->whereNull('study_level')->orWhere('study_level', '');
+                      })
+                      ->whereHas('studentPendingStudent.pendingStudent', function ($ps) use ($equivalentLevels) {
+                          $ps->whereIn('level', $equivalentLevels);
                       });
-                }
+                  });
             });
         }
 
@@ -208,28 +358,21 @@ class DecisionService
 
         $academicPaths = $query->get();
 
-        // Récupérer également les StudentPendingStudent non encore dans academic_paths pour cette sélection
-        $existingSpsIds = $academicPaths->pluck('student_pending_student_id')->filter()->toArray();
+        // Récupérer également les StudentPendingStudent de cette année non encore enregistrés dans academic_paths
+        $allExistingSpsForYear = AcademicPath::where('academic_year_id', $academicYearId)
+            ->pluck('student_pending_student_id')
+            ->filter()
+            ->toArray();
 
         $spsQuery = \App\Modules\Inscription\Models\StudentPendingStudent::with([
             'pendingStudent.personalInformation',
             'student'
         ])
-        ->whereHas('pendingStudent', function ($q) use ($academicYearId, $departmentId, $level, $cohort) {
+        ->whereHas('pendingStudent', function ($q) use ($academicYearId, $departmentId, $equivalentLevels, $cohort) {
             $q->where('academic_year_id', $academicYearId)
               ->where('department_id', $departmentId);
-            if (!empty($level) && $level !== 'all') {
-                $q->where(function ($lq) use ($level) {
-                    $lq->where('level', $level);
-                    if (preg_match('/^L?(\d+)/i', $level, $m)) {
-                        $num = $m[1];
-                        $lq->orWhere('level', $num)
-                           ->orWhere('level', 'L' . $num)
-                           ->orWhere('level', "{$num}ème Année")
-                           ->orWhere('level', "{$num}ère Année")
-                           ->orWhere('level', "Niveau {$num}");
-                    }
-                });
+            if (!empty($equivalentLevels)) {
+                $q->whereIn('level', $equivalentLevels);
             }
             if (!empty($cohort) && $cohort !== 'all') {
                 $cohortNum = (int) preg_replace('/[^0-9]/', '', (string)$cohort);
@@ -239,17 +382,18 @@ class DecisionService
             }
         });
 
-        if (!empty($existingSpsIds)) {
-            $spsQuery->whereNotIn('id', $existingSpsIds);
+        if (!empty($allExistingSpsForYear)) {
+            $spsQuery->whereNotIn('id', $allExistingSpsForYear);
         }
 
         $extraSps = $spsQuery->get();
         foreach ($extraSps as $sps) {
+            $apLevel = $level ?: ($sps->pendingStudent?->level ?? '1');
             $ap = AcademicPath::firstOrCreate([
                 'student_pending_student_id' => $sps->id,
                 'academic_year_id' => $academicYearId,
             ], [
-                'study_level' => $level ?: ($sps->pendingStudent?->level ?? 'L1'),
+                'study_level' => $apLevel,
                 'cohort' => $cohort ?: ($sps->pendingStudent?->initial_wave ? (string)$sps->pendingStudent->initial_wave : '1'),
                 'financial_status' => $sps->pendingStudent?->exonere ? 'Exonéré' : 'Non exonéré',
             ]);
@@ -262,30 +406,19 @@ class DecisionService
 
     private function getStudentsForYear($academicYearId, $departmentId, $level, $cohort, $programsSem1, $programsSem2, $hasSem1, $hasSem2, $validationAverage)
     {
-        $classGroupIds = $this->getClassGroupIds($academicYearId, $departmentId, $level);
         $academicPaths = $this->getAcademicPaths($academicYearId, $departmentId, $level, $cohort);
-        
-        $allProgramsSem1 = [];
-        if ($hasSem1) {
-            $allProgramsSem1 = Program::whereIn('class_group_id', $classGroupIds)
-                ->where('semester', 1)
-                ->with('courseElementProfessor.courseElement')
-                ->get();
-        }
-        
-        $allProgramsSem2 = [];
-        if ($hasSem2) {
-            $allProgramsSem2 = Program::whereIn('class_group_id', $classGroupIds)
-                ->where('semester', 2)
-                ->with('courseElementProfessor.courseElement')
-                ->get();
-        }
 
-        return $academicPaths->map(function ($academicPath) use ($programsSem1, $programsSem2, $allProgramsSem1, $allProgramsSem2, $hasSem1, $hasSem2) {
+        return $academicPaths->map(function ($academicPath) use ($programsSem1, $programsSem2, $hasSem1, $hasSem2) {
             $studentPending = $academicPath->studentPendingStudent;
             $pendingStudent = $studentPending?->pendingStudent;
             $personalInfo = $pendingStudent?->personalInformation;
             $student = $studentPending?->student;
+
+            $spsIds = array_filter([$academicPath->student_pending_student_id]);
+            if ($student?->id) {
+                $extra = \App\Modules\Inscription\Models\StudentPendingStudent::where('student_id', $student->id)->pluck('id')->toArray();
+                $spsIds = array_unique(array_merge($spsIds, $extra));
+            }
 
             $moyennesSem1 = [];
             $moyenneSem1 = 0;
@@ -293,30 +426,14 @@ class DecisionService
             $hasZeroSem1 = false;
             if ($hasSem1) {
                 foreach ($programsSem1 as $program) {
-                    $courseId = $program->matiere_professeur->matiere->code ?? null;
-                    $grade = null;
-                    
-                    foreach ($allProgramsSem1 as $p) {
-                        $pCourseId = $p->courseElementProfessor->courseElement->code ?? null;
-                        if ($courseId === $pCourseId) {
-                            $tempGrade = OldSystemGrade::where('student_pending_student_id', $academicPath->student_pending_student_id)
-                                ->where('program_id', $p->id)->first();
-                            if ($tempGrade && $tempGrade->average > 0) {
-                                $grade = $tempGrade;
-                                break;
-                            } elseif (!$grade) {
-                                $grade = $tempGrade;
-                            }
-                        }
-                    }
-                    
-                    $avg = $grade ? ($grade->average ?? 0) : 0;
+                    $gradeData = $this->getStudentGradeData($spsIds, $program);
+                    $avg = $gradeData ? $gradeData['average'] : 0;
                     $moyennesSem1[] = $avg > 0 ? $avg : '-';
                     if ($avg > 0) {
                         $moyenneSem1 += $avg;
                         $countSem1++;
                     }
-                    if ($grade && $avg === 0.0 && count($grade->grades ?? []) > 0) {
+                    if ($gradeData && $avg === 0.0 && count($gradeData['grades'] ?? []) > 0) {
                         $hasZeroSem1 = true;
                     }
                 }
@@ -329,30 +446,14 @@ class DecisionService
             $hasZeroSem2 = false;
             if ($hasSem2) {
                 foreach ($programsSem2 as $program) {
-                    $courseId = $program->matiere_professeur->matiere->code ?? null;
-                    $grade = null;
-                    
-                    foreach ($allProgramsSem2 as $p) {
-                        $pCourseId = $p->courseElementProfessor->courseElement->code ?? null;
-                        if ($courseId === $pCourseId) {
-                            $tempGrade = OldSystemGrade::where('student_pending_student_id', $academicPath->student_pending_student_id)
-                                ->where('program_id', $p->id)->first();
-                            if ($tempGrade && $tempGrade->average > 0) {
-                                $grade = $tempGrade;
-                                break;
-                            } elseif (!$grade) {
-                                $grade = $tempGrade;
-                            }
-                        }
-                    }
-                    
-                    $avg = $grade ? ($grade->average ?? 0) : 0;
+                    $gradeData = $this->getStudentGradeData($spsIds, $program);
+                    $avg = $gradeData ? $gradeData['average'] : 0;
                     $moyennesSem2[] = $avg > 0 ? $avg : '-';
                     if ($avg > 0) {
                         $moyenneSem2 += $avg;
                         $countSem2++;
                     }
-                    if ($grade && $avg === 0.0 && count($grade->grades ?? []) > 0) {
+                    if ($gradeData && $avg === 0.0 && count($gradeData['grades'] ?? []) > 0) {
                         $hasZeroSem2 = true;
                     }
                 }
@@ -366,7 +467,7 @@ class DecisionService
             $moyenneAnnuelle = $countTotal > 0 ? round($moyenneAnnuelle / $countTotal, 2) : 0;
 
             return (object)[
-                'id' => $student?->id,
+                'id' => $student?->id ?? $academicPath->id,
                 'matricule' => $student?->student_id_number ?? 'N/A',
                 'nom' => $personalInfo?->last_name ?? 'N/A',
                 'prenoms' => $personalInfo?->first_names ?? 'N/A',
@@ -577,18 +678,22 @@ class DecisionService
     {
         \Log::info('DecisionService: Récupération étudiants semestre', compact('academicYearId', 'departmentId', 'level', 'cohort', 'semester'));
         
-        $classGroupIds = $this->getClassGroupIds($academicYearId, $departmentId, $level);
-        
-        $programsData = empty($classGroupIds)
-            ? collect([])
-            : Program::whereIn('class_group_id', $classGroupIds)
-                ->where('semester', $semester)
-                ->with('courseElementProfessor.courseElement')
-                ->get();
-
+        $programsData = $this->getProgramsForSemester($academicYearId, $departmentId, $level, $semester);
         $academicPaths = $this->getAcademicPaths($academicYearId, $departmentId, $level, $cohort);
 
-        return $academicPaths->map(function ($academicPath) use ($programsData, $semester, $level) {
+        // Pré-calculer les crédits totaux du semestre
+        $totalSemesterCredits = 0;
+        if ($programsData->isNotEmpty()) {
+            foreach ($programsData as $p) {
+                $c = $p->courseElementProfessor?->courseElement?->credits ?? 3;
+                $totalSemesterCredits += ($c > 0 ? $c : 3);
+            }
+        }
+        if ($totalSemesterCredits <= 0) {
+            $totalSemesterCredits = 30;
+        }
+
+        return $academicPaths->map(function ($academicPath) use ($programsData, $semester, $level, $totalSemesterCredits) {
             $studentPending = $academicPath->studentPendingStudent;
             $pendingStudent = $studentPending?->pendingStudent;
             $personalInfo = $pendingStudent?->personalInformation;
@@ -603,42 +708,57 @@ class DecisionService
                 $prenoms = $matricule;
             }
 
+            // Collecter tous les SPS IDs pour cet étudiant
+            $spsIds = array_filter([$academicPath->student_pending_student_id]);
+            if ($student?->id) {
+                $extraSps = \App\Modules\Inscription\Models\StudentPendingStudent::where('student_id', $student->id)->pluck('id')->toArray();
+                $spsIds = array_unique(array_merge($spsIds, $extraSps));
+            }
+
             $gradeDetails = [];
-            $totalCredits = 0;
             $earnedCredits = 0;
-            $moyenneSum = 0;
-            $programCount = 0;
+            $totalWeight = 0;
+            $weightedSum = 0;
+            $hasAnyGrade = false;
 
             if ($programsData->isNotEmpty()) {
                 foreach ($programsData as $program) {
-                    $grade = LmdSystemGrade::where('student_pending_student_id', $academicPath->student_pending_student_id)
-                        ->where('program_id', $program->id)
-                        ->first();
+                    $courseCredits = $program->courseElementProfessor?->courseElement?->credits ?? 3;
+                    if ($courseCredits <= 0) {
+                        $courseCredits = 3;
+                    }
 
-                    if ($grade) {
-                        $gradesArray = is_array($grade->grades) ? $grade->grades : [];
+                    $gradeData = $this->getStudentGradeData($spsIds, $program);
+
+                    if ($gradeData) {
+                        $hasAnyGrade = true;
                         $gradeDetails[$program->id] = [
-                            'grades' => $gradesArray,
-                            'average' => $grade->average ?? 0
+                            'grades' => $gradeData['grades'],
+                            'average' => $gradeData['average'],
+                            'retake_average' => $gradeData['retake_average'],
+                            'validated' => $gradeData['validated'],
                         ];
-                        $moyenneSum += ($grade->average ?? 0);
-                        $programCount++;
-                        
-                        if ($grade->validated) {
-                            $earnedCredits += 3;
+                        $weightedSum += ($gradeData['average'] * $courseCredits);
+                        $totalWeight += $courseCredits;
+
+                        if ($gradeData['validated']) {
+                            $earnedCredits += $courseCredits;
                         }
-                        $totalCredits += 3;
                     } else {
                         $gradeDetails[$program->id] = [
                             'grades' => [],
-                            'average' => 0
+                            'average' => 0,
+                            'retake_average' => null,
+                            'validated' => false,
                         ];
-                        $totalCredits += 3;
+                        $totalWeight += $courseCredits;
                     }
                 }
             }
 
-            $moyenneGenerale = $programCount > 0 ? $moyenneSum / $programCount : 0;
+            $moyenneGenerale = ($totalWeight > 0 && $hasAnyGrade) ? round($weightedSum / $totalWeight, 2) : 0;
+
+            $currentLevel = $academicPath->study_level ?: ($pendingStudent?->level ?: ($level ?: 'L1'));
 
             return [
                 'id' => $student?->id ?? $academicPath->id,
@@ -648,11 +768,13 @@ class DecisionService
                 'nom' => $nom,
                 'prenoms' => $prenoms,
                 'prenom' => $prenoms,
-                'level' => $academicPath->study_level ?? $level ?? 'L1',
-                'moyenne' => round($moyenneGenerale, 2),
+                'level' => $currentLevel,
+                'study_level' => $currentLevel,
+                'moyenne' => $moyenneGenerale,
                 'credits' => $earnedCredits,
-                'totalCredits' => $totalCredits > 0 ? $totalCredits : 30,
-                'gradeDetails' => $gradeDetails
+                'totalCredits' => $totalSemesterCredits,
+                'gradeDetails' => $gradeDetails,
+                'hasNotes' => $hasAnyGrade,
             ];
         })->sortBy('nom')->values()->toArray();
     }
@@ -678,18 +800,22 @@ class DecisionService
                 'prenoms' => $student['prenoms'] ?? $student['prenom'] ?? '',
                 'prenom' => $student['prenoms'] ?? $student['prenom'] ?? '',
                 'level' => $student['level'] ?? $level ?? 'L1',
-                'moyenne_s1' => $student['moyenne'],
-                'moyenneS1' => $student['moyenne'],
-                'credits_s1' => $student['credits'],
-                'creditsS1' => $student['credits'],
-                'moyenne_s2' => 0,
-                'moyenneS2' => 0,
+                'study_level' => $student['level'] ?? $level ?? 'L1',
+                'moyenne_s1' => (float)($student['moyenne'] ?? 0),
+                'moyenneS1' => (float)($student['moyenne'] ?? 0),
+                'credits_s1' => (int)($student['credits'] ?? 0),
+                'creditsS1' => (int)($student['credits'] ?? 0),
+                'moyenne_s2' => 0.0,
+                'moyenneS2' => 0.0,
                 'credits_s2' => 0,
                 'creditsS2' => 0,
-                'moyenne_annuelle' => 0,
-                'moyenneAnnuelle' => 0,
-                'credits_total' => 0,
+                'moyenne_annuelle' => 0.0,
+                'moyenneAnnuelle' => 0.0,
+                'credits_total' => (int)($student['credits'] ?? 0),
+                'creditsTotal' => (int)($student['credits'] ?? 0),
                 'totalCredits' => ($student['totalCredits'] ?? 30) * 2,
+                'hasNotesS1' => $student['hasNotes'] ?? false,
+                'hasNotesS2' => false,
             ];
         }
 
@@ -697,10 +823,11 @@ class DecisionService
             $student = (array) $item;
             $id = $student['id'];
             if (isset($studentsById[$id])) {
-                $studentsById[$id]['moyenne_s2'] = $student['moyenne'];
-                $studentsById[$id]['moyenneS2'] = $student['moyenne'];
-                $studentsById[$id]['credits_s2'] = $student['credits'];
-                $studentsById[$id]['creditsS2'] = $student['credits'];
+                $studentsById[$id]['moyenne_s2'] = (float)($student['moyenne'] ?? 0);
+                $studentsById[$id]['moyenneS2'] = (float)($student['moyenne'] ?? 0);
+                $studentsById[$id]['credits_s2'] = (int)($student['credits'] ?? 0);
+                $studentsById[$id]['creditsS2'] = (int)($student['credits'] ?? 0);
+                $studentsById[$id]['hasNotesS2'] = $student['hasNotes'] ?? false;
             } else {
                 $studentsById[$id] = [
                     'id' => $id,
@@ -711,28 +838,45 @@ class DecisionService
                     'prenoms' => $student['prenoms'] ?? $student['prenom'] ?? '',
                     'prenom' => $student['prenoms'] ?? $student['prenom'] ?? '',
                     'level' => $student['level'] ?? $level ?? 'L1',
-                    'moyenne_s1' => 0,
-                    'moyenneS1' => 0,
+                    'study_level' => $student['level'] ?? $level ?? 'L1',
+                    'moyenne_s1' => 0.0,
+                    'moyenneS1' => 0.0,
                     'credits_s1' => 0,
                     'creditsS1' => 0,
-                    'moyenne_s2' => $student['moyenne'],
-                    'moyenneS2' => $student['moyenne'],
-                    'credits_s2' => $student['credits'],
-                    'creditsS2' => $student['credits'],
-                    'moyenne_annuelle' => 0,
-                    'moyenneAnnuelle' => 0,
-                    'credits_total' => 0,
+                    'moyenne_s2' => (float)($student['moyenne'] ?? 0),
+                    'moyenneS2' => (float)($student['moyenne'] ?? 0),
+                    'credits_s2' => (int)($student['credits'] ?? 0),
+                    'creditsS2' => (int)($student['credits'] ?? 0),
+                    'moyenne_annuelle' => 0.0,
+                    'moyenneAnnuelle' => 0.0,
+                    'credits_total' => (int)($student['credits'] ?? 0),
+                    'creditsTotal' => (int)($student['credits'] ?? 0),
                     'totalCredits' => ($student['totalCredits'] ?? 30) * 2,
+                    'hasNotesS1' => false,
+                    'hasNotesS2' => $student['hasNotes'] ?? false,
                 ];
             }
         }
 
         foreach ($studentsById as &$student) {
-            $moyAnnuelle = round(($student['moyenne_s1'] + $student['moyenne_s2']) / 2, 2);
+            $s1HasNotes = $student['hasNotesS1'];
+            $s2HasNotes = $student['hasNotesS2'];
+            
+            if ($s1HasNotes && $s2HasNotes) {
+                $moyAnnuelle = round(($student['moyenne_s1'] + $student['moyenne_s2']) / 2, 2);
+            } elseif ($s1HasNotes) {
+                $moyAnnuelle = $student['moyenne_s1'];
+            } elseif ($s2HasNotes) {
+                $moyAnnuelle = $student['moyenne_s2'];
+            } else {
+                $moyAnnuelle = 0.0;
+            }
+
             $creditsTotal = $student['credits_s1'] + $student['credits_s2'];
             $student['moyenne_annuelle'] = $moyAnnuelle;
             $student['moyenneAnnuelle'] = $moyAnnuelle;
             $student['credits_total'] = $creditsTotal;
+            $student['creditsTotal'] = $creditsTotal;
         }
 
         return array_values($studentsById);
@@ -740,76 +884,7 @@ class DecisionService
 
     public function getStudentsBySemesterOldSystem(int $academicYearId, int $departmentId, ?string $level, ?string $cohort = null, int $semester = 1): array
     {
-        \Log::info('DecisionService: Récupération étudiants semestre (Old System)', compact('academicYearId', 'departmentId', 'level', 'cohort', 'semester'));
-        
-        $classGroupIds = $this->getClassGroupIds($academicYearId, $departmentId, $level);
-        
-        $programsData = empty($classGroupIds)
-            ? collect([])
-            : Program::whereIn('class_group_id', $classGroupIds)
-                ->where('semester', $semester)
-                ->with('courseElementProfessor.courseElement')
-                ->get();
-
-        $academicPaths = $this->getAcademicPaths($academicYearId, $departmentId, $level, $cohort);
-
-        return $academicPaths->map(function ($academicPath) use ($programsData, $semester, $level) {
-            $studentPending = $academicPath->studentPendingStudent;
-            $pendingStudent = $studentPending?->pendingStudent;
-            $personalInfo = $pendingStudent?->personalInformation;
-            $student = $studentPending?->student;
-
-            $nom = $personalInfo?->last_name ?? '';
-            $prenoms = $personalInfo?->first_names ?? '';
-            $matricule = $student?->student_id_number ?? 'N/A';
-
-            if (empty($nom) && empty($prenoms)) {
-                $nom = 'Étudiant';
-                $prenoms = $matricule;
-            }
-
-            $gradeDetails = [];
-            $moyenneSum = 0;
-            $programCount = 0;
-
-            if ($programsData->isNotEmpty()) {
-                foreach ($programsData as $program) {
-                    $grade = OldSystemGrade::where('student_pending_student_id', $academicPath->student_pending_student_id)
-                        ->where('program_id', $program->id)
-                        ->first();
-
-                    if ($grade) {
-                        $gradesArray = is_array($grade->grades) ? $grade->grades : [];
-                        $gradeDetails[$program->id] = [
-                            'grades' => $gradesArray,
-                            'average' => $grade->average ?? 0
-                        ];
-                        $moyenneSum += ($grade->average ?? 0);
-                        $programCount++;
-                    } else {
-                        $gradeDetails[$program->id] = [
-                            'grades' => [],
-                            'average' => 0
-                        ];
-                    }
-                }
-            }
-
-            $moyenneGenerale = $programCount > 0 ? $moyenneSum / $programCount : 0;
-
-            return [
-                'id' => $student?->id ?? $academicPath->id,
-                'student_id' => $student?->id ?? $academicPath->id,
-                'student_pending_student_id' => $academicPath->student_pending_student_id,
-                'matricule' => $matricule,
-                'nom' => $nom,
-                'prenoms' => $prenoms,
-                'prenom' => $prenoms,
-                'level' => $academicPath->study_level ?? $level ?? 'L1',
-                'moyenne' => round($moyenneGenerale, 2),
-                'gradeDetails' => $gradeDetails
-            ];
-        })->sortBy('nom')->values()->toArray();
+        return $this->getStudentsBySemester($academicYearId, $departmentId, $level, $cohort, $semester);
     }
 
     public function saveSemesterDecisions(array $decisions): int
