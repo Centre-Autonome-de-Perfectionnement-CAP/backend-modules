@@ -109,7 +109,11 @@
 
     <footer>
         @php
-            $footerLandscape = storage_path("images/epac_footer_landscape.png");
+            $footerLandscape = file_exists(public_path("images/epac_footer_landscape.png"))
+                ? public_path("images/epac_footer_landscape.png")
+                : (file_exists(storage_path("images/epac_footer_landscape.png"))
+                    ? storage_path("images/epac_footer_landscape.png")
+                    : base_path("storage/images/epac_footer_landscape.png"));
             $footerBase64 = file_exists($footerLandscape) ? 'data:image/png;base64,' . base64_encode(file_get_contents($footerLandscape)) : '';
         @endphp
         @if($footerBase64)

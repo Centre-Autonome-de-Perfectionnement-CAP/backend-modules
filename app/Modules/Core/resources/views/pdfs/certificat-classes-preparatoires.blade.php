@@ -141,9 +141,17 @@
 </head>
 <body>
     @php
-        $headerImg = storage_path("images/epac_header_portrait.png");
+        $headerImg = file_exists(public_path("images/epac_header_portrait.png"))
+            ? public_path("images/epac_header_portrait.png")
+            : (file_exists(storage_path("images/epac_header_portrait.png"))
+                ? storage_path("images/epac_header_portrait.png")
+                : base_path("storage/images/epac_header_portrait.png"));
         $headerBase64 = file_exists($headerImg) ? 'data:image/png;base64,' . base64_encode(file_get_contents($headerImg)) : '';
-        $footerImg = storage_path("images/epac_footer_portrait.png");
+        $footerImg = file_exists(public_path("images/epac_footer_portrait.png"))
+            ? public_path("images/epac_footer_portrait.png")
+            : (file_exists(storage_path("images/epac_footer_portrait.png"))
+                ? storage_path("images/epac_footer_portrait.png")
+                : base_path("storage/images/epac_footer_portrait.png"));
         $footerBase64 = file_exists($footerImg) ? 'data:image/png;base64,' . base64_encode(file_get_contents($footerImg)) : '';
         $banner   = public_path('assets/banner-1.png');
     @endphp

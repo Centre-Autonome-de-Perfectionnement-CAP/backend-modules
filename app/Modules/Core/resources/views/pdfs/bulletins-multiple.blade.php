@@ -10,7 +10,11 @@
     @if(!$loop->first)
     <div class="header-banner-container" style="margin-left: -25px; margin-right: -25px; margin-top: -10px; margin-bottom: 15px;">
         @php
-            $headerImg = storage_path("images/epac_header_portrait.png");
+            $headerImg = file_exists(public_path("images/epac_header_portrait.png"))
+                ? public_path("images/epac_header_portrait.png")
+                : (file_exists(storage_path("images/epac_header_portrait.png"))
+                    ? storage_path("images/epac_header_portrait.png")
+                    : base_path("storage/images/epac_header_portrait.png"));
             $headerBase64 = file_exists($headerImg) ? 'data:image/png;base64,' . base64_encode(file_get_contents($headerImg)) : '';
         @endphp
         @if($headerBase64)

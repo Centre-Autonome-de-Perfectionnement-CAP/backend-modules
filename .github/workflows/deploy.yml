@@ -55,6 +55,13 @@ jobs:
             echo "📚 Installing Composer dependencies..."
             composer install --no-dev --optimize-autoloader --no-interaction
             
+            # Sync persistent assets to shared storage before symlinking
+            echo "📁 Syncing assets to shared storage..."
+            mkdir -p $SHARED_DIR/storage/images
+            mkdir -p $SHARED_DIR/storage/fonts
+            cp -rn $RELEASE_DIR/storage/images/* $SHARED_DIR/storage/images/ 2>/dev/null || cp -r $RELEASE_DIR/storage/images/* $SHARED_DIR/storage/images/ 2>/dev/null || true
+            cp -rn $RELEASE_DIR/storage/fonts/* $SHARED_DIR/storage/fonts/ 2>/dev/null || cp -r $RELEASE_DIR/storage/fonts/* $SHARED_DIR/storage/fonts/ 2>/dev/null || true
+
             # Create symlinks to shared directories
             echo "🔗 Creating symlinks..."
             rm -rf $RELEASE_DIR/storage

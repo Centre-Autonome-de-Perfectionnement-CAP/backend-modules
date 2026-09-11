@@ -126,7 +126,11 @@
     {{-- Bannière d'en-tête officielle avec logo EPAC, textes officiels et logo CAP --}}
     <div class="header-banner-container">
         @php
-            $headerImg = storage_path("images/epac_header_portrait.png");
+            $headerImg = file_exists(public_path("images/epac_header_portrait.png"))
+                ? public_path("images/epac_header_portrait.png")
+                : (file_exists(storage_path("images/epac_header_portrait.png"))
+                    ? storage_path("images/epac_header_portrait.png")
+                    : base_path("storage/images/epac_header_portrait.png"));
             $headerBase64 = file_exists($headerImg) ? 'data:image/png;base64,' . base64_encode(file_get_contents($headerImg)) : '';
         @endphp
         @if($headerBase64)
@@ -167,7 +171,11 @@
     @sectionMissing('hide-footer')
     <div class="footer-banner-container">
         @php
-            $footerImg = storage_path("images/epac_footer_portrait.png");
+            $footerImg = file_exists(public_path("images/epac_footer_portrait.png"))
+                ? public_path("images/epac_footer_portrait.png")
+                : (file_exists(storage_path("images/epac_footer_portrait.png"))
+                    ? storage_path("images/epac_footer_portrait.png")
+                    : base_path("storage/images/epac_footer_portrait.png"));
             $footerBase64 = file_exists($footerImg) ? 'data:image/png;base64,' . base64_encode(file_get_contents($footerImg)) : '';
         @endphp
         @if($footerBase64)
