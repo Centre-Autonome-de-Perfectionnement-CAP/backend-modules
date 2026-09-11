@@ -6,62 +6,19 @@
     <title>@yield('title', 'Document PDF')</title>
     <style>
         @page {
-            size: A3 landscape;
-            margin: 1cm;
+            size: A4 landscape;
+            margin: 0cm;
             counter-increment: page;
         }
 
         body {
             font-family: Arial, sans-serif;
-            margin: 1cm;
+            margin: 0;
+            padding: 0;
         }
 
         .contenu {
-            height: 200px;
-        }
-
-        .logoepac {
-            width: 150px;
-            position: relative;
-            top: 10px;
-            left: 50px;
-        }
-
-        .logouac {
-            width: 150px;
-            position: absolute;
-            top: 10px;
-            right: 50px;
-        }
-
-        .header {
-            text-align: center;
-            position: absolute;
-            top: 10px;
-            left: 35%;
-            right: 35%;
-        }
-
-        .header h3 {
-            font-size: 20px;
-            margin: 2px 0;
-        }
-
-        .header h4 {
-            position: relative;
-            top: -20px;
-        }
-
-        .header p {
-            position: relative;
-            top: -35px;
-            font-size: 11px;
-        }
-
-        hr {
-            border: .7px solid black;
-            position: relative;
-            top: -35px;
+            margin: 0;
         }
 
         table {
@@ -69,25 +26,23 @@
             border-collapse: collapse;
             margin-bottom: 10px;
             text-align: center;
-            font-size: 15px;
+            font-size: 13px;
         }
 
         table th,
         table td {
             border: 1px solid #ccc;
-            padding: 2px;
+            padding: 3px;
             text-align: center;
         }
 
         .main {
             text-align: center;
-            margin-bottom: 20px;
-            position: relative;
-            top: -15px;
+            margin: 5px 25px 55px 25px;
         }
 
         .top-page {
-            font-size: 17px;
+            font-size: 14px;
             text-align: left;
         }
 
@@ -100,17 +55,42 @@
         }
 
         .pg {
-            min-height: 96%;
+            margin: 0;
+            padding: 0;
         }
 
         footer {
-            text-align: right;
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
-            height: 30px;
-            font-size: 12px;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        footer .footer-img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        footer .footer-info-left {
+            position: absolute;
+            bottom: 4px;
+            left: 25px;
+            color: #ffffff;
+            font-size: 8px;
+            z-index: 10;
+        }
+
+        footer .footer-info-right {
+            position: absolute;
+            bottom: 4px;
+            right: 25px;
+            color: #ffffff;
+            font-size: 8px;
+            z-index: 10;
         }
 
         footer .page:after {
@@ -128,10 +108,17 @@
     @yield('content')
 
     <footer>
-        <div style="text-align: left; font-size: 12px;">
-            Imprimé le {{ date('d/m/Y à H:i') }} par la Cellule Informatique de la Division Formation Continue CAP
+        @php
+            $footerLandscape = storage_path("images/epac_footer_landscape.png");
+            $footerBase64 = file_exists($footerLandscape) ? 'data:image/png;base64,' . base64_encode(file_get_contents($footerLandscape)) : '';
+        @endphp
+        @if($footerBase64)
+            <img src="{{ $footerBase64 }}" class="footer-img" alt="Pied de page officiel EPAC - CAP">
+        @endif
+        <div class="footer-info-left">
+            Imprimé le {{ date('d/m/Y à H:i') }} par la Cellule Informatique CAP
         </div>
-        <div class="page"></div>
+        <div class="footer-info-right page"></div>
     </footer>
 </body>
 </html>

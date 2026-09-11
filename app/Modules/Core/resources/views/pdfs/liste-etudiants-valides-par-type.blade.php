@@ -12,12 +12,21 @@
             font-style: normal;
         }
 
+        @page {
+            size: A4 landscape;
+            margin: 0cm;
+        }
+
         body {
             font-family: 'DejaVu Sans', sans-serif;
             font-size: 10px;
             margin: 0;
-            padding: 15px;
+            padding: 0;
             line-height: 1.3;
+        }
+
+        .content-body {
+            margin: 10px 25px 55px 25px;
         }
 
         .header {
@@ -160,13 +169,20 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>République du Bénin</h1>
-        <h2>Université d'Abomey-Calavi</h2>
-        <h2>École Polytechnique d'Abomey-Calavi (EPAC)</h2>
-        <h2>Centre Autonome de Perfectionnement (CAP)</h2>
-        <p>01 BP 2009 COTONOU - Tél. 21 36 14 32/21 36 09 93 - Email: epac.uac@epac.uac.bj</p>
+    @php
+        $headerLandscape = storage_path("images/epac_header_landscape.png");
+        $headerBase64 = file_exists($headerLandscape) ? 'data:image/png;base64,' . base64_encode(file_get_contents($headerLandscape)) : '';
+        $footerLandscape = storage_path("images/epac_footer_landscape.png");
+        $footerBase64 = file_exists($footerLandscape) ? 'data:image/png;base64,' . base64_encode(file_get_contents($footerLandscape)) : '';
+    @endphp
+
+    <div style="margin: 0; padding: 0; width: 100%;">
+        @if($headerBase64)
+            <img src="{{ $headerBase64 }}" style="width: 100%; height: auto; display: block;" alt="En-tête officiel EPAC - CAP">
+        @endif
     </div>
+
+    <div class="content-body">
 
     <div class="info-section">
         <div style="text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 10px;">
@@ -225,17 +241,18 @@
         <p>Document généré automatiquement le {{ $exportDate }} à {{ $exportTime }}</p>
     </div>
 
-    <div class="signature-section">
-        <div class="signature-box">
-            <p><strong>Le Chef CAP</strong></p>
-            <br><br>
-            <p>_________________________</p>
-        </div>
-        <div class="signature-box">
-            <p><strong>Le Directeur EPAC</strong></p>
-            <br><br>
-            <p>_________________________</p>
-        </div>
     </div>
+
+    <footer style="position: fixed; bottom: 0; left: 0; right: 0; width: 100%; margin: 0; padding: 0;">
+        @if($footerBase64)
+            <img src="{{ $footerBase64 }}" style="width: 100%; height: auto; display: block;" alt="Pied de page officiel EPAC - CAP">
+        @endif
+        <div style="position: absolute; bottom: 4px; left: 25px; color: #ffffff; font-size: 8px;">
+            Document généré automatiquement le {{ $exportDate }} à {{ $exportTime }}
+        </div>
+        <div style="position: absolute; bottom: 4px; right: 25px; color: #ffffff; font-size: 8px;">
+            Cellule Informatique CAP
+        </div>
+    </footer>
 </body>
 </html>

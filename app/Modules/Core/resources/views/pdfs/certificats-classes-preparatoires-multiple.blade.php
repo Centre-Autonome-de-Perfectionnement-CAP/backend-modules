@@ -30,6 +30,10 @@
             src: url({{ storage_path('fonts/Berlin Sans FB Regular.ttf') }});
         }
 
+        @page {
+            margin: 0cm;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -38,13 +42,14 @@
         
         body {
             font-family: "Albertus Medium";
-            font-size: 14pt;
+            font-size: 13pt;
             margin: 0;
             text-align: center;
         }
         
         .page {
             page-break-after: always;
+            position: relative;
         }
         
         .page:last-child {
@@ -52,11 +57,11 @@
         }
         
         .header {
-            padding: 1cm 1cm;
+            padding: 10px 1.5cm 0 1.5cm;
         }
         
         .content {
-            margin: 0 2cm;
+            margin: 0 1.5cm;
         }
         
         table {
@@ -126,46 +131,22 @@
 </head>
 <body>
     @php
-        $epacLogo = public_path('assets/epac.png');
-        $uacLogo  = public_path('assets/uac.jpeg');
+        $headerImg = storage_path("images/epac_header_portrait.png");
+        $headerBase64 = file_exists($headerImg) ? 'data:image/png;base64,' . base64_encode(file_get_contents($headerImg)) : '';
+        $footerImg = storage_path("images/epac_footer_portrait.png");
+        $footerBase64 = file_exists($footerImg) ? 'data:image/png;base64,' . base64_encode(file_get_contents($footerImg)) : '';
         $banner   = public_path('assets/banner-1.png');
     @endphp
 
     @foreach($etudiants as $etudiant)
     <div class="page">
-        <div class="header">
-        <table style="width: 100%;" >
-            <tr>
-                <td style="width: 20%; text-align: left;">
-                    @if(file_exists($epacLogo))
-                        <img src="{{ $epacLogo }}" alt="EPAC" style="height: 100px;">
-                    @endif
-                </td>
-                <td style="width: 60%; text-align: center; font-size: 10pt; line-height: 1.2;">
-                    <div style="font-weight: bold; text-transform: uppercase;">
-                        REPUBLIQUE DU BENIN
-                    </div>
-                    <hr style="border: 1.3px solid #000; margin: 5px auto; width: 80px;">
-                    <div style="font-weight: bold; text-transform: uppercase; margin-top: 3px;">
-                        UNIVERSITE D'ABOMEY - CALAVI
-                    </div>
-                    <div style="font-weight: bold; font-size: 1.1rem; text-transform: uppercase; margin-top: 3px;">
-                        ECOLE POLYTECHNIQUE D'ABOMEY-CALAVI
-                    </div>
-                    <hr style="border: 2px solid #000; margin: 5px auto; width: 150px;">
-                    <div style="margin-top: 6px; font-size: 1.1rem; font-style: italic;">
-                        DIRECTION
-                    </div>
-                </td>
-                <td style="width: 20%; text-align: right;">
-                    @if(file_exists($uacLogo))
-                        <img src="{{ $uacLogo }}" alt="UAC" style="height: 100px;">
-                    @endif
-                </td>
-            </tr>
-        </table>
+        <div style="margin: 0; padding: 0; width: 100%; text-align: center;">
+            @if($headerBase64)
+                <img src="{{ $headerBase64 }}" alt="En-tête officiel EPAC" style="width: 100%; height: auto; display: block;">
+            @endif
+        </div>
 
-        <hr style="border: 1px solid #000; margin: 5px 0 8px; width: 100%;">
+        <div class="header">
 
         <table style="width: 100%; font-size: 14pt;">
             <tr>
@@ -225,17 +206,19 @@
                 </p>
             </div>
             
-            <div style="position: fixed; bottom: 30px; left: -2cm; text-align: center; width: 90%; left: 0; padding: 0 2cm;">
-                <!-- <hr style="border: 1px solid black; width: 100%; position: relative; left: -1cm; right: 1cm;"> -->
-                <p style="position: relative; left: -1cm; font-size: 11pt; font-family: 'Economica';">
+            <div style="position: fixed; bottom: 50px; left: 0; right: 0; text-align: center; width: 100%; padding: 0 1.5cm;">
+                <hr style="border: 0.8px solid black; width: 100%; margin-bottom: 4px;">
+                <p style="font-size: 10pt; font-family: 'Economica'; font-style: italic;">
                     Ce certificat est le résultat de la mise à niveau de l'étudiant et n'est valable que pour une inscription aux études ingénieurs du CAP.
                 </p>
             </div>
-            <div style="text-align: center; position: fixed; left: -2cm;  bottom: 7px; text-align: center; width: 90%; left: 0; padding: 0 2cm;">
-                <hr style="border: 0.7px solid black; width: 100%; position: relative; left: -1cm; right: 1cm;">
-                <p style="font-size: 9pt; position: relative; left: -1cm; ">
-                    01 B.P.2009 COTONOU - TELEPHONE: 21 36 09 93 - FAX: 21 36 01 99 E-mail : epac.uac@epac.uac.bj - epacuac@bj.refer.org
-                </p>
+            <div style="position: fixed; bottom: 0; left: 0; right: 0; width: 100%; margin: 0; padding: 0;">
+                @if($footerBase64)
+                    <img src="{{ $footerBase64 }}" alt="Pied de page officiel EPAC" style="width: 100%; height: auto; display: block;">
+                @endif
+                <div style="position: absolute; bottom: 3px; right: 20px; color: #ffffff; font-size: 8px;">
+                    Imprimé le {{ now()->format('d/m/Y à H:i') }}
+                </div>
             </div>
         </div>
     </div>

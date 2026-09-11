@@ -2,41 +2,7 @@
 
 @section('title', 'Fiche de Confirmation d\'Inscription')
 
-@section('custom-header')
-<div class="header">
-    @php
-        $epacLogo = storage_path("images/epac.png");
-        $capLogo = storage_path("images/cap.png");
-    @endphp
-    @if(file_exists($epacLogo) && filesize($epacLogo) > 0)
-    <img src='{{ $epacLogo }}' alt="logo-epac" class="logo-header epac">
-    @endif
-    @if(file_exists($capLogo) && filesize($capLogo) > 0)
-    <img src='{{ $capLogo }}' alt="logo-cap"  class="logo-header">
-    @endif
-    <h3 style="margin:0px">Université d'Abomey-Calavi</h3>
-    @php
-        $bannerImg = storage_path("images/banner.png");
-        $hasBanner = file_exists($bannerImg) && filesize($bannerImg) > 0;
-    @endphp
-    @if($hasBanner)
-    <img src='{{ $bannerImg }}' alt="header-separator-img" style="margin:0px">
-    @else
-    <hr style="margin: 5px 0;">
-    @endif
-    <h2 style="margin:0">Ecole Polytechnique d'Abomey-Calavi</h2>
-    @if($hasBanner)
-    <img src='{{ $bannerImg }}' alt="header-separator-img" style="margin:0px">
-    @else
-    <hr style="margin: 5px 0;">
-    @endif
-    <h1 style="margin:0;">Centre Autonome de Perfectionnement</h1>
-    <p>
-        01 BP 2009 COTONOU - TEl. 21 36 14 32/21 36 09 93 - Email. epac.uac@epac.uac.bj
-    </p>
-    <hr>
-</div>
-@endsection
+@section('hide-annee', 'true')
 
 @section('content')
 <div class="main">
@@ -149,10 +115,4 @@
         <p style="margin: 5px 0;">Ce document atteste de la soumission en ligne de votre dossier d'inscription</p>
     </div>
 </div>
-@endsection
-
-@section('footer-text')
-    <div style="text-align: center; font-size: 11px;">
-        <strong>NB:</strong> Cette fiche doit être imprimée et jointe au dossier physique. Toute candidature sans cette fiche sera automatiquement rejetée.
-    </div>
 @endsection

@@ -1,84 +1,54 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Liste des Étudiants - {{ $departmentName }}</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            color: #333;
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            border-bottom: 3px solid #003087;
-            padding-bottom: 15px;
-        }
-        .header h1 {
-            margin: 0;
-            color: #003087;
-            font-size: 24px;
-        }
-        .header p {
-            margin: 5px 0;
-            color: #666;
-            font-size: 14px;
-        }
-        .info-box {
-            background-color: #f0f0f0;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            font-size: 12px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        table thead {
-            background-color: #003087;
-            color: white;
-        }
-        table th {
-            padding: 12px;
-            text-align: left;
-            font-weight: bold;
-            font-size: 14px;
-        }
-        table td {
-            padding: 10px 12px;
-            border-bottom: 1px solid #ddd;
-            font-size: 13px;
-        }
-        table tbody tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        table tbody tr:hover {
-            background-color: #f0f0f0;
-        }
-        .footer {
-            margin-top: 30px;
-            text-align: center;
-            font-size: 11px;
-            color: #666;
-            border-top: 1px solid #ddd;
-            padding-top: 15px;
-        }
-        .total {
-            font-weight: bold;
-            margin-top: 15px;
-            font-size: 14px;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>Liste des Étudiants</h1>
-        <p><strong>{{ $departmentName }}</strong></p>
-        <p>Généré le {{ $generatedAt }}</p>
+@extends('core::pdfs.epac-base')
+
+@section('title', 'Liste des Étudiants - ' . ($departmentName ?? ''))
+@section('hide-annee', 'true')
+
+@section('extra-styles')
+.info-box {
+    background-color: #f0f0f0;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+    font-size: 11px;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+table thead {
+    background-color: #003087;
+    color: white;
+}
+table th {
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: bold;
+    font-size: 12px;
+    color: white;
+    background-color: #003087;
+}
+table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #ddd;
+    font-size: 11px;
+}
+table tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+.total {
+    font-weight: bold;
+    margin-top: 15px;
+    font-size: 13px;
+}
+@endsection
+
+@section('content')
+<div class="main">
+    <div style="text-align: center; margin-bottom: 15px;">
+        <h1 style="margin: 0; color: #003087; font-size: 20px; text-transform: uppercase;">Liste des Étudiants</h1>
+        <p style="margin: 4px 0; font-size: 13px;"><strong>{{ $departmentName }}</strong></p>
+        <p style="margin: 2px 0; color: #666; font-size: 11px;">Généré le {{ $generatedAt }}</p>
     </div>
 
     <div class="info-box">
@@ -109,10 +79,5 @@
     <div class="total">
         Total : {{ $totalStudents }} étudiant(s)
     </div>
-
-    <div class="footer">
-        <p><strong>CAP-EPAC</strong> - Centre Autonome de Perfectionnement</p>
-        <p>École Polytechnique d'Abomey-Calavi</p>
-    </div>
-</body>
-</html>
+</div>
+@endsection

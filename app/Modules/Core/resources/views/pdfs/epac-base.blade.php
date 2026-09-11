@@ -5,19 +5,54 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>@yield('title', 'Document PDF')</title>
     <style>
+        @page {
+            margin: 0cm;
+        }
+
         @yield('font-faces')
         
         body {
             font-family: Arial, sans-serif;
             font-size: @yield('body-font-size', '10px');
-            margin: @yield('body-margin', '20px');
+            margin: 0;
+            padding: 0;
             font-weight: @yield('body-font-weight', 'bold');
             position: relative;
         }
-        .header, .footer {
+
+        .header-banner-container {
             width: 100%;
+            margin: 0;
+            padding: 0;
             text-align: center;
         }
+
+        .header-banner {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .footer-banner-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        .footer-banner {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .document-body {
+            margin: @yield('body-margin', '10px 25px 60px 25px');
+        }
+
         .info-table {
             width: 100%;
             margin-bottom: 10px;
@@ -39,139 +74,109 @@
         th {
             background-color: #f2f2f2;
         }
-        .footer {
-            position: fixed;
-            bottom: 8px;
-            width: 100%;
-            left: 0;
-        }
+
         .printed-info {
             position: fixed;
-            bottom: 0px;
-            left: 10px;
-        }
-        .header{
-            position: relative;
-        }
-        .header h1{
-            font-size: 16px;
-            text-transform: uppercase;
-        }
-        .header h2{
-            font-size: @yield('header-h2-size', '14px');
-            text-transform: uppercase;
-            margin: @yield('header-h2-margin', '2px 0');
-        }
-        .header h3{
-            font-size: @yield('header-h3-size', '13px');
-            position: relative;
-            top: @yield('header-h3-top', '0');
-        }
-        .logo-header{
-            position: absolute;
-            right: 0;
-            height: 110px;
-            @yield('logo-cap-styles')
-        }
-        .logo-header.epac{
-            left: 0;
-            text-align: left;
-            height: 110px;
-            @yield('logo-epac-styles')
-        }
-        .header p{
+            bottom: 3px;
+            right: 20px;
+            color: #ffffff;
+            font-size: 8px;
             font-weight: normal;
-            font-size: @yield('header-p-size', '10px');
-            position: relative;
-            top: @yield('header-p-top', '0');
+            z-index: 10;
         }
-        .header hr {
-            border: @yield('header-hr-border', '.7px solid black');
-            position: relative;
-            top: @yield('header-hr-top', '0');
+
+        .header-title-section {
+            text-align: center;
+            margin-top: 10px;
+            margin-bottom: 15px;
         }
-        .info-table,.info-table tr,.info-table td{
+
+        .header-title-section h2 {
+            font-size: @yield('header-h2-size', '15px');
+            text-transform: uppercase;
+            margin: 5px 0;
+        }
+
+        .header-title-section .annee-acad {
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .info-table, .info-table tr, .info-table td {
             border: none;
         }
-        .info-table td:first-child{
+        .info-table td:first-child {
             width: 70%;
         }
-        .info-table td{
+        .info-table td {
             overflow: hidden;
         }
-        .no-border,.no-border tr,.no-border td{
+        .no-border, .no-border tr, .no-border td {
             border: none;
             margin-top: 15px;
             margin-bottom: 70px;
         }
+
         @yield('extra-styles')
     </style>
 </head>
 <body>
     @sectionMissing('custom-header')
-    {{-- Header EPAC/CAP par défaut --}}
-    <div class="header">
+    {{-- Bannière d'en-tête officielle avec logo EPAC, textes officiels et logo CAP --}}
+    <div class="header-banner-container">
         @php
-            $epacLogo = storage_path("images/epac.png");
-            $capLogo = storage_path("images/cap.png");
-            $epacBase64 = file_exists($epacLogo) && filesize($epacLogo) > 0 ? 'data:image/png;base64,' . base64_encode(file_get_contents($epacLogo)) : '';
-            $capBase64 = file_exists($capLogo) && filesize($capLogo) > 0 ? 'data:image/png;base64,' . base64_encode(file_get_contents($capLogo)) : '';
+            $headerImg = storage_path("images/epac_header_portrait.png");
+            $headerBase64 = file_exists($headerImg) ? 'data:image/png;base64,' . base64_encode(file_get_contents($headerImg)) : '';
         @endphp
-        @if($epacBase64)
-        <img src='{{ $epacBase64 }}' alt="logo-epac" class="logo-header epac">
-        @endif
-        @if($capBase64)
-        <img src='{{ $capBase64 }}' alt="logo-cap"  class="logo-header">
-        @endif
-        <h3 style="margin:0px">Université d'Abomey-Calavi</h3>
-        @php
-            $bannerImg = storage_path("images/banner.png");
-            $hasBanner = file_exists($bannerImg) && filesize($bannerImg) > 0;
-            $bannerBase64 = $hasBanner ? 'data:image/png;base64,' . base64_encode(file_get_contents($bannerImg)) : '';
-        @endphp
-        @if($bannerBase64)
-        <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
-        @else
-        <hr style="margin: 5px 0;">
-        @endif
-        <h2 style="margin:0">Ecole Polytechnique d'Abomey-Calavi</h2>
-        @if($bannerBase64)
-        <img src='{{ $bannerBase64 }}' alt="header-separator-img" style="margin:0px">
-        @else
-        <hr style="margin: 5px 0;">
-        @endif
-        <h1 style="margin:0;">Centre Autonome de Perfectionnement</h1>
-        <p>
-            01 BP 2009 COTONOU - TEl. 21 36 14 32/21 36 09 93 - Email. epac.uac@epac.uac.bj
-        </p>
-        <hr>
-        @sectionMissing('hide-annee')
-        <div>Année académique : {{ $anneeAcamedique ?? $annee ?? '' }}</div>
-        @endif
-        @hasSection('document-title')
-        <h2>@yield('document-title')</h2>
+        @if($headerBase64)
+            <img src="{{ $headerBase64 }}" alt="En-tête officiel EPAC" class="header-banner">
         @endif
     </div>
+
+    @if((!View::hasSection('hide-annee') && (isset($anneeAcamedique) || isset($annee))) || View::hasSection('document-title'))
+    <div class="header-title-section">
+        @sectionMissing('hide-annee')
+            @if(isset($anneeAcamedique) || isset($annee))
+                <div class="annee-acad">Année académique : {{ $anneeAcamedique ?? $annee ?? '' }}</div>
+            @endif
+        @endif
+
+        @hasSection('document-title')
+            <h2>@yield('document-title')</h2>
+        @endif
+    </div>
+    @endif
     @else
-    {{-- Header personnalisé --}}
+    {{-- Header personnalisé si défini --}}
     @yield('custom-header')
     @endif
 
-    {{-- Info table (filière, classe, matière, etc.) --}}
-    @yield('info-table')
+    <div class="document-body">
+        {{-- Info table (filière, classe, matière, etc.) --}}
+        @yield('info-table')
 
-    {{-- Content (students table) --}}
-    @yield('content')
+        {{-- Content (students table, etc.) --}}
+        @yield('content')
 
-    {{-- Additional content --}}
-    @yield('additional-content')
-
-    {{-- Footer --}}
-    @sectionMissing('hide-footer')
-    <div class="printed-info">
-        @yield('footer-text', 'Imprimé le ' . now()->format('d/m/Y à H:i:s') . ' par Administrateur')
+        {{-- Additional content --}}
+        @yield('additional-content')
     </div>
-    <hr class="footer">
+
+    {{-- Bannière de pied de page officielle --}}
+    @sectionMissing('hide-footer')
+    <div class="footer-banner-container">
+        @php
+            $footerImg = storage_path("images/epac_footer_portrait.png");
+            $footerBase64 = file_exists($footerImg) ? 'data:image/png;base64,' . base64_encode(file_get_contents($footerImg)) : '';
+        @endphp
+        @if($footerBase64)
+            <img src="{{ $footerBase64 }}" alt="Pied de page officiel EPAC" class="footer-banner">
+        @endif
+        <div class="printed-info">
+            @yield('footer-text', 'Imprimé le ' . now()->format('d/m/Y à H:i'))
+        </div>
+    </div>
     @endif
 </body>
 </html>
