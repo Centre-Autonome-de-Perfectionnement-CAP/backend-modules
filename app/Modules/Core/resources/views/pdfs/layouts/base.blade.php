@@ -38,7 +38,7 @@
 
         .main {
             text-align: center;
-            margin: 5px 25px 55px 25px;
+            margin: 5px 25px 35px 25px;
         }
 
         .top-page {
@@ -61,36 +61,12 @@
 
         footer {
             position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            width: 100%;
-            margin: 0;
-            padding: 0;
-        }
-
-        footer .footer-img {
-            width: 100%;
-            height: auto;
-            display: block;
-        }
-
-        footer .footer-info-left {
-            position: absolute;
-            bottom: 4px;
+            bottom: 10px;
             left: 25px;
-            color: #ffffff;
-            font-size: 8px;
-            z-index: 10;
-        }
-
-        footer .footer-info-right {
-            position: absolute;
-            bottom: 4px;
             right: 25px;
-            color: #ffffff;
-            font-size: 8px;
-            z-index: 10;
+            height: 20px;
+            font-size: 11px;
+            color: #333333;
         }
 
         footer .page:after {
@@ -108,21 +84,11 @@
     @yield('content')
 
     <footer>
-        @php
-            $footerLandscape = file_exists(public_path("images/epac_footer_landscape.png"))
-                ? public_path("images/epac_footer_landscape.png")
-                : (file_exists(storage_path("images/epac_footer_landscape.png"))
-                    ? storage_path("images/epac_footer_landscape.png")
-                    : base_path("storage/images/epac_footer_landscape.png"));
-            $footerBase64 = file_exists($footerLandscape) ? 'data:image/png;base64,' . base64_encode(file_get_contents($footerLandscape)) : '';
-        @endphp
-        @if($footerBase64)
-            <img src="{{ $footerBase64 }}" class="footer-img" alt="Pied de page officiel EPAC - CAP">
-        @endif
-        <div class="footer-info-left">
-            Imprimé le {{ date('d/m/Y à H:i') }} par la Cellule Informatique CAP
+        <div style="float: left; width: 80%; text-align: left; font-size: 11px;">
+            Imprimé le {{ date('d/m/Y à H:i') }} par la Cellule Informatique de la Division Formation Continue CAP
         </div>
-        <div class="footer-info-right page"></div>
+        <div class="page" style="float: right; width: 18%; text-align: right; font-size: 11px;"></div>
+        <div style="clear: both;"></div>
     </footer>
 </body>
 </html>

@@ -176,12 +176,6 @@
                 ? storage_path("images/epac_header_landscape.png")
                 : base_path("storage/images/epac_header_landscape.png"));
         $headerBase64 = file_exists($headerLandscape) ? 'data:image/png;base64,' . base64_encode(file_get_contents($headerLandscape)) : '';
-        $footerLandscape = file_exists(public_path("images/epac_footer_landscape.png"))
-            ? public_path("images/epac_footer_landscape.png")
-            : (file_exists(storage_path("images/epac_footer_landscape.png"))
-                ? storage_path("images/epac_footer_landscape.png")
-                : base_path("storage/images/epac_footer_landscape.png"));
-        $footerBase64 = file_exists($footerLandscape) ? 'data:image/png;base64,' . base64_encode(file_get_contents($footerLandscape)) : '';
     @endphp
 
     <div style="margin: 0; padding: 0; width: 100%;">
@@ -249,18 +243,26 @@
         <p>Document généré automatiquement le {{ $exportDate }} à {{ $exportTime }}</p>
     </div>
 
-    </div>
+    <table style="width: 100%; border: none; margin-top: 35px;">
+        <tr>
+            <td style="width: 45%; border: none; text-align: center; vertical-align: top;">
+                <div style="border-top: 1px solid #000; padding-top: 8px;">
+                    <p style="margin: 0; font-weight: bold;">Le Chef CAP</p>
+                    <br><br><br>
+                    <p style="margin: 0;">_________________________</p>
+                </div>
+            </td>
+            <td style="width: 10%; border: none;"></td>
+            <td style="width: 45%; border: none; text-align: center; vertical-align: top;">
+                <div style="border-top: 1px solid #000; padding-top: 8px;">
+                    <p style="margin: 0; font-weight: bold;">Le Directeur EPAC</p>
+                    <br><br><br>
+                    <p style="margin: 0;">_________________________</p>
+                </div>
+            </td>
+        </tr>
+    </table>
 
-    <footer style="position: fixed; bottom: 0; left: 0; right: 0; width: 100%; margin: 0; padding: 0;">
-        @if($footerBase64)
-            <img src="{{ $footerBase64 }}" style="width: 100%; height: auto; display: block;" alt="Pied de page officiel EPAC - CAP">
-        @endif
-        <div style="position: absolute; bottom: 4px; left: 25px; color: #ffffff; font-size: 8px;">
-            Document généré automatiquement le {{ $exportDate }} à {{ $exportTime }}
-        </div>
-        <div style="position: absolute; bottom: 4px; right: 25px; color: #ffffff; font-size: 8px;">
-            Cellule Informatique CAP
-        </div>
-    </footer>
+    </div>
 </body>
 </html>
