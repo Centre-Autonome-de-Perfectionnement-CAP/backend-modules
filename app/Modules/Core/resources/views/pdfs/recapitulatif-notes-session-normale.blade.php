@@ -53,7 +53,6 @@
                 @unless($isPrepa)
                     - {{ $classe->filiere->diplome->sigle }}
                 @endunless
-                - (2e Cohorte)
             </div>
 
             <table>
