@@ -462,7 +462,58 @@ class DecisionService
         $department = Department::find($departmentId);
         
         $etudiants = $this->getStudentsBySemester($academicYearId, $departmentId, $level, $cohort, $semester);
-        
+
+        $programsData = $this->getProgramsForSemester($academicYearId, $departmentId, $level, $semester);
+
+        $programsByCourse = [];
+        foreach ($programsData as $p) {
+            $courseId = $p->courseElementProfessor->courseElement->id ?? null;
+            if ($courseId) {
+                $programsByCourse[$courseId][] = $p;
+            }
+        }
+
+        $programmes = [];
+        foreach ($programsByCourse as $coursePrograms) {
+            $selectedProgram = $coursePrograms[0];
+            $programmes[] = (object)[
+                'id' => $selectedProgram->id,
+                'allProgramIds' => array_map(fn($p) => $p->id, $coursePrograms),
+                'matiere_professeur' => (object)[
+                    'matiere' => (object)[
+                        'libelle' => $selectedProgram->courseElementProfessor->courseElement->name ?? 'N/A',
+                        'code' => $selectedProgram->courseElementProfessor->courseElement->code ?? 'N/A',
+                    ]
+                ]
+            ];
+        }
+        $programmes = collect($programmes);
+
+        $nt = [];
+        $moyennes = [];
+        $credits = [];
+        foreach ($etudiants as $i => $etudiant) {
+            $gradeDetails = $etudiant['gradeDetails'] ?? [];
+            $nt[$i] = [];
+
+            foreach ($programmes as $programme) {
+                $average = null;
+                foreach ($programme->allProgramIds as $progId) {
+                    if (isset($gradeDetails[$progId])) {
+                        if (!empty($gradeDetails[$progId]['grades'])) {
+                            $average = $gradeDetails[$progId]['average'];
+                            break;
+                        }
+                        $average = $average ?? $gradeDetails[$progId]['average'];
+                    }
+                }
+                $nt[$i][] = $average !== null ? round((float)$average, 2) : '-';
+            }
+
+            $moyennes[$i] = $etudiant['moyenne'] ?? 0;
+            $credits[$i] = $etudiant['credits'] ?? 0;
+        }
+
         return [
             'annee' => $academicYear->libelle ?? '2024-2025',
             'filiere' => $department->name ?? 'N/A',
@@ -481,11 +532,11 @@ class DecisionService
             ],
             'sem' => $semester,
             'etudiants' => collect($etudiants),
-            'nt' => [],
-            'moyennes' => [],
-            'credits' => [],
-            'programmes' => [],
-            'nd' => count($etudiants),
+            'nt' => $nt,
+            'moyennes' => $moyennes,
+            'credits' => $credits,
+            'programmes' => $programmes,
+            'nd' => $programmes->count(),
             'etudiants_reprise' => collect([]),
             'ntr' => [],
             'moyennesr' => [],
