@@ -620,15 +620,15 @@ class DecisionService
         foreach ($etudiants as $i => $etudiant) {
             $nt[$i] = [];
             $moyennes[$i] = [];
-            \Log::info('Processing student', ['index' => $i, 'nom' => $etudiant->nom, 'gradeDetailsKeys' => array_keys($etudiant->gradeDetails)]);
+            \Log::info('Processing student', ['index' => $i, 'nom' => $etudiant['nom'] ?? null, 'gradeDetailsKeys' => array_keys($etudiant['gradeDetails'] ?? [])]);
             
             foreach ($programs as $program) {
                 $gradeData = null;
                 \Log::info('Processing program', ['code' => $program->code, 'allProgramIds' => $program->allProgramIds, 'maxWeightCount' => $program->maxWeightCount]);
                 
                 foreach ($program->allProgramIds as $progId) {
-                    if (isset($etudiant->gradeDetails[$progId])) {
-                        $tempGradeData = $etudiant->gradeDetails[$progId];
+                    if (isset($etudiant['gradeDetails'][$progId])) {
+                        $tempGradeData = $etudiant['gradeDetails'][$progId];
                         if (isset($tempGradeData['grades']) && is_array($tempGradeData['grades']) && count($tempGradeData['grades']) > 0) {
                             $gradeData = $tempGradeData;
                             \Log::info('Found grade data with notes', ['progId' => $progId, 'grades' => $gradeData['grades'], 'average' => $gradeData['average'] ?? null]);
