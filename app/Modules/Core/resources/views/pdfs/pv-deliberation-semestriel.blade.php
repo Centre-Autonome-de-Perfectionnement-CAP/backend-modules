@@ -31,8 +31,8 @@
                     @foreach ($etudiants as $i => $et)
                         <tr class="text-align-center">
                             <th> {{ $i + 1 }} </th>
-                            <th> {{ $et->matricule }} </th>
-                            <th> {{ $et->nom . ' ' . $et->prenoms }} </th>
+                            <th> {{ data_get($et, 'matricule') }} </th>
+                            <th> {{ data_get($et, 'nom') . ' ' . data_get($et, 'prenoms') }} </th>
                             @foreach ($nt[$i] as $n)
                                 <th class="text-center"> {{ $n }} </th>
                             @endforeach
@@ -88,8 +88,8 @@
                         @foreach ($etudiants_reprise as $i => $et)
                             <tr class="text-align-center">
                                 <th> {{ $i + 1 }} </th>
-                                <th> {{ $et->matricule }} </th>
-                                <th> {{ $et->nom . ' ' . $et->prenoms }} </th>
+                                <th> {{ data_get($et, 'matricule') }} </th>
+                                <th> {{ data_get($et, 'nom') . ' ' . data_get($et, 'prenoms') }} </th>
                                 @foreach ($ntr[$i] as $n)
                                     <th class="text-center"> {{ $n }} </th>
                                 @endforeach

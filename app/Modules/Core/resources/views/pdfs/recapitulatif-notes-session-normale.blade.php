@@ -90,9 +90,9 @@
                     @foreach ($etudiants as $i => $et)
                         <tr>
                             <th> {{ $i + 1 }} </th>
-                            <th> {{ $et->matricule }} </th>
+                            <th> {{ data_get($et, 'matricule') }} </th>
                             <th style="text-align:left; padding-left:10px;">
-                                {{ $et->nom . ' ' . $et->prenoms }}
+                                {{ data_get($et, 'nom') . ' ' . data_get($et, 'prenoms') }}
                             </th>
                             @php
                                 $colIndex = 0;
