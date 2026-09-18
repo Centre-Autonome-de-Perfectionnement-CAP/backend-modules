@@ -17,5 +17,10 @@ Route::prefix('api/attestations')->group(function () {
         Route::post('generate/licence/multiple', [AttestationController::class, 'generateMultipleLicence']);
         Route::put('students/{studentPendingStudentId}/names', [AttestationController::class, 'updateStudentNames']);
         Route::get('students/{studentPendingStudentId}/birth-certificate', [AttestationController::class, 'getBirthCertificate']);
+        Route::get('document-requests/badge-count', function () {
+            return response()->json([
+                'count' => 0,
+            ]);
+        });
     });
 });
