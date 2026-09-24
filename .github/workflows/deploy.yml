@@ -109,7 +109,7 @@ jobs:
             # Restart queue workers if supervisor is configured
             if command -v supervisorctl &> /dev/null; then
               echo "👷 Restarting queue workers..."
-              sudo supervisorctl restart laravel-worker:* || true
+              sudo supervisorctl restart laravel-app-worker:* || true
             fi
             
             # Keep only last 5 releases
