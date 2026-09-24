@@ -157,6 +157,8 @@ class SendPendingStudentMailJob implements ShouldQueue
                     // uniquement le statut à jour, sans recréer de lien ni d'AcademicPath.
                     $student->update(['status' => 'approved']);
                     Log::info('Statut approved appliqué (lien existant)', ['pending_student_id' => $student->id]);
+                    app(\App\Modules\Inscription\Services\PendingStudentService::class)
+                        ->assignToClassGroup($existingLink->student_id, $student);
                 }
             } catch (\Exception $e) {
                 Log::error('Erreur création Student', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);

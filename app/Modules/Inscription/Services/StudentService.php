@@ -19,6 +19,25 @@ use App\Modules\Core\Services\NationalityService;
 class StudentService
 {
     /**
+     * Sous-requête SQL retournant le nom du groupe de classe d'un étudiant (un seul).
+     *
+     * On n'utilise pas de jointure sur student_groups : un étudiant présent dans
+     * plusieurs groupes de la même classe (ex. groupes "A" créés en double) produirait
+     * une ligne par groupe, donc des doublons dans les listes et les fiches PDF.
+     * Nécessite les tables student_pending_student et pending_students dans la requête.
+     */
+    public static function groupNameSql(): string
+    {
+        return "SELECT cg.group_name FROM student_groups sg "
+            . "JOIN class_groups cg ON cg.id = sg.class_group_id "
+            . "WHERE sg.student_id = student_pending_student.student_id "
+            . "AND cg.academic_year_id = pending_students.academic_year_id "
+            . "AND cg.department_id = pending_students.department_id "
+            . "AND cg.study_level = pending_students.level "
+            . "ORDER BY cg.id LIMIT 1";
+    }
+
+    /**
      * Récupère tous les étudiants avec pagination et filtres
      */
     public function getAll(array $filters = [], int $perPage = 10)
@@ -29,13 +48,6 @@ class StudentService
             ->join('academic_years', 'pending_students.academic_year_id', '=', 'academic_years.id')
             ->join('student_pending_student', 'pending_students.id', '=', 'student_pending_student.pending_student_id')
             ->leftJoin('entry_diplomas', 'pending_students.entry_diploma_id', '=', 'entry_diplomas.id')
-            ->leftJoin('student_groups', 'student_pending_student.student_id', '=', 'student_groups.student_id')
-            ->leftJoin('class_groups', function ($join) {
-                $join->on('student_groups.class_group_id', '=', 'class_groups.id')
-                     ->on('class_groups.academic_year_id', '=', 'pending_students.academic_year_id')
-                     ->on('class_groups.department_id', '=', 'pending_students.department_id')
-                     ->on('class_groups.study_level', '=', 'pending_students.level');
-            })
             ->select(
                 'pending_students.id',
                 'student_pending_student.id as student_pending_student_id',
@@ -51,7 +63,7 @@ class StudentService
                 'personal_information.email',
                 DB::raw(DatabaseAdapter::jsonExtract('personal_information.contacts', '$.phone') . ' as telephone'),
                 DB::raw("(SELECT student_id_number FROM students WHERE students.id = student_pending_student.student_id) as matricule"),
-                'class_groups.group_name as groupe'
+                DB::raw('(' . self::groupNameSql() . ') as groupe')
             )
             ->where('pending_students.status', '!=', 'pending');
 
@@ -123,13 +135,6 @@ class StudentService
             ->join('academic_years', 'pending_students.academic_year_id', '=', 'academic_years.id')
             ->join('student_pending_student', 'pending_students.id', '=', 'student_pending_student.pending_student_id')
             ->leftJoin('entry_diplomas', 'pending_students.entry_diploma_id', '=', 'entry_diplomas.id')
-            ->leftJoin('student_groups', 'student_pending_student.student_id', '=', 'student_groups.student_id')
-            ->leftJoin('class_groups', function ($join) {
-                $join->on('student_groups.class_group_id', '=', 'class_groups.id')
-                     ->on('class_groups.academic_year_id', '=', 'pending_students.academic_year_id')
-                     ->on('class_groups.department_id', '=', 'pending_students.department_id')
-                     ->on('class_groups.study_level', '=', 'pending_students.level');
-            })
             ->select(
                 'pending_students.id',
                 'student_pending_student.id as student_pending_student_id',
@@ -145,7 +150,7 @@ class StudentService
                 'personal_information.email',
                 DB::raw(DatabaseAdapter::jsonExtract('personal_information.contacts', '$.phone') . ' as telephone'),
                 DB::raw("(SELECT student_id_number FROM students WHERE students.id = student_pending_student.student_id) as matricule"),
-                'class_groups.group_name as groupe'
+                DB::raw('(' . self::groupNameSql() . ') as groupe')
             )
             ->where('pending_students.id', $id)
             ->first();
@@ -336,20 +341,13 @@ class StudentService
             ->join('personal_information', 'pending_students.personal_information_id', '=', 'personal_information.id')
             ->join('departments', 'pending_students.department_id', '=', 'departments.id')
             ->join('academic_years', 'pending_students.academic_year_id', '=', 'academic_years.id')
-            ->leftJoin('student_groups', 'students.id', '=', 'student_groups.student_id')
-            ->leftJoin('class_groups', function ($join) {
-                $join->on('student_groups.class_group_id', '=', 'class_groups.id')
-                     ->on('class_groups.academic_year_id', '=', 'pending_students.academic_year_id')
-                     ->on('class_groups.department_id', '=', 'pending_students.department_id')
-                     ->on('class_groups.study_level', '=', 'pending_students.level');
-            })
             ->select(
                 'students.id',
                 'student_pending_student.id as student_pending_student_id',
                 'students.student_id_number as matricule',
                 DB::raw("CONCAT(personal_information.last_name, ' ', personal_information.first_names) as nomPrenoms"),
                 'pending_students.level as niveau',
-                'class_groups.group_name as groupe',
+                DB::raw('(' . self::groupNameSql() . ') as groupe'),
                 'personal_information.nationality'
             );
 
@@ -385,7 +383,16 @@ class StudentService
         }
 
         if (!empty($filters['groupe']) && $filters['groupe'] !== 'all') {
-            $query->where('class_groups.group_name', $filters['groupe']);
+            $query->whereExists(function ($subQuery) use ($filters) {
+                $subQuery->select(DB::raw(1))
+                    ->from('student_groups')
+                    ->join('class_groups', 'class_groups.id', '=', 'student_groups.class_group_id')
+                    ->whereColumn('student_groups.student_id', 'student_pending_student.student_id')
+                    ->whereColumn('class_groups.academic_year_id', 'pending_students.academic_year_id')
+                    ->whereColumn('class_groups.department_id', 'pending_students.department_id')
+                    ->whereColumn('class_groups.study_level', 'pending_students.level')
+                    ->where('class_groups.group_name', $filters['groupe']);
+            });
         }
 
         $query->orderBy('personal_information.last_name')

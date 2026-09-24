@@ -345,6 +345,28 @@ class PendingStudentService
     /**
      * Créer un étudiant officiel à partir d'un étudiant en attente approuvé
      */
+    /**
+     * Ajoute l'étudiant au groupe de sa classe si celle-ci n'a qu'un groupe.
+     * N'interrompt jamais l'approbation en cas d'échec.
+     */
+    public function assignToClassGroup(int $studentId, PendingStudent $pendingStudent): void
+    {
+        try {
+            app(ClassGroupService::class)->assignStudentToSingleGroup(
+                $studentId,
+                $pendingStudent->academic_year_id,
+                $pendingStudent->department_id,
+                $pendingStudent->level
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Affectation automatique au groupe impossible', [
+                'student_id' => $studentId,
+                'pending_student_id' => $pendingStudent->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     private function createOfficialStudent(PendingStudent $pendingStudent): void
     {
         Log::info('=== DÉBUT createOfficialStudent ===', [
@@ -463,6 +485,8 @@ class PendingStudentService
         Log::info('✅ AcademicPath créé', [
             'academic_path_id' => $academicPath->id,
         ]);
+
+        $this->assignToClassGroup($student->id, $pendingStudent);
 
         Log::info('=== FIN createOfficialStudent - SUCCÈS ===', [
             'student_id' => $student->id,
