@@ -152,6 +152,11 @@ class SendPendingStudentMailJob implements ShouldQueue
                     Log::info('Appel de PendingStudentService::createOfficialStudent');
                     $pendingStudentService = app(\App\Modules\Inscription\Services\PendingStudentService::class);
                     $pendingStudentService->changeStatus($student, 'approved');
+                } elseif ($student->status !== 'approved') {
+                    // Étudiant déjà lié à un Student officiel (réinscription) : on met
+                    // uniquement le statut à jour, sans recréer de lien ni d'AcademicPath.
+                    $student->update(['status' => 'approved']);
+                    Log::info('Statut approved appliqué (lien existant)', ['pending_student_id' => $student->id]);
                 }
             } catch (\Exception $e) {
                 Log::error('Erreur création Student', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
