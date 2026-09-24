@@ -86,7 +86,7 @@ class LmdGradeService
                 'student_id' => $student?->student_id_number ?? 'N/A',
                 'last_name' => $personalInfo?->last_name,
                 'first_names' => $personalInfo?->first_names,
-                'grades' => $grade?->grades ?? [],
+                'grades' => $this->padGrades($grade?->grades, count($program->weighting ?? [])),
                 'average' => $grade?->average,
                 'retake_grades' => $grade?->retake_grades ?? [],
                 'retake_average' => $grade?->retake_average,
@@ -217,15 +217,25 @@ class LmdGradeService
         float $note,
         bool $sessionNormale = true
     ): bool {
+        $program = Program::findOrFail($programId);
+        $pond = $sessionNormale ? ($program->weighting ?? []) : ($program->retake_weighting ?? []);
+
         $grade = LmdSystemGrade::where('student_pending_student_id', $studentPendingStudentId)
             ->where('program_id', $programId)
             ->first();
 
+        // Étudiant sans ligne de notes (ex. ajouté à la classe après la création
+        // des évaluations) : on la crée à la première saisie.
         if (!$grade) {
-            return false;
+            $grade = new LmdSystemGrade();
+            $grade->student_pending_student_id = $studentPendingStudentId;
+            $grade->program_id = $programId;
         }
 
-        $gradesArray = $sessionNormale ? ($grade->grades ?? []) : ($grade->retake_grades ?? []);
+        $gradesArray = $this->padGrades(
+            $sessionNormale ? $grade->grades : $grade->retake_grades,
+            count($pond)
+        );
 
         if (!isset($gradesArray[$position])) {
             return false;
@@ -240,8 +250,6 @@ class LmdGradeService
         }
 
         // Recalcule la moyenne
-        $program = Program::findOrFail($programId);
-        $pond = $sessionNormale ? ($program->weighting ?? []) : ($program->retake_weighting ?? []);
         
         if (count($gradesArray) === count($pond) && count($pond) > 0) {
             $moyenne = $this->calculationService->calculateMoyennePonderee($gradesArray, $pond);
@@ -795,5 +803,20 @@ class LmdGradeService
                 'cohort' => $cohort,
             ]
         ];
+    }
+
+    /**
+     * Complète les notes avec -1 (non saisi) jusqu'au nombre d'évaluations attendu,
+     * pour qu'un étudiant sans note reste saisissable dans la fiche de notation.
+     */
+    private function padGrades(?array $grades, int $columnCount): array
+    {
+        $grades = array_values($grades ?? []);
+
+        while (count($grades) < $columnCount) {
+            $grades[] = -1;
+        }
+
+        return $grades;
     }
 }

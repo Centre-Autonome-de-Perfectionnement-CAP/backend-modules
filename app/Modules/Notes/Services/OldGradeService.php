@@ -71,7 +71,7 @@ class OldGradeService
                 'student_pending_student_id' => $academicPath->student_pending_student_id,
                 'last_name' => $personalInfo?->last_name,
                 'first_names' => $personalInfo?->first_names,
-                'grades' => $grade?->grades ?? [],
+                'grades' => $this->padGrades($grade?->grades, $program),
                 'average' => $grade?->average,
             ];
         })->filter(function ($item) {
@@ -172,15 +172,21 @@ class OldGradeService
         int $position,
         float $note
     ): bool {
+        $program = Program::findOrFail($programId);
+
         $grade = OldSystemGrade::where('student_pending_student_id', $studentPendingStudentId)
             ->where('program_id', $programId)
             ->first();
 
+        // Étudiant sans ligne de notes (ex. ajouté à la classe après la création
+        // des évaluations) : on la crée à la première saisie.
         if (!$grade) {
-            return false;
+            $grade = new OldSystemGrade();
+            $grade->student_pending_student_id = $studentPendingStudentId;
+            $grade->program_id = $programId;
         }
 
-        $gradesArray = $grade->grades ?? [];
+        $gradesArray = $this->padGrades($grade->grades, $program);
 
         if (!isset($gradesArray[$position])) {
             return false;
@@ -189,7 +195,6 @@ class OldGradeService
         $gradesArray[$position] = $note;
         $grade->grades = $gradesArray;
 
-        $program = Program::findOrFail($programId);
         $pond = $program->weighting ?? [];
         
         if (count($gradesArray) === count($pond) && count($pond) > 0) {
@@ -353,5 +358,22 @@ class OldGradeService
             DB::rollBack();
             throw $e;
         }
+    }
+
+    /**
+     * Complète les notes avec -1 (non saisi) jusqu'au nombre d'évaluations du
+     * programme, pour qu'un étudiant sans note (ou avec moins de notes que de
+     * colonnes) reste saisissable dans la fiche de notation.
+     */
+    private function padGrades(?array $grades, Program $program): array
+    {
+        $grades = array_values($grades ?? []);
+        $columnCount = count($program->weighting ?? []);
+
+        while (count($grades) < $columnCount) {
+            $grades[] = -1;
+        }
+
+        return $grades;
     }
 }

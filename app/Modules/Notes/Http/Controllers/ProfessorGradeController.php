@@ -149,7 +149,8 @@ class ProfessorGradeController extends Controller
             ->where('program_id', $program->id)
             ->first();
         
-        $columnCount = $grade ? count($grade->grades ?? []) : 0;
+        // Sans ligne de notes, on se base sur le nombre d'évaluations du programme
+        $columnCount = $grade ? count($grade->grades ?? []) : count($program->weighting ?? []);
         $isSessionNormale = $request->position < $columnCount;
         $adjustedPosition = $isSessionNormale ? $request->position : ($request->position - $columnCount);
 
