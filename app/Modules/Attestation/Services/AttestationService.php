@@ -297,6 +297,69 @@ class AttestationService
     }
 
     /**
+     * Récupère les étudiants éligibles pour attestation de passage
+     * Critères : year_decision = 'pass', hors départements PREPA
+     */
+    public function getEligibleForPassage(
+        ?int $academicYearId = null,
+        ?int $departmentId = null,
+        ?string $cohort = null,
+        ?string $search = null
+    ) {
+        $query = AcademicPath::with([
+            'studentPendingStudent.pendingStudent.personalInformation',
+            'studentPendingStudent.pendingStudent.department',
+            'studentPendingStudent.student',
+            'academicYear'
+        ])
+        ->where('year_decision', 'pass')
+        ->whereHas('studentPendingStudent.pendingStudent.department', function ($q) {
+            $q->where('name', 'not like', '%prepa%')
+              ->where('name', 'not like', '%prépa%');
+        });
+
+        if ($academicYearId) {
+            $query->where('academic_year_id', $academicYearId);
+        }
+
+        if ($departmentId) {
+            $query->whereHas('studentPendingStudent.pendingStudent', function ($q) use ($departmentId) {
+                $q->where('department_id', $departmentId);
+            });
+        }
+
+        if ($cohort) {
+            $query->where('cohort', $cohort);
+        }
+
+        if ($search) {
+            $query->whereHas('studentPendingStudent.pendingStudent.personalInformation', function ($q) use ($search) {
+                $q->where('last_name', 'like', "%{$search}%")
+                  ->orWhere('first_names', 'like', "%{$search}%");
+            });
+        }
+
+        return $query->orderBy('created_at', 'desc')->get()->map(function ($path) {
+            $personalInfo = $path->studentPendingStudent?->pendingStudent?->personalInformation;
+            $student      = $path->studentPendingStudent?->student;
+            $department   = $path->studentPendingStudent?->pendingStudent?->department;
+
+            return [
+                'id'                         => $path->id,
+                'student_pending_student_id' => $path->student_pending_student_id,
+                'student_id'                 => $student?->student_id_number,
+                'last_name'                  => $personalInfo?->last_name,
+                'first_names'                => $personalInfo?->first_names,
+                'department'                 => $department?->name,
+                'study_level'                => $path->study_level,
+                'cohort'                     => $path->cohort,
+                'year_decision'              => $path->year_decision,
+                'academic_year'              => $path->academicYear?->libelle,
+            ];
+        });
+    }
+
+    /**
      * Génère une attestation de succès
      */
     public function generateAttestationSucces(int $studentPendingStudentId)

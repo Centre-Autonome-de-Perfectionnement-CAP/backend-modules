@@ -8,6 +8,7 @@ Route::prefix('api/attestations')->group(function () {
         
         Route::get('eligible/success', [AttestationController::class, 'getEligibleForSuccess']);
         Route::get('eligible/preparatory', [AttestationController::class, 'getEligibleForPreparatory']);
+        Route::get('eligible/passage', [AttestationController::class, 'getEligibleForPassage']);
         Route::post('generate/success', [AttestationController::class, 'generateSuccess']);
         Route::post('generate/preparatory', [AttestationController::class, 'generatePreparatory']);
         Route::post('generate/preparatory/multiple', [AttestationController::class, 'generateMultiplePreparatory']);

@@ -9,6 +9,7 @@ use App\Modules\Attestation\Http\Requests\{
     UpdateStudentNamesRequest,
     GetEligibleStudentsRequest,
     GetEligiblePreparatoryRequest,
+    GetEligiblePassageRequest,
     GenerateBulletinRequest,
     GenerateMultiplePreparatoryRequest,
     GenerateMultipleBulletinsRequest,
@@ -64,6 +65,24 @@ class AttestationController extends Controller
             'students' => $students,
             'total' => $students->count(),
         ], 'Étudiants éligibles récupérés avec succès');
+    }
+
+    /**
+     * Récupère les étudiants éligibles pour attestation de passage
+     */
+    public function getEligibleForPassage(GetEligiblePassageRequest $request): JsonResponse
+    {
+        $students = $this->attestationService->getEligibleForPassage(
+            $request->academic_year_id,
+            $request->department_id,
+            $request->cohort,
+            $request->search
+        );
+
+        return $this->successResponse([
+            'students' => $students,
+            'total'    => $students->count(),
+        ], 'Étudiants éligibles au passage récupérés avec succès');
     }
 
     /**
