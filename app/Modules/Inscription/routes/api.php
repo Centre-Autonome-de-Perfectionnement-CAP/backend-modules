@@ -17,6 +17,7 @@ use App\Modules\Inscription\Http\Controllers\PendingStudentExportController;
 
 
 use App\Modules\Inscription\Http\Controllers\StudentBroadcastController;
+use App\Modules\Inscription\Http\Controllers\LegacyPrepaLinkController;
 
 
 Route::prefix('api/inscription')->group(function () {
@@ -162,5 +163,13 @@ Route::prefix('api/inscription')->group(function () {
         Route::get('export/word', [PendingStudentExportController::class, 'exportWord']);
         Route::get('export/emails', [PendingStudentExportController::class, 'exportEmails']);
     });
+
+        // Rattachement historique Prépa (anciens étudiants)
+    Route::prefix('legacy-prepa')->middleware('auth:sanctum')->group(function () {
+        Route::get('/candidates', [LegacyPrepaLinkController::class, 'candidates']);
+        Route::get('/check/{pendingStudentId}', [LegacyPrepaLinkController::class, 'check']);
+        Route::post('/link/{pendingStudentId}', [LegacyPrepaLinkController::class, 'link']);
+    });
+
 
 }); // Fin du groupe api/inscription

@@ -38,11 +38,11 @@ class DatabaseAdapter
      */
     public static function concat(array $columns): string
     {
-        if (self::isPostgres()) {
+        if (in_array(self::getDriver(), ['pgsql', 'sqlite'])) {
             return implode(' || ', $columns);
         }
-        
-        return 'CONCAT(' . implode(', ', $columns) . ')';
+
+        return 'CONCAT('.implode(', ', $columns).')';
     }
 
     /**
@@ -61,7 +61,7 @@ class DatabaseAdapter
         if (self::isPostgres()) {
             return "{$column}::text";
         }
-        
+
         return "CAST({$column} AS CHAR)";
     }
 
@@ -73,7 +73,7 @@ class DatabaseAdapter
         if (self::isMysql()) {
             return $value ? 1 : 0;
         }
-        
+
         return $value;
     }
 
@@ -85,15 +85,19 @@ class DatabaseAdapter
         if (self::isPostgres()) {
             return "{$column}->'{$path}'";
         }
-        
+
+        if (self::getDriver() === 'sqlite') {
+            return "json_extract({$column}, '$.{$path}')";
+        }
+
         return "JSON_EXTRACT({$column}, '$.{$path}')";
     }
 
     /**
      * Sanitize ID for database query
      * PostgreSQL is strict with types, so we need to ensure IDs are integers
-     * 
-     * @param mixed $id The ID to sanitize
+     *
+     * @param  mixed  $id  The ID to sanitize
      * @return int|null The sanitized ID or null if invalid
      */
     public static function sanitizeId($id): ?int
@@ -105,7 +109,7 @@ class DatabaseAdapter
 
         // If it's numeric, cast to int
         if (is_numeric($id)) {
-            return (int)$id;
+            return (int) $id;
         }
 
         // Otherwise, it's not a valid ID
@@ -115,8 +119,8 @@ class DatabaseAdapter
     /**
      * Get the appropriate MONTH extract expression for the current database.
      *
-     * @param string $column The column name to extract the month from.
-     * @return string  The SQL fragment.
+     * @param  string  $column  The column name to extract the month from.
+     * @return string The SQL fragment.
      */
     public static function month(string $column): string
     {
