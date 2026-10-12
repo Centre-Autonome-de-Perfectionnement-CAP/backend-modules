@@ -14,9 +14,9 @@ class LegacyPrepaLinkController extends Controller
 {
     use ApiResponse, HasPagination;
 
-    // Module réservé à l'administrateur uniquement — doit rester synchronisé
+    // Module réservé au Chef CAP / Chef Division — doit rester synchronisé
     // avec ALLOWED_ROLES côté frontend (src/views/pages/legacy-prepa/LegacyPrepaGuard.tsx)
-    private const ALLOWED_ROLES = ['admin', 'chef-cap'];
+    private const ALLOWED_ROLES = ['chef-cap', 'chef-division'];
 
     public function __construct(
         protected LegacyPrepaLinkService $service
