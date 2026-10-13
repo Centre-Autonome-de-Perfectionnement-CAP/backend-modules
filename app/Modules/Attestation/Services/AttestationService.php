@@ -591,7 +591,7 @@ class AttestationService
                         'code' => $program->code,
                         'name' => $program->name,
                         'credits' => $program->credits,
-                        'average' => $gradeRecord->average ?? 0,
+                        'average' => max((float) ($gradeRecord->average ?? 0), 0),
                         'semester' => $program->semester,
                         'has_retake' => false
                     ];
@@ -788,7 +788,7 @@ class AttestationService
                     'code' => $program->code,
                     'name' => $program->name,
                     'credits' => $program->credits,
-                    'average' => $gradeRecord->average ?? 0,
+                    'average' => max((float) ($gradeRecord->average ?? 0), 0),
                     'semester' => $program->semester,
                     'has_retake' => false // TODO: vérifier si l'étudiant a fait un rattrapage
                 ];

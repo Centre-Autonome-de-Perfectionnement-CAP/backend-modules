@@ -50,6 +50,24 @@ class AttestationController extends Controller
     }
 
     /**
+     * Récupère les étudiants pour lesquels un bulletin peut être généré.
+     */
+    public function getStudentsForBulletins(GetEligibleStudentsRequest $request): JsonResponse
+    {
+        $students = $this->attestationService->getEligibleStudents(
+            $request->academic_year_id,
+            $request->department_id,
+            $request->cohort,
+            $request->search
+        );
+
+        return $this->successResponse([
+            'students' => $students,
+            'total' => $students->count(),
+        ], 'Étudiants récupérés pour les bulletins avec succès');
+    }
+
+    /**
      * Récupère les étudiants éligibles pour certificat de classes préparatoires
      */
     public function getEligibleForPreparatory(GetEligiblePreparatoryRequest $request): JsonResponse

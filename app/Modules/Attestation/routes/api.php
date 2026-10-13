@@ -7,6 +7,7 @@ Route::prefix('api/attestations')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         
         Route::get('eligible/success', [AttestationController::class, 'getEligibleForSuccess']);
+        Route::get('eligible/bulletins', [AttestationController::class, 'getStudentsForBulletins']);
         Route::get('eligible/preparatory', [AttestationController::class, 'getEligibleForPreparatory']);
         Route::get('eligible/passage', [AttestationController::class, 'getEligibleForPassage']);
         Route::post('generate/success', [AttestationController::class, 'generateSuccess']);
