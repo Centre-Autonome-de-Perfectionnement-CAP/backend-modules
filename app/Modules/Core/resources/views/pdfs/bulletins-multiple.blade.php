@@ -3,7 +3,7 @@
 @section('title', 'Bulletins')
 
 @section('hide-annee', 'true')
-@section('body-margin', '40px 25px 60px 25px')
+@section('body-margin', '140px 25px 60px 25px')
 
 @section('content')
 @foreach($bulletins as $bulletin)
