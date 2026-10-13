@@ -69,11 +69,31 @@ class StudentService
 
         // Filtres
         if (!empty($filters['year']) && $filters['year'] !== 'all') {
-            if (is_numeric($filters['year'])) {
-                $query->where('academic_years.id', $filters['year']);
-            } else {
-                $query->where('academic_years.academic_year', $filters['year']);
-            }
+            // Inclut les étudiants dont le dossier courant est de cette année,
+            // OU qui possèdent un parcours académique (ex. historique Prépa
+            // rattaché) pour cette année. Ainsi un étudiant rattaché à une année
+            // antérieure (ex. Prépa 2022) apparaît aussi en filtrant sur 2022,
+            // en plus de son année courante.
+            $query->where(function ($q) use ($filters) {
+                if (is_numeric($filters['year'])) {
+                    $q->where('academic_years.id', $filters['year']);
+                } else {
+                    $q->where('academic_years.academic_year', $filters['year']);
+                }
+
+                $q->orWhereExists(function ($sub) use ($filters) {
+                    $sub->select(DB::raw(1))
+                        ->from('academic_paths')
+                        ->join('academic_years as path_year', 'path_year.id', '=', 'academic_paths.academic_year_id')
+                        ->whereColumn('academic_paths.student_pending_student_id', 'student_pending_student.id');
+
+                    if (is_numeric($filters['year'])) {
+                        $sub->where('path_year.id', $filters['year']);
+                    } else {
+                        $sub->where('path_year.academic_year', $filters['year']);
+                    }
+                });
+            });
         }
 
         if (!empty($filters['filiere']) && $filters['filiere'] !== 'all') {
