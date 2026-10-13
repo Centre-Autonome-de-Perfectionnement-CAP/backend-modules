@@ -665,7 +665,7 @@ class AttestationService
                 new \BaconQrCode\Renderer\Image\SvgImageBackEnd()
             );
             $writer = new \BaconQrCode\Writer($renderer);
-            $qrCodeSvg = $writer->writeString($qrData);
+            $qrCodeSvg = $writer->writeString($qrData, 'UTF-8');
             $qrCodeBase64 = base64_encode($qrCodeSvg);
             
             $bulletins[] = [
@@ -870,7 +870,7 @@ class AttestationService
             new \BaconQrCode\Renderer\Image\SvgImageBackEnd()
         );
         $writer = new \BaconQrCode\Writer($renderer);
-        $qrCodeSvg = $writer->writeString($qrData);
+        $qrCodeSvg = $writer->writeString($qrData, 'UTF-8');
         $qrCodeBase64 = base64_encode($qrCodeSvg);
 
         return $this->pdfService->downloadPdf('core::pdfs.bulletin', [
