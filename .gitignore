@@ -84,3 +84,12 @@ deploy.php
 
 *.sql
 app/Modules_backup/
+
+# Archives et sauvegardes (ne jamais versionner)
+*.zip
+*.tar.gz
+*.rar
+*.7z
+/.marscode
+# Rapports ponctuels de scripts de migration
+payment_migration_errors_*.csv
