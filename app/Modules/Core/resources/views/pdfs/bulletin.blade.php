@@ -3,7 +3,7 @@
 @section('title', 'Bulletin')
 
 @section('hide-annee', 'true')
-@section('body-margin', '140px 25px 60px 25px')
+@section('body-margin', '100px 25px 60px 25px')
 
 @section('content')
 <div class="main" style="position: relative;">

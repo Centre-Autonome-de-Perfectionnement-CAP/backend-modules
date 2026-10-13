@@ -3,13 +3,13 @@
 @section('title', 'Bulletins')
 
 @section('hide-annee', 'true')
-@section('body-margin', '140px 25px 60px 25px')
+@section('body-margin', '100px 25px 60px 25px')
 
 @section('content')
 @foreach($bulletins as $bulletin)
 <div class="main" style="position: relative; {{ !$loop->last ? 'page-break-after: always;' : '' }}">
     @if(!$loop->first)
-    <div class="header-banner-container" style="margin-left: -25px; margin-right: -25px; margin-top: -10px; margin-bottom: 15px;">
+    <div class="header-banner-container" style="margin-left: -25px; margin-right: -25px; margin-top: -10px; margin-bottom: 100px;">
         @php
             $headerImg = file_exists(public_path("images/epac_header_portrait.png"))
                 ? public_path("images/epac_header_portrait.png")
