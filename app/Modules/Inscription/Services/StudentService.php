@@ -170,12 +170,18 @@ class StudentService
                 'personal_information.email',
                 DB::raw(DatabaseAdapter::jsonExtract('personal_information.contacts', '$.phone') . ' as telephone'),
                 DB::raw("(SELECT student_id_number FROM students WHERE students.id = student_pending_student.student_id) as matricule"),
-                DB::raw('(' . self::groupNameSql() . ') as groupe')
+                DB::raw('(' . self::groupNameSql() . ') as groupe'),
+                // Année de l'historique Prépa rattaché (academic_paths), si présente :
+                // elle doit primer sur l'année du dossier courant pour l'affichage.
+                DB::raw("(SELECT ay.academic_year FROM academic_paths ap JOIN academic_years ay ON ay.id = ap.academic_year_id WHERE ap.student_pending_student_id = student_pending_student.id AND (ap.study_level LIKE '%prepa%' OR ap.study_level LIKE '%prépa%') ORDER BY ap.academic_year_id ASC LIMIT 1) as annee_prepa")
             )
             ->where('pending_students.id', $id)
             ->first();
 
         if ($student) {
+            if (!empty($student->annee_prepa)) {
+                $student->annee = $student->annee_prepa;
+            }
             $student->redoublant = ($student->niveau && $this->isRepeatingStudent($student->student_pending_student_id, $student->niveau)) ? 'Oui' : 'Non';
         }
 
