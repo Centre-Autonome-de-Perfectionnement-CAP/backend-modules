@@ -3,36 +3,45 @@
 namespace App\Modules\Demandes\Services;
 
 use App\Exceptions\BusinessException;
-use App\Modules\Demandes\Mail\SecretaireMessageMail;
 use App\Modules\Demandes\Models\DocumentRequest;
 use App\Modules\Demandes\WorkflowConstants;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 
 /**
  * Envoi d'un message libre (texte + pièces jointes) de la secrétaire vers
  * le demandeur d'un dossier, par WhatsApp ET email.
  *
- * ENVOI SYNCHRONE (pas de queue) : action interactive déclenchée par un clic
- * secrétaire, qui attend un retour immédiat succès/échec par canal — pas de
- * SendNotificationJob ici, contrairement au reste du module.
+ * REFONTE (13/10/2026) — ENVOI ASYNCHRONE :
+ *   L'ancienne version envoyait WhatsApp (texte + chaque fichier) de façon
+ *   SYNCHRONE dans la requête HTTP : jusqu'à 30 s pour le texte + 60 s par
+ *   pièce jointe. Au-delà du timeout du serveur web, le navigateur recevait
+ *   une erreur alors que le WhatsApp était bien parti (bug « parfois ça
+ *   marche, parfois non, mais le message part »). L'email, lui, était
+ *   désactivé et ne pouvait de toute façon pas partir (Mailable invalide :
+ *   propriété $attachments typée en conflit avec Mailable + variable de vue
+ *   'message' réservée par Laravel).
  *
- * Chaque canal est indépendant : un échec WhatsApp n'empêche pas l'envoi
- * email et vice-versa. Le résultat retourné donne le motif exact de chaque
- * échec pour affichage direct au frontend (pas de message générique).
+ *   Désormais, chaque canal est mis en file d'envoi (SendNotificationJob),
+ *   indépendamment l'un de l'autre, avec retry automatique 24 h en cas
+ *   d'incident (bridge déconnecté, SMTP indisponible). La réponse HTTP est
+ *   immédiate.
  */
 class ContactDemandeurService
 {
     public function __construct(
-        private readonly WhatsAppService        $whatsApp,
-        private readonly DocumentStorageService  $storageService,
+        private readonly DocumentStorageService        $storageService,
+        private readonly NotificationService           $notificationService,
+        private readonly WhatsAppService               $whatsApp,
+        private readonly DocumentRequestHistoryService $historyService,
     ) {}
 
     /**
+     * @param  \Illuminate\Http\UploadedFile[]  $attachmentFiles
      * @return array{
-     *   whatsapp: array{attempted: bool, success: bool, reason: ?string},
-     *   email:    array{attempted: bool, success: bool, reason: ?string},
+     *   whatsapp: array{attempted: bool, success: bool, queued: bool, reason: ?string},
+     *   email:    array{attempted: bool, success: bool, queued: bool, reason: ?string},
      * }
      * @throws BusinessException si aucun canal n'est joignable (ni whatsapp ni email connus)
      */
@@ -51,135 +60,90 @@ class ContactDemandeurService
             );
         }
 
-        $nomDemandeur = trim(($demande->last_name ?? '') . ' ' . ($demande->first_names ?? '')) ?: 'Demandeur';
-        if ($nomDemandeur === 'Demandeur') {
-            // last_name/first_names ne sont pas des colonnes directes sur document_requests —
-            // il faut les récupérer via la jointure personal_information.
-            $info = \Illuminate\Support\Facades\DB::table('document_requests as dr')
-                ->join('student_pending_student as sps', 'dr.student_pending_student_id', '=', 'sps.id')
-                ->join('pending_students as ps', 'sps.pending_student_id', '=', 'ps.id')
-                ->join('personal_information as pi', 'ps.personal_information_id', '=', 'pi.id')
-                ->where('dr.id', $demande->id)
-                ->select('pi.last_name', 'pi.first_names')
-                ->first();
-            $nomDemandeur = trim(($info->first_names ?? '') . ' ' . ($info->last_name ?? '')) ?: 'Demandeur';
-        }
-        $typeLabel    = WorkflowConstants::typeLabel($demande->type, $demande->academic_year ?? null);
-        $secretaire   = $request->user();
-        $secretaireName = trim($secretaire?->name ?? $secretaire?->first_name . ' ' . $secretaire?->last_name) ?: 'Le secrétariat';
+        // last_name/first_names ne sont pas des colonnes de document_requests :
+        // jointure personal_information.
+        $info = DB::table('document_requests as dr')
+            ->join('student_pending_student as sps', 'dr.student_pending_student_id', '=', 'sps.id')
+            ->join('pending_students as ps', 'sps.pending_student_id', '=', 'ps.id')
+            ->join('personal_information as pi', 'ps.personal_information_id', '=', 'pi.id')
+            ->leftJoin('academic_years as ay', 'dr.academic_year_id', '=', 'ay.id')
+            ->where('dr.id', $demande->id)
+            ->select('pi.last_name', 'pi.first_names', 'ay.academic_year')
+            ->first();
 
-        // ── Stockage des pièces jointes (une seule fois, réutilisées pour les 2 canaux) ──
+        $nomDemandeur   = trim(($info->first_names ?? '') . ' ' . ($info->last_name ?? '')) ?: 'Demandeur';
+        $typeLabel      = WorkflowConstants::typeLabel($demande->type, $info->academic_year ?? null);
+        $secretaire     = $request->user();
+        $secretaireName = trim((string) ($secretaire?->first_name ?? '') . ' ' . (string) ($secretaire?->last_name ?? ''))
+            ?: (trim((string) ($secretaire?->name ?? '')) ?: 'Le secrétariat');
+
+        // ── Stockage des pièces jointes (une seule fois, réutilisées par les 2 canaux) ──
         $stored = [];
         foreach ($attachmentFiles as $file) {
             if (!$file || !$file->isValid()) continue;
-            $fileId = uniqid('msg_');
-            $path   = $this->storageService->storeSecretaireFile($demande->type, $demande->reference, $file, $fileId);
-            $stored[] = ['path' => $path, 'name' => $file->getClientOriginalName()];
+            $fileId   = uniqid('msg_');
+            $path     = $this->storageService->storeSecretaireFile($demande->type, $demande->reference, $file, $fileId);
+            $stored[] = ['path' => $path, 'name' => $this->safeFileName($file->getClientOriginalName())];
         }
 
-        $result = [
-            'whatsapp' => ['attempted' => false, 'success' => false, 'reason' => null],
-            'email'    => ['attempted' => false, 'success' => false, 'reason' => null],
-        ];
+        $queued = $this->notificationService->sendMessageDemandeur(
+            demande:        $demande,
+            nomDemandeur:   $nomDemandeur,
+            typeLabel:      $typeLabel,
+            message:        $message,
+            secretaireName: $secretaireName,
+            attachments:    $stored,
+        );
 
-        // ── WhatsApp ──────────────────────────────────────────────────────────
-        if (!empty($demande->demandeur_whatsapp)) {
-            $result['whatsapp']['attempted'] = true;
-            $result['whatsapp'] = $this->sendWhatsApp($demande, $nomDemandeur, $message, $secretaireName, $stored);
-        }
-
-        // ── Email désactivé temporairement (canal WhatsApp uniquement) ────────
-
-        return $result;
-    }
-
-    private function sendWhatsApp(
-        DocumentRequest $demande,
-        string $nomDemandeur,
-        string $message,
-        string $secretaireName,
-        array $stored,
-    ): array {
-        if (!$this->whatsApp->isConnected()) {
-            Log::warning('[ContactDemandeur] Bridge WhatsApp injoignable', ['reference' => $demande->reference]);
-            return [
-                'attempted' => true,
-                'success'   => false,
-                'reason'    => "Le service WhatsApp est actuellement déconnecté ou injoignable. Vérifiez la connexion WhatsApp dans l'onglet Administration.",
-            ];
-        }
-
-        $waMessage = implode("\n\n", array_filter([
-            "*CAP-EPAC — Message du secrétariat*",
-            "Bonjour {$nomDemandeur},",
-            $message,
-            "— {$secretaireName}, Secrétariat CAP-EPAC",
-        ]));
-
-        $context = "message-secretariat:{$demande->reference}";
-        $ok = $this->whatsApp->send($demande->demandeur_whatsapp, $waMessage, $context);
-
-        if (!$ok) {
-            return [
-                'attempted' => true,
-                'success'   => false,
-                'reason'    => "Échec de l'envoi WhatsApp : numéro invalide ({$demande->demandeur_whatsapp}) ou service indisponible. Voir les journaux pour le détail exact.",
-            ];
-        }
-
-        // Pièces jointes : envoyées séparément, un échec de fichier ne fait pas
-        // échouer le message texte déjà parti — juste consigné dans les logs.
-        foreach ($stored as $att) {
-            $fileOk = $this->whatsApp->sendFile(
-                phone:    $demande->demandeur_whatsapp,
-                disk:     'public',
-                path:     $att['path'],
-                fileName: $att['name'],
-                caption:  "Pièce jointe — dossier {$demande->reference}",
-                context:  $context,
-            );
-            if (!$fileOk) {
-                Log::warning('[ContactDemandeur] Échec envoi pièce jointe WhatsApp', [
-                    'reference' => $demande->reference,
-                    'file'      => $att['name'],
-                ]);
-            }
-        }
-
-        return ['attempted' => true, 'success' => true, 'reason' => null];
-    }
-
-    private function sendEmail(
-        DocumentRequest $demande,
-        string $nomDemandeur,
-        string $typeLabel,
-        string $message,
-        string $secretaireName,
-        array $stored,
-    ): array {
+        // Traçabilité dans l'historique du dossier (jamais bloquant).
         try {
-            Mail::to($demande->email)->send(new SecretaireMessageMail(
-                reference:      $demande->reference,
-                typeLabel:      $typeLabel,
-                nomDemandeur:   $nomDemandeur,
-                message:        $message,
-                secretaireName: $secretaireName,
-                attachments:    $stored,
-            ));
-
-            return ['attempted' => true, 'success' => true, 'reason' => null];
+            $this->historyService->recordMail($demande->id, 'Message du secrétariat au demandeur');
         } catch (\Throwable $e) {
-            Log::error('[ContactDemandeur] Échec envoi email', [
+            Log::warning('[ContactDemandeur] Historique non enregistré', [
                 'reference' => $demande->reference,
-                'email'     => $demande->email,
                 'error'     => $e->getMessage(),
             ]);
-
-            return [
-                'attempted' => true,
-                'success'   => false,
-                'reason'    => "Échec de l'envoi email : " . $e->getMessage(),
-            ];
         }
+
+        Log::info('[ContactDemandeur] Message mis en file d\'envoi', [
+            'reference'   => $demande->reference,
+            'whatsapp'    => $queued['whatsapp'],
+            'email'       => $queued['email'],
+            'attachments' => count($stored),
+        ]);
+
+        // Information (non bloquante) : bridge actuellement déconnecté →
+        // le message partira automatiquement à la reconnexion.
+        $waReason = null;
+        if ($queued['whatsapp'] && !$this->whatsApp->isConnected()) {
+            $waReason = "WhatsApp est momentanément déconnecté : le message partira automatiquement dès la reconnexion.";
+        }
+
+        return [
+            'whatsapp' => [
+                'attempted' => $queued['whatsapp'],
+                'success'   => $queued['whatsapp'],
+                'queued'    => $queued['whatsapp'],
+                'reason'    => $waReason,
+            ],
+            'email' => [
+                'attempted' => $queued['email'],
+                'success'   => $queued['email'],
+                'queued'    => $queued['email'],
+                'reason'    => null,
+            ],
+        ];
+    }
+
+    /**
+     * Nom de fichier affiché au destinataire : sans chemin ni caractères de contrôle.
+     */
+    private function safeFileName(?string $name): string
+    {
+        $name = basename(str_replace('\\', '/', (string) $name));
+        $name = preg_replace('/[\x00-\x1F\x7F]/u', '', $name) ?? '';
+        $name = trim($name);
+
+        return $name !== '' ? mb_substr($name, 0, 150) : 'piece-jointe';
     }
 }

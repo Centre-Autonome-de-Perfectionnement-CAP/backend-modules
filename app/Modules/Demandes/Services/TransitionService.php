@@ -103,31 +103,56 @@ class TransitionService
             ->select(['dr.*', 'ay.academic_year'])
             ->first();
 
-        match ($mailTrigger) {
-            'rejected'                          => $this->notificationService->sendRejected($fresh, $payload['motif'] ?? ''),
-            'ready_for_pickup'                  => $this->notificationService->sendReady($fresh),
-            'picked_up'                         => $this->notificationService->sendDelivered($fresh),
-            'direction_transmission'            => $this->notificationService->notifySecretaryOfDirectionTransmission($fresh),
-            'directeur_signed_notify_secretaire'=> $this->notificationService->notifySecretaireAfterDirecteurSign($fresh),
-            default                             => null,
-        };
+        // Les notifications ne doivent JAMAIS faire échouer une transition déjà
+        // validée en base (sinon l'acteur voit une erreur alors que le dossier
+        // a bien avancé, et recliquerait).
+        try {
+            match ($mailTrigger) {
+                'rejected'                          => $this->notificationService->sendRejected($fresh, $payload['motif'] ?? ''),
+                'ready_for_pickup'                  => $this->notificationService->sendReady($fresh),
+                'picked_up'                         => $this->notificationService->sendDelivered($fresh),
+                'direction_transmission'            => $this->notificationService->notifySecretaryOfDirectionTransmission($fresh),
+                'directeur_signed_notify_secretaire'=> $this->notificationService->notifySecretaireAfterDirecteurSign($fresh),
+                default                             => null,
+            };
 
-        if ($newStatus && $mailTrigger !== 'directeur_signed_notify_secretaire') {
-            // CORRECTIF : sur directeur_sign / directeur_sign_flagged, la secrétaire
-            // recevait DEUX messages redondants — "Signature validée" (ci-dessus,
-            // via notifySecretaireAfterDirecteurSign) ET le message générique
-            // "Dossier à traiter" de notifyNextActor (elle est le prochain acteur
-            // après la signature du directeur). Le premier message contient déjà
-            // l'appel à l'action ("Merci de préparer... et de le marquer prêt"),
-            // donc on n'envoie plus le second dans ce cas précis.
-            $this->notificationService->notifyNextActor(
-                demande:                 $fresh,
-                newStatus:               $newStatus,
-                expediteurUser:          $user,
-                expediteurRole:          $role,
-                responsableDivisionType: $update['responsable_division_type'] ?? ($demande->responsable_division_type ?? null),
-                commentaire:             $payload['motif'] ?? $payload['comment'] ?? null,
-            );
+            // AJOUT (13/10/2026) : validation « sous réserve » (actions *_flagged).
+            // NotificationService::sendSousReserve() existait mais n'était appelé
+            // nulle part : l'étudiant n'était jamais informé de la réserve ni
+            // invité à déposer un complément. Le dossier poursuit son circuit ;
+            // l'étudiant reçoit en parallèle (email + WhatsApp) le motif et le lien
+            // de complément de dossier.
+            if (str_ends_with($action, '_flagged')) {
+                $this->notificationService->sendSousReserve(
+                    $fresh,
+                    trim((string) ($payload['motif'] ?? $payload['comment'] ?? ''))
+                        ?: 'Votre dossier a été validé sous réserve. Merci de vous rapprocher du secrétariat.',
+                );
+            }
+
+            if ($newStatus && $mailTrigger !== 'directeur_signed_notify_secretaire') {
+                // CORRECTIF : sur directeur_sign / directeur_sign_flagged, la secrétaire
+                // recevait DEUX messages redondants — "Signature validée" (ci-dessus,
+                // via notifySecretaireAfterDirecteurSign) ET le message générique
+                // "Dossier à traiter" de notifyNextActor (elle est le prochain acteur
+                // après la signature du directeur). Le premier message contient déjà
+                // l'appel à l'action ("Merci de préparer... et de le marquer prêt"),
+                // donc on n'envoie plus le second dans ce cas précis.
+                $this->notificationService->notifyNextActor(
+                    demande:                 $fresh,
+                    newStatus:               $newStatus,
+                    expediteurUser:          $user,
+                    expediteurRole:          $role,
+                    responsableDivisionType: $update['responsable_division_type'] ?? ($demande->responsable_division_type ?? null),
+                    commentaire:             $payload['motif'] ?? $payload['comment'] ?? null,
+                );
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('[TransitionService] Erreur lors de la mise en file des notifications', [
+                'demande_id' => $id,
+                'action'     => $action,
+                'error'      => $e->getMessage(),
+            ]);
         }
 
         return $fresh;
@@ -289,11 +314,20 @@ class TransitionService
         }
 
         elseif ($action === 'chef_cap_reject') {
+            // CORRECTIF (13/10/2026) : contrairement à tous les autres rejets
+            // d'acteur, celui du Chef CAP n'enregistrait ni l'origine ni le
+            // circuit de correction. Conséquences : la secrétaire ne voyait pas
+            // le bandeau « circuit de correction », l'option « Sortir du
+            // circuit → Chef CAP » n'existait pas, et un renvoi « origin »
+            // échouait (« Impossible de déterminer le statut de retour »).
             $this->requireMotif($p);
             $newStatus                          = 'secretary_correction';
             $update['status']                   = $newStatus;
             $update['rejected_reason']          = $p['motif'];
             $update['rejected_by']              = WorkflowConstants::ROLE_LABELS[$role] ?? $role;
+            $update['correction_origin_role']   = $role;
+            $update['correction_origin_status'] = $demande->status;
+            $update['is_in_correction_circuit'] = true;
         }
 
         // ── SEC. DIRECTRICE ADJOINTE ──────────────────────────────────────────

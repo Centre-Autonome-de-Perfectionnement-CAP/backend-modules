@@ -39,6 +39,11 @@ class ComplementDossierController extends Controller
 
     private const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 Mo
 
+    /**
+     * Statuts terminaux : plus aucun complément accepté (dossier clos).
+     */
+    private const CLOSED_STATUSES = ['rejected', 'picked_up'];
+
     private const FILE_LABELS = [
         'demande_manuscrite'      => 'Demande manuscrite',
         'acte_naissance'          => 'Acte de naissance',
@@ -159,6 +164,17 @@ class ComplementDossierController extends Controller
             return response()->json(['message' => 'Référence introuvable.'], 404);
         }
 
+        // AJOUT (audit 13/10/2026) : un dossier clos (rejeté ou déjà retiré)
+        // n'accepte plus de complément — sinon les pièces étaient stockées et la
+        // secrétaire notifiée pour un dossier qui ne sera plus jamais traité.
+        if (in_array($demande->status, self::CLOSED_STATUSES, true)) {
+            return response()->json([
+                'message' => $demande->status === 'rejected'
+                    ? 'Ce dossier a été rejeté : il n\'accepte plus de complément. Veuillez soumettre une nouvelle demande.'
+                    : 'Ce dossier est clôturé (document déjà retiré) : il n\'accepte plus de complément.',
+            ], 409);
+        }
+
         // Infos étudiant pour les notifications
         $link = StudentPendingStudent::with([
             'student',
@@ -184,6 +200,12 @@ class ComplementDossierController extends Controller
 
         $filesToStore = [];
         foreach ($uploadedFiles as $key => $file) {
+            // SÉCURITÉ : la clé sert à nommer le fichier stocké — seules les
+            // clés métier connues sont acceptées (pas de nom arbitraire fourni
+            // par le client).
+            if (!is_string($key) || !array_key_exists($key, self::FILE_LABELS)) {
+                return response()->json(['message' => 'Type de pièce non reconnu.'], 422);
+            }
             if (!$file || !$file->isValid()) {
                 continue;
             }
@@ -222,7 +244,9 @@ class ComplementDossierController extends Controller
         $pieceLabels = $request->input('piece_labels', []);
         $savedLabels = [];
         foreach (array_keys($newEntries) as $key) {
-            $savedLabels[$key] = $pieceLabels[$key] ?? self::FILE_LABELS[$key] ?? $key;
+            // Libellé serveur en priorité (le libellé client n'est qu'un fallback, nettoyé).
+            $savedLabels[$key] = self::FILE_LABELS[$key]
+                ?? trim(strip_tags((string) ($pieceLabels[$key] ?? $key)));
         }
 
         $updateData = [
@@ -249,11 +273,19 @@ class ComplementDossierController extends Controller
         // sendComplementSecretaire() gère en un appel :
         //   - Email + WhatsApp → étudiant
         //   - Email + WhatsApp → toutes les secrétaires
-        $this->notificationService->sendComplementSecretaire(
-            etudiantEmail:    $request->email,
-            vars:             compact('nomComplet', 'matricule', 'reference', 'dateComplement', 'piecesList'),
-            whatsappEtudiant: $whatsappNormalized,
-        );
+        // Ne doit jamais faire échouer la réponse : les pièces sont déjà enregistrées.
+        try {
+            $this->notificationService->sendComplementSecretaire(
+                etudiantEmail:    $request->email,
+                vars:             compact('nomComplet', 'matricule', 'reference', 'dateComplement', 'piecesList'),
+                whatsappEtudiant: $whatsappNormalized,
+            );
+        } catch (\Throwable $e) {
+            Log::error('[ComplementDossier] Erreur mise en file des notifications', [
+                'reference' => $reference,
+                'error'     => $e->getMessage(),
+            ]);
+        }
 
         return response()->json([
             'success' => true,

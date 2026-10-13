@@ -84,7 +84,13 @@ function timingSafeEqual(a, b) {
 const rateLimitMap = new Map();
 const RATE_LIMIT_MAX = 30;
 const RATE_LIMIT_WINDOW = 60_000;
+// CORRECTIF (13/10/2026) : service loopback appelé uniquement par Laravel — les appels
+// authentifiés par la clé API ne sont plus limités (voir src/index.ts).
 const rateLimit = (req, res, next) => {
+    if (config.apiKey) {
+        next();
+        return;
+    }
     const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim()
         ?? req.socket.remoteAddress
         ?? 'unknown';
@@ -187,7 +193,7 @@ async function resolveJid(sock, cleanTo) {
     return null;
 }
 // ─── REST : POST /send-message ────────────────────────────────────────────────
-app.post('/send-message', rateLimit, requireApiKey, async (req, res) => {
+app.post('/send-message', requireApiKey, rateLimit, async (req, res) => {
     const { to, text, context, module } = req.body;
     if (typeof to !== 'string' || typeof text !== 'string') {
         res.status(400).json({ success: false, error: 'Paramètres invalides : to et text doivent être des chaînes' });
@@ -254,7 +260,7 @@ app.post('/send-message', rateLimit, requireApiKey, async (req, res) => {
     }
 });
 // ─── REST : POST /send-file (NOUVEAU) ──────────────────────────────────────────
-app.post('/send-file', rateLimit, requireApiKey, async (req, res) => {
+app.post('/send-file', requireApiKey, rateLimit, async (req, res) => {
     const { to, fileUrl, fileName, mimeType, caption, context, module, fileDisk, filePath } = req.body;
     if (typeof to !== 'string' || typeof fileUrl !== 'string' || typeof fileName !== 'string' || typeof mimeType !== 'string') {
         res.status(400).json({ success: false, error: 'Paramètres invalides : to, fileUrl, fileName, mimeType sont requis' });

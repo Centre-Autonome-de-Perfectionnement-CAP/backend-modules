@@ -240,7 +240,9 @@ class DocumentRequestController extends Controller
         $request->validate([
             'message'        => 'required|string|max:3000',
             'attachments'    => 'nullable|array|max:5',
-            'attachments.*'  => 'file|max:10240', // 10 Mo par pièce jointe
+            // 10 Mo par pièce jointe, formats bureautiques uniquement (même liste
+            // que les fichiers secrétaire) — jamais d'exécutable/HTML vers l'étudiant.
+            'attachments.*'  => 'file|max:10240|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx',
         ]);
 
         try {
@@ -258,7 +260,7 @@ class DocumentRequestController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            return $this->errorResponse('Erreur lors de l\'envoi : ' . $e->getMessage(), 500);
+            return $this->errorResponse("Erreur lors de la mise en file d'envoi du message. Veuillez réessayer.", 500);
         }
 
         return $this->successResponse($result, 'Envoi traité.');

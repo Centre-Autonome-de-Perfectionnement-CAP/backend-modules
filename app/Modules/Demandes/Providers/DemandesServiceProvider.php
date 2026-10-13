@@ -6,6 +6,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Gate;
 use App\Modules\Demandes\Models\DocumentRequest;
 use App\Modules\Demandes\Policies\DocumentRequestPolicy;
+use App\Modules\Demandes\WorkflowConstants;
 use App\Modules\Demandes\Services\DocumentRequestQueryService;
 use App\Modules\Demandes\Services\DocumentRequestHistoryService;
 use App\Modules\Demandes\Services\NotificationService;
@@ -66,5 +67,17 @@ class DemandesServiceProvider extends ServiceProvider
 
         // ── AJOUT (B1.3) : Policy absente de l'original ───────────────────────
         Gate::policy(DocumentRequest::class, DocumentRequestPolicy::class);
+
+        // ── AJOUT (audit sécurité 13/10/2026) ─────────────────────────────────
+        // Consultation d'un dossier (détail, pièces jointes, historique) :
+        // réservée aux acteurs du circuit Demandes. Auparavant, tout compte
+        // authentifié (ex. professeur) pouvait lire n'importe quel dossier et
+        // ses pièces (acte de naissance, quittances…) en devinant un id.
+        Gate::define('demandes.view', function ($user): bool {
+            $role = WorkflowConstants::canonicalRole($user->roles->first()?->slug);
+
+            return $role !== null
+                && array_key_exists($role, WorkflowConstants::VISIBLE_STATUSES);
+        });
     }
 }

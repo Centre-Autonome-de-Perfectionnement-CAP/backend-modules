@@ -98,7 +98,21 @@ const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
 const RATE_LIMIT_MAX    = 30
 const RATE_LIMIT_WINDOW = 60_000
 
+//
+// CORRECTIF (13/10/2026) : ce service n'écoute QUE sur 127.0.0.1 et n'est
+// appelé QUE par Laravel. Toutes les requêtes ont donc la même IP (loopback) :
+// la limite de 30 req/min s'appliquait à TOUTES les notifications du serveur
+// confondues. Au-delà (soumissions simultanées, transitions vers plusieurs
+// acteurs, pièces jointes…), le bridge répondait 429 et les messages étaient
+// perdus. Les appels authentifiés par la clé API (Laravel) ne sont donc plus
+// limités ici — le débit est déjà régulé par la queue Laravel. La limite reste
+// active si aucune clé API n'est configurée (mode dev).
 const rateLimit: express.RequestHandler = (req, res, next) => {
+    if (config.apiKey) {
+        next()
+        return
+    }
+
     const ip  = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
               ?? req.socket.remoteAddress
               ?? 'unknown'
@@ -216,7 +230,7 @@ async function resolveJid(sock: NonNullable<ReturnType<WhatsAppManager['getSocke
 
 // ─── REST : POST /send-message ────────────────────────────────────────────────
 
-app.post('/send-message', rateLimit, requireApiKey, async (req, res) => {
+app.post('/send-message', requireApiKey, rateLimit, async (req, res) => {
     const { to, text, context, module } = req.body as {
         to?: unknown; text?: unknown; context?: unknown; module?: unknown
     }
@@ -293,7 +307,7 @@ app.post('/send-message', rateLimit, requireApiKey, async (req, res) => {
 
 // ─── REST : POST /send-file (NOUVEAU) ──────────────────────────────────────────
 
-app.post('/send-file', rateLimit, requireApiKey, async (req, res) => {
+app.post('/send-file', requireApiKey, rateLimit, async (req, res) => {
     const { to, fileUrl, fileName, mimeType, caption, context, module, fileDisk, filePath } = req.body as {
         to?: unknown; fileUrl?: unknown; fileName?: unknown; mimeType?: unknown
         caption?: unknown; context?: unknown; module?: unknown

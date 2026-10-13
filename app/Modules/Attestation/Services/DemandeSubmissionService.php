@@ -67,10 +67,31 @@ class DemandeSubmissionService
 
     private const INACTIVE_STATUSES = ['rejected', 'picked_up'];
 
+    /**
+     * Pièces OBLIGATOIRES par type — miroir exact des contrôles du site vitrine
+     * (AttestationsForm::validateDocuments). La quittance n'est pas exigée en
+     * paiement Trésor en ligne (une quittance PDF est générée côté serveur).
+     */
+    private const REQUIRED_ATTESTATION_FILES = [
+        'attestation_definitive'  => ['demande_manuscrite', 'acte_naissance', 'attestation_succes_file'],
+        'attestation_inscription' => ['demande_manuscrite', 'recu_paiement'],
+        'attestation_passage'     => ['demande_manuscrite', 'acte_naissance', 'recu_paiement', 'bulletin'],
+    ];
+
+    private const FILE_LABELS = [
+        'demande_manuscrite'      => 'Demande manuscrite',
+        'acte_naissance'          => 'Acte de naissance',
+        'attestation_succes_file' => 'Attestation de succès',
+        'quittance'               => 'Quittance',
+        'recu_paiement'           => 'Reçus de paiement',
+        'bulletin'                => 'Bulletin de notes',
+    ];
+
     public function __construct(
         protected NotificationService    $notificationService,
         protected WhatsAppService        $whatsAppService,
         protected DocumentStorageService $storageService,
+        protected EligibilityService     $eligibilityService,
     ) {}
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -108,7 +129,13 @@ class DemandeSubmissionService
 
         $this->assertNoActivePendingRequest($link->id, $request->type);
 
-        $reference = 'ATT-' . Str::upper(Str::random(4));
+        // AJOUT (audit 13/10/2026) — contrôles serveur alignés sur le site vitrine.
+        // Le client est falsifiable : sans ces contrôles, une requête forgée
+        // pouvait soumettre un type non éligible ou un dossier sans pièces.
+        $this->assertEligible($link, $request->type);
+        $this->assertRequiredFiles($request, $request->type);
+
+        $reference = $this->generateReference('ATT');
 
         $this->storageService->ensureStructure($request->type, $reference);
 
@@ -186,7 +213,7 @@ class DemandeSubmissionService
 
         $this->assertNoActivePendingRequest($link->id, 'bulletin_annuel');
 
-        $reference = 'BUL-' . Str::upper(Str::random(4));
+        $reference = $this->generateReference('BUL');
 
         $this->storageService->ensureStructure('bulletin_annuel', $reference);
 
@@ -306,6 +333,79 @@ class DemandeSubmissionService
                     : "Une demande active existe déjà pour ce type d'attestation.",
                 'DUPLICATE_REQUEST',
                 409
+            );
+        }
+    }
+
+    /**
+     * Génère une référence unique (ex : ATT-7KQ2XM).
+     *
+     * CORRECTIF : 4 caractères aléatoires sans contrôle d'unicité → collision
+     * possible (contrainte UNIQUE → erreur 500 à la soumission) et référence
+     * trop facile à deviner, alors qu'elle suffit à consulter le suivi public
+     * (nom + matricule) et à déposer un complément. Désormais 6 caractères
+     * (≈ 2 milliards de combinaisons) sans caractères ambigus, et unicité vérifiée.
+     */
+    private function generateReference(string $prefix): string
+    {
+        $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans 0/O/1/I
+
+        for ($i = 0; $i < 10; $i++) {
+            $code = '';
+            for ($j = 0; $j < 6; $j++) {
+                $code .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+            }
+            $reference = "{$prefix}-{$code}";
+
+            if (!DB::table('document_requests')->where('reference', $reference)->exists()) {
+                return $reference;
+            }
+        }
+
+        throw new BusinessException(
+            'Impossible de générer une référence unique. Veuillez réessayer.',
+            'REFERENCE_GENERATION_FAILED',
+            503
+        );
+    }
+
+    /**
+     * @throws BusinessException
+     */
+    private function assertEligible(StudentPendingStudent $link, string $type): void
+    {
+        $eligibility = $this->eligibilityService->getAttestationEligibility($link);
+
+        if (empty($eligibility[$type])) {
+            throw new BusinessException(
+                "Vous n'êtes pas éligible à ce type d'attestation pour le moment.",
+                'NOT_ELIGIBLE',
+                422
+            );
+        }
+    }
+
+    /**
+     * @throws BusinessException
+     */
+    private function assertRequiredFiles(Request $request, string $type): void
+    {
+        $required = self::REQUIRED_ATTESTATION_FILES[$type] ?? [];
+
+        $isTresorOnline = ($request->payment_method ?? 'manual') === 'tresor_online'
+            && !empty($request->payment_reference);
+        if (!$isTresorOnline) {
+            $required[] = 'quittance';
+        }
+
+        $missing = array_values(array_filter($required, fn ($key) => !$request->hasFile($key)));
+
+        if ($missing) {
+            $labels = array_map(fn ($k) => self::FILE_LABELS[$k] ?? $k, $missing);
+            throw new BusinessException(
+                'Pièce(s) obligatoire(s) manquante(s) : ' . implode(', ', $labels) . '.',
+                'MISSING_FILES',
+                422
             );
         }
     }

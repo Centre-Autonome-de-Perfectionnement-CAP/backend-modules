@@ -61,15 +61,17 @@ class NotificationService
         string  $view,
         array   $vars,
         string  $context = '',
+        array   $attachments = [],
     ): void {
         if (empty($to)) return;
 
         SendNotificationJob::dispatch('email', [
-            'to'      => $to,
-            'to_name' => $toName,
-            'subject' => $subject,
-            'view'    => $view,
-            'vars'    => $vars,
+            'to'          => $to,
+            'to_name'     => $toName,
+            'subject'     => $subject,
+            'view'        => $view,
+            'vars'        => $vars,
+            'attachments' => $attachments,
         ]);
     }
 
@@ -147,7 +149,7 @@ class NotificationService
                     'etudiantMatricule' => $matricule,
                     'dateTransmission'  => now()->format('d/m/Y à H:i'),
                     'commentaire'       => null,
-                    'urlEspace'         => config('app.url') . '/dashboard',
+                    'urlEspace'         => $this->urlEspace('secretaire'),
                     'etablissement'     => config('app.name', 'CAP-EPAC'),
                 ],
                 context: "soumission-secretaire:{$demande->reference}",
@@ -340,7 +342,7 @@ class NotificationService
                 toName:  $sec->name,
                 subject: "Nouveau complément — Réf : {$reference}",
                 view:    'core::emails.complement-notification-secretariat',
-                vars:    array_merge($vars, ['email' => $etudiantEmail]),
+                vars:    array_merge($vars, ['email' => $etudiantEmail, 'urlEspace' => $this->urlEspace('secretaire')]),
                 context: "complement-secretaire:{$reference}",
             );
 
@@ -380,6 +382,18 @@ class NotificationService
 
         $destinataires = $this->findUsersWithRole($targetRoleSlug, $responsableDivisionType);
 
+        // Filet de sécurité : si aucun Responsable Division n'est rattaché au
+        // type du dossier (chef_division_type non renseigné sur l'utilisateur),
+        // on prévient tous les Responsables Division plutôt que personne —
+        // un dossier ne doit jamais arriver chez un acteur sans notification.
+        if ($destinataires->isEmpty() && $targetRoleSlug === 'responsable-division' && $responsableDivisionType) {
+            Log::warning('notifyNextActor: aucun Responsable Division pour ce type — notification de tous les Responsables Division', [
+                'type' => $responsableDivisionType,
+                'ref'  => $demande->reference,
+            ]);
+            $destinataires = $this->findUsersWithRole($targetRoleSlug, null);
+        }
+
         if ($destinataires->isEmpty()) {
             Log::warning('notifyNextActor: aucun utilisateur pour le rôle', [
                 'role'   => $targetRoleSlug,
@@ -415,7 +429,7 @@ class NotificationService
                     'etudiantMatricule' => $matricule,
                     'dateTransmission'  => now()->format('d/m/Y à H:i'),
                     'commentaire'       => $commentaire,
-                    'urlEspace'         => config('app.url') . '/dashboard',
+                    'urlEspace'         => $this->urlEspace($targetRoleSlug),
                     'etablissement'     => config('app.name', 'CAP-EPAC'),
                 ],
                 context: "acteur:{$targetRoleSlug}:{$demande->reference}",
@@ -483,7 +497,7 @@ class NotificationService
                     'etudiantMatricule' => $matricule,
                     'dateTransmission'  => now()->format('d/m/Y à H:i'),
                     'commentaire'       => 'Le Directeur a signé ce dossier. Veuillez préparer le document et le marquer comme prêt à retirer.',
-                    'urlEspace'         => config('app.url') . '/dashboard',
+                    'urlEspace'         => $this->urlEspace('secretaire'),
                     'etablissement'     => config('app.name', 'CAP-EPAC'),
                 ],
                 context: "directeur-signe:{$demande->reference}",
@@ -534,7 +548,7 @@ class NotificationService
                     'etudiantMatricule' => $matricule,
                     'dateTransmission'  => now()->format('d/m/Y à H:i'),
                     'commentaire'       => 'Ce dossier est maintenant en cours de signature (Direction). Veuillez préparer et transmettre les documents physiques correspondants.',
-                    'urlEspace'         => config('app.url') . '/dashboard',
+                    'urlEspace'         => $this->urlEspace('secretaire'),
                     'etablissement'     => config('app.name', 'CAP-EPAC'),
                 ],
                 context: "direction:{$demande->reference}",
@@ -552,6 +566,91 @@ class NotificationService
                 );
             }
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // MESSAGE LIBRE SECRÉTAIRE → DEMANDEUR (bouton « Contacter le demandeur »)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Met en file d'envoi le message libre de la secrétaire, sur les deux
+     * canaux, indépendamment l'un de l'autre :
+     *   - WhatsApp : 1 job pour le texte + 1 job par pièce jointe ;
+     *   - Email    : 1 job (pièces jointes incluses dans le même email).
+     *
+     * @param array<int, array{path: string, name: string}> $attachments  (disque 'public')
+     * @return array{whatsapp: bool, email: bool}  canaux effectivement mis en file
+     */
+    public function sendMessageDemandeur(
+        object $demande,
+        string $nomDemandeur,
+        string $typeLabel,
+        string $message,
+        string $secretaireName,
+        array  $attachments = [],
+    ): array {
+        $context = "message-secretariat:{$demande->reference}";
+        $queued  = ['whatsapp' => false, 'email' => false];
+
+        if (!empty($demande->demandeur_whatsapp)) {
+            $this->wa(
+                $demande->demandeur_whatsapp,
+                $this->whatsApp->templateMessageSecretariat($nomDemandeur, $message, $secretaireName),
+                $context,
+            );
+
+            foreach ($attachments as $att) {
+                SendNotificationJob::dispatch('whatsapp_file', [
+                    'phone'     => $demande->demandeur_whatsapp,
+                    'disk'      => 'public',
+                    'path'      => $att['path'],
+                    'file_name' => $att['name'],
+                    'caption'   => "Pièce jointe — dossier {$demande->reference}",
+                    'context'   => $context,
+                ]);
+            }
+            $queued['whatsapp'] = true;
+        }
+
+        if (!empty($demande->email)) {
+            $this->email(
+                to:          $demande->email,
+                toName:      $nomDemandeur,
+                subject:     "CAP-EPAC — Message concernant votre dossier {$demande->reference}",
+                view:        'core::emails.secretaire-message',
+                // NB : la clé 'message' est réservée par Laravel dans les vues mail
+                // (instance Illuminate\Mail\Message) — d'où 'messageBody'.
+                vars:        [
+                    'reference'      => $demande->reference,
+                    'typeLabel'      => $typeLabel,
+                    'nomDemandeur'   => $nomDemandeur,
+                    'messageBody'    => $message,
+                    'secretaireName' => $secretaireName,
+                ],
+                context:     $context,
+                attachments: array_map(
+                    fn (array $a) => ['disk' => 'public', 'path' => $a['path'], 'name' => $a['name']],
+                    $attachments,
+                ),
+            );
+            $queued['email'] = true;
+        }
+
+        return $queued;
+    }
+
+    /**
+     * URL de l'espace de traitement du progiciel pour un rôle donné :
+     *   - rôles direction  → /services/demandes/cap (espace dédié)
+     *   - autres rôles     → /services/demandes
+     */
+    private function urlEspace(?string $roleSlug): string
+    {
+        $base = rtrim((string) config('app.url'), '/') . '/services';
+
+        return in_array($roleSlug, WorkflowConstants::DIRECTION_ROLES, true)
+            ? $base . '/demandes/cap'
+            : $base . '/demandes';
     }
 
     // ══════════════════════════════════════════════════════════════════════════

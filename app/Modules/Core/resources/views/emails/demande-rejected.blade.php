@@ -60,7 +60,9 @@
 
       <div class="cta-container">
         @php
-            $applyUrl = config('app.url') . '/app-cap/apply';
+            // CORRECTIF : le site vitrine est servi à la racine (pas /app-cap) et
+            // les demandes de documents se font depuis l'Espace Étudiant.
+            $applyUrl = rtrim(config('app.frontend_url', config('app.url')), '/') . '/student-services';
         @endphp
         <a href="{{ $applyUrl }}" class="cta-button">Refaire ma demande</a>
       </div>

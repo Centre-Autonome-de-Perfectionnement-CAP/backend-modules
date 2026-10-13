@@ -1,5 +1,6 @@
 {{-- resources/views/emails/secretaire-message.blade.php --}}
-{{-- Variables : $reference, $typeLabel, $nomDemandeur, $message, $secretaireName --}}
+{{-- Variables : $reference, $typeLabel, $nomDemandeur, $messageBody, $secretaireName --}}
+{{-- NB : ne jamais utiliser $message ici — Laravel y injecte l'objet Illuminate\Mail\Message. --}}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -48,7 +49,7 @@
         <div class="type-line">{{ $typeLabel }}</div>
       </div>
 
-      <div class="message-box">{{ $message }}</div>
+      <div class="message-box">{{ $messageBody }}</div>
 
       <p class="signature">— {{ $secretaireName }}, Secrétariat CAP-EPAC</p>
     </div>

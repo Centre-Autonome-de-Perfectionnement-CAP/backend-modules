@@ -97,6 +97,24 @@ class WhatsAppBridgeClient
      */
     public function send(string $phone, string $message, string $context = '', ?string $module = null): bool
     {
+        $module ??= $this->detectCallingModule();
+
+        return $this->sendDetailed($phone, $message, $context, $module)['ok'];
+    }
+
+    /**
+     * Variante de send() qui qualifie l'échec, pour que l'appelant (queue)
+     * sache s'il doit retenter :
+     *   - retryable = true  → incident transitoire (bridge injoignable, timeout,
+     *                          429 rate limit, 5xx, 503 non initialisé, 401 clé
+     *                          mal configurée) : le message DOIT être retenté.
+     *   - retryable = false → échec définitif (numéro invalide, numéro absent de
+     *                          WhatsApp, requête rejetée 400) : inutile de retenter.
+     *
+     * @return array{ok: bool, retryable: bool, http: int, error: ?string}
+     */
+    public function sendDetailed(string $phone, string $message, string $context = '', ?string $module = null): array
+    {
         $normalized = $this->normalizePhone($phone);
         $module   ??= $this->detectCallingModule();
 
@@ -106,82 +124,18 @@ class WhatsAppBridgeClient
                 'context' => $context,
                 'module'  => $module,
             ]);
-            return false;
+            return $this->result(false, false, 0, 'Numéro invalide');
         }
 
         // Le Node bridge n'aime pas le signe +, on l'enlève ici pour être sûr
         $cleanTo = str_replace('+', '', $normalized);
 
-        try {
-            $data = json_encode([
-                'to'      => $cleanTo,
-                'text'    => $message,
-                'context' => $context,
-                'module'  => $module, // détecté automatiquement, journalisé par le Node
-            ]);
-
-            $headers = [
-                'Content-Type: application/json',
-                'Content-Length: ' . strlen($data),
-            ];
-            if ($this->apiKey !== '') {
-                $headers[] = 'X-Api-Key: ' . $this->apiKey;
-            }
-
-            $ch = curl_init("{$this->baseUrl}/send-message");
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_TIMEOUT, $this->timeout);
-
-            // Forcer IPv4 pour éviter les bugs loopback Windows
-            curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
-
-            $result    = curl_exec($ch);
-            $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curlError = curl_error($ch);
-            curl_close($ch);
-
-            if ($result === false) {
-                Log::error("[WhatsApp] Échec critique cURL sur {$this->baseUrl} : $curlError");
-                return false;
-            }
-
-            $response = json_decode($result, true);
-
-            if ($httpCode >= 200 && $httpCode < 300 && isset($response['success']) && $response['success']) {
-                Log::info('[WhatsApp] Message envoyé via bridge', [
-                    'to'      => $cleanTo,
-                    'context' => $context,
-                ]);
-                return true;
-            }
-
-            if ($httpCode === 401) {
-                Log::error('[WhatsApp] Rejeté par le bridge (401) — clé API invalide ou manquante côté Laravel/Node', [
-                    'to'      => $cleanTo,
-                    'context' => $context,
-                ]);
-                return false;
-            }
-
-            Log::warning('[WhatsApp] Réponse négative du bridge', [
-                'to'       => $cleanTo,
-                'context'  => $context,
-                'httpCode' => $httpCode,
-                'error'    => $response['error'] ?? 'Erreur inconnue',
-            ]);
-            return false;
-
-        } catch (\Exception $e) {
-            Log::error('[WhatsApp] Échec exceptionnel du bridge', [
-                'to'      => $normalized,
-                'context' => $context,
-                'error'   => $e->getMessage(),
-            ]);
-            return false;
-        }
+        return $this->postToBridge('/send-message', [
+            'to'      => $cleanTo,
+            'text'    => $message,
+            'context' => $context,
+            'module'  => $module, // détecté automatiquement, journalisé par le Node
+        ], $this->timeout, $cleanTo, $context);
     }
 
     // ─── Envoi de fichier (document ou image) ──────────────────────────────────
@@ -210,6 +164,25 @@ class WhatsAppBridgeClient
         string $context = '',
         ?string $module = null,
     ): bool {
+        $module ??= $this->detectCallingModule();
+
+        return $this->sendFileDetailed($phone, $disk, $path, $fileName, $caption, $context, $module)['ok'];
+    }
+
+    /**
+     * Variante de sendFile() qui qualifie l'échec (voir sendDetailed()).
+     *
+     * @return array{ok: bool, retryable: bool, http: int, error: ?string}
+     */
+    public function sendFileDetailed(
+        string $phone,
+        string $disk,
+        string $path,
+        string $fileName,
+        string $caption = '',
+        string $context = '',
+        ?string $module = null,
+    ): array {
         $normalized = $this->normalizePhone($phone);
         $module   ??= $this->detectCallingModule();
 
@@ -217,81 +190,127 @@ class WhatsAppBridgeClient
             Log::warning('[WhatsApp] Numéro invalide ou absent (envoi fichier)', [
                 'phone' => $phone, 'context' => $context, 'module' => $module,
             ]);
-            return false;
+            return $this->result(false, false, 0, 'Numéro invalide');
         }
 
         if (!Storage::disk($disk)->exists($path)) {
             Log::error('[WhatsApp] Fichier introuvable pour envoi', [
                 'disk' => $disk, 'path' => $path, 'context' => $context,
             ]);
-            return false;
+            return $this->result(false, false, 0, 'Fichier introuvable');
         }
 
         $cleanTo  = str_replace('+', '', $normalized);
         $mimeType = Storage::disk($disk)->mimeType($path) ?: 'application/octet-stream';
         $fileUrl  = $this->makeInternalFileUrl($disk, $path);
 
-        try {
-            $data = json_encode([
-                'to'        => $cleanTo,
-                'fileUrl'   => $fileUrl,
-                'fileName'  => $fileName,
-                'mimeType'  => $mimeType,
-                'caption'   => $caption,
-                'context'   => $context,
-                'module'    => $module,
-                // Persistés (pas juste le token éphémère 10 min) pour que le
-                // RETRY admin puisse régénérer une URL fraîche à tout moment.
-                'fileDisk'  => $disk,
-                'filePath'  => $path,
-            ]);
+        // Timeout plus généreux que pour un texte simple : le Node doit
+        // télécharger le fichier puis l'envoyer à WhatsApp.
+        return $this->postToBridge('/send-file', [
+            'to'        => $cleanTo,
+            'fileUrl'   => $fileUrl,
+            'fileName'  => $fileName,
+            'mimeType'  => $mimeType,
+            'caption'   => $caption,
+            'context'   => $context,
+            'module'    => $module,
+            // Persistés (pas juste le token éphémère 10 min) pour que le
+            // RETRY admin puisse régénérer une URL fraîche à tout moment.
+            'fileDisk'  => $disk,
+            'filePath'  => $path,
+        ], max($this->timeout, 60), $cleanTo, $context);
+    }
 
-            $headers = ['Content-Type: application/json', 'Content-Length: ' . strlen($data)];
+    /**
+     * Appel HTTP commun vers le bridge Node (texte et fichier).
+     *
+     * @return array{ok: bool, retryable: bool, http: int, error: ?string}
+     */
+    private function postToBridge(string $endpoint, array $body, int $timeout, string $cleanTo, string $context): array
+    {
+        try {
+            $data = json_encode($body);
+
+            $headers = [
+                'Content-Type: application/json',
+                'Content-Length: ' . strlen($data),
+            ];
             if ($this->apiKey !== '') {
                 $headers[] = 'X-Api-Key: ' . $this->apiKey;
             }
 
-            $ch = curl_init("{$this->baseUrl}/send-file");
+            $ch = curl_init("{$this->baseUrl}{$endpoint}");
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
             curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            // Timeout plus généreux que pour un texte simple : le Node doit
-            // télécharger le fichier puis l'envoyer à WhatsApp.
-            curl_setopt($ch, CURLOPT_TIMEOUT, max($this->timeout, 60));
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+
+            // Forcer IPv4 pour éviter les bugs loopback Windows
             curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
 
-            $result   = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curlErr  = curl_error($ch);
+            $result    = curl_exec($ch);
+            $httpCode  = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
             curl_close($ch);
 
             if ($result === false) {
-                Log::error("[WhatsApp] Échec critique cURL (fichier) sur {$this->baseUrl} : $curlErr");
-                return false;
+                Log::error("[WhatsApp] Bridge injoignable sur {$this->baseUrl}{$endpoint} : {$curlError}", [
+                    'to' => $cleanTo, 'context' => $context,
+                ]);
+                return $this->result(false, true, 0, $curlError ?: 'Bridge injoignable');
             }
 
             $response = json_decode($result, true);
+            $error    = is_array($response) ? ($response['error'] ?? null) : null;
 
-            if ($httpCode >= 200 && $httpCode < 300 && isset($response['success']) && $response['success']) {
-                Log::info('[WhatsApp] Fichier envoyé via bridge', [
-                    'to' => $cleanTo, 'fileName' => $fileName, 'context' => $context,
+            if ($httpCode >= 200 && $httpCode < 300 && !empty($response['success'])) {
+                Log::info('[WhatsApp] Envoi accepté par le bridge', [
+                    'endpoint' => $endpoint,
+                    'to'       => $cleanTo,
+                    'context'  => $context,
                 ]);
-                return true;
+                return $this->result(true, false, $httpCode, null);
             }
 
-            Log::warning('[WhatsApp] Échec envoi fichier', [
-                'to' => $cleanTo, 'fileName' => $fileName, 'context' => $context,
-                'httpCode' => $httpCode, 'error' => $response['error'] ?? 'Erreur inconnue',
-            ]);
-            return false;
+            if ($httpCode === 401) {
+                Log::error('[WhatsApp] Rejeté par le bridge (401) — clé API invalide ou manquante côté Laravel/Node', [
+                    'to'      => $cleanTo,
+                    'context' => $context,
+                ]);
+            } else {
+                Log::warning('[WhatsApp] Réponse négative du bridge', [
+                    'endpoint' => $endpoint,
+                    'to'       => $cleanTo,
+                    'context'  => $context,
+                    'httpCode' => $httpCode,
+                    'error'    => $error ?? 'Erreur inconnue',
+                ]);
+            }
 
-        } catch (\Exception $e) {
-            Log::error('[WhatsApp] Échec exceptionnel envoi fichier', [
-                'to' => $normalized, 'fileName' => $fileName, 'error' => $e->getMessage(),
+            // 400 (requête invalide) et 404 (numéro absent de WhatsApp) sont
+            // définitifs. Tout le reste (401 config, 429, 5xx, 503) est transitoire.
+            $retryable = !in_array($httpCode, [400, 404, 413, 422], true);
+
+            return $this->result(false, $retryable, $httpCode, $error ?? "HTTP {$httpCode}");
+
+        } catch (\Throwable $e) {
+            Log::error('[WhatsApp] Échec exceptionnel du bridge', [
+                'to'      => $cleanTo,
+                'context' => $context,
+                'error'   => $e->getMessage(),
             ]);
-            return false;
+            return $this->result(false, true, 0, $e->getMessage());
         }
+    }
+
+    /**
+     * @return array{ok: bool, retryable: bool, http: int, error: ?string}
+     */
+    private function result(bool $ok, bool $retryable, int $http, ?string $error): array
+    {
+        return ['ok' => $ok, 'retryable' => $retryable, 'http' => $http, 'error' => $error];
     }
 
     /**

@@ -12,14 +12,31 @@ use Illuminate\Support\Facades\Route;
 // (php artisan storage:link) ou non. Si non, cette route est le seul accès
 // aux fichiers stockés et doit rester. Si oui, elle fait doublon — inoffensif
 // mais à nettoyer plus tard si confirmé inutile.
-Route::get('/stockage/{path}', function ($path) {
-    $fullPath = storage_path('app/public/' . $path);
+//
+// CORRECTIF SÉCURITÉ (audit 13/10/2026) :
+//   1. Path traversal : le chemin était concaténé tel quel → /stockage/../../.env
+//      (ou équivalent encodé) permettait de lire n'importe quel fichier du
+//      serveur. Le chemin résolu (realpath) doit désormais rester DANS
+//      storage/app/public.
+//   2. Les dossiers des demandes d'attestation (demandes/…) contiennent des
+//      pièces personnelles (acte de naissance, quittances…). Ils ne sont plus
+//      servis publiquement : le progiciel y accède via la route authentifiée
+//      /api/attestations/document-requests/{id}/files/... .
+Route::get('/stockage/{path}', function (string $path) {
+    $root     = realpath(storage_path('app/public'));
+    $fullPath = $root ? realpath($root . DIRECTORY_SEPARATOR . $path) : false;
 
-    if (!file_exists($fullPath)) {
-        abort(404, 'Fichier non trouvé : ' . $path);
+    $inside = $fullPath !== false
+        && str_starts_with($fullPath, $root . DIRECTORY_SEPARATOR)
+        && is_file($fullPath);
+
+    $relative = $inside ? str_replace('\\', '/', substr($fullPath, strlen($root) + 1)) : '';
+
+    if (!$inside || str_starts_with($relative, 'demandes/')) {
+        abort(404, 'Fichier non trouvé.');
     }
 
-    return response()->file($fullPath);
+    return response()->file($fullPath, ['X-Content-Type-Options' => 'nosniff']);
 })->where('path', '.*');
 
 // ========== APPLICATIONS FRONTEND ==========

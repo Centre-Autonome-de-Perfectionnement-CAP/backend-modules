@@ -102,7 +102,8 @@ class SendGroupedReminders extends Command
                     'destinataireNom' => $user->name,
                     'count'           => $count,
                     'demandes'        => $listeDemandes,
-                    'urlEspace'       => config('app.url') . '/dashboard',
+                    // CORRECTIF : /dashboard n'existe pas — le progiciel est servi sous /services.
+                    'urlEspace'       => rtrim((string) config('app.url'), '/') . '/services/demandes',
                     'etablissement'   => config('app.name', 'CAP-EPAC'),
                 ], function ($m) use ($user) {
                     $m->to($user->email, $user->name)

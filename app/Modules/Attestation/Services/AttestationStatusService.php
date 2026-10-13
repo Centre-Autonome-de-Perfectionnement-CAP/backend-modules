@@ -44,9 +44,15 @@ class AttestationStatusService
         $pending  = $link->pendingStudent;
         $personal = $pending->personalInformation;
 
+        // CORRECTIF (13/10/2026) : keyBy() conserve la DERNIÈRE ligne de chaque
+        // type. Avec un tri DESC, c'était donc la demande la PLUS ANCIENNE qui
+        // était affichée (ex. un ancien rejet masquant la demande en cours →
+        // l'étudiant se voyait proposer une nouvelle soumission, refusée en 409).
+        // Tri ASC : la demande la plus récente l'emporte.
         $existingRequests = DB::table('document_requests')
             ->where('student_pending_student_id', $link->id)
-            ->orderBy('submitted_at', 'desc')
+            ->orderBy('submitted_at')
+            ->orderBy('id')
             ->get()
             ->keyBy('type');
 

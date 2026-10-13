@@ -39,11 +39,13 @@ Route::prefix('api/attestations')->middleware('auth:sanctum')->group(function ()
     // ── Listing + détail ───────────────────────────────────────────────────────
     Route::get('document-requests',              [DocumentRequestController::class, 'index']);
     Route::get('document-requests/{id}',         [DocumentRequestController::class, 'show'])
-         ->whereNumber('id'); // ← AJOUT : garde-fou supplémentaire
+         ->whereNumber('id') // ← AJOUT : garde-fou supplémentaire
+         ->middleware('can:demandes.view');
 
     // ── Aperçu / téléchargement d'une pièce jointe ─────────────────────────────
     Route::get('document-requests/{id}/files/{source}/{key}', [DocumentRequestController::class, 'previewFile'])
-         ->whereNumber('id');
+         ->whereNumber('id')
+         ->middleware('can:demandes.view');
 
     // ── Fichiers secrétaire ─────────────────────────────────────────────────────
     Route::post('document-requests/{id}/secretary-files',                    [DocumentRequestController::class, 'uploadSecretaryFiles'])->whereNumber('id');
@@ -58,6 +60,7 @@ Route::prefix('api/attestations')->middleware('auth:sanctum')->group(function ()
     Route::post('document-requests/{id}/transition', DocumentRequestTransitionController::class)->whereNumber('id');
 
     // ── Historique ────────────────────────────────────────────────────────────────
-    Route::get('document-requests/{id}/history', [DocumentRequestHistoryController::class, 'index'])->whereNumber('id');
+    Route::get('document-requests/{id}/history', [DocumentRequestHistoryController::class, 'index'])->whereNumber('id')
+         ->middleware('can:demandes.view');
 
 });

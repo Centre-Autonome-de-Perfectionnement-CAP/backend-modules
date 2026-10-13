@@ -38,7 +38,9 @@ class WhatsAppService
     // endroit à changer (le .env) pour prod/local/staging.
     private function urlSuivi(): string
     {
-        return rtrim(config('app.frontend_url'), '/') . '/student-services?type=suivi';
+        // CORRECTIF : le site vitrine attend type=suivi-demandes (type=suivi
+        // n'existe pas → la page affichait la liste des services, sans suivi).
+        return rtrim(config('app.frontend_url'), '/') . '/student-services?type=suivi-demandes';
     }
 
     private function urlComplement(): string
@@ -70,6 +72,31 @@ class WhatsAppService
         string $context = '',
     ): bool {
         return $this->bridge->sendFile($phone, $disk, $path, $fileName, $caption, $context);
+    }
+
+    /**
+     * Envoi qualifié (succès / échec transitoire / échec définitif) —
+     * utilisé par SendNotificationJob pour décider d'un retry.
+     *
+     * @return array{ok: bool, retryable: bool, http: int, error: ?string}
+     */
+    public function sendDetailed(string $phone, string $message, string $context = ''): array
+    {
+        return $this->bridge->sendDetailed($phone, $message, $context);
+    }
+
+    /**
+     * @return array{ok: bool, retryable: bool, http: int, error: ?string}
+     */
+    public function sendFileDetailed(
+        string $phone,
+        string $disk,
+        string $path,
+        string $fileName,
+        string $caption = '',
+        string $context = '',
+    ): array {
+        return $this->bridge->sendFileDetailed($phone, $disk, $path, $fileName, $caption, $context);
     }
 
     public function normalizePhone(string $phone): ?string
@@ -154,6 +181,19 @@ class WhatsAppService
             "Votre demande de *{$typeLabel}* (Réf : *{$reference}*) nécessite un complément.",
             "Motif : {$motif}",
             'Merci de soumettre les pièces manquantes via ce lien : ' . $this->urlComplement() . "&ref={$reference}",
+        ]);
+    }
+
+    /**
+     * Message libre de la secrétaire vers le demandeur (bouton « Contacter le demandeur »).
+     */
+    public function templateMessageSecretariat(string $nomDemandeur, string $message, string $secretaireName): string
+    {
+        return implode("\n\n", [
+            '*CAP-EPAC — Message du secrétariat*',
+            "Bonjour {$nomDemandeur},",
+            $message,
+            "— {$secretaireName}, Secrétariat CAP-EPAC",
         ]);
     }
 

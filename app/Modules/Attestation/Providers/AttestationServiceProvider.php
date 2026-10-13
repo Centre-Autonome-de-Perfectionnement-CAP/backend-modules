@@ -2,6 +2,9 @@
 
 namespace App\Modules\Attestation\Providers;
 
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use App\Modules\Attestation\Services\{EligibilityService, AttestationStatusService, DemandeSubmissionService};
 
@@ -33,6 +36,24 @@ class AttestationServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // ── AJOUT (audit sécurité 13/10/2026) : limitation de débit des routes
+        // publiques du site vitrine.
+        //   - lecture  : 300 / min / IP — rend l'énumération des références
+        //     et matricules impraticable, sans gêner un usage normal même si
+        //     plusieurs étudiants partagent une IP (cybercafé, proxy, NAT) ;
+        //   - écriture : 20 / min / (IP + étudiant ciblé) — anti-spam de
+        //     dossiers/notifications ; la clé inclut le matricule/la référence
+        //     pour ne jamais pénaliser des étudiants différents sur une même IP.
+        RateLimiter::for('attestation-public-read', fn (Request $request) =>
+            Limit::perMinute(300)->by('att-read|' . $request->ip())
+        );
+
+        RateLimiter::for('attestation-public-write', fn (Request $request) =>
+            Limit::perMinute(20)->by('att-write|' . $request->ip() . '|' . strtoupper(trim((string) (
+                $request->input('matricule') ?? $request->input('reference') ?? $request->input('link_id') ?? ''
+            ))))
+        );
+
         $this->app['router']
             ->middleware('api')          // ← applique le groupe API (CORS inclus)
             ->group(__DIR__ . '/../routes/api.php');

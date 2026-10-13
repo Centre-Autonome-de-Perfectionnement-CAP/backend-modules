@@ -60,7 +60,8 @@
 
       <div class="cta-container">
         @php
-            $suiviUrl = config('app.url') . '/app-cap/student-services?ref=' . $reference;
+            // CORRECTIF : lien direct vers le complément de dossier (site vitrine servi à la racine).
+            $suiviUrl = rtrim(config('app.frontend_url', config('app.url')), '/') . '/student-services?type=complement-dossier&ref=' . urlencode($reference);
         @endphp
         <a href="{{ $suiviUrl }}" class="cta-button">Fournir les pièces manquantes</a>
       </div>

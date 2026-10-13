@@ -21,20 +21,28 @@ use App\Modules\Attestation\Http\Controllers\Public\ComplementDossierController;
 Route::prefix('api/attestations')->group(function () {
 
     // ── Routes publiques (site vitrine) ───────────────────────────────────────
+    //
+    // AJOUT (audit sécurité 13/10/2026) : limitation de débit — limiteurs
+    // nommés définis dans AttestationServiceProvider::boot().
 
-    Route::get('academic-years',        [AttestationController::class, 'getAcademicYears']);
-    Route::get('status',                [AttestationController::class, 'getStatus']);
-    Route::get('bulletin-status',       [AttestationController::class, 'getBulletinStatus']);
-    Route::get('identify',              [AttestationController::class, 'identify']);
-    Route::get('check-availability',    [AttestationController::class, 'checkAvailability']);
-    Route::get('demandes/suivi',        [DemandeController::class, 'suiviDemande']);
-    Route::post('demandes',             [DemandeController::class, 'storeDemande']);
-    Route::post('bulletins',            [DemandeController::class, 'storeBulletinDemande']);
-    Route::post('quittance/generate',   [QuittanceController::class, 'generateAndSendQuittance']);
+    Route::middleware('throttle:attestation-public-read')->group(function () {
+        Route::get('academic-years',        [AttestationController::class, 'getAcademicYears']);
+        Route::get('status',                [AttestationController::class, 'getStatus']);
+        Route::get('bulletin-status',       [AttestationController::class, 'getBulletinStatus']);
+        Route::get('identify',              [AttestationController::class, 'identify']);
+        Route::get('check-availability',    [AttestationController::class, 'checkAvailability']);
+        Route::get('demandes/suivi',        [DemandeController::class, 'suiviDemande']);
 
-    // ── Complément de dossier (public — étudiant sans compte) ─────────────────
-    Route::get('demandes/complement/find', [ComplementDossierController::class, 'find']);
-    Route::post('demandes/complement',     [ComplementDossierController::class, 'store']);
+        // ── Complément de dossier (public — étudiant sans compte) ─────────────
+        Route::get('demandes/complement/find', [ComplementDossierController::class, 'find']);
+    });
+
+    Route::middleware('throttle:attestation-public-write')->group(function () {
+        Route::post('demandes',             [DemandeController::class, 'storeDemande']);
+        Route::post('bulletins',            [DemandeController::class, 'storeBulletinDemande']);
+        Route::post('quittance/generate',   [QuittanceController::class, 'generateAndSendQuittance']);
+        Route::post('demandes/complement',  [ComplementDossierController::class, 'store']);
+    });
 
     // ── Routes protégées (progiciel interne) ──────────────────────────────────
 
