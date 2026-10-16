@@ -29,7 +29,7 @@ use App\Modules\Demandes\Http\Controllers\DocumentRequestBadgeController;
  * AJOUT (B3.2) : route paginée additive, ne remplace pas l'existante.
  */
 
-Route::prefix('api/attestations')->middleware('auth:sanctum')->group(function () {
+Route::prefix('api/attestations')->middleware(['api', 'auth:sanctum'])->group(function () {
 
     // ── Routes à chemin fixe — DOIVENT précéder {id} ──────────────────────────
     Route::get('document-requests/stats',        DocumentRequestStatsController::class);

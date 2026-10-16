@@ -36,12 +36,12 @@ class DemandeController extends Controller
             'whatsapp'          => 'required|string|max:30|regex:/^[0-9\+\s\-]+$/',
             'payment_method'    => 'nullable|in:manual,tresor_online',
             'payment_reference' => 'nullable|string|max:50|regex:/^[a-zA-Z0-9\-]+$/',
-            'demande_manuscrite'=> 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
-            'acte_naissance'    => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
-            'attestation_succes_file' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
-            'quittance'         => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
-            'recu_paiement'     => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
-            'bulletin'          => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
+            'demande_manuscrite'=> 'nullable|file|mimes:pdf,jpg,jpeg,png,webp,heic,heif,doc,docx|max:5120',
+            'acte_naissance'    => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp,heic,heif,doc,docx|max:5120',
+            'attestation_succes_file' => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp,heic,heif,doc,docx|max:5120',
+            'quittance'         => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp,heic,heif,doc,docx|max:5120',
+            'recu_paiement'     => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp,heic,heif,doc,docx|max:5120',
+            'bulletin'          => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp,heic,heif,doc,docx|max:5120',
         ]);
 
         try {
@@ -75,9 +75,9 @@ class DemandeController extends Controller
             'whatsapp'          => 'required|string|max:30|regex:/^[0-9\+\s\-]+$/',
             'payment_method'    => 'nullable|in:manual,tresor_online',
             'payment_reference' => 'nullable|string|max:50|regex:/^[a-zA-Z0-9\-]+$/',
-            'demande_manuscrite'=> 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
-            'acte_naissance'    => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
-            'quittance'         => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
+            'demande_manuscrite'=> 'nullable|file|mimes:pdf,jpg,jpeg,png,webp,heic,heif,doc,docx|max:5120',
+            'acte_naissance'    => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp,heic,heif,doc,docx|max:5120',
+            'quittance'         => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp,heic,heif,doc,docx|max:5120',
         ]);
 
         try {

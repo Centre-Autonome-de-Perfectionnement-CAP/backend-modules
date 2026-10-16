@@ -25,3 +25,7 @@ Route::prefix('contact')->group(function () {
         Route::delete('/contacts/{contact}', [ContactController::class, 'destroy'])->name('contact.destroy');
     });
 });
+
+// Alias : le site vitrine appelait historiquement POST /api/contact
+// (route inexistante → le message n'était jamais enregistré).
+Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:5,1');
