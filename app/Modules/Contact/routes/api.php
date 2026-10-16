@@ -11,7 +11,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('contact')->group(function () {
     // Route publique pour soumettre un message de contact
-    Route::post('/contact', [ContactController::class, 'store'])->name('contact.store');
+    // Limitation anti-spam : 5 messages / minute / IP.
+    Route::post('/contact', [ContactController::class, 'store'])
+        ->middleware('throttle:5,1')
+        ->name('contact.store');
 
     // Routes admin (nécessitent authentification)
     Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {

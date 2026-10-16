@@ -22,7 +22,8 @@ use Illuminate\Support\Facades\Storage;
  *
  * Canaux :
  *   'email'          → { to, to_name?, cc?: [], subject, view, vars, attachments?: [{disk, path, name}] }
- *   'mailable'       → { to, cc?: [], mailable: Mailable }
+ *   'mailable'       → { to, cc?: [], mailable: Mailable, after_sent?: [{channel, payload}] }
+ *                      (after_sent : publiés UNIQUEMENT si l'email est accepté par le SMTP)
  *   'whatsapp'       → { phone, message, context, module? }
  *   'whatsapp_file'  → { phone, disk, path, file_name, caption?, context, module? }
  *
@@ -142,6 +143,27 @@ class SendNotificationJob implements ShouldQueue
         $pending->send($mailable);
 
         Log::info('[SendNotificationJob] Mailable envoyé', ['to' => $p['to'], 'class' => get_class($mailable)]);
+
+        $this->dispatchAfterSent($p['after_sent'] ?? []);
+    }
+
+    /**
+     * Notifications conditionnées à la réussite de l'email (ex. WhatsApp
+     * « consultez votre boîte mail »). Une erreur ici est journalisée sans
+     * relancer le job : l'email est déjà parti, il ne doit pas être renvoyé.
+     */
+    private function dispatchAfterSent(array $followUps): void
+    {
+        foreach ($followUps as $followUp) {
+            try {
+                static::dispatch($followUp['channel'], $followUp['payload']);
+            } catch (\Throwable $e) {
+                Log::error('[SendNotificationJob] Notification de suivi non publiée', [
+                    'channel' => $followUp['channel'] ?? null,
+                    'error'   => $e->getMessage(),
+                ]);
+            }
+        }
     }
 
     // ── WhatsApp ───────────────────────────────────────────────────────────────

@@ -28,8 +28,16 @@ class NewContactNotification extends Mailable
      */
     public function envelope(): Envelope
     {
+        // Objet nettoyé : un retour à la ligne dans un en-tête fait échouer
+        // l'envoi (protection anti-injection d'en-têtes du mailer).
+        $subject = trim(preg_replace('/[\r\n\t]+/', ' ', (string) $this->contact->subject));
+
         return new Envelope(
-            subject: 'Nouveau message de contact - ' . $this->contact->subject,
+            subject: 'Nouveau message de contact - ' . mb_strimwidth($subject, 0, 150, '…'),
+            // « Répondre » dans la boîte du CAP écrit directement au visiteur.
+            replyTo: filter_var($this->contact->email, FILTER_VALIDATE_EMAIL)
+                ? [new \Illuminate\Mail\Mailables\Address($this->contact->email, $this->contact->name)]
+                : [],
         );
     }
 
@@ -45,7 +53,7 @@ class NewContactNotification extends Mailable
                 'contactEmail' => $this->contact->email,
                 'contactSubject' => $this->contact->subject,
                 'contactMessage' => $this->contact->message,
-                'contactDate' => $this->contact->created_at->format('d/m/Y à H:i'),
+                'contactDate' => ($this->contact->created_at ?? now())->format('d/m/Y à H:i'),
             ],
         );
     }

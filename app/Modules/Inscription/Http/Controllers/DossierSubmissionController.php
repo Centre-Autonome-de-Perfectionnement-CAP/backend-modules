@@ -25,6 +25,8 @@ use Illuminate\Support\Facades\Log;
  */
 class DossierSubmissionController extends Controller
 {
+    use \App\Modules\Inscription\Http\Requests\Concerns\DossierUploadRules;
+
     use ApiResponse;
 
     public function __construct(private DossierSubmissionService $submissionService)
@@ -330,10 +332,18 @@ class DossierSubmissionController extends Controller
      */
     public function updateExistingDossier(Request $request): JsonResponse
     {
-        $request->validate([
+        // SÉCURITÉ / mobile : les pièces remplacées étaient acceptées sans
+        // aucun contrôle (type, taille). Mêmes règles que la soumission.
+        $fileRules = [];
+        foreach (DocumentFields::allFields() as $field) {
+            $fileRules[$field] = $this->pieceRule(false);
+        }
+
+        $request->validate(array_merge([
             'email' => 'required|email',
             'tracking_code' => 'required|string',
-        ]);
+            'photo' => $this->photoRule(),
+        ], $fileRules), $this->uploadMessages());
 
         $result = $this->submissionService->updateExistingDossier($request, DocumentFields::allFields());
 

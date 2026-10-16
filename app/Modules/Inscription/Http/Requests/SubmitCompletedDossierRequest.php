@@ -8,6 +8,8 @@ use Illuminate\Http\Exceptions\HttpResponseException;
 
 class SubmitCompletedDossierRequest extends FormRequest
 {
+    use \App\Modules\Inscription\Http\Requests\Concerns\DossierUploadRules;
+
     public function authorize(): bool
     {
         return true;
@@ -19,7 +21,7 @@ class SubmitCompletedDossierRequest extends FormRequest
             'names' => ['required', 'array'],
             'names.*' => ['required', 'string'],
             'files' => ['required', 'array'],
-            'files.*' => ['required', 'file'],
+            'files.*' => $this->pieceRule(),
         ];
     }
 
@@ -35,5 +37,10 @@ class SubmitCompletedDossierRequest extends FormRequest
                 'errors' => $validator->errors()
             ], 422)
         );
+    }
+
+    public function messages(): array
+    {
+        return $this->uploadMessages();
     }
 }

@@ -37,32 +37,62 @@ class ContactService
     }
 
     /**
-     * Notify admins about new contact message
+     * Email au CAP (contenu complet), puis — UNIQUEMENT si l'email a été
+     * accepté par le serveur SMTP — un WhatsApp au(x) responsable(s) de la
+     * Formation Continue l'invitant à consulter la boîte mail. Le WhatsApp
+     * ne contient JAMAIS le contenu du message (données du visiteur).
      */
     protected function notifyAdmins(Contact $contact): void
     {
         $primaryEmail = config('mail.contact.to', 'contact@cap-epac.online');
-        $ccEmail = config('mail.contact.cc', 'owomax@gmail.com');
+        $ccEmail = config('mail.contact.cc');
 
-        $notifier = app(\App\Modules\Core\Services\Notifier::class);
-        $notifier->mailable($primaryEmail, new NewContactNotification($contact), $ccEmail ? [$ccEmail] : []);
+        $alerts = [];
+        foreach ($this->formationContinueManagers() as $manager) {
+            $alerts[] = [
+                'phone'   => $manager->phone,
+                'message' => "*CAP-EPAC — Nouveau message de contact*\n"
+                    . "Bonjour {$manager->first_name},\n"
+                    . "Un nouveau message a été reçu via le formulaire de contact du site. "
+                    . "Merci de consulter la boîte mail {$primaryEmail} pour le traiter.",
+                'context' => "contact:{$contact->id}:{$manager->id}",
+                'module'  => 'Contact',
+            ];
+        }
 
-        $waNumbers = array_filter(array_map('trim', explode(',', (string) config('mail.contact.whatsapp', ''))));
-        $preview = mb_strimwidth(trim(strip_tags((string) $contact->message)), 0, 500, '…');
-        foreach ($waNumbers as $number) {
-            $notifier->whatsapp(
-                $number,
-                "*CAP-EPAC — Nouveau message de contact*\nDe : {$contact->name} ({$contact->email})\nObjet : *{$contact->subject}*\n\n{$preview}",
-                "contact:{$contact->id}",
-                'Contact',
-            );
+        app(\App\Modules\Core\Services\Notifier::class)->mailableThenWhatsApp(
+            $primaryEmail,
+            new NewContactNotification($contact),
+            $alerts,
+            $ccEmail ? [$ccEmail] : [],
+        );
+
+        if (empty($alerts)) {
+            Log::warning('Contact : aucun responsable Formation Continue avec numéro WhatsApp — alerte non envoyée', [
+                'contact_id' => $contact->id,
+            ]);
         }
 
         Log::info('Contact notification queued', [
             'contact_id' => $contact->id,
             'to' => $primaryEmail,
             'cc' => $ccEmail,
-            'whatsapp' => count($waNumbers),
+            'whatsapp_alerts' => count($alerts),
         ]);
+    }
+
+    /** Responsable(s) de division « Formation Continue » joignables par WhatsApp. */
+    private function formationContinueManagers(): \Illuminate\Support\Collection
+    {
+        return \Illuminate\Support\Facades\DB::table('users as u')
+            ->join('role_user as ru', 'ru.user_id', '=', 'u.id')
+            ->join('roles as r', 'r.id', '=', 'ru.role_id')
+            ->whereIn('r.slug', \App\Modules\Demandes\WorkflowConstants::roleSlugVariants('responsable-division'))
+            ->where('u.chef_division_type', 'formation_continue')
+            ->whereNotNull('u.phone')
+            ->where('u.phone', '!=', '')
+            ->select('u.id', 'u.first_name', 'u.phone')
+            ->distinct()
+            ->get();
     }
 }

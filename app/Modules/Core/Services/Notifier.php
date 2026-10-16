@@ -65,6 +65,35 @@ class Notifier
         $this->dispatch('mailable', ['to' => trim($to), 'cc' => $cc, 'mailable' => $mailable], $bulk);
     }
 
+    /**
+     * Email (Mailable) puis, SEULEMENT si le serveur SMTP l'a accepté, des
+     * WhatsApp d'alerte (ex. « un message vous attend dans la boîte mail »).
+     * Si l'email échoue définitivement, aucun WhatsApp n'est envoyé.
+     *
+     * @param array<int, array{phone: ?string, message: string, context: string, module: string}> $whatsAppAfterSent
+     */
+    public function mailableThenWhatsApp(?string $to, Mailable $mailable, array $whatsAppAfterSent, array $cc = []): void
+    {
+        if (!$this->isEmail($to)) {
+            Log::warning('[Notifier] Email non envoyé (adresse invalide) : alertes WhatsApp annulées', ['to' => $to]);
+            return;
+        }
+
+        $followUps = [];
+        foreach ($whatsAppAfterSent as $wa) {
+            if ($this->hasPhone($wa['phone'] ?? null)) {
+                $followUps[] = ['channel' => 'whatsapp', 'payload' => [
+                    'phone' => $wa['phone'], 'message' => $wa['message'],
+                    'context' => $wa['context'], 'module' => $wa['module'],
+                ]];
+            }
+        }
+
+        $this->dispatch('mailable', [
+            'to' => trim($to), 'cc' => $cc, 'mailable' => $mailable, 'after_sent' => $followUps,
+        ], false);
+    }
+
     /** Message WhatsApp texte. */
     public function whatsapp(?string $phone, string $message, string $context, string $module, bool $bulk = false): void
     {

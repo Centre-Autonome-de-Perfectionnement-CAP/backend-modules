@@ -6,6 +6,8 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class SubmitIngenieurPrepaDossierRequest extends FormRequest
 {
+    use \App\Modules\Inscription\Http\Requests\Concerns\DossierUploadRules;
+
     public function authorize(): bool
     {
         return true;
@@ -28,16 +30,21 @@ class SubmitIngenieurPrepaDossierRequest extends FormRequest
             'academic_year_id' => ['required','integer','exists:academic_years,id'],
             'department_id' => ['required','integer','exists:departments,id'],
 
-            'demande_da' => ['required','file'],
-            'cv' => ['required','file'],
-            'acte_naissance' => ['required','file'],
-            'diplome_bac' => ['required','file'],
-            'diplome_licence' => ['required','file'],
-            'attestation_travail' => ['required','file'],
-            'quittance_rectorat' => ['nullable','file'],
-            'quittance_cap' => ['required','file'],
-            'attestation_depot_dossier' => ['nullable','file'],
-            'photo' => ['nullable','file','image'],
+            'demande_da' => $this->pieceRule(),
+            'cv' => $this->pieceRule(),
+            'acte_naissance' => $this->pieceRule(),
+            'diplome_bac' => $this->pieceRule(),
+            'diplome_licence' => $this->pieceRule(),
+            'attestation_travail' => $this->pieceRule(),
+            'quittance_rectorat' => $this->pieceRule(false),
+            'quittance_cap' => $this->pieceRule(),
+            'attestation_depot_dossier' => $this->pieceRule(false),
+            'photo' => $this->photoRule(),
         ];
+    }
+
+    public function messages(): array
+    {
+        return $this->uploadMessages();
     }
 }

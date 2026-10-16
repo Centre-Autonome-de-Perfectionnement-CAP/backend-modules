@@ -11,11 +11,21 @@ use Illuminate\Http\Request;
 
 class ContactController extends Controller
 {
+    use \App\Traits\RestrictsToRoles;
+
     protected $contactService;
 
     public function __construct(ContactService $contactService)
     {
         $this->contactService = $contactService;
+
+        // SÉCURITÉ : la consultation des messages (noms, emails, contenus des
+        // visiteurs) était ouverte à TOUT compte connecté, y compris étudiants
+        // et professeurs. Réservée désormais au personnel concerné.
+        $this->restrictToRoles(
+            ['admin', 'secretaire', 'chef-cap', 'responsable-division', 'chef-division'],
+            except: ['store'],
+        );
     }
 
     /**
