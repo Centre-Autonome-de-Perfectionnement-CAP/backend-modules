@@ -26,7 +26,7 @@ class PendingStudentExportController extends Controller
     {
         $filters = $request->only(['year', 'filiere', 'cohort']);
 
-        $validation = $this->exportService->validateStudentsHavestatus($filters);
+        $validation = $this->exportService->validateStudentsHaveStatus($filters);
         if ($validation) {
             return $this->errorResponse($validation['message'], 422);
         }
@@ -51,7 +51,7 @@ class PendingStudentExportController extends Controller
     {
         $filters = $request->only(['year', 'filiere', 'cohort']);
 
-        $validation = $this->exportService->validateStudentsHavestatus($filters);
+        $validation = $this->exportService->validateStudentsHaveStatus($filters);
         if ($validation) {
             return $this->errorResponse($validation['message'], 422);
         }
@@ -111,7 +111,7 @@ class PendingStudentExportController extends Controller
     {
         $filters = $request->only(['year', 'filiere', 'cohort']);
 
-        $validation = $this->exportService->validateStudentsHavestatus($filters);
+        $validation = $this->exportService->validateStudentsHaveStatus($filters);
         if ($validation) {
             return $this->errorResponse($validation['message'], 422);
         }

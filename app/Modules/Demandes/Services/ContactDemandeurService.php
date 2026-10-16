@@ -62,13 +62,17 @@ class ContactDemandeurService
 
         // last_name/first_names ne sont pas des colonnes de document_requests :
         // jointure personal_information.
-        $info = DB::table('document_requests as dr')
-            ->join('student_pending_student as sps', 'dr.student_pending_student_id', '=', 'sps.id')
-            ->join('pending_students as ps', 'sps.pending_student_id', '=', 'ps.id')
-            ->join('personal_information as pi', 'ps.personal_information_id', '=', 'pi.id')
+        // Inscrit OU ancien étudiant (jointures gauches, cf. Requester).
+        $infoQuery = DB::table('document_requests as dr');
+        \App\Modules\Demandes\Support\Requester::join($infoQuery, 'dr', false);
+        $info = $infoQuery
             ->leftJoin('academic_years as ay', 'dr.academic_year_id', '=', 'ay.id')
             ->where('dr.id', $demande->id)
-            ->select('pi.last_name', 'pi.first_names', 'ay.academic_year')
+            ->select(
+                DB::raw(\App\Modules\Demandes\Support\Requester::LAST_NAME . ' as last_name'),
+                DB::raw(\App\Modules\Demandes\Support\Requester::FIRST_NAMES . ' as first_names'),
+                DB::raw('COALESCE(ay.academic_year, dr.bulletin_year) as academic_year'),
+            )
             ->first();
 
         $nomDemandeur   = trim(($info->first_names ?? '') . ' ' . ($info->last_name ?? '')) ?: 'Demandeur';

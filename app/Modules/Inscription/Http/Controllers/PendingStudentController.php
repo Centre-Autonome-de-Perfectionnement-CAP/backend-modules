@@ -255,11 +255,11 @@ class PendingStudentController extends Controller
         ]);
 
         if (isset($data['status']) && $data['status'] !== $pendingStudent->status && !$isOpinionUpdate) {
-            \Log::info('Calling changestatus', [
+            \Log::info('Calling changeStatus', [
                 'old_status' => $pendingStudent->status,
                 'new_status' => $data['status'],
             ]);
-            $pendingStudent = $this->pendingStudentService->changestatus($pendingStudent, $data['status']);
+            $pendingStudent = $this->pendingStudentService->changeStatus($pendingStudent, $data['status']);
             unset($data['status']);
         }
 
@@ -290,7 +290,7 @@ class PendingStudentController extends Controller
 
     return $this->successResponse(
         new PendingStudentResource($pendingStudent),
-        'statuss mis à jour avec succès'
+        'Statuts mis à jour avec succès'
     );
 }
 

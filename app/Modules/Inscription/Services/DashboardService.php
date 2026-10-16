@@ -63,7 +63,8 @@ class DashboardService
         return [
             'inscritsParFiliere' => $this->getStudentsByDepartment($academicYearId),
             'inscritsParCycle' => $this->getStudentsByCycle($academicYearId),
-            'dossiersParstatus' => $this->getStudentsBystatus($academicYearId),
+            // CORRECTIF (fusion) : clé attendue par le frontend (types/inscription.types.ts)
+            'dossiersParStatut' => $this->getStudentsByStatus($academicYearId),
             'anneeAcademique' => $currentYear ? $currentYear->academic_year : null,
         ];
     }
@@ -116,7 +117,7 @@ class DashboardService
     /**
      * Get students grouped by status
      */
-    protected function getStudentsBystatus($academicYearId = null): array {
+    protected function getStudentsByStatus($academicYearId = null): array {
         $query = PendingStudent::select('status', DB::raw('count(*) as nombre'))
             ->groupBy('status');
 
@@ -126,12 +127,12 @@ class DashboardService
 
         $statusData = $query->get();
         if ($statusData->isEmpty()) {
-            return [['status' => 'Aucun dossier', 'nombre' => 0]];
+            return [['statut' => 'Aucun dossier', 'nombre' => 0]];
         }
 
         return $statusData->map(function ($item) {
             return [
-                'status' => $this->translatestatus($item->status),
+                'statut' => $this->translateStatus($item->status),
                 'nombre' => $item->nombre,
             ];
         })->values()->toArray();
@@ -140,7 +141,7 @@ class DashboardService
     /**
      * Translate status to French
      */
-    protected function translatestatus(string $status): string {
+    protected function translateStatus(string $status): string {
         $translations = [
             'pending' => 'En attente',
             'approved' => 'Approuvé',

@@ -221,42 +221,53 @@ class PaiementService
                 'student_id_number' => $paiement->student_id_number,
             ]);
 
-            // Envoyer un email de confirmation si un email est fourni
+            // Notifications asynchrones de dépôt
             try {
-                if (!empty($paiement->email)) {
-                    $firstName = 'Étudiant(e)';
-                    $lastName = '';
+                // Notifications de dépôt (email si fourni + WhatsApp si contact fourni).
+                $firstName = 'Étudiant(e)';
+                $lastName = '';
 
-                    if ($student) {
-                        if (!$student->relationLoaded('pendingStudents')) {
-                            $student->load('pendingStudents.personalInformation');
-                        }
-                        $personalInfo = $student->personalInformation;
-                        $firstName = $personalInfo?->first_names ?? 'Étudiant(e)';
-                        $lastName = $personalInfo?->last_name ?? '';
-                    } elseif ($legacy) {
-                        $firstName = $legacy->first_name ?? 'Étudiant(e)';
-                        $lastName = $legacy->last_name ?? '';
+                if ($student) {
+                    if (!$student->relationLoaded('pendingStudents')) {
+                        $student->load('pendingStudents.personalInformation');
                     }
-                    
-                    $mailData = [
-                        'reference' => $paiement->reference,
-                        'matricule' => $paiement->student_id_number,
-                        'montant' => $paiement->amount,
-                        'numero_compte' => $paiement->account_number,
-                        'date_versement' => $paiement->payment_date,
-                        'motif' => $paiement->purpose,
-                        'prenoms' => $firstName,
-                        'nom' => $lastName,
-                    ];
-                    
-                    Mail::to($paiement->email)->send(new QuittanceConfirmation($mailData));
-                    
-                    Log::info('Email de confirmation de quittance envoyé', [
-                        'paiement_id' => $paiement->id,
-                        'email' => $paiement->email,
-                    ]);
+                    $personalInfo = $student->personalInformation;
+                    $firstName = $personalInfo?->first_names ?? 'Étudiant(e)';
+                    $lastName = $personalInfo?->last_name ?? '';
+                } elseif ($legacy) {
+                    $firstName = $legacy->first_name ?? 'Étudiant(e)';
+                    $lastName = $legacy->last_name ?? '';
                 }
+                
+                $mailData = [
+                    'reference' => $paiement->reference,
+                    'matricule' => $paiement->student_id_number,
+                    'montant' => $paiement->amount,
+                    'numero_compte' => $paiement->account_number,
+                    'date_versement' => $paiement->payment_date,
+                    'motif' => $paiement->purpose,
+                    'prenoms' => $firstName,
+                    'nom' => $lastName,
+                ];
+                
+                // Asynchrone (publié après le COMMIT de la transaction).
+                $notifier = app(\App\Modules\Core\Services\Notifier::class);
+                $notifier->mailable($paiement->email, new QuittanceConfirmation($mailData));
+
+                $nomComplet = trim("{$firstName} {$lastName}");
+                $montant = number_format((float) $paiement->amount, 0, ',', ' ');
+                $notifier->whatsapp(
+                    $notifier->phoneFromContacts($paiement->contact),
+                    "*CAP-EPAC — Quittance reçue*\nBonjour {$nomComplet},\n"
+                        . "Votre quittance de *{$montant} FCFA* (réf. *{$paiement->reference}*) a bien été enregistrée. "
+                        . "Elle sera vérifiée par le service financier ; vous serez notifié(e) de la décision.",
+                    "paiement-soumis:{$paiement->reference}",
+                    'Finance',
+                );
+
+                Log::info('Confirmation de quittance mise en file (email + WhatsApp)', [
+                    'paiement_id' => $paiement->id,
+                ]);
             } catch (\Exception $e) {
                 Log::error('Échec lors de l\'envoi du mail de confirmation de quittance', [
                     'paiement_id' => $paiement->id,

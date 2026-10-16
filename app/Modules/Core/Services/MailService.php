@@ -70,10 +70,13 @@ class MailService
      */
     public function sendNotification($to, string $subject, string $title, string $message, array $additionalData = []): bool
     {
-        $data = array_merge([
+        // "message" est réservé par Laravel dans les vues mail (instance
+        // Illuminate\Mail\Message) : le corps passe sous la clé "body".
+        unset($additionalData['message']);
+        $data = array_merge($additionalData, [
             'title' => $title,
-            'message' => $message,
-        ], $additionalData);
+            'body' => $message,
+        ]);
 
         return $this->sendWithTemplate($to, $subject, 'notification', $data);
     }

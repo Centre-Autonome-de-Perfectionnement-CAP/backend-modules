@@ -5,6 +5,8 @@ namespace App\Modules\Attestation\Services;
 use App\Exceptions\BusinessException;
 use App\Modules\Demandes\Services\{DocumentStorageService, NotificationService, WhatsAppService};
 use App\Modules\Inscription\Models\{Student, StudentPendingStudent};
+use App\Modules\LegacyStudent\Models\LegacyStudent;
+use App\Modules\LegacyStudent\Services\LegacyDeclarationService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{DB, Log};
@@ -92,6 +94,7 @@ class DemandeSubmissionService
         protected WhatsAppService        $whatsAppService,
         protected DocumentStorageService $storageService,
         protected EligibilityService     $eligibilityService,
+        protected LegacyDeclarationService $legacyDeclarations,
     ) {}
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -114,6 +117,12 @@ class DemandeSubmissionService
 
         $student = Student::where('student_id_number', strtoupper(trim($request->matricule)))->first();
         if (!$student) {
+            // Ancien étudiant déclaré (avant 2023) : circuit officiel, vérification
+            // manuelle par la secrétaire (décisions D1/D2).
+            $legacy = $this->legacyDeclarations->findActiveByMatricule((string) $request->matricule);
+            if ($legacy) {
+                return $this->submitLegacyAttestationRequest($request, $legacy, $whatsappNormalized);
+            }
             throw new BusinessException('Étudiant introuvable.', 'STUDENT_NOT_FOUND', 404);
         }
 
@@ -127,7 +136,7 @@ class DemandeSubmissionService
             throw new BusinessException('Inscription approuvée introuvable.', 'APPROVED_LINK_NOT_FOUND', 404);
         }
 
-        $this->assertNoActivePendingRequest($link->id, $request->type);
+        $this->assertNoActivePendingRequest('student_pending_student_id', $link->id, $request->type);
 
         // AJOUT (audit 13/10/2026) — contrôles serveur alignés sur le site vitrine.
         // Le client est falsifiable : sans ces contrôles, une requête forgée
@@ -153,7 +162,13 @@ class DemandeSubmissionService
         $montant          = self::MONTANTS_ATTESTATION[$request->type] ?? 2000;
 
         if ($paymentMethod === 'tresor_online' && $paymentReference) {
-            $this->generateQuittancePdf($request, $link, $student, $reference, $paymentReference, $montant, $filesData);
+            $pi = $link->pendingStudent->personalInformation;
+            $this->generateQuittancePdf(
+                $request,
+                trim(($pi->last_name ?? '') . ' ' . ($pi->first_names ?? '')),
+                $student->student_id_number,
+                $reference, $paymentReference, $montant, $filesData
+            );
         }
 
         $id = DB::table('document_requests')->insertGetId([
@@ -171,7 +186,7 @@ class DemandeSubmissionService
             'updated_at'                 => now(),
         ]);
 
-        $demande = DB::table('document_requests as dr')->leftJoin('academic_years as ay', 'dr.academic_year_id', '=', 'ay.id')->where('dr.id', $id)->select(['dr.*', 'ay.academic_year'])->first();
+        $demande = DB::table('document_requests as dr')->leftJoin('academic_years as ay', 'dr.academic_year_id', '=', 'ay.id')->where('dr.id', $id)->select(['dr.*', DB::raw('COALESCE(ay.academic_year, dr.bulletin_year) as academic_year')])->first();
 
         // Notification : ne doit jamais faire échouer la réponse HTTP.
         try {
@@ -204,6 +219,19 @@ class DemandeSubmissionService
             );
         }
 
+        // Ancien étudiant : pas de lien d'inscription, année choisie librement (D3).
+        if (!$request->filled('link_id') && $request->filled('legacy_matricule')) {
+            $legacy = $this->legacyDeclarations->findActiveByMatricule((string) $request->legacy_matricule);
+            if (!$legacy) {
+                throw new BusinessException(
+                    "Aucune déclaration d'ancien étudiant active pour ce matricule.",
+                    'LEGACY_NOT_FOUND',
+                    404
+                );
+            }
+            return $this->submitLegacyBulletinRequest($request, $legacy, $whatsappNormalized);
+        }
+
         $link = StudentPendingStudent::with(['pendingStudent', 'pendingStudent.academicYear'])
             ->find($request->link_id);
 
@@ -211,7 +239,7 @@ class DemandeSubmissionService
             throw new BusinessException('Inscription introuvable ou non approuvée.', 'APPROVED_LINK_NOT_FOUND', 404);
         }
 
-        $this->assertNoActivePendingRequest($link->id, 'bulletin_annuel');
+        $this->assertNoActivePendingRequest('student_pending_student_id', $link->id, 'bulletin_annuel');
 
         $reference = $this->generateReference('BUL');
 
@@ -242,7 +270,7 @@ class DemandeSubmissionService
             'updated_at'                 => now(),
         ]);
 
-        $demande = DB::table('document_requests as dr')->leftJoin('academic_years as ay', 'dr.academic_year_id', '=', 'ay.id')->where('dr.id', $id)->select(['dr.*', 'ay.academic_year'])->first();
+        $demande = DB::table('document_requests as dr')->leftJoin('academic_years as ay', 'dr.academic_year_id', '=', 'ay.id')->where('dr.id', $id)->select(['dr.*', DB::raw('COALESCE(ay.academic_year, dr.bulletin_year) as academic_year')])->first();
 
         try {
             $this->notificationService->sendSoumission($demande);
@@ -254,6 +282,144 @@ class DemandeSubmissionService
         }
 
         return ['reference' => $reference];
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // ANCIENS ÉTUDIANTS (déclarés, avant 2023) — décisions D1/D2/D3
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Tous les types d'attestation sont acceptés (D2) : l'éligibilité est
+     * vérifiée manuellement par la secrétaire, qui doit aussi valider la
+     * déclaration avant de transmettre au comptable (D1).
+     *
+     * @throws BusinessException
+     */
+    private function submitLegacyAttestationRequest(Request $request, LegacyStudent $legacy, string $whatsappNormalized): array
+    {
+        $this->assertNoActivePendingRequest('legacy_student_id', $legacy->id, $request->type);
+        $this->assertRequiredFiles($request, $request->type);
+
+        $reference = $this->generateReference('ATT');
+        $this->storageService->ensureStructure($request->type, $reference);
+
+        $filesToStore = [];
+        foreach (self::ATTESTATION_FILES[$request->type] ?? [] as $key) {
+            if ($request->hasFile($key)) {
+                $filesToStore[$key] = $request->file($key);
+            }
+        }
+        $filesData = $this->storageService->storeDemandeFiles($request->type, $reference, $filesToStore);
+
+        $paymentMethod    = $request->payment_method ?? 'manual';
+        $paymentReference = $request->payment_reference;
+
+        if ($paymentMethod === 'tresor_online' && $paymentReference) {
+            $this->generateQuittancePdf(
+                $request,
+                trim("{$legacy->last_name} {$legacy->first_name}"),
+                $legacy->matricule,
+                $reference, $paymentReference, self::MONTANTS_ATTESTATION[$request->type] ?? 2000, $filesData
+            );
+        }
+
+        return $this->insertLegacyRequest($legacy, [
+            'type'              => $request->type,
+            'reference'         => $reference,
+            'email'             => $request->email,
+            'demandeur_whatsapp'=> $whatsappNormalized,
+            'payment_method'    => $paymentMethod,
+            'payment_reference' => $paymentReference,
+            'files'             => json_encode($filesData),
+        ]);
+    }
+
+    /**
+     * Bulletin d'un ancien étudiant : l'année est choisie par l'étudiant (D3)
+     * et vérifiée par la secrétaire.
+     *
+     * @throws BusinessException
+     */
+    private function submitLegacyBulletinRequest(Request $request, LegacyStudent $legacy, string $whatsappNormalized): array
+    {
+        $year = self::normalizeBulletinYear((string) $request->bulletin_year);
+        if (!$year) {
+            throw new BusinessException(
+                "Année du bulletin invalide (format attendu : AAAA-AAAA, ex. 2019-2020).",
+                'INVALID_BULLETIN_YEAR',
+                422
+            );
+        }
+
+        $this->assertNoActivePendingRequest('legacy_student_id', $legacy->id, 'bulletin_annuel', $year);
+
+        $reference = $this->generateReference('BUL');
+        $this->storageService->ensureStructure('bulletin_annuel', $reference);
+
+        $filesToStore = [];
+        foreach (['demande_manuscrite', 'acte_naissance', 'quittance'] as $key) {
+            if ($request->hasFile($key)) {
+                $filesToStore[$key] = $request->file($key);
+            }
+        }
+        $filesData = $this->storageService->storeDemandeFiles('bulletin_annuel', $reference, $filesToStore);
+
+        return $this->insertLegacyRequest($legacy, [
+            'type'              => 'bulletin_annuel',
+            'reference'         => $reference,
+            'bulletin_year'     => $year,
+            'email'             => $request->email,
+            'demandeur_whatsapp'=> $whatsappNormalized,
+            'payment_method'    => $request->payment_method ?? 'manual',
+            'payment_reference' => $request->payment_reference ?? null,
+            'files'             => json_encode($filesData),
+        ]);
+    }
+
+    /**
+     * Année de bulletin « AAAA-AAAA » (années consécutives, plausibles).
+     * Renvoie la valeur normalisée ou null.
+     */
+    public static function normalizeBulletinYear(string $value): ?string
+    {
+        if (!preg_match('/^\s*(\d{4})\s*[-\/]\s*(\d{4})\s*$/', $value, $m)) {
+            return null;
+        }
+        [$start, $end] = [(int) $m[1], (int) $m[2]];
+        if ($end !== $start + 1 || $start < 1970 || $start > (int) now()->year) {
+            return null;
+        }
+        return "{$start}-{$end}";
+    }
+
+    private function insertLegacyRequest(LegacyStudent $legacy, array $columns): array
+    {
+        $id = DB::table('document_requests')->insertGetId(array_merge([
+            'student_pending_student_id' => null,
+            'legacy_student_id'          => $legacy->id,
+            'status'                     => 'submitted',
+            'department_name'            => $legacy->department?->name,
+            'submitted_at'               => now(),
+            'created_at'                 => now(),
+            'updated_at'                 => now(),
+        ], $columns));
+
+        $demande = DB::table('document_requests as dr')
+            ->leftJoin('academic_years as ay', 'dr.academic_year_id', '=', 'ay.id')
+            ->where('dr.id', $id)
+            ->select(['dr.*', DB::raw('COALESCE(ay.academic_year, dr.bulletin_year) as academic_year')])
+            ->first();
+
+        try {
+            $this->notificationService->sendSoumission($demande);
+        } catch (\Throwable $e) {
+            Log::error('[DemandeSubmissionService] Erreur notification soumission (ancien étudiant)', [
+                'error'     => $e->getMessage(),
+                'reference' => $columns['reference'] ?? null,
+            ]);
+        }
+
+        return ['reference' => $columns['reference']];
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -283,17 +449,24 @@ class DemandeSubmissionService
             $flagReason = $history ? $history->comment : 'Dossier validé sous réserve.';
         }
 
-        $studentData = DB::table('student_pending_student')
-            ->join('students',             'student_pending_student.student_id',       '=', 'students.id')
-            ->join('pending_students',     'student_pending_student.pending_student_id', '=', 'pending_students.id')
-            ->join('personal_information', 'pending_students.personal_information_id',  '=', 'personal_information.id')
-            ->where('student_pending_student.id', $demande->student_pending_student_id)
-            ->select(
-                'personal_information.last_name',
-                'personal_information.first_names',
-                'students.student_id_number as matricule'
-            )
-            ->first();
+        if (!empty($demande->legacy_student_id)) {
+            $studentData = DB::table('legacy_students')
+                ->where('id', $demande->legacy_student_id)
+                ->select('last_name', 'first_name as first_names', 'matricule', 'status as declaration_status')
+                ->first();
+        } else {
+            $studentData = DB::table('student_pending_student')
+                ->join('students',             'student_pending_student.student_id',       '=', 'students.id')
+                ->join('pending_students',     'student_pending_student.pending_student_id', '=', 'pending_students.id')
+                ->join('personal_information', 'pending_students.personal_information_id',  '=', 'personal_information.id')
+                ->where('student_pending_student.id', $demande->student_pending_student_id)
+                ->select(
+                    'personal_information.last_name',
+                    'personal_information.first_names',
+                    'students.student_id_number as matricule'
+                )
+                ->first();
+        }
 
         return [
             'reference'       => $demande->reference,
@@ -303,10 +476,14 @@ class DemandeSubmissionService
             'flag_reason'     => $flagReason,
             'submitted_at'    => $demande->submitted_at,
             'rejected_reason' => $demande->status === 'rejected' ? $demande->rejected_reason : null,
+            'bulletin_year'   => $demande->bulletin_year ?? null,
+            'is_legacy'       => !empty($demande->legacy_student_id),
             'student'         => $studentData ? [
                 'last_name'   => $studentData->last_name,
                 'first_names' => $studentData->first_names,
                 'matricule'   => $studentData->matricule,
+                // Ancien étudiant : état de la déclaration (pending|validated)
+                'declaration_status' => $studentData->declaration_status ?? null,
             ] : null,
         ];
     }
@@ -318,11 +495,12 @@ class DemandeSubmissionService
     /**
      * @throws BusinessException
      */
-    private function assertNoActivePendingRequest(int $linkId, string $type): void
+    private function assertNoActivePendingRequest(string $ownerColumn, int $ownerId, string $type, ?string $bulletinYear = null): void
     {
         $existing = DB::table('document_requests')
-            ->where('student_pending_student_id', $linkId)
+            ->where($ownerColumn, $ownerId)
             ->where('type', $type)
+            ->when($bulletinYear !== null, fn ($q) => $q->where('bulletin_year', $bulletinYear))
             ->whereNotIn('status', self::INACTIVE_STATUSES)
             ->first();
 
@@ -411,15 +589,13 @@ class DemandeSubmissionService
     }
 
     private function generateQuittancePdf(
-        Request $request, StudentPendingStudent $link, Student $student,
+        Request $request, string $nom, string $matricule,
         string $reference, string $paymentReference, int $montant, array &$filesData
     ): void {
         try {
-            $pi  = $link->pendingStudent->personalInformation;
-            $nom = trim(($pi->last_name ?? '') . ' ' . ($pi->first_names ?? ''));
             $pdf = Pdf::loadView('core::pdf.quittance', [
                 'reference'        => $reference,
-                'matricule'        => $student->student_id_number,
+                'matricule'        => $matricule,
                 'nomEtudiant'      => $nom,
                 'typeDocument'     => self::TYPE_LABELS[$request->type] ?? $request->type,
                 'montant'          => number_format($montant, 0, ',', ' ') . ' FCFA',

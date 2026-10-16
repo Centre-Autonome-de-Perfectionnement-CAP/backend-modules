@@ -110,7 +110,7 @@ class OtpVerificationController extends Controller
             Log::error("[OTP EMAIL] Erreur lors de l'envoi du mail OTP à {$email}: " . $e->getMessage());
         }
 
-        Log::info("[OTP EMAIL] Code généré pour {$email}: {$code} (Envoi SMTP: " . ($mailSent ? 'OK' : 'Échec / Log') . ")");
+        Log::info("[OTP EMAIL] Code généré pour {$email} (Envoi SMTP: " . ($mailSent ? 'OK' : 'Échec / Log') . ")");
 
         return response()->json([
             'success' => true,

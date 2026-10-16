@@ -60,13 +60,19 @@ class WhatsAppNotificationService
             return false;
         }
 
-        $message = implode("\n", [
+        $message = $this->quittanceMessage($quittanceNumber, $reference, $nomEtudiant);
+
+        return $this->bridge->send($phone, $message, "attestation-quittance:{$quittanceNumber}");
+    }
+
+    /** Texte du message quittance (aussi utilisé comme légende du PDF envoyé en file). */
+    public function quittanceMessage(string $quittanceNumber, string $reference, string $nomEtudiant): string
+    {
+        return implode("\n", [
             '*' . self::ETAB . ' — Quittance générée*',
             "Bonjour {$nomEtudiant},",
             "Votre quittance n°*{$quittanceNumber}* a été générée avec succès pour la demande *{$reference}*.",
             "Elle vous a également été transmise par e-mail sur l'adresse renseignée.",
         ]);
-
-        return $this->bridge->send($phone, $message, "attestation-quittance:{$quittanceNumber}");
     }
 }

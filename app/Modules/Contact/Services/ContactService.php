@@ -5,7 +5,6 @@ namespace App\Modules\Contact\Services;
 use App\Modules\Contact\Mail\NewContactNotification;
 use App\Modules\Contact\Models\Contact;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 
 class ContactService
 {
@@ -23,12 +22,12 @@ class ContactService
             'subject' => $contact->subject,
         ]);
 
-        // Envoyer une notification email aux admins
+        // Notifications asynchrones (email + WhatsApp) : la réponse au
+        // visiteur ne dépend jamais du SMTP ni du bridge.
         try {
             $this->notifyAdmins($contact);
-        } catch (\Exception $e) {
-            // Logger l'erreur sans bloquer la création du contact
-            Log::error('Failed to send contact notification email', [
+        } catch (\Throwable $e) {
+            Log::error('Failed to queue contact notification', [
                 'contact_id' => $contact->id,
                 'error' => $e->getMessage()
             ]);
@@ -45,19 +44,25 @@ class ContactService
         $primaryEmail = config('mail.contact.to', 'contact@cap-epac.online');
         $ccEmail = config('mail.contact.cc', 'owomax@gmail.com');
 
-        // Envoyer au destinataire principal avec copie
-        $mail = Mail::to($primaryEmail);
-        
-        if ($ccEmail) {
-            $mail->cc($ccEmail);
-        }
-        
-        $mail->send(new NewContactNotification($contact));
+        $notifier = app(\App\Modules\Core\Services\Notifier::class);
+        $notifier->mailable($primaryEmail, new NewContactNotification($contact), $ccEmail ? [$ccEmail] : []);
 
-        Log::info('Contact notification email sent', [
+        $waNumbers = array_filter(array_map('trim', explode(',', (string) config('mail.contact.whatsapp', ''))));
+        $preview = mb_strimwidth(trim(strip_tags((string) $contact->message)), 0, 500, '…');
+        foreach ($waNumbers as $number) {
+            $notifier->whatsapp(
+                $number,
+                "*CAP-EPAC — Nouveau message de contact*\nDe : {$contact->name} ({$contact->email})\nObjet : *{$contact->subject}*\n\n{$preview}",
+                "contact:{$contact->id}",
+                'Contact',
+            );
+        }
+
+        Log::info('Contact notification queued', [
             'contact_id' => $contact->id,
             'to' => $primaryEmail,
-            'cc' => $ccEmail
+            'cc' => $ccEmail,
+            'whatsapp' => count($waNumbers),
         ]);
     }
 }

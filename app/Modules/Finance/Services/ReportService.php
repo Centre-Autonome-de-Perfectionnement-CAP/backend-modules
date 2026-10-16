@@ -36,7 +36,7 @@ class ReportService
                 'Prénoms' => $personalInfo?->first_names ?? 'N/A',
                 'Montant' => $payment->amount,
                 'Date versement' => $payment->payment_date->format('d/m/Y'),
-                'status' => $payment->status,
+                'Statut' => $payment->status,
                 'Motif' => $payment->purpose ?? 'N/A'
             ];
         });

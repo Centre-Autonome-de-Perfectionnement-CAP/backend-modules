@@ -18,6 +18,7 @@ class AttestationStatusService
 {
     public function __construct(
         private readonly EligibilityService $eligibility,
+        private readonly \App\Modules\LegacyStudent\Services\LegacyDeclarationService $legacyDeclarations,
     ) {}
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -29,6 +30,10 @@ class AttestationStatusService
      */
     public function getAttestationStatus(string $matricule): array
     {
+        if (!$this->studentExists($matricule) && ($legacy = $this->legacyDeclarations->findActiveByMatricule($matricule))) {
+            return $this->legacyAttestationStatus($legacy);
+        }
+
         $student = $this->findStudentOrFail($matricule);
 
         $link = StudentPendingStudent::where('student_id', $student->id)
@@ -87,6 +92,10 @@ class AttestationStatusService
 
     public function getBulletinStatus(string $matricule): array
     {
+        if (!$this->studentExists($matricule) && ($legacy = $this->legacyDeclarations->findActiveByMatricule($matricule))) {
+            return $this->legacyBulletinStatus($legacy);
+        }
+
         $student = $this->findStudentOrFail($matricule);
 
         $links = StudentPendingStudent::where('student_id', $student->id)
@@ -207,6 +216,89 @@ class AttestationStatusService
     // ══════════════════════════════════════════════════════════════════════════
     // HELPERS PRIVÉS
     // ══════════════════════════════════════════════════════════════════════════
+
+    private function studentExists(string $matricule): bool
+    {
+        return Student::where('student_id_number', strtoupper(trim($matricule)))->exists();
+    }
+
+    /**
+     * Ancien étudiant déclaré : tous les types sont proposés (D2), la
+     * secrétaire vérifie manuellement l'éligibilité.
+     */
+    private function legacyAttestationStatus(\App\Modules\LegacyStudent\Models\LegacyStudent $legacy): array
+    {
+        $existingRequests = DB::table('document_requests')
+            ->where('legacy_student_id', $legacy->id)
+            ->where('type', '!=', 'bulletin_annuel')
+            ->orderBy('submitted_at')
+            ->orderBy('id')
+            ->get()
+            ->keyBy('type');
+
+        $documents = [];
+        foreach (['attestation_passage', 'attestation_definitive', 'attestation_inscription'] as $type) {
+            $existing = $existingRequests->get($type);
+            $documents[] = $existing
+                ? DocumentStatusDTO::fromExisting($existing)->toArray()
+                : DocumentStatusDTO::available($type)->toArray();
+        }
+
+        return [
+            'student'   => $this->legacyStudentPayload($legacy),
+            'documents' => $documents,
+            'is_legacy' => true,
+        ];
+    }
+
+    /**
+     * Ancien étudiant : l'année du bulletin est choisie librement (D3). On
+     * renvoie les demandes déjà déposées, une par année.
+     */
+    private function legacyBulletinStatus(\App\Modules\LegacyStudent\Models\LegacyStudent $legacy): array
+    {
+        $rows = DB::table('document_requests')
+            ->where('legacy_student_id', $legacy->id)
+            ->where('type', 'bulletin_annuel')
+            ->orderBy('submitted_at')
+            ->orderBy('id')
+            ->get()
+            ->keyBy('bulletin_year');
+
+        $years = [];
+        foreach ($rows as $year => $row) {
+            $years[] = [
+                'link_id'       => null,
+                'academic_year' => $year,
+                'year_id'       => null,
+                'is_current'    => false,
+                'bulletin'      => DocumentStatusDTO::fromExisting($row)->toArray(),
+            ];
+        }
+        usort($years, fn ($a, $b) => strcmp((string) $b['academic_year'], (string) $a['academic_year']));
+
+        return [
+            'student'   => $this->legacyStudentPayload($legacy),
+            'years'     => $years,
+            'is_legacy' => true,
+            // Le formulaire doit proposer une saisie libre de l'année (AAAA-AAAA).
+            'free_year' => true,
+        ];
+    }
+
+    private function legacyStudentPayload(\App\Modules\LegacyStudent\Models\LegacyStudent $legacy): array
+    {
+        return [
+            'last_name'          => $legacy->last_name,
+            'first_names'        => $legacy->first_name,
+            'matricule'          => $legacy->matricule,
+            'level'              => '—',
+            'department'         => $legacy->department?->name ?? '—',
+            'academic_year'      => '—',
+            'is_legacy'          => true,
+            'declaration_status' => $legacy->status,
+        ];
+    }
 
     private function findStudentOrFail(string $matricule): Student
     {

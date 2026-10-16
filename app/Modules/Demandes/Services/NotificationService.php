@@ -683,18 +683,12 @@ class NotificationService
 
     private function fetchEtudiantInfo(int $demandeId): ?object
     {
-        return DB::table('document_requests as dr')
-            ->join('student_pending_student as sps', 'dr.student_pending_student_id', '=', 'sps.id')
-            ->join('pending_students as ps', 'sps.pending_student_id', '=', 'ps.id')
-            ->join('personal_information as pi', 'ps.personal_information_id', '=', 'pi.id')
-            ->where('dr.id', $demandeId)
-            ->select(
-                'pi.last_name',
-                'pi.first_names',
-                DB::raw("(SELECT student_id_number FROM students s
-                          JOIN student_pending_student sps2 ON sps2.student_id = s.id
-                          WHERE sps2.id = dr.student_pending_student_id LIMIT 1) as matricule")
-            )
+        // Inscrit OU ancien étudiant déclaré (jointures gauches, cf. Requester).
+        $query = DB::table('document_requests as dr');
+        \App\Modules\Demandes\Support\Requester::join($query, 'dr', false);
+
+        return $query->where('dr.id', $demandeId)
+            ->select(\App\Modules\Demandes\Support\Requester::identityColumns())
             ->first();
     }
 

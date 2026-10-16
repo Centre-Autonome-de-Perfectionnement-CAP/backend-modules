@@ -58,7 +58,7 @@ Route::prefix('notes')->middleware('auth:sanctum')->group(function () {
     // ── Reprises ───────────────────────────────────────────────────────────
     Route::prefix('retakes')->group(function () {
         Route::get('my-retakes',            [CourseRetakeController::class, 'getStudentRetakes']);
-        Route::put('{retake_id}/status',    [CourseRetakeController::class, 'updateRetakestatus']);
+        Route::put('{retake_id}/status',    [CourseRetakeController::class, 'updateRetakeStatus']);
     });
 
     // ── Décisions et PV ────────────────────────────────────────────────────

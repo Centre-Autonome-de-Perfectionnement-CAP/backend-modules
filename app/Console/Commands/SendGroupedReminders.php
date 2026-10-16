@@ -45,10 +45,10 @@ class SendGroupedReminders extends Command
         $ignoredStatuses = ['submitted', 'ready_for_pickup', 'picked_up', 'rejected'];
 
         // On récupère toutes les demandes non traitées depuis > 36h
-        $demandes = DB::table('document_requests as dr')
-            ->join('student_pending_student as sps', 'dr.student_pending_student_id', '=', 'sps.id')
-            ->join('pending_students as ps', 'sps.pending_student_id', '=', 'ps.id')
-            ->join('personal_information as pi', 'ps.personal_information_id', '=', 'pi.id')
+        // Inscrits ET anciens étudiants (jointures gauches, cf. Requester).
+        $demandesQuery = DB::table('document_requests as dr');
+        \App\Modules\Demandes\Support\Requester::join($demandesQuery, 'dr', false);
+        $demandes = $demandesQuery
             ->whereNotIn('dr.status', $ignoredStatuses)
             ->where('dr.updated_at', '<', $seuil)
             ->select(
@@ -58,8 +58,8 @@ class SendGroupedReminders extends Command
                 'dr.status',
                 'dr.updated_at',
                 'dr.responsable_division_type',
-                'pi.first_names',
-                'pi.last_name'
+                DB::raw(\App\Modules\Demandes\Support\Requester::FIRST_NAMES . ' as first_names'),
+                DB::raw(\App\Modules\Demandes\Support\Requester::LAST_NAME . ' as last_name'),
             )
             ->get();
 
@@ -96,36 +96,32 @@ class SendGroupedReminders extends Command
             $listeDemandes = $data['demandes'];
             $count = count($listeDemandes);
 
-            // 1. Email
-            try {
-                Mail::send('core::emails.grouped-reminders', [
+            // Email + WhatsApp en file (retry automatique, canaux indépendants).
+            $notifier = app(\App\Modules\Core\Services\Notifier::class);
+            $notifier->email(
+                $user->email,
+                'Relance : Vous avez des dossiers en retard',
+                'core::emails.grouped-reminders',
+                [
                     'destinataireNom' => $user->name,
                     'count'           => $count,
-                    'demandes'        => $listeDemandes,
+                    'demandes'        => $listeDemandes, // stdClass : sérialisables
                     // CORRECTIF : /dashboard n'existe pas — le progiciel est servi sous /services.
                     'urlEspace'       => rtrim((string) config('app.url'), '/') . '/services/demandes',
                     'etablissement'   => config('app.name', 'CAP-EPAC'),
-                ], function ($m) use ($user) {
-                    $m->to($user->email, $user->name)
-                      ->subject("Relance : Vous avez des dossiers en retard");
-                });
-            } catch (\Exception $e) {
-                Log::error('[Reminders] Erreur email', [
-                    'error' => $e->getMessage(),
-                    'user'  => $user->email,
-                ]);
-            }
+                ],
+                toName: $user->name,
+            );
 
-            // 2. WhatsApp
             if (!empty($user->phone)) {
                 $appName = config('app.name', 'CAP-EPAC');
                 $label = $count > 1 ? 'dossiers en attente de traitement' : 'dossier en attente de traitement';
-                
+
                 $message = "*{$appName} — Relance*\n\nBonjour *{$user->name}*,\n\nVous avez *{$count} {$label}* depuis plus de 36h.\n\nMerci de vous connecter sur la plateforme pour les traiter dans les plus brefs délais.\n\n_Ceci est un message automatique._";
 
-                $whatsApp->send($user->phone, $message, "reminders:{$user->id}");
+                $notifier->whatsapp($user->phone, $message, "reminders:{$user->id}", 'Demandes');
             }
-            
+
             $this->info("Relance envoyée à {$user->name} ({$count} dossiers).");
         }
 

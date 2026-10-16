@@ -14,36 +14,27 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('api')->group(function () {
 
     // ── Routes publiques (déclaration étudiant et filières) ─────────────────
-    Route::get('/legacy-students/available-filieres', [LegacyStudentPublicController::class, 'availableFilieres']);
-    Route::get('/v1/legacy-students/available-filieres', [LegacyStudentPublicController::class, 'availableFilieres']);
-    Route::post('/legacy-students/register', [LegacyStudentPublicController::class, 'register']);
-    Route::post('/v1/legacy-students/register', [LegacyStudentPublicController::class, 'register']);
-    Route::post('/legacy-students/lookup-by-name', [LegacyStudentPublicController::class, 'lookupByName']);
-    Route::post('/v1/legacy-students/lookup-by-name', [LegacyStudentPublicController::class, 'lookupByName']);
+    // FUSION : limitation de débit (mêmes limiteurs que les routes publiques
+    // du site vitrine, définis dans AttestationServiceProvider).
+    Route::middleware('throttle:attestation-public-read')->group(function () {
+        Route::get('/legacy-students/available-filieres', [LegacyStudentPublicController::class, 'availableFilieres']);
+        Route::get('/v1/legacy-students/available-filieres', [LegacyStudentPublicController::class, 'availableFilieres']);
+    });
+    Route::middleware('throttle:attestation-public-write')->group(function () {
+        Route::post('/legacy-students/register', [LegacyStudentPublicController::class, 'register']);
+        Route::post('/v1/legacy-students/register', [LegacyStudentPublicController::class, 'register']);
+        Route::post('/legacy-students/lookup-by-name', [LegacyStudentPublicController::class, 'lookupByName']);
+        Route::post('/v1/legacy-students/lookup-by-name', [LegacyStudentPublicController::class, 'lookupByName']);
+    });
 
-    // ── Endpoints unifiés de services étudiants ────────────────────────────
-    // Recherche par matricule dans les DEUX tables (récents + anciens)
-
-    // Statut attestations (remplace l'ancien endpoint legacy-only)
-    Route::get('/attestations/status', [StudentServiceController::class, 'attestationsStatus']);
-
-    // Statut bulletins — NOUVEAU endpoint attendu par DemandesBulletinForm
-    Route::get('/attestations/bulletin-status', [StudentServiceController::class, 'bulletinStatus']);
-
-    // Soumission demande d'attestation — NOUVEAU
-    Route::post('/attestations/demandes', [StudentServiceController::class, 'submitAttestation']);
-
-    // Soumission demande de bulletin — NOUVEAU
-    Route::post('/attestations/bulletins', [StudentServiceController::class, 'submitBulletin']);
-
-    // Suivi d'une demande par référence — NOUVEAU
-    Route::get('/attestations/demandes/suivi', [StudentServiceController::class, 'suiviDemande']);
-
-    // Rechercher une demande de complément — NOUVEAU
-    Route::get('/attestations/demandes/complement/find', [StudentServiceController::class, 'findComplement']);
-
-    // Soumettre un complément de dossier — NOUVEAU
-    Route::post('/attestations/demandes/complement', [StudentServiceController::class, 'submitComplement']);
+    // ── FUSION develop/main (décision validée) ─────────────────────────────
+    // Les adresses publiques /api/attestations/* (statut, bulletin-status,
+    // demandes, bulletins, suivi, complément) appartiennent au module
+    // Attestation/Demandes (circuit de validation + notifications). Les
+    // versions provisoires de StudentServiceController sur ces mêmes adresses
+    // ne sont plus enregistrées : chargées après, elles remplaçaient
+    // silencieusement le circuit officiel. Les anciennes références REF-xxxxxx
+    // restent consultables : le module Attestation délègue à ce contrôleur.
 
     // Rétrocompatibilité — ancien endpoint bulletins (conservé)
     Route::get('/bulletins/status', [StudentServiceController::class, 'bulletinStatus']);

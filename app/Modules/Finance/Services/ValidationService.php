@@ -153,13 +153,8 @@ class ValidationService
             ]);
 
             // Envoyer notification par email
-            if ($payment->email) {
-                SendPaymentNotificationJob::dispatch(
-                    $payment->email,
-                    'validation',
-                    $payment->toArray()
-                );
-            }
+            // Email + WhatsApp asynchrones, publiés après le COMMIT.
+            SendPaymentNotificationJob::notify(app(\App\Modules\Core\Services\Notifier::class), $payment->email, 'validation', $payment->toArray());
 
             DB::commit();
             return $payment;
@@ -187,13 +182,13 @@ class ValidationService
             ]);
 
             // Envoyer notification par email avec motif de rejet
-            if ($payment->email) {
-                SendPaymentNotificationJob::dispatch(
-                    $payment->email,
-                    'rejection',
-                    array_merge($payment->toArray(), ['rejection_reason' => $data['motif']])
-                );
-            }
+            // Email + WhatsApp asynchrones, publiés après le COMMIT.
+            SendPaymentNotificationJob::notify(
+                app(\App\Modules\Core\Services\Notifier::class),
+                $payment->email,
+                'rejection',
+                array_merge($payment->toArray(), ['rejection_reason' => $data['motif'] ?? null])
+            );
 
             DB::commit();
             return $payment;

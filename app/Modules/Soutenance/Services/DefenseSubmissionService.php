@@ -11,7 +11,6 @@ use App\Modules\Core\Mail\DefenseSubmissionRejected;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Mail;
 use App\Exceptions\ResourceNotFoundException;
 
 class DefenseSubmissionService
@@ -115,11 +114,17 @@ class DefenseSubmissionService
                 'student_id_number' => $submission->student_id_number,
             ]);
 
-            try {
-                Mail::to($data['email'])->send(new DefenseSubmissionReceived($submission));
-            } catch (\Exception $e) {
-                Log::error('Échec envoi email confirmation soumission: '.$e->getMessage());
-            }
+            // Email + WhatsApp asynchrones (publiés après le COMMIT).
+            $notifier = app(\App\Modules\Core\Services\Notifier::class);
+            $notifier->mailable($data['email'], new DefenseSubmissionReceived($submission));
+            $notifier->whatsapp(
+                $notifier->phoneFromContacts($data['contacts'] ?? null),
+                "*CAP-EPAC — Soutenance*\nBonjour {$submission->first_names},\n"
+                    . "Votre demande de soutenance « {$submission->thesis_title} » a bien été reçue. "
+                    . "Vous serez notifié(e) de la décision.",
+                "soutenance-soumission:{$submission->id}",
+                'Soutenance',
+            );
 
             return $submission;
         });
@@ -128,7 +133,7 @@ class DefenseSubmissionService
     private function validateSubmissionPeriod($period): void
     {
         $currentDate = now()->toDateString();
-
+        
         if ($currentDate < $period->start_date || $currentDate > $period->end_date) {
             throw new \Exception("La période de soumission est fermée");
         }
@@ -140,26 +145,41 @@ class DefenseSubmissionService
             ->find($id);
     }
 
-    public function updatestatus(DefenseSubmission $submission, string $status, ?string $rejectionReason = null): DefenseSubmission
+    public function updateStatus(DefenseSubmission $submission, string $status, ?string $rejectionReason = null): DefenseSubmission
     {
         $submission->update([
             'status' => $status,
             'rejection_reason' => $rejectionReason,
         ]);
 
-        Log::info('status de soumission mis à jour', [
+        Log::info('Statut de soumission mis à jour', [
             'submission_id' => $submission->id,
             'new_status' => $status,
         ]);
 
-        try {
-            if ($status === 'accepted') {
-                Mail::to($submission->email)->send(new DefenseSubmissionAccepted($submission));
-            } elseif ($status === 'rejected') {
-                Mail::to($submission->email)->send(new DefenseSubmissionRejected($submission, $rejectionReason));
-            }
-        } catch (\Exception $e) {
-            Log::error('Échec envoi email changement status: '.$e->getMessage());
+        // Email + WhatsApp asynchrones et indépendants.
+        $notifier = app(\App\Modules\Core\Services\Notifier::class);
+        $phone = $notifier->phoneFromContacts($submission->contacts);
+        if ($status === 'accepted') {
+            $notifier->mailable($submission->email, new DefenseSubmissionAccepted($submission));
+            $notifier->whatsapp(
+                $phone,
+                "*CAP-EPAC — Soutenance acceptée*\nBonjour {$submission->first_names},\n"
+                    . "Votre demande de soutenance « {$submission->thesis_title} » a été *acceptée*. "
+                    . "La date et la salle vous seront communiquées.",
+                "soutenance-acceptee:{$submission->id}",
+                'Soutenance',
+            );
+        } elseif ($status === 'rejected') {
+            $notifier->mailable($submission->email, new DefenseSubmissionRejected($submission, $rejectionReason));
+            $notifier->whatsapp(
+                $phone,
+                "*CAP-EPAC — Soutenance*\nBonjour {$submission->first_names},\n"
+                    . "Votre demande de soutenance « {$submission->thesis_title} » n'a pas été retenue."
+                    . ($rejectionReason ? "\nMotif : _{$rejectionReason}_" : ''),
+                "soutenance-rejetee:{$submission->id}",
+                'Soutenance',
+            );
         }
 
         return $submission->fresh(['student', 'department', 'professor', 'period', 'room']);

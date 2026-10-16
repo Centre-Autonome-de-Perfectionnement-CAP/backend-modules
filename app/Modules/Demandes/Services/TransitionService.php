@@ -69,6 +69,7 @@ class TransitionService
             }
 
             $this->assertActionAllowed($role, $action, $demande->status);
+            $this->assertLegacyDeclarationValidated($action, $demande);
 
             [$update, $newStatus, $mail] = $this->buildUpdate($action, $payload, $demande, $user, $role);
 
@@ -100,7 +101,7 @@ class TransitionService
         $fresh = DB::table('document_requests as dr')
             ->leftJoin('academic_years as ay', 'dr.academic_year_id', '=', 'ay.id')
             ->where('dr.id', $id)
-            ->select(['dr.*', 'ay.academic_year'])
+            ->select(['dr.*', DB::raw('COALESCE(ay.academic_year, dr.bulletin_year) as academic_year')])
             ->first();
 
         // Les notifications ne doivent JAMAIS faire échouer une transition déjà
@@ -437,6 +438,16 @@ class TransitionService
 
     private function resolveResponsableDivisionType(int $demandeId): string
     {
+        // Ancien étudiant : même règle, à partir de sa déclaration.
+        $legacyId = DB::table('document_requests')->where('id', $demandeId)->value('legacy_student_id');
+        if ($legacyId) {
+            $legacy = \App\Modules\LegacyStudent\Models\LegacyStudent::with('department.cycle')->find($legacyId);
+            if ($legacy) {
+                return app(\App\Modules\LegacyStudent\Services\LegacyDeclarationService::class)
+                    ->responsableDivisionType($legacy);
+            }
+        }
+
         $cycleName = DB::table('document_requests as dr')
             ->join('student_pending_student as sps', 'dr.student_pending_student_id', '=', 'sps.id')
             ->join('pending_students as ps', 'sps.pending_student_id', '=', 'ps.id')
@@ -469,6 +480,24 @@ class TransitionService
 
         if ($allowedStatuses === null || !in_array($currentStatus, $allowedStatuses)) {
             abort(403, "Action « {$action} » non autorisée pour le rôle « {$role} » depuis « {$currentStatus} ».");
+        }
+    }
+
+    /**
+     * Décision D1 : la demande d'un ancien étudiant ne quitte pas le
+     * secrétariat (Valider → Comptable) tant que sa déclaration n'a pas été
+     * validée depuis le dossier. S'applique aussi à l'admin.
+     */
+    private function assertLegacyDeclarationValidated(string $action, object $demande): void
+    {
+        if ($action !== 'secretaire_validate' || empty($demande->legacy_student_id)) {
+            return;
+        }
+
+        $status = DB::table('legacy_students')->where('id', $demande->legacy_student_id)->value('status');
+
+        if ($status !== 'validated') {
+            abort(409, "La déclaration d'ancien étudiant doit d'abord être validée (bouton « Valider la déclaration » du dossier).");
         }
     }
 

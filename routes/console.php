@@ -13,3 +13,11 @@ Schedule::command('demandes:send-reminders')
     ->weekdays()
     ->dailyAt('10:00')
     ->timezone('Africa/Porto-Novo');
+
+// Filet de sécurité des notifications : si aucun worker ne tourne (crash,
+// redémarrage serveur), le scheduler vide la file chaque minute. Sans effet
+// gênant quand les workers sont actifs (withoutOverlapping, arrêt à vide).
+Schedule::command('queue:work --queue=default,emails --stop-when-empty --sleep=1 --tries=3 --timeout=85 --max-time=55')
+    ->everyMinute()
+    ->withoutOverlapping(5)
+    ->runInBackground();

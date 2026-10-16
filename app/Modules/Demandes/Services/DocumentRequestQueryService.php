@@ -2,6 +2,7 @@
 
 namespace App\Modules\Demandes\Services;
 
+use App\Modules\Demandes\Support\Requester;
 use App\Modules\Demandes\WorkflowConstants;
 use Illuminate\Support\Facades\DB;
 
@@ -62,10 +63,9 @@ class DocumentRequestQueryService
         'dr.correction_origin_role',
         'dr.correction_origin_status',
         'dr.student_pending_student_id',
-        'pi.last_name',
-        'pi.first_names',
-        'dept.name as department',
-        'ay.academic_year',
+        'dr.legacy_student_id',
+        'dr.bulletin_year',
+        // Identité (inscrit OU ancien étudiant) : voir identitySelect().
     ];
 
     /**
@@ -167,22 +167,27 @@ class DocumentRequestQueryService
         )) . "'";
     }
 
-    private const MATRICULE_SUBQUERY = "
-        (SELECT student_id_number FROM students s
-         JOIN student_pending_student sps2 ON sps2.student_id = s.id
-         WHERE sps2.id = dr.student_pending_student_id LIMIT 1) as matricule
-    ";
-
     // ── Base query ────────────────────────────────────────────────────────────
 
+    /**
+     * Jointures GAUCHES : une demande appartient soit à un étudiant inscrit,
+     * soit à un ancien étudiant déclaré (legacy_students) — voir Requester.
+     */
     private function baseQuery()
     {
-        return DB::table('document_requests as dr')
-            ->join('student_pending_student as sps', 'dr.student_pending_student_id', '=', 'sps.id')
-            ->join('pending_students as ps', 'sps.pending_student_id', '=', 'ps.id')
-            ->join('personal_information as pi', 'ps.personal_information_id', '=', 'pi.id')
-            ->leftJoin('departments as dept', 'ps.department_id', '=', 'dept.id')
-            ->leftJoin('academic_years as ay', 'dr.academic_year_id', '=', 'ay.id');
+        $query = DB::table('document_requests as dr');
+        Requester::join($query);
+
+        return $query->leftJoin('academic_years as ay', 'dr.academic_year_id', '=', 'ay.id');
+    }
+
+    /** Identité du demandeur + filière, communes au listing et au détail. */
+    private function identitySelect(): array
+    {
+        return array_merge(Requester::identityColumns(), [
+            DB::raw(Requester::DEPARTMENT . ' as department'),
+            DB::raw('COALESCE(ay.academic_year, dr.bulletin_year) as academic_year'),
+        ]);
     }
 
     /**
@@ -193,8 +198,8 @@ class DocumentRequestQueryService
     {
         return array_merge(
             self::BASE_COLUMNS,
+            $this->identitySelect(),
             array_map(fn($sq) => DB::raw($sq), $this->historySubqueries()),
-            [DB::raw(self::MATRICULE_SUBQUERY)]
         );
     }
 
@@ -235,6 +240,9 @@ class DocumentRequestQueryService
             $query->where(function ($q) use ($s) {
                 $q->where('pi.last_name', 'like', $s)
                   ->orWhere('pi.first_names', 'like', $s)
+                  ->orWhere('ls.last_name', 'like', $s)
+                  ->orWhere('ls.first_name', 'like', $s)
+                  ->orWhere('ls.matricule', 'like', $s)
                   ->orWhere('dr.reference', 'like', $s);
             });
         }
@@ -277,6 +285,9 @@ class DocumentRequestQueryService
             $query->where(function ($q) use ($s) {
                 $q->where('pi.last_name', 'like', $s)
                   ->orWhere('pi.first_names', 'like', $s)
+                  ->orWhere('ls.last_name', 'like', $s)
+                  ->orWhere('ls.first_name', 'like', $s)
+                  ->orWhere('ls.matricule', 'like', $s)
                   ->orWhere('dr.reference', 'like', $s);
             });
         }
@@ -325,11 +336,19 @@ class DocumentRequestQueryService
         // n'affichait donc jamais les commentaires/horodatages par rôle.
         // Corrigé : $select est maintenant bien celui utilisé ci-dessous.
         $select = array_merge(
-            ['dr.*', 'pi.birth_date', 'dept.name as department', 'ay.academic_year'],
+            ['dr.*', DB::raw(Requester::BIRTH_DATE . ' as birth_date')],
+            $this->identitySelect(),
             array_map(fn($sq) => DB::raw($sq), $this->historySubqueries()),
             [
-                DB::raw(self::MATRICULE_SUBQUERY),
                 DB::raw('ps.level as study_level'),
+                // Ancien étudiant : éléments de la déclaration à vérifier.
+                'ls.id as legacy_id',
+                'ls.enrollment_year as legacy_enrollment_year',
+                'ls.cycle as legacy_cycle',
+                'ls.place_of_birth as legacy_place_of_birth',
+                'ls.email as legacy_email',
+                'ls.phone as legacy_phone',
+                'ls.rejection_reason as legacy_rejection_reason',
             ]
         );
 

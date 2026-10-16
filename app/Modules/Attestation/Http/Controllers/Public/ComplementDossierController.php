@@ -44,6 +44,9 @@ class ComplementDossierController extends Controller
      */
     private const CLOSED_STATUSES = ['rejected', 'picked_up'];
 
+    private const LEGACY_REF_MESSAGE = "Cette référence (REF-…) correspond à une ancienne demande : elle reste consultable "
+        . "dans « Suivi des demandes », mais le complément doit être déposé directement au secrétariat.";
+
     private const FILE_LABELS = [
         'demande_manuscrite'      => 'Demande manuscrite',
         'acte_naissance'          => 'Acte de naissance',
@@ -90,6 +93,13 @@ class ComplementDossierController extends Controller
             ], 422);
         }
 
+        // Ancienne référence REF-xxxxxx (système provisoire de main) : consultation seule
+        if ($request->filled('reference') && DemandeController::isLegacyServiceReference($request->reference)) {
+            return response()->json([
+                'message' => self::LEGACY_REF_MESSAGE,
+            ], 409);
+        }
+
         // Recherche par référence → résultat unique
         if ($request->filled('reference')) {
             $demande = DB::table('document_requests')
@@ -111,16 +121,29 @@ class ComplementDossierController extends Controller
             'student_id_number', strtoupper(trim($request->matricule))
         )->first();
 
-        if (!$student) {
-            return response()->json(['message' => 'Aucun étudiant trouvé avec ce matricule.'], 404);
-        }
+        if ($student) {
+            $demandes = DB::table('document_requests as dr')
+                ->join('student_pending_student as sps', 'dr.student_pending_student_id', '=', 'sps.id')
+                ->where('sps.student_id', $student->id)
+                ->select('dr.*')
+                ->orderByDesc('dr.id')
+                ->get();
+        } else {
+            // Ancien étudiant déclaré
+            $legacyIds = \App\Modules\LegacyStudent\Models\LegacyStudent::whereRaw(
+                'UPPER(TRIM(matricule)) = ?', [strtoupper(trim($request->matricule))]
+            )->pluck('id');
 
-        $demandes = DB::table('document_requests as dr')
-            ->join('student_pending_student as sps', 'dr.student_pending_student_id', '=', 'sps.id')
-            ->where('sps.student_id', $student->id)
-            ->select('dr.*')
-            ->orderByDesc('dr.id')
-            ->get();
+            if ($legacyIds->isEmpty()) {
+                return response()->json(['message' => 'Aucun étudiant trouvé avec ce matricule.'], 404);
+            }
+
+            $demandes = DB::table('document_requests as dr')
+                ->whereIn('dr.legacy_student_id', $legacyIds)
+                ->select('dr.*')
+                ->orderByDesc('dr.id')
+                ->get();
+        }
 
         if ($demandes->isEmpty()) {
             return response()->json(['message' => 'Aucune demande trouvée pour ce matricule.'], 404);
@@ -156,6 +179,10 @@ class ComplementDossierController extends Controller
 
         $reference = strtoupper(trim($request->reference));
 
+        if (DemandeController::isLegacyServiceReference($reference)) {
+            return response()->json(['message' => self::LEGACY_REF_MESSAGE], 409);
+        }
+
         $demande = DB::table('document_requests')
             ->where('reference', $reference)
             ->first();
@@ -175,17 +202,12 @@ class ComplementDossierController extends Controller
             ], 409);
         }
 
-        // Infos étudiant pour les notifications
-        $link = StudentPendingStudent::with([
-            'student',
-            'pendingStudent.personalInformation',
-        ])->find($demande->student_pending_student_id);
-
-        $personal   = $link?->pendingStudent?->personalInformation;
+        // Infos étudiant pour les notifications (inscrit ou ancien étudiant)
+        $info       = $this->requesterInfo($demande);
         $nomComplet = strtoupper(trim(
-            ($personal?->last_name ?? '') . ' ' . ($personal?->first_names ?? '')
+            ($info['last_name'] !== '—' ? $info['last_name'] : '') . ' ' . ($info['first_names'] !== '—' ? $info['first_names'] : '')
         ));
-        $matricule  = $link?->student?->student_id_number ?? '—';
+        $matricule  = $info['matricule'];
 
         // Récupérer l'existant en complement/
         $existingComplement = is_string($demande->complement_files)
@@ -306,16 +328,6 @@ class ComplementDossierController extends Controller
      */
     private function formatDemande(object $demande): array
     {
-        $link = StudentPendingStudent::with([
-            'student',
-            'pendingStudent.personalInformation',
-            'pendingStudent.department',
-            'pendingStudent.academicYear',
-        ])->find($demande->student_pending_student_id);
-
-        $personal  = $link?->pendingStudent?->personalInformation;
-        $matricule = $link?->student?->student_id_number ?? '—';
-
         return [
             'reference'    => $demande->reference,
             'type'         => $demande->type,
@@ -323,14 +335,47 @@ class ComplementDossierController extends Controller
             'submitted_at' => $demande->submitted_at
                 ? Carbon::parse($demande->submitted_at)->format('d/m/Y à H:i')
                 : '—',
-            'student' => [
-                'last_name'     => $personal?->last_name   ?? '—',
-                'first_names'   => $personal?->first_names ?? '—',
-                'matricule'     => $matricule,
-                'level'         => $link?->pendingStudent?->level ?? '—',
-                'department'    => $link?->pendingStudent?->department?->name ?? '—',
-                'academic_year' => $link?->pendingStudent?->academicYear?->academic_year ?? '—',
-            ],
+            'student' => $this->requesterInfo($demande),
+        ];
+    }
+
+    /**
+     * Identité du demandeur : étudiant inscrit (lien d'inscription) ou
+     * ancien étudiant déclaré (legacy_students).
+     *
+     * @return array{last_name: string, first_names: string, matricule: string, level: string, department: string, academic_year: string}
+     */
+    private function requesterInfo(object $demande): array
+    {
+        if (!empty($demande->legacy_student_id)) {
+            $legacy = \App\Modules\LegacyStudent\Models\LegacyStudent::with('department')->find($demande->legacy_student_id);
+
+            return [
+                'last_name'     => $legacy?->last_name  ?? '—',
+                'first_names'   => $legacy?->first_name ?? '—',
+                'matricule'     => $legacy?->matricule  ?? '—',
+                'level'         => '—',
+                'department'    => $legacy?->department?->name ?? '—',
+                'academic_year' => $demande->bulletin_year ?? '—',
+            ];
+        }
+
+        $link = StudentPendingStudent::with([
+            'student',
+            'pendingStudent.personalInformation',
+            'pendingStudent.department',
+            'pendingStudent.academicYear',
+        ])->find($demande->student_pending_student_id);
+
+        $personal = $link?->pendingStudent?->personalInformation;
+
+        return [
+            'last_name'     => $personal?->last_name   ?? '—',
+            'first_names'   => $personal?->first_names ?? '—',
+            'matricule'     => $link?->student?->student_id_number ?? '—',
+            'level'         => $link?->pendingStudent?->level ?? '—',
+            'department'    => $link?->pendingStudent?->department?->name ?? '—',
+            'academic_year' => $link?->pendingStudent?->academicYear?->academic_year ?? '—',
         ];
     }
 }

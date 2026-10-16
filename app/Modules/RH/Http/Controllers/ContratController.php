@@ -143,7 +143,7 @@ class ContratController extends Controller
      * Un échec WhatsApp ne fait JAMAIS échouer l'envoi (l'email reste le
      * canal de référence, WhatsApp est un plus) — juste loggué.
      */
-    public function sendTransferEmail(Request $request, \App\Modules\WhatsApp\Services\WhatsAppBridgeClient $whatsapp, $id)
+    public function sendTransferEmail(Request $request, $id)
     {
         $this->assertAdmin($request);
 
@@ -233,24 +233,28 @@ class ContratController extends Controller
                 'link_expiry_hours'  => 72,
             ];
 
-            Mail::to($professor->email)->send(new \App\Mail\ContratTransferred($details));
+            // Email + WhatsApp (PDF + texte) : asynchrones et indépendants.
+            $notifier = app(\App\Modules\Core\Services\Notifier::class);
+            $notifier->mailable($professor->email, new \App\Mail\ContratTransferred($details));
 
-            // ── Notification WhatsApp (texte + PDF), non bloquante ────────────
             if (!empty($professor->phone)) {
-                $whatsappSent = $whatsapp->send(
-                    $professor->phone,
-                    $this->buildTransferWhatsAppMessage($details),
-                    context: "contrat-transfert:{$contrat->contrat_number}",
-                );
-
-                if ($whatsappSent && $contrat->pdf_path && Storage::disk('public')->exists($contrat->pdf_path)) {
-                    $whatsapp->sendFile(
+                // Un seul message : le PDF avec le texte en légende (ordre garanti).
+                if ($contrat->pdf_path && Storage::disk('public')->exists($contrat->pdf_path)) {
+                    $notifier->whatsappFile(
                         $professor->phone,
-                        disk:     'public',
-                        path:     $contrat->pdf_path,
-                        fileName: "Contrat_{$contrat->contrat_number}.pdf",
-                        caption:  'Votre contrat en pièce jointe.',
-                        context:  "contrat-transfert-pdf:{$contrat->contrat_number}",
+                        'public',
+                        $contrat->pdf_path,
+                        "Contrat_{$contrat->contrat_number}.pdf",
+                        $this->buildTransferWhatsAppMessage($details),
+                        "contrat-transfert:{$contrat->contrat_number}",
+                        'RH',
+                    );
+                } else {
+                    $notifier->whatsapp(
+                        $professor->phone,
+                        $this->buildTransferWhatsAppMessage($details),
+                        "contrat-transfert:{$contrat->contrat_number}",
+                        'RH',
                     );
                 }
             } else {
@@ -259,7 +263,7 @@ class ContratController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Email envoyé avec succès',
+                'message' => 'Email et WhatsApp mis en envoi',
             ]);
         } catch (\Exception $e) {
             return response()->json([

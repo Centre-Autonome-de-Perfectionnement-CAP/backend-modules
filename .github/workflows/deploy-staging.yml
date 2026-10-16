@@ -164,16 +164,31 @@ jobs:
             sudo systemctl reload php8.4-fpm
             
             # ── Restart workers + Node ─────────────────────────────────────────
-            if command -v supervisorctl &> /dev/null && sudo supervisorctl status laravel-worker:* &> /dev/null; then
-              echo "👷 Restarting queue workers via supervisor..."
-              sudo supervisorctl restart laravel-worker:* || true
+            # Les workers en cours terminent leur job puis s'arrêtent proprement.
+            php artisan queue:restart || true
+
+            WORKER_GROUP=""
+            for g in laravel-worker laravel-app-worker; do
+              if command -v supervisorctl &> /dev/null && sudo supervisorctl status "$g:*" &> /dev/null; then
+                WORKER_GROUP="$g"; break
+              fi
+            done
+
+            if [ -n "$WORKER_GROUP" ]; then
+              echo "👷 Restarting queue workers via supervisor ($WORKER_GROUP)..."
+              echo "   ⚠️  Leur commande doit écouter --queue=default,emails (voir supervisor/laravel-worker.conf)"
+              sudo supervisorctl restart "$WORKER_GROUP:*" || true
             else
-              echo "⚠️  Supervisor non trouvé ou non configuré pour laravel-worker. Lancement manuel de queue:work en arrière-plan..."
-              # Tuer les anciens workers pour éviter les doublons
-              pkill -f "php artisan queue:work" || true
+              echo "⚠️  Supervisor non configuré : 3 workers auto-relancés en arrière-plan..."
+              # Tuer les anciennes boucles PUIS les workers (sinon une boucle les relance)
+              pkill -f "queue-worker-loop.sh" || true
+              pkill -f "artisan queue:work" || true
               sleep 1
-              # Lancer en arrière-plan (detached)
-              nohup php artisan queue:work --sleep=3 --tries=3 --max-time=3600 > /dev/null 2>&1 &
+              chmod +x "$RELEASE_DIR/scripts/queue-worker-loop.sh"
+              for i in 1 2 3; do
+                # Le script tourne depuis la release ; il exécute toujours "current".
+                nohup "$RELEASE_DIR/scripts/queue-worker-loop.sh" "$CURRENT_DIR" < /dev/null > /dev/null 2>&1 &
+              done
             fi
 
             echo "🔄 Restarting WhatsApp Node via Artisan..."

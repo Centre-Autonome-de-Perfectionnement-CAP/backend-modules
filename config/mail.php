@@ -127,6 +127,8 @@ return [
 
     'contact' => [
         'to' => env('MAIL_CONTACT_TO', 'contact@cap-epac.online'),
+        // Numéro(s) WhatsApp prévenus à chaque nouveau message (séparés par des virgules, optionnel)
+        'whatsapp' => env('CONTACT_WHATSAPP_TO', ''),
         'cc' => env('MAIL_CONTACT_CC', 'owomax@gmail.com'),
     ],
 

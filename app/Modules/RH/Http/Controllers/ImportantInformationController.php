@@ -473,7 +473,7 @@ class ImportantInformationController extends Controller
             ], now()->addHours(24));
 
             // Diviser les étudiants en chunks de 50 pour éviter les jobs trop lourds
-            $chunks = $students->chunk(50);
+            $chunks = $students->chunk(20); // 20 : tient sous le timeout du job (85 s)
             
             foreach ($chunks as $chunk) {
                 // Dispatcher le job en queue
