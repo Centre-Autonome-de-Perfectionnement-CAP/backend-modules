@@ -21,7 +21,7 @@ namespace App\Modules\Inscription\Http\Requests\Concerns;
 trait DossierUploadRules
 {
     /** Taille max d'une pièce (Ko) — cohérente avec la config PHP (public/.user.ini). */
-    protected const MAX_PIECE_KB = 10240;
+    protected const MAX_PIECE_KB = 5120; // 5 Mo (limite historique, conservée)
 
     /** Pièce justificative (scan PDF, photo, document Word). */
     protected function pieceRule(bool $required = true): array

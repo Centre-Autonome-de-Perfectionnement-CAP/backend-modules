@@ -40,8 +40,7 @@ class ComplementDossierController extends Controller
         'image/heif',
     ];
 
-    // 10 Mo : les photos prises au téléphone dépassaient souvent 5 Mo.
-    private const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    private const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 Mo
 
     /**
      * Statuts terminaux : plus aucun complément accepté (dossier clos).
@@ -233,7 +232,7 @@ class ComplementDossierController extends Controller
             'email'          => 'required|email|max:255',
             'whatsapp'       => 'required|string|max:30',
             'pieces'         => 'required|array|min:1',
-            'pieces.*'       => 'file|max:10240|mimes:pdf,jpg,jpeg,png,webp,heic,heif',
+            'pieces.*'       => 'file|max:5120|mimes:pdf,jpg,jpeg,png,webp,heic,heif',
             // Jeton obtenu après validation du code reçu par WhatsApp / email
             'complement_token' => 'required|string|max:100',
             'piece_labels'   => 'nullable|array',
@@ -303,7 +302,7 @@ class ComplementDossierController extends Controller
                 continue;
             }
             if ($file->getSize() > self::MAX_FILE_SIZE) {
-                return response()->json(['message' => "Le fichier « {$key} » dépasse 10 Mo. Réduisez sa taille ou envoyez un PDF."], 422);
+                return response()->json(['message' => "Le fichier « {$key} » dépasse 5 Mo. Réduisez sa taille ou envoyez un PDF."], 422);
             }
             if (!in_array($file->getMimeType(), self::ALLOWED_MIMES)) {
                 return response()->json(['message' => "Format non accepté pour « {$key} » (PDF, JPG, PNG, WEBP, HEIC)."], 422);
