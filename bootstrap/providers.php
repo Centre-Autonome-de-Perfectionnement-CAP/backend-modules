@@ -19,4 +19,5 @@ return [
     App\Modules\Attendance\Providers\AttendanceServiceProvider::class,
     App\Modules\WhatsApp\Providers\WhatsAppServiceProvider::class,
     App\Modules\AdminDb\Providers\AdminDbServiceProvider::class,
+    App\Modules\LegacyStudent\Providers\LegacyStudentServiceProvider::class,
 ];

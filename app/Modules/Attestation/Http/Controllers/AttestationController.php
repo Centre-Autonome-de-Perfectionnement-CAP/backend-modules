@@ -11,6 +11,7 @@ use App\Modules\Attestation\Http\Requests\{
     UpdateStudentNamesRequest,
     GetEligibleStudentsRequest,
     GetEligiblePreparatoryRequest,
+    GetEligiblePassageRequest,
     GenerateBulletinRequest,
     GenerateMultiplePreparatoryRequest,
     GenerateMultipleBulletinsRequest,
@@ -122,6 +123,25 @@ class AttestationController extends Controller
 
     public function getEligibleForPassage(GetEligibleStudentsRequest $request): JsonResponse
     { $s = $this->attestationService->getEligibleForPassage($request->academic_year_id, $request->department_id, $request->cohort, $request->search); return $this->successResponse(['students' => $s, 'total' => $s->count()], 'OK'); }
+
+    /**
+     * Étudiants pour lesquels un bulletin peut être généré (ajouté sur main —
+     * route GET eligible/bulletins, utilisée par le progiciel).
+     */
+    public function getStudentsForBulletins(GetEligibleStudentsRequest $request): JsonResponse
+    {
+        $students = $this->attestationService->getEligibleStudents(
+            $request->academic_year_id,
+            $request->department_id,
+            $request->cohort,
+            $request->search
+        );
+
+        return $this->successResponse([
+            'students' => $students,
+            'total' => $students->count(),
+        ], 'Étudiants récupérés pour les bulletins avec succès');
+    }
 
     public function getEligibleForPreparatory(GetEligiblePreparatoryRequest $request): JsonResponse
     { $s = $this->attestationService->getEligibleForPreparatoryClass($request->academic_year_id, $request->department_id, $request->cohort, $request->search); return $this->successResponse(['students' => $s, 'total' => $s->count()], 'OK'); }

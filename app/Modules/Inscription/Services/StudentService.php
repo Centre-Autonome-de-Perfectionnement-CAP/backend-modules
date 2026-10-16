@@ -14,6 +14,25 @@ use App\Modules\Core\Services\NationalityService;
 class StudentService
 {
     /**
+     * Sous-requête SQL retournant le nom du groupe de classe d'un étudiant (un seul).
+     *
+     * On n'utilise pas de jointure sur student_groups : un étudiant présent dans
+     * plusieurs groupes de la même classe (ex. groupes "A" créés en double) produirait
+     * une ligne par groupe, donc des doublons dans les listes et les fiches PDF.
+     * Nécessite les tables student_pending_student et pending_students dans la requête.
+     */
+    public static function groupNameSql(): string
+    {
+        return "SELECT cg.group_name FROM student_groups sg "
+            . "JOIN class_groups cg ON cg.id = sg.class_group_id "
+            . "WHERE sg.student_id = student_pending_student.student_id "
+            . "AND cg.academic_year_id = pending_students.academic_year_id "
+            . "AND cg.department_id = pending_students.department_id "
+            . "AND cg.study_level = pending_students.level "
+            . "ORDER BY cg.id LIMIT 1";
+    }
+
+    /**
      * Récupère tous les étudiants avec pagination et filtres
      */
     public function getAll(array $filters = [], int $perPage = 10)
@@ -24,13 +43,6 @@ class StudentService
             ->join('academic_years', 'pending_students.academic_year_id', '=', 'academic_years.id')
             ->join('student_pending_student', 'pending_students.id', '=', 'student_pending_student.pending_student_id')
             ->leftJoin('entry_diplomas', 'pending_students.entry_diploma_id', '=', 'entry_diplomas.id')
-            ->leftJoin('student_groups', 'student_pending_student.student_id', '=', 'student_groups.student_id')
-            ->leftJoin('class_groups', function ($join) {
-                $join->on('student_groups.class_group_id', '=', 'class_groups.id')
-                     ->on('class_groups.academic_year_id', '=', 'pending_students.academic_year_id')
-                     ->on('class_groups.department_id', '=', 'pending_students.department_id')
-                     ->on('class_groups.study_level', '=', 'pending_students.level');
-            })
             ->select(
                 'pending_students.id',
                 'student_pending_student.id as student_pending_student_id',
@@ -47,23 +59,47 @@ class StudentService
                 'academic_years.academic_year as annee',
                 'entry_diplomas.name as entryDiploma',
                 'pending_students.status as status',
+                'pending_students.status as statut', // FUSION : clé historique (main) conservée en plus de 'status' (develop)
                 'personal_information.email',
                 DB::raw(DatabaseAdapter::jsonExtract('personal_information.contacts', '$.phone') . ' as telephone'),
                 DB::raw("(SELECT student_id_number FROM students WHERE students.id = student_pending_student.student_id) as matricule"),
-                // ✅ AJOUT : nom du groupe pour le verrouillage côté frontend
-                'class_groups.group_name as classGroupName',
-                // ✅ AJOUT : role_id depuis personal_information pour détecter le responsable
+                // FUSION develop/main : 'groupe' (main, sous-requête sans doublons)
+                // + 'classGroupName' (develop, verrouillage côté frontend) — même valeur,
+                // la jointure class_groups ayant été remplacée sur main par groupNameSql().
+                DB::raw('(' . self::groupNameSql() . ') as groupe'),
+                DB::raw('(' . self::groupNameSql() . ') as classGroupName'),
+                // ✅ (develop) role_id depuis personal_information pour détecter le responsable
                 'personal_information.role_id'
             )
             ->where('pending_students.status', '!=', 'pending');
 
         // Filtre année
         if (!empty($filters['year']) && $filters['year'] !== 'all') {
-            if (is_numeric($filters['year'])) {
-                $query->where('academic_years.id', $filters['year']);
-            } else {
-                $query->where('academic_years.academic_year', $filters['year']);
-            }
+            // Inclut les étudiants dont le dossier courant est de cette année,
+            // OU qui possèdent un parcours académique (ex. historique Prépa
+            // rattaché) pour cette année. Ainsi un étudiant rattaché à une année
+            // antérieure (ex. Prépa 2022) apparaît aussi en filtrant sur 2022,
+            // en plus de son année courante.
+            $query->where(function ($q) use ($filters) {
+                if (is_numeric($filters['year'])) {
+                    $q->where('academic_years.id', $filters['year']);
+                } else {
+                    $q->where('academic_years.academic_year', $filters['year']);
+                }
+
+                $q->orWhereExists(function ($sub) use ($filters) {
+                    $sub->select(DB::raw(1))
+                        ->from('academic_paths')
+                        ->join('academic_years as path_year', 'path_year.id', '=', 'academic_paths.academic_year_id')
+                        ->whereColumn('academic_paths.student_pending_student_id', 'student_pending_student.id');
+
+                    if (is_numeric($filters['year'])) {
+                        $sub->where('path_year.id', $filters['year']);
+                    } else {
+                        $sub->where('path_year.academic_year', $filters['year']);
+                    }
+                });
+            });
         }
 
         // Filtre filière
@@ -158,13 +194,6 @@ class StudentService
             ->join('academic_years', 'pending_students.academic_year_id', '=', 'academic_years.id')
             ->join('student_pending_student', 'pending_students.id', '=', 'student_pending_student.pending_student_id')
             ->leftJoin('entry_diplomas', 'pending_students.entry_diploma_id', '=', 'entry_diplomas.id')
-            ->leftJoin('student_groups', 'student_pending_student.student_id', '=', 'student_groups.student_id')
-            ->leftJoin('class_groups', function ($join) {
-                $join->on('student_groups.class_group_id', '=', 'class_groups.id')
-                     ->on('class_groups.academic_year_id', '=', 'pending_students.academic_year_id')
-                     ->on('class_groups.department_id', '=', 'pending_students.department_id')
-                     ->on('class_groups.study_level', '=', 'pending_students.level');
-            })
             ->select(
                 'pending_students.id',
                 'student_pending_student.id as student_pending_student_id',
@@ -178,16 +207,24 @@ class StudentService
                 'academic_years.academic_year as annee',
                 'entry_diplomas.name as entryDiploma',
                 'pending_students.status as status',
+                'pending_students.status as statut', // FUSION : clé historique (main) conservée en plus de 'status' (develop)
                 'personal_information.email',
                 DB::raw(DatabaseAdapter::jsonExtract('personal_information.contacts', '$.phone') . ' as telephone'),
                 DB::raw("(SELECT student_id_number FROM students WHERE students.id = student_pending_student.student_id) as matricule"),
-                'class_groups.group_name as classGroupName',
+                DB::raw('(' . self::groupNameSql() . ') as groupe'),
+                // Année de l'historique Prépa rattaché (academic_paths), si présente :
+                // elle doit primer sur l'année du dossier courant pour l'affichage.
+                DB::raw("(SELECT ay.academic_year FROM academic_paths ap JOIN academic_years ay ON ay.id = ap.academic_year_id WHERE ap.student_pending_student_id = student_pending_student.id AND (ap.study_level LIKE '%prepa%' OR ap.study_level LIKE '%prépa%') ORDER BY ap.academic_year_id ASC LIMIT 1) as annee_prepa"),
+                DB::raw('(' . self::groupNameSql() . ') as classGroupName'), // FUSION : clé develop conservée
                 'personal_information.role_id'
             )
             ->where('pending_students.id', $id)
             ->first();
 
         if ($student) {
+            if (!empty($student->annee_prepa)) {
+                $student->annee = $student->annee_prepa;
+            }
             $student->redoublant = (
                 $student->niveau &&
                 $this->isRepeatingStudent($student->student_pending_student_id, $student->niveau)
@@ -356,20 +393,13 @@ class StudentService
             ->join('personal_information', 'pending_students.personal_information_id', '=', 'personal_information.id')
             ->join('departments', 'pending_students.department_id', '=', 'departments.id')
             ->join('academic_years', 'pending_students.academic_year_id', '=', 'academic_years.id')
-            ->leftJoin('student_groups', 'students.id', '=', 'student_groups.student_id')
-            ->leftJoin('class_groups', function ($join) {
-                $join->on('student_groups.class_group_id', '=', 'class_groups.id')
-                     ->on('class_groups.academic_year_id', '=', 'pending_students.academic_year_id')
-                     ->on('class_groups.department_id', '=', 'pending_students.department_id')
-                     ->on('class_groups.study_level', '=', 'pending_students.level');
-            })
             ->select(
                 'students.id',
                 'student_pending_student.id as student_pending_student_id',
                 'students.student_id_number as matricule',
                 DB::raw("CONCAT(personal_information.last_name, ' ', personal_information.first_names) as nomPrenoms"),
                 'pending_students.level as niveau',
-                'class_groups.group_name as groupe',
+                DB::raw('(' . self::groupNameSql() . ') as groupe'),
                 'personal_information.nationality'
             );
 
@@ -404,7 +434,16 @@ class StudentService
         }
 
         if (!empty($filters['groupe']) && $filters['groupe'] !== 'all') {
-            $query->where('class_groups.group_name', $filters['groupe']);
+            $query->whereExists(function ($subQuery) use ($filters) {
+                $subQuery->select(DB::raw(1))
+                    ->from('student_groups')
+                    ->join('class_groups', 'class_groups.id', '=', 'student_groups.class_group_id')
+                    ->whereColumn('student_groups.student_id', 'student_pending_student.student_id')
+                    ->whereColumn('class_groups.academic_year_id', 'pending_students.academic_year_id')
+                    ->whereColumn('class_groups.department_id', 'pending_students.department_id')
+                    ->whereColumn('class_groups.study_level', 'pending_students.level')
+                    ->where('class_groups.group_name', $filters['groupe']);
+            });
         }
 
         $query->orderBy('personal_information.last_name')

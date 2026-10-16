@@ -12,12 +12,21 @@
             font-style: normal;
         }
 
+        @page {
+            size: A4 landscape;
+            margin: 0cm;
+        }
+
         body {
             font-family: 'DejaVu Sans', sans-serif;
             font-size: 10px;
             margin: 0;
-            padding: 15px;
+            padding: 0;
             line-height: 1.3;
+        }
+
+        .content-body {
+            margin: 10px 25px 55px 25px;
         }
 
         .header {
@@ -160,13 +169,22 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>République du Bénin</h1>
-        <h2>Université d'Abomey-Calavi</h2>
-        <h2>École Polytechnique d'Abomey-Calavi (EPAC)</h2>
-        <h2>Centre Autonome de Perfectionnement (CAP)</h2>
-        <p>01 BP 2009 COTONOU - Tél. 21 36 14 32/21 36 09 93 - Email: epac.uac@epac.uac.bj</p>
+    @php
+        $headerLandscape = file_exists(public_path("images/epac_header_landscape.png"))
+            ? public_path("images/epac_header_landscape.png")
+            : (file_exists(storage_path("images/epac_header_landscape.png"))
+                ? storage_path("images/epac_header_landscape.png")
+                : base_path("storage/images/epac_header_landscape.png"));
+        $headerBase64 = file_exists($headerLandscape) ? 'data:image/png;base64,' . base64_encode(file_get_contents($headerLandscape)) : '';
+    @endphp
+
+    <div style="margin: 0; padding: 0; width: 100%;">
+        @if($headerBase64)
+            <img src="{{ $headerBase64 }}" style="width: 100%; height: auto; display: block;" alt="En-tête officiel EPAC - CAP">
+        @endif
     </div>
+
+    <div class="content-body">
 
     <div class="info-section">
         <div style="text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 10px;">
@@ -225,17 +243,26 @@
         <p>Document généré automatiquement le {{ $exportDate }} à {{ $exportTime }}</p>
     </div>
 
-    <div class="signature-section">
-        <div class="signature-box">
-            <p><strong>Le Chef CAP</strong></p>
-            <br><br>
-            <p>_________________________</p>
-        </div>
-        <div class="signature-box">
-            <p><strong>Le Directeur EPAC</strong></p>
-            <br><br>
-            <p>_________________________</p>
-        </div>
+    <table style="width: 100%; border: none; margin-top: 35px;">
+        <tr>
+            <td style="width: 45%; border: none; text-align: center; vertical-align: top;">
+                <div style="border-top: 1px solid #000; padding-top: 8px;">
+                    <p style="margin: 0; font-weight: bold;">Le Chef CAP</p>
+                    <br><br><br>
+                    <p style="margin: 0;">_________________________</p>
+                </div>
+            </td>
+            <td style="width: 10%; border: none;"></td>
+            <td style="width: 45%; border: none; text-align: center; vertical-align: top;">
+                <div style="border-top: 1px solid #000; padding-top: 8px;">
+                    <p style="margin: 0; font-weight: bold;">Le Directeur EPAC</p>
+                    <br><br><br>
+                    <p style="margin: 0;">_________________________</p>
+                </div>
+            </td>
+        </tr>
+    </table>
+
     </div>
 </body>
 </html>

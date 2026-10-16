@@ -17,6 +17,7 @@ use App\Modules\Inscription\Http\Controllers\PendingStudentExportController;
 use App\Modules\Inscription\Http\Controllers\ResponsableController;
 use App\Modules\Inscription\Http\Controllers\StudentBroadcastController;
 use App\Modules\Inscription\Http\Controllers\TextbookController;
+use App\Modules\Inscription\Http\Controllers\LegacyPrepaLinkController;
 
 
 Route::prefix('inscription')->group(function () {
@@ -31,6 +32,7 @@ Route::prefix('inscription')->group(function () {
             Route::patch('/{pendingStudent}/financial-status', [PendingStudentController::class, 'updateStatus']);
             Route::patch('/{pendingStudent}/level', [PendingStudentController::class, 'updateLevel']);
             Route::patch('/{pendingStudent}/pieces/rename', [PendingStudentController::class, 'renamePiece']);
+            Route::patch('/{pendingStudent}/transfer-wave', [PendingStudentController::class, 'transferWave']);
         });
         Route::post('/', [PendingStudentController::class, 'store']);
         Route::post('/{pendingStudent}/documents', [PendingStudentController::class, 'submitDocuments']);
@@ -61,6 +63,8 @@ Route::prefix('inscription')->group(function () {
             Route::post('/', [AcademicYearController::class, 'store']);
             Route::put('/{academicYear}', [AcademicYearController::class, 'update']);
             Route::delete('/{academicYear}', [AcademicYearController::class, 'destroy']);
+            Route::patch('/{academicYear}/set-current', [AcademicYearController::class, 'setCurrent']);
+            Route::post('/{academicYear}/set-current', [AcademicYearController::class, 'setCurrent']);
 
             Route::get('/{academicYear}/periods', [AcademicYearController::class, 'getPeriods']);
             Route::post('/{academicYear}/periods', [AcademicYearController::class, 'addPeriods']);
@@ -69,8 +73,12 @@ Route::prefix('inscription')->group(function () {
         });
     });
 
-    Route::prefix('dossiers')->group(function () {
+    Route::prefix('dossiers')->middleware('throttle:30,1')->group(function () {
         Route::get('/periods', [DossierSubmissionController::class, 'getSubmissionPeriods']);
+        Route::get('/check-existing', [DossierSubmissionController::class, 'checkExistingDossier']);
+        Route::post('/fetch-for-update', [DossierSubmissionController::class, 'getDossierForUpdate']);
+        Route::post('/update-existing', [DossierSubmissionController::class, 'updateExistingDossier']);
+        Route::post('/transfer-wave', [DossierSubmissionController::class, 'transferWaveByCandidate']);
         Route::post('/licence', [DossierSubmissionController::class, 'submitLicenceDossier']);
         Route::post('/master', [DossierSubmissionController::class, 'submitMasterDossier']);
         Route::post('/ingenieur/prepa', [DossierSubmissionController::class, 'submitIngenieurPrepaDossier']);
@@ -152,6 +160,13 @@ Route::prefix('inscription')->group(function () {
         });
     });
  
+
+    // Rattachement historique Prépa (anciens étudiants) — ajouté sur main
+    Route::prefix('legacy-prepa')->middleware('auth:sanctum')->group(function () {
+        Route::get('/candidates', [LegacyPrepaLinkController::class, 'candidates']);
+        Route::get('/check/{pendingStudentId}', [LegacyPrepaLinkController::class, 'check']);
+        Route::post('/link/{pendingStudentId}', [LegacyPrepaLinkController::class, 'link']);
+    });
 
 }); // Fin du groupe api/inscription
 

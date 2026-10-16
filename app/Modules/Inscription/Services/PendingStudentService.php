@@ -3,10 +3,10 @@
 namespace App\Modules\Inscription\Services;
 
 use App\Modules\Inscription\Models\PendingStudent;
+use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Exception;
 
 class PendingStudentService
 {
@@ -19,55 +19,69 @@ class PendingStudentService
             'entryDiploma',
             'personalInformation',
             'department',
-            'academicYear'
+            'academicYear',
         ]);
-        if (!empty($filters['department_id']) && is_numeric($filters['department_id'])) {
+        if (! empty($filters['department_id']) && is_numeric($filters['department_id'])) {
             $query->where('department_id', $filters['department_id']);
         }
 
-        if (!empty($filters['academic_year_id']) && is_numeric($filters['academic_year_id'])) {
+        if (! empty($filters['academic_year_id']) && is_numeric($filters['academic_year_id'])) {
             $query->where('academic_year_id', $filters['academic_year_id']);
         }
 
         // Filtre par diplôme d'entrée
-        if (!empty($filters['entry_diploma_id']) && is_numeric($filters['entry_diploma_id'])) {
+        if (! empty($filters['entry_diploma_id']) && is_numeric($filters['entry_diploma_id'])) {
             $query->where('entry_diploma_id', $filters['entry_diploma_id']);
         }
 
         // Filtre par niveau
-        if (!empty($filters['level'])) {
+        if (! empty($filters['level'])) {
             $query->where('level', $filters['level']);
         }
 
-        // Filtre par cohorte
-        if (!empty($filters['cohort']) && !empty($filters['academic_year_id'])) {
-            // Récupérer les périodes de soumission distinctes pour cette année académique
-            $periods = \DB::table('submission_periods')
-                ->where('academic_year_id', $filters['academic_year_id'])
-                ->select('start_date', 'end_date')
-                ->distinct()
-                ->orderBy('start_date')
-                ->get();
+        // Filtre par cohorte / vague
+        if (! empty($filters['cohort'])) {
+            $cohortNum = (int) $filters['cohort'];
+            $query->where(function ($q) use ($cohortNum, $filters) {
+                $q->where('initial_wave', $cohortNum);
 
-            // Trouver la période correspondant à la cohorte demandée
-            $cohortIndex = (int)$filters['cohort'] - 1;
-            if (isset($periods[$cohortIndex])) {
-                $period = $periods[$cohortIndex];
-                $query->whereDate('pending_students.created_at', '>=', $period->start_date)
-                      ->whereDate('pending_students.created_at', '<=', $period->end_date);
-            }
+                // Fallback pour anciens enregistrements sans initial_wave
+                if (! empty($filters['academic_year_id'])) {
+                    $periodQuery = \DB::table('submission_periods')
+                        ->where('academic_year_id', $filters['academic_year_id']);
+
+                    if (! empty($filters['department_id']) && is_numeric($filters['department_id'])) {
+                        $periodQuery->where('department_id', $filters['department_id']);
+                    }
+
+                    $periods = $periodQuery->select('start_date', 'end_date')
+                        ->distinct()
+                        ->orderBy('start_date')
+                        ->get();
+
+                    $cohortIndex = $cohortNum - 1;
+                    if (isset($periods[$cohortIndex])) {
+                        $period = $periods[$cohortIndex];
+                        $q->orWhere(function ($sub) use ($period) {
+                            $sub->whereNull('initial_wave')
+                                ->where('created_at', '>=', \Carbon\Carbon::parse($period->start_date)->startOfDay())
+                                ->where('created_at', '<=', \Carbon\Carbon::parse($period->end_date)->endOfDay());
+                        });
+                    }
+                }
+            });
         }
 
         // Recherche
-        if (!empty($filters['search'])) {
+        if (! empty($filters['search'])) {
             $search = $filters['search'];
             $query->where(function ($q) use ($search) {
                 $q->where('tracking_code', 'like', "%{$search}%")
-                  ->orWhereHas('personalInformation', function ($subQuery) use ($search) {
-                      $subQuery->where('first_names', 'like', "%{$search}%")
-                              ->orWhere('last_name', 'like', "%{$search}%")
-                              ->orWhere('email', 'like', "%{$search}%");
-                  });
+                    ->orWhereHas('personalInformation', function ($subQuery) use ($search) {
+                        $subQuery->where('first_names', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -81,7 +95,7 @@ class PendingStudentService
     {
         return DB::transaction(function () use ($data) {
             // Si personal_information_id n'est pas fourni, créer d'abord PersonalInformation
-            if (!isset($data['personal_information_id'])) {
+            if (! isset($data['personal_information_id'])) {
                 $personalInfo = \App\Modules\Inscription\Models\PersonalInformation::create([
                     'first_names' => $data['first_name'] ?? null,
                     'last_name' => $data['last_name'] ?? null,
@@ -118,7 +132,7 @@ class PendingStudentService
     private function generateTrackingCode(): string
     {
         do {
-            $code = 'CAP-' . strtoupper(Str::random(8));
+            $code = 'CAP-'.strtoupper(Str::random(8));
         } while (PendingStudent::where('tracking_code', $code)->exists());
 
         return $code;
@@ -135,7 +149,7 @@ class PendingStudentService
             'department',
             'academicYear',
             'studentPendingStudents.student',
-            'files'
+            'files',
         ])->find($id);
     }
 
@@ -167,7 +181,7 @@ class PendingStudentService
             }
 
             // Mettre à jour PersonalInformation si nécessaire
-            if (!empty($personalInfoData) && $pendingStudent->personalInformation) {
+            if (! empty($personalInfoData) && $pendingStudent->personalInformation) {
                 $pendingStudent->personalInformation->update($personalInfoData);
             }
 
@@ -183,7 +197,7 @@ class PendingStudentService
                 'entryDiploma',
                 'personalInformation',
                 'department',
-                'academicYear'
+                'academicYear',
             ]);
         });
     }
@@ -214,24 +228,24 @@ class PendingStudentService
     }
 
     /**
-     * Changer le status d'un étudiant en attente
+     * Changer le statut d'un étudiant en attente
      */
-    public function changestatus(PendingStudent $pendingStudent, string $status): PendingStudent
+    public function changeStatus(PendingStudent $pendingStudent, string $status): PendingStudent
     {
         return DB::transaction(function () use ($pendingStudent, $status) {
-            $oldstatus = $pendingStudent->status;
+            $oldStatus = $pendingStudent->status;
 
-            Log::info('=== CHANGE status START ===', [
+            Log::info('=== CHANGE STATUS START ===', [
                 'pending_student_id' => $pendingStudent->id,
-                'old_status' => $oldstatus,
+                'old_status' => $oldStatus,
                 'new_status' => $status,
             ]);
 
             $pendingStudent->update(['status' => $status]);
 
-            // Si le status passe à "approved", créer l'étudiant officiel
-            if ($status === 'approved' && $oldstatus !== 'approved') {
-                Log::info('status changed to approved, checking if student should be created');
+            // Si le statut passe à "approved", créer l'étudiant officiel
+            if ($status === 'approved' && $oldStatus !== 'approved') {
+                Log::info('Status changed to approved, checking if student should be created');
 
                 // Vérifier le cycle et le nom du département
                 $department = $pendingStudent->department;
@@ -274,7 +288,7 @@ class PendingStudentService
                 }
             }
 
-            Log::info('=== CHANGE status END ===');
+            Log::info('=== CHANGE STATUS END ===');
 
             return $pendingStudent->fresh();
         });
@@ -324,13 +338,35 @@ class PendingStudentService
             'personalInformation',
             'department',
             'academicYear',
-            'files'
+            'files',
         ])->where('tracking_code', $trackingCode)->first();
     }
 
     /**
      * Créer un étudiant officiel à partir d'un étudiant en attente approuvé
      */
+    /**
+     * Ajoute l'étudiant au groupe de sa classe si celle-ci n'a qu'un groupe.
+     * N'interrompt jamais l'approbation en cas d'échec.
+     */
+    public function assignToClassGroup(int $studentId, PendingStudent $pendingStudent): void
+    {
+        try {
+            app(ClassGroupService::class)->assignStudentToSingleGroup(
+                $studentId,
+                $pendingStudent->academic_year_id,
+                $pendingStudent->department_id,
+                $pendingStudent->level
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Affectation automatique au groupe impossible', [
+                'student_id' => $studentId,
+                'pending_student_id' => $pendingStudent->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     private function createOfficialStudent(PendingStudent $pendingStudent): void
     {
         Log::info('=== DÉBUT createOfficialStudent ===', [
@@ -372,22 +408,30 @@ class PendingStudentService
         */
 
         // Chercher si un Student existe déjà pour cette personne
-        Log::info('Recherche d\'un Student existant via personal_information_id', [
-            'personal_information_id' => $pendingStudent->personal_information_id,
-        ]);
+        // D'abord la liaison exacte de CE dossier (le rattachement LegacyPrepa peut
+        // l'avoir créée avant l'approbation) : évite un doublon sur l'index unique
+        $spsForThisDossier = \App\Modules\Inscription\Models\StudentPendingStudent::where('pending_student_id', $pendingStudent->id)
+            ->with('student')
+            ->first();
 
-        $existingStudentPendingStudent = \App\Modules\Inscription\Models\StudentPendingStudent::whereHas('pendingStudent', function($q) use ($pendingStudent) {
-            $q->where('personal_information_id', $pendingStudent->personal_information_id);
-        })->with('student')->first();
+        if (! $spsForThisDossier) {
+            Log::info('Recherche d\'un Student existant via personal_information_id', [
+                'personal_information_id' => $pendingStudent->personal_information_id,
+            ]);
 
-        if ($existingStudentPendingStudent && $existingStudentPendingStudent->student) {
+            $spsForThisDossier = \App\Modules\Inscription\Models\StudentPendingStudent::whereHas('pendingStudent', function ($q) use ($pendingStudent) {
+                $q->where('personal_information_id', $pendingStudent->personal_information_id);
+            })->with('student')->first();
+        }
+
+        if ($spsForThisDossier && $spsForThisDossier->student) {
             // Réutiliser le Student existant
-            $student = $existingStudentPendingStudent->student;
+            $student = $spsForThisDossier->student;
             Log::info('✅ Student existant TROUVÉ et RÉUTILISÉ', [
                 'student_id' => $student->id,
                 'student_id_number' => $student->student_id_number,
                 'personal_information_id' => $pendingStudent->personal_information_id,
-                'existing_student_pending_student_id' => $existingStudentPendingStudent->id,
+                'existing_student_pending_student_id' => $spsForThisDossier->id,
             ]);
         } else {
             // Créer un nouveau Student
@@ -403,20 +447,27 @@ class PendingStudentService
             ]);
         }
 
-        // Créer la liaison dans student_pending_student
-        Log::info('Création de StudentPendingStudent (liaison)', [
-            'student_id' => $student->id,
-            'pending_student_id' => $pendingStudent->id,
-        ]);
+        // Créer la liaison dans student_pending_student (ou réutiliser celle déjà présente)
+        if ($spsForThisDossier && $spsForThisDossier->student_id === $student->id) {
+            $studentPendingStudent = $spsForThisDossier;
+            Log::info('✅ Liaison StudentPendingStudent existante RÉUTILISÉE', [
+                'student_pending_student_id' => $studentPendingStudent->id,
+            ]);
+        } else {
+            Log::info('Création de StudentPendingStudent (liaison)', [
+                'student_id' => $student->id,
+                'pending_student_id' => $pendingStudent->id,
+            ]);
 
-        $studentPendingStudent = \App\Modules\Inscription\Models\StudentPendingStudent::create([
-            'student_id' => $student->id,
-            'pending_student_id' => $pendingStudent->id,
-        ]);
+            $studentPendingStudent = \App\Modules\Inscription\Models\StudentPendingStudent::create([
+                'student_id' => $student->id,
+                'pending_student_id' => $pendingStudent->id,
+            ]);
 
-        Log::info('✅ StudentPendingStudent créé', [
-            'student_pending_student_id' => $studentPendingStudent->id,
-        ]);
+            Log::info('✅ StudentPendingStudent créé', [
+                'student_pending_student_id' => $studentPendingStudent->id,
+            ]);
+        }
 
         // Déterminer la cohorte basée sur la période de dépôt
         $cohort = $this->determineCohort($pendingStudent);
@@ -427,28 +478,42 @@ class PendingStudentService
         Log::info('Role étudiant récupéré', ['role_id' => $studentRoleId]);
 
         // Créer l'entrée dans academic_paths pour l'année académique actuelle
-        $financialstatus = $pendingStudent->exonere ? 'Exonéré' : 'Non exonéré';
+        $financialStatus = $pendingStudent->exonere ? 'Exonéré' : 'Non exonéré';
         Log::info('Création de AcademicPath', [
             'student_pending_student_id' => $studentPendingStudent->id,
             'academic_year_id' => $pendingStudent->academic_year_id,
             'study_level' => $pendingStudent->level,
             'cohort' => $cohort,
             'role_id' => $studentRoleId,
-            'financial_status' => $financialstatus,
+            'financial_status' => $financialStatus,
         ]);
 
-        $academicPath = \App\Modules\Inscription\Models\AcademicPath::create([
-            'student_pending_student_id' => $studentPendingStudent->id,
-            'academic_year_id' => $pendingStudent->academic_year_id,
-            'study_level' => $pendingStudent->level,
-            'cohort' => $cohort,
-            'role_id' => $studentRoleId,
-            'financial_status' => $financialstatus,
-        ]);
+        $existingAcademicPath = \App\Modules\Inscription\Models\AcademicPath::where('student_pending_student_id', $studentPendingStudent->id)
+            ->where('academic_year_id', $pendingStudent->academic_year_id)
+            ->where('study_level', $pendingStudent->level)
+            ->first();
 
-        Log::info('✅ AcademicPath créé', [
-            'academic_path_id' => $academicPath->id,
-        ]);
+        if ($existingAcademicPath) {
+            $academicPath = $existingAcademicPath;
+            Log::info('AcademicPath existant RÉUTILISÉ', [
+                'academic_path_id' => $academicPath->id,
+            ]);
+        } else {
+            $academicPath = \App\Modules\Inscription\Models\AcademicPath::create([
+                'student_pending_student_id' => $studentPendingStudent->id,
+                'academic_year_id' => $pendingStudent->academic_year_id,
+                'study_level' => $pendingStudent->level,
+                'cohort' => $cohort,
+                'role_id' => $studentRoleId,
+                'financial_status' => $financialStatus,
+            ]);
+
+            Log::info('✅ AcademicPath créé', [
+                'academic_path_id' => $academicPath->id,
+            ]);
+        }
+
+        $this->assignToClassGroup($student->id, $pendingStudent);
 
         Log::info('=== FIN createOfficialStudent - SUCCÈS ===', [
             'student_id' => $student->id,
@@ -457,7 +522,7 @@ class PendingStudentService
             'tracking_code' => $pendingStudent->tracking_code,
             'student_pending_student_id' => $studentPendingStudent->id,
             'academic_path_id' => $academicPath->id,
-            'student_reused' => isset($existingStudentPendingStudent),
+            'student_reused' => isset($spsForThisDossier),
         ]);
     }
 
@@ -466,34 +531,71 @@ class PendingStudentService
      */
     private function determineCohort(PendingStudent $pendingStudent): ?string
     {
-        // Récupérer les périodes distinctes pour cette année académique ET cette filière
-        $periods = DB::table('submission_periods')
-            ->where('academic_year_id', $pendingStudent->academic_year_id)
-            ->where('department_id', $pendingStudent->department_id)
-            ->select('start_date', 'end_date')
-            ->groupBy('start_date', 'end_date')
-            ->orderBy('start_date', 'asc')
-            ->get();
-
-        if ($periods->isEmpty()) {
-            return '1'; // Par défaut cohorte 1
+        if (! empty($pendingStudent->initial_wave)) {
+            return (string) $pendingStudent->initial_wave;
         }
 
-        // Trouver dans quelle période le pending_student a été créé
-        $createdAt = $pendingStudent->created_at;
-        $cohortNumber = 1;
+        $academicYearService = app(AcademicYearService::class);
+        $wave = $academicYearService->resolveWave(
+            (int) $pendingStudent->academic_year_id,
+            (int) $pendingStudent->department_id,
+            $pendingStudent->created_at
+        );
 
-        foreach ($periods as $index => $period) {
-            $startDate = \Carbon\Carbon::parse($period->start_date);
-            $endDate = \Carbon\Carbon::parse($period->end_date);
+        return (string) $wave;
+    }
 
-            if ($createdAt->between($startDate, $endDate)) {
-                $cohortNumber = $index + 1;
-                break;
+    /**
+     * Transférer un dossier de candidature vers une autre vague
+     */
+    public function transferWave(PendingStudent $pendingStudent, int $toWave, ?string $reason = null, $user = null): PendingStudent
+    {
+        $fromWave = (int) ($pendingStudent->initial_wave ?? 1);
+
+        if ($fromWave === $toWave) {
+            throw new \App\Exceptions\BusinessException(
+                message: "Le candidat est déjà dans la Vague {$toWave}.",
+                errorCode: 'SAME_WAVE_TRANSFER'
+            );
+        }
+
+        $history = $pendingStudent->transfer_history ?? [];
+
+        $actorName = 'Scolarité / Administration';
+        if ($user) {
+            $actorName = trim(($user->first_name ?? '').' '.($user->last_name ?? ''));
+            if (empty($actorName)) {
+                $actorName = $user->email ?? 'Agent Scolarité';
             }
         }
 
-        return (string)$cohortNumber;
+        $history[] = [
+            'from_wave' => $fromWave,
+            'to_wave' => $toWave,
+            'transferred_at' => now()->toDateTimeString(),
+            'transferred_by' => $actorName,
+            'reason' => $reason ?: "Transfert de la Vague {$fromWave} vers la Vague {$toWave}",
+        ];
+
+        $pendingStudent->transferred_from_wave = $pendingStudent->transferred_from_wave ?? $fromWave;
+        $pendingStudent->initial_wave = $toWave;
+        $pendingStudent->transfer_history = $history;
+        $pendingStudent->save();
+
+        Log::info('Candidat transféré de vague', [
+            'pending_student_id' => $pendingStudent->id,
+            'tracking_code' => $pendingStudent->tracking_code,
+            'from_wave' => $fromWave,
+            'to_wave' => $toWave,
+            'transferred_by' => $actorName,
+        ]);
+
+        return $pendingStudent->fresh([
+            'entryDiploma',
+            'personalInformation',
+            'department',
+            'academicYear',
+        ]);
     }
 
     /**
@@ -505,7 +607,7 @@ class PendingStudentService
             // Format: ANNEE + 4 chiffres aléatoires (ex: 20240001)
             $year = date('Y');
             $number = str_pad(mt_rand(1, 9999), 4, '0', STR_PAD_LEFT);
-            $studentId = $year . $number;
+            $studentId = $year.$number;
         } while (\App\Modules\Inscription\Models\Student::where('student_id_number', $studentId)->exists());
 
         return $studentId;

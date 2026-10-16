@@ -17,7 +17,7 @@ class LmdGradeService
 
     /**
      * Récupère les étudiants d'un programme avec leurs notes
-     *
+     * 
      * @param Program $program
      * @param string|null $cohort
      * @return \Illuminate\Support\Collection
@@ -86,7 +86,7 @@ class LmdGradeService
                 'student_id' => $student?->student_id_number ?? 'N/A',
                 'last_name' => $personalInfo?->last_name,
                 'first_names' => $personalInfo?->first_names,
-                'grades' => $grade?->grades ?? [],
+                'grades' => $this->padGrades($grade?->grades, count($program->weighting ?? [])),
                 'average' => $grade?->average,
                 'retake_grades' => $grade?->retake_grades ?? [],
                 'retake_average' => $grade?->retake_average,
@@ -105,7 +105,7 @@ class LmdGradeService
 
     /**
      * Ajoute une colonne de notes (un nouveau devoir)
-     *
+     * 
      * @param int $programId
      * @param array $notes ['student_id' => value]
      * @param bool $sessionNormale
@@ -126,10 +126,10 @@ class LmdGradeService
 
                 if ($grade) {
                     // Ajoute la note au tableau existant
-                    $gradesArray = $sessionNormale
+                    $gradesArray = $sessionNormale 
                         ? ($grade->grades ?? [])
                         : ($grade->retake_grades ?? []);
-
+                    
                     $gradesArray[] = $note;
 
                     if ($sessionNormale) {
@@ -142,7 +142,7 @@ class LmdGradeService
                     $grade = new LmdSystemGrade();
                     $grade->student_pending_student_id = $studentPendingStudentId;
                     $grade->program_id = $programId;
-
+                    
                     if ($sessionNormale) {
                         $grade->grades = [$note];
                     } else {
@@ -151,7 +151,7 @@ class LmdGradeService
                 }
 
                 // Récupère la pondération actuelle
-                $pond = $sessionNormale
+                $pond = $sessionNormale 
                     ? ($program->weighting ?? [])
                     : ($program->retake_weighting ?? []);
 
@@ -159,7 +159,7 @@ class LmdGradeService
                 $currentGrades = $sessionNormale ? $grade->grades : $grade->retake_grades;
                 if (count($currentGrades) === count($pond) && count($pond) > 0) {
                     $moyenne = $this->calculationService->calculateMoyennePonderee($currentGrades, $pond);
-
+                    
                     if ($sessionNormale) {
                         $grade->average = $moyenne;
                         $grade->validated = $this->calculationService->isValidated($moyenne, $grade->retake_average);
@@ -180,7 +180,7 @@ class LmdGradeService
             if (!empty($results)) {
                 $columnCount = count($sessionNormale ? $results[0]->grades : $results[0]->retake_grades);
                 $newPond = $this->calculationService->getBalancedPonderation($columnCount);
-
+                
                 if ($sessionNormale) {
                     $program->weighting = $newPond;
                 } else {
@@ -202,7 +202,7 @@ class LmdGradeService
 
     /**
      * Modifie une note à une position donnée
-     *
+     * 
      * @param int $studentPendingStudentId
      * @param int $programId
      * @param int $position
@@ -217,15 +217,25 @@ class LmdGradeService
         float $note,
         bool $sessionNormale = true
     ): bool {
+        $program = Program::findOrFail($programId);
+        $pond = $sessionNormale ? ($program->weighting ?? []) : ($program->retake_weighting ?? []);
+
         $grade = LmdSystemGrade::where('student_pending_student_id', $studentPendingStudentId)
             ->where('program_id', $programId)
             ->first();
 
+        // Étudiant sans ligne de notes (ex. ajouté à la classe après la création
+        // des évaluations) : on la crée à la première saisie.
         if (!$grade) {
-            return false;
+            $grade = new LmdSystemGrade();
+            $grade->student_pending_student_id = $studentPendingStudentId;
+            $grade->program_id = $programId;
         }
 
-        $gradesArray = $sessionNormale ? ($grade->grades ?? []) : ($grade->retake_grades ?? []);
+        $gradesArray = $this->padGrades(
+            $sessionNormale ? $grade->grades : $grade->retake_grades,
+            count($pond)
+        );
 
         if (!isset($gradesArray[$position])) {
             return false;
@@ -240,12 +250,10 @@ class LmdGradeService
         }
 
         // Recalcule la moyenne
-        $program = Program::findOrFail($programId);
-        $pond = $sessionNormale ? ($program->weighting ?? []) : ($program->retake_weighting ?? []);
-
+        
         if (count($gradesArray) === count($pond) && count($pond) > 0) {
             $moyenne = $this->calculationService->calculateMoyennePonderee($gradesArray, $pond);
-
+            
             if ($sessionNormale) {
                 $grade->average = $moyenne;
                 $grade->validated = $this->calculationService->isValidated($moyenne, $grade->retake_average);
@@ -262,7 +270,7 @@ class LmdGradeService
 
     /**
      * Supprime une colonne de notes (un devoir) pour tous les étudiants
-     *
+     * 
      * @param int $programId
      * @param int $columnIndex
      * @param bool $sessionNormale
@@ -323,7 +331,7 @@ class LmdGradeService
 
     /**
      * Définit une pondération manuelle et recalcule toutes les moyennes
-     *
+     * 
      * @param int $programId
      * @param array $pond
      * @param bool $sessionNormale
@@ -337,7 +345,7 @@ class LmdGradeService
         }
 
         $program = Program::findOrFail($programId);
-
+        
         if ($sessionNormale) {
             $program->weighting = $pond;
         } else {
@@ -351,7 +359,7 @@ class LmdGradeService
 
     /**
      * Recalcule les moyennes de tous les étudiants d'un programme
-     *
+     * 
      * @param int $programId
      * @param bool $sessionNormale
      * @return bool
@@ -364,10 +372,10 @@ class LmdGradeService
 
         foreach ($grades as $grade) {
             $gradesArray = $sessionNormale ? ($grade->grades ?? []) : ($grade->retake_grades ?? []);
-
+            
             if (count($gradesArray) === count($pond) && count($pond) > 0) {
                 $moyenne = $this->calculationService->calculateMoyennePonderee($gradesArray, $pond);
-
+                
                 if ($sessionNormale) {
                     $grade->average = $moyenne;
                     $grade->validated = $this->calculationService->isValidated($moyenne, $grade->retake_average);
@@ -377,7 +385,7 @@ class LmdGradeService
                     $grade->validated = $this->calculationService->isValidated($grade->average, $grade->retake_average);
                     $grade->must_retake = $this->calculationService->mustRetake($grade->retake_average);
                 }
-
+                
                 $grade->save();
             }
         }
@@ -431,12 +439,12 @@ class LmdGradeService
                             if ($class->group_name) {
                                 $name .= ' (' . $class->group_name . ')';
                             }
-
+                            
                             // Compter uniquement les programmes du professeur
                             $professorProgramsCount = $class->programs->filter(function ($program) use ($professorId) {
                                 return $program->courseElementProfessor && $program->courseElementProfessor->professor_id === $professorId;
                             })->count();
-
+                            
                             // Compter les étudiants dans le class_group spécifique
                             $studentsCount = \App\Modules\Inscription\Models\StudentGroup::where('class_group_id', $class->id)
                                 ->whereHas('student.studentPendingStudents.academicPaths', function ($q) use ($class, $cohort) {
@@ -450,7 +458,7 @@ class LmdGradeService
                                     }
                                 })
                                 ->count();
-
+                            
                             return [
                                 'id' => $class->id,
                                 'name' => $name,
@@ -471,7 +479,7 @@ class LmdGradeService
     public function getStudentsForEvaluation(Program $program, ?string $cohort = null): array
     {
         $students = $this->getStudentsByProgram($program, $cohort);
-
+        
         return [
             'program' => [
                 'id' => $program->id,
@@ -524,7 +532,7 @@ class LmdGradeService
             'programs' => $programs->map(function ($program) {
                 $weighting = $program->weighting ?? [];
                 $columnCount = is_array($weighting) ? count($weighting) : 0;
-
+                
                 return [
                     'id' => $program->id,
                     'uuid' => $program->uuid,
@@ -544,14 +552,14 @@ class LmdGradeService
     public function getGradeSheet(Program $program, ?string $cohort = null): array
     {
         $students = $this->getStudentsByProgram($program, $cohort);
-
+        
         // Convertir weighting en tableau de valeurs si c'est un objet
         $weighting = $program->weighting ?? [];
         $weightingArray = is_array($weighting) ? array_values($weighting) : [];
-
+        
         $retakeWeighting = $program->retake_weighting ?? [];
         $retakeWeightingArray = is_array($retakeWeighting) ? array_values($retakeWeighting) : [];
-
+        
         return [
             'program' => [
                 'id' => $program->id,
@@ -584,18 +592,18 @@ class LmdGradeService
         $defaultNotes = [];
         $program = Program::findOrFail($programId);
         $students = $this->getStudentsByProgram($program);
-
+        
         foreach ($students as $student) {
             $defaultNotes[$student['student_pending_student_id']] = -1;
         }
-
+        
         // Remplacer par les notes fournies
         foreach ($notes as $studentId => $note) {
             if (isset($defaultNotes[$studentId])) {
                 $defaultNotes[$studentId] = $note;
             }
         }
-
+        
         return $this->addNoteColumn($programId, $defaultNotes, !$isRetake);
     }
 
@@ -606,23 +614,23 @@ class LmdGradeService
     {
         $program = Program::findOrFail($programId);
         $grades = LmdSystemGrade::where('program_id', $programId)->get();
-
+        
         DB::beginTransaction();
         try {
             $notesToAdd = [];
-
+            
             foreach ($grades as $grade) {
                 $gradesArray = $sessionNormale ? ($grade->grades ?? []) : ($grade->retake_grades ?? []);
-
+                
                 if (isset($gradesArray[$columnIndex])) {
                     $notesToAdd[$grade->student_pending_student_id] = $gradesArray[$columnIndex];
                 } else {
                     $notesToAdd[$grade->student_pending_student_id] = -1;
                 }
             }
-
+            
             $result = $this->addNoteColumn($programId, $notesToAdd, $sessionNormale);
-
+            
             DB::commit();
             return $result;
         } catch (\Exception $e) {
@@ -639,7 +647,7 @@ class LmdGradeService
         $program = Program::with(['classGroup', 'courseElementProfessor.courseElement', 'courseElementProfessor.professor'])
             ->findOrFail($programId);
         $students = $this->getStudentsByProgram($program);
-
+        
         $exportData = [
             'program_info' => [
                 'name' => $program->courseElementProfessor->courseElement->name ?? 'N/A',
@@ -656,17 +664,17 @@ class LmdGradeService
                     'grades' => $student['grades'] ?? [],
                     'average' => $student['average']
                 ];
-
+                
                 if ($includeRetake) {
                     $data['retake_grades'] = $student['retake_grades'] ?? [];
                     $data['retake_average'] = $student['retake_average'];
                     $data['final_average'] = $student['retake_average'] ?? $student['average'];
                 }
-
+                
                 return $data;
             })
         ];
-
+        
         return $exportData;
     }
 
@@ -674,13 +682,13 @@ class LmdGradeService
     public function getTotalEvaluations(?int $academicYearId = null): int
     {
         $query = \App\Modules\Cours\Models\Program::query();
-
+        
         if ($academicYearId) {
             $query->whereHas('classGroup', function ($q) use ($academicYearId) {
                 $q->where('academic_year_id', $academicYearId);
             });
         }
-
+        
         return $query->whereNotNull('weighting')->count();
     }
 
@@ -758,7 +766,7 @@ class LmdGradeService
 
         return $programs->map(function ($program) use ($cohort) {
             $students = $this->getStudentsByProgram($program, $cohort);
-
+            
             return [
                 'program_id' => $program->id,
                 'program_name' => $program->courseElementProfessor->courseElement->name ?? 'N/A',
@@ -777,14 +785,14 @@ class LmdGradeService
     {
         $program = Program::with(['classGroup.department', 'classGroup.cycle', 'courseElementProfessor.courseElement', 'courseElementProfessor.professor'])
             ->findOrFail($programId);
-
+        
         return $this->getGradeSheet($program, $cohort);
     }
 
     public function exportGradesByDepartment(int $academicYearId, int $departmentId, ?string $level, string $format, ?string $cohort = null): array
     {
         $programs = $this->getGradesByFilters($academicYearId, $departmentId, $level, null, $cohort);
-
+        
         return [
             'format' => $format,
             'data' => $programs,
@@ -795,5 +803,20 @@ class LmdGradeService
                 'cohort' => $cohort,
             ]
         ];
+    }
+
+    /**
+     * Complète les notes avec -1 (non saisi) jusqu'au nombre d'évaluations attendu,
+     * pour qu'un étudiant sans note reste saisissable dans la fiche de notation.
+     */
+    private function padGrades(?array $grades, int $columnCount): array
+    {
+        $grades = array_values($grades ?? []);
+
+        while (count($grades) < $columnCount) {
+            $grades[] = -1;
+        }
+
+        return $grades;
     }
 }

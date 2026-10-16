@@ -171,26 +171,32 @@ class CycleController extends Controller
         if (!$academicYearId) {
             return $this->successResponse([], 'Aucune année académique spécifiée');
         }
-
-        // Récupérer les périodes distinctes et compter
+        
         $query = \DB::table('submission_periods')
             ->where('academic_year_id', $academicYearId);
-
-        // Filtrer par filière si spécifiée
-        if ($departmentId) {
-            $query->where('department_id', $departmentId);
+        
+        if ($departmentId && $departmentId !== 'all') {
+            $periodsCount = (int) $query->where('department_id', $departmentId)->count();
+        } else {
+            // Nombre max de périodes configurées par filière pour cette année
+            $periodsCount = (int) ($query->groupBy('department_id')
+                ->selectRaw('count(*) as count')
+                ->pluck('count')
+                ->max() ?? 0);
         }
 
-        $periods = $query->select('start_date', 'end_date')
-            ->distinct()
-            ->orderBy('start_date')
-            ->get();
+        // Prendre en compte aussi la vague max des dossiers existants
+        $studentQuery = \DB::table('pending_students')
+            ->where('academic_year_id', $academicYearId);
+        if ($departmentId && $departmentId !== 'all') {
+            $studentQuery->where('department_id', $departmentId);
+        }
+        $maxStudentWave = (int) ($studentQuery->max('initial_wave') ?? 0);
 
-        $periodsCount = $periods->count();
-
-        // Générer les cohortes basées sur le nombre de périodes
+        $totalCohorts = max($periodsCount, $maxStudentWave, 1);
+        
         $cohorts = [];
-        for ($i = 1; $i <= $periodsCount; $i++) {
+        for ($i = 1; $i <= $totalCohorts; $i++) {
             $cohorts[] = [
                 'value' => (string)$i,
                 'label' => "Cohorte {$i}"

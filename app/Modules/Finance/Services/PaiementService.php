@@ -23,7 +23,11 @@ class PaiementService
      */
     public function getAll(array $filters, int $perPage = 15)
     {
-        $query = Paiement::query()->with(['student']);
+        $query = Paiement::query()->with([
+            'student.pendingStudents.personalInformation',
+            'studentPendingStudent.pendingStudent.personalInformation',
+            'legacyStudent',
+        ]);
 
         // Recherche globale
         if (!empty($filters['search'])) {
@@ -37,7 +41,7 @@ class PaiementService
             });
         }
 
-        // Filtre par status
+        // Filtre par statut
         if (!empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
@@ -67,9 +71,56 @@ class PaiementService
      */
     public function getStudentInfo(string $matricule): array
     {
+        $matricule = strtoupper(trim($matricule));
         $student = Student::with('pendingStudents.personalInformation')->where('student_id_number', $matricule)->first();
-
+        
         if (!$student) {
+            // Vérifier si c'est un ancien étudiant (< 2023)
+            $legacy = \App\Modules\LegacyStudent\Models\LegacyStudent::with(['department', 'departments'])->where('matricule', $matricule)->first();
+            if ($legacy) {
+                $filieres = [];
+                if ($legacy->department) {
+                    $filieres[] = [
+                        'id' => $legacy->department->id,
+                        'nom' => $legacy->department->name . ($legacy->cycle ? " ({$legacy->cycle})" : ''),
+                    ];
+                }
+                if ($legacy->departments) {
+                    foreach ($legacy->departments as $dept) {
+                        if (!in_array($dept->id, array_column($filieres, 'id'))) {
+                            $filieres[] = [
+                                'id' => $dept->id,
+                                'nom' => $dept->name . ($legacy->cycle ? " ({$legacy->cycle})" : ''),
+                            ];
+                        }
+                    }
+                }
+
+                // Fallback si la filière était enregistrée par id direct
+                if (empty($filieres) && $legacy->department_id) {
+                    $dept = \App\Modules\Inscription\Models\Department::find($legacy->department_id);
+                    if ($dept) {
+                        $filieres[] = [
+                            'id' => $dept->id,
+                            'nom' => $dept->name . ($legacy->cycle ? " ({$legacy->cycle})" : ''),
+                        ];
+                    }
+                }
+
+                return [
+                    'id' => $legacy->id,
+                    'student_id_number' => $legacy->matricule,
+                    'nom' => $legacy->last_name,
+                    'prenoms' => $legacy->first_name,
+                    'email' => $legacy->email,
+                    'tel' => $legacy->phone,
+                    'filieres' => $filieres,
+                    'has_no_filieres' => empty($filieres),
+                    'message' => null,
+                    'is_legacy' => true,
+                ];
+            }
+
             throw new ResourceNotFoundException('Étudiant');
         }
 
@@ -113,50 +164,39 @@ class PaiementService
     public function create(array $data, $quittanceFile): Paiement
     {
         return DB::transaction(function () use ($data, $quittanceFile) {
-            // La référence vient de la quittance (extraite par OCR)
-            // Elle est déjà validée comme unique dans CreatePaiementRequest
+            $matricule = strtoupper(trim($data['matricule']));
+            $student = Student::where('student_id_number', $matricule)->first();
+            $legacy = null;
+            $studentPendingStudentId = null;
 
-            // Vérifier que l'étudiant existe
-            $student = Student::where('student_id_number', $data['matricule'])->first();
             if (!$student) {
-                throw new ResourceNotFoundException("Étudiant avec le matricule {$data['matricule']}");
+                // Vérifier si c'est un ancien étudiant (< 2023)
+                $legacy = \App\Modules\LegacyStudent\Models\LegacyStudent::where('matricule', $matricule)->first();
+                if (!$legacy) {
+                    throw new ResourceNotFoundException("Étudiant avec le matricule {$matricule}");
+                }
+            } else {
+                if (!empty($data['department_id'])) {
+                    $studentPendingStudent = StudentPendingStudent::query()
+                        ->where('student_id', $student->id)
+                        ->whereHas('pendingStudent', function ($q) use ($data) {
+                            $q->where('department_id', $data['department_id']);
+                        })
+                        ->latest('id')
+                        ->first();
+
+                    if ($studentPendingStudent) {
+                        $studentPendingStudentId = $studentPendingStudent->id;
+                    }
+                }
             }
-
-            // Récupérer le student_pending_student_id à partir du matricule et department_id
-            // Le department_id est requis pour identifier correctement l'inscription
-            if (empty($data['department_id'])) {
-                throw new \InvalidArgumentException('Le department_id est requis pour créer un paiement');
-            }
-
-            $studentPendingStudent = StudentPendingStudent::query()
-                ->where('student_id', $student->id)
-                ->whereHas('pendingStudent', function ($q) use ($data) {
-                    $q->where('department_id', $data['department_id']);
-                })
-                ->latest('id') // Prendre le plus récent si plusieurs
-                ->first();
-
-            if (!$studentPendingStudent) {
-                throw new ResourceNotFoundException(
-                    "Aucune inscription trouvée pour l'étudiant {$data['matricule']} dans le département {$data['department_id']}"
-                );
-            }
-
-            $studentPendingStudentId = $studentPendingStudent->id;
-
-            Log::info('Récupération student_pending_student_id', [
-                'student_id' => $student->id,
-                'department_id' => $data['department_id'],
-                'student_pending_student_id' => $studentPendingStudentId,
-                'pending_student_id' => $studentPendingStudent->pending_student_id,
-            ]);
 
             // Stockage direct de la quittance
             // Structure: storage/app/private/payments/{matricule}/{année}/{filename}
             $year = date('Y');
             $filename = uniqid('receipt_' . $data['matricule'] . '_') . '.' . $quittanceFile->getClientOriginalExtension();
             $receiptPath = "payments/{$data['matricule']}/{$year}/{$filename}";
-
+            
             // Stocker le fichier
             Storage::disk('local')->put($receiptPath, file_get_contents($quittanceFile->getRealPath()));
 
@@ -184,12 +224,21 @@ class PaiementService
             // Envoyer un email de confirmation si un email est fourni
             try {
                 if (!empty($paiement->email)) {
-                    // Charger les informations personnelles via l'accessor
-                    if (!$student->relationLoaded('pendingStudents')) {
-                        $student->load('pendingStudents.personalInformation');
-                    }
-                    $personalInfo = $student->personalInformation;
+                    $firstName = 'Étudiant(e)';
+                    $lastName = '';
 
+                    if ($student) {
+                        if (!$student->relationLoaded('pendingStudents')) {
+                            $student->load('pendingStudents.personalInformation');
+                        }
+                        $personalInfo = $student->personalInformation;
+                        $firstName = $personalInfo?->first_names ?? 'Étudiant(e)';
+                        $lastName = $personalInfo?->last_name ?? '';
+                    } elseif ($legacy) {
+                        $firstName = $legacy->first_name ?? 'Étudiant(e)';
+                        $lastName = $legacy->last_name ?? '';
+                    }
+                    
                     $mailData = [
                         'reference' => $paiement->reference,
                         'matricule' => $paiement->student_id_number,
@@ -197,12 +246,12 @@ class PaiementService
                         'numero_compte' => $paiement->account_number,
                         'date_versement' => $paiement->payment_date,
                         'motif' => $paiement->purpose,
-                        'prenoms' => $personalInfo?->first_names ?? 'Étudiant(e)',
-                        'nom' => $personalInfo?->last_name ?? '',
+                        'prenoms' => $firstName,
+                        'nom' => $lastName,
                     ];
-
+                    
                     Mail::to($paiement->email)->send(new QuittanceConfirmation($mailData));
-
+                    
                     Log::info('Email de confirmation de quittance envoyé', [
                         'paiement_id' => $paiement->id,
                         'email' => $paiement->email,
@@ -231,16 +280,16 @@ class PaiementService
     }
 
     /**
-     * Mettre à jour le status d'un paiement
+     * Mettre à jour le statut d'un paiement
      */
-    public function updatestatus(Paiement $paiement, string $status, ?string $observation = null): Paiement
+    public function updateStatus(Paiement $paiement, string $status, ?string $observation = null): Paiement
     {
         $paiement->update([
             'status' => $status,
             'observation' => $observation,
         ]);
 
-        Log::info('status du paiement mis à jour', [
+        Log::info('Statut du paiement mis à jour', [
             'paiement_id' => $paiement->id,
             'reference' => $paiement->reference,
             'new_status' => $status,

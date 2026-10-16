@@ -8,6 +8,7 @@ use App\Modules\Inscription\Http\Requests\SubmitIngenieurPrepaDossierRequest;
 use App\Modules\Inscription\Http\Requests\SubmitIngenieurSpecialiteDossierRequest;
 use App\Modules\Inscription\Http\Requests\SubmitLicenceDossierRequest;
 use App\Modules\Inscription\Http\Requests\SubmitMasterDossierRequest;
+use App\Modules\Inscription\Constants\DocumentFields;
 use App\Modules\Inscription\Models\PendingStudent;
 use App\Modules\Inscription\Models\SubmissionPeriod;
 use App\Modules\Inscription\Services\DossierSubmissionService;
@@ -62,13 +63,13 @@ class DossierSubmissionController extends Controller
         $validCycles = ['Licence', 'Master', 'Ingénieur'];
 
         if (!in_array($cycleName, $validCycles)) {
-            return $this->errorResponse('Cycle invalide spécifié', 'INVALID_CYCLE', 400);
+            return $this->errorResponse('Cycle invalide spécifié', 400, 'INVALID_CYCLE');
         }
 
         $periods = $this->submissionService->getActiveSubmissionPeriods($cycleName);
 
         if (empty($periods)) {
-            return $this->errorResponse("Aucune période active pour {$cycleName}", 'NO_ACTIVE_PERIOD', 404);
+            return $this->errorResponse("Aucune période active pour {$cycleName}", 404, 'NO_ACTIVE_PERIOD');
         }
 
         return $this->successResponse($periods, 'Périodes récupérées avec succès');
@@ -129,23 +130,11 @@ class DossierSubmissionController extends Controller
             'all_inputs' => $request->except(['photo', 'demande_da', 'cv', 'acte_naissance', 'diplome_bac', 'diplome_licence', 'attestation_travail', 'quittance_rectorat', 'quittance_cap', 'attestation_depot_dossier'])
         ]);
 
-        $fileFields = [
-                'demande_da' => 'Demande manuscrite adressée au D/EPAC',
-                'cv' => 'Curriculum Vitae',
-                'acte_naissance' => "Photocopie de l’extrait d’acte de naissance légalisé ou sécurisé",
-                'diplome_bac' => 'Photocopie légalisée du diplôme BAC ou équivalent',
-                'diplome_licence' => 'Photocopie légalisée du diplôme de la licence professionnelle',
-                'attestation_travail' => 'Attestation de travail',
-                'quittance_rectorat' => 'Quittance Rectorat de 2.000F',
-                'quittance_cap' => 'Quittance de 10.000F',
-                'attestation_depot_dossier' => 'Attestation de dépôt de dossier pour diplômes étrangers',
-            ];
-
         $result = $this->submissionService->submitDossier(
             $request,
             'Licence Professionnelle',
             ['Baccalauréat Scientifique', 'BTS', 'DTI', 'DUT', 'DEAT'],
-            $fileFields
+            DocumentFields::LICENCE
         );
 
         return $this->createdResponse($result, 'Dossier Licence soumis avec succès');
@@ -170,24 +159,11 @@ class DossierSubmissionController extends Controller
      */
     public function submitMasterDossier(SubmitMasterDossierRequest $request): JsonResponse
     {
-        $fileFields = [
-                'demande_da' => 'Demande manuscrite adressée au D/EPAC',
-                'cv' => 'Curriculum Vitae',
-                'acte_naissance' => "Photocopie de l’extrait d’acte de naissance légalisé ou sécurisé",
-                'diplome_bac' => 'Photocopie légalisée du diplôme BAC',
-                'diplome_license' => 'Photocopie légalisée du diplôme de la licence professionnelle',
-                'attestation_travail' => 'Attestation de travail',
-                'quittance_rectorat' => 'Quittance Rectorat de 2.000F',
-                'quittance_cap' => 'Quittance de 20.000F',
-                'attestation_depot_dossier' => 'Attestation de dépôt de dossier pour diplômes étrangers',
-                'attestation_anglais' => 'Attestation d’Anglais pour le secteur biologique',
-            ];
-
         $result = $this->submissionService->submitDossier(
             $request,
             'Master Professionnel',
             ['Licence Professionnelle'],
-            $fileFields
+            DocumentFields::MASTER
         );
 
         return $this->createdResponse($result, 'Dossier Master soumis avec succès');
@@ -212,23 +188,11 @@ class DossierSubmissionController extends Controller
      */
     public function submitIngenieurPrepaDossier(SubmitIngenieurPrepaDossierRequest $request): JsonResponse
     {
-        $fileFields = [
-                'demande_da' => 'Demande manuscrite adressée au D/EPAC',
-                'cv' => 'Curriculum Vitae',
-                'acte_naissance' => "Photocopie de l’extrait d’acte de naissance légalisé ou sécurisé",
-                'diplome_bac' => 'Photocopie légalisée du diplôme BAC',
-                'diplome_licence' => 'Photocopie légalisée du diplôme de la licence',
-                'attestation_travail' => 'Attestation de travail',
-                // 'quittance_rectorat' => 'Quittance Rectorat de 2.000F',
-                'quittance_cap' => 'Quittance de 15.000F',
-                'attestation_depot_dossier' => 'Attestation de dépôt de dossier pour diplômes étrangers',
-            ];
-
         $result = $this->submissionService->submitDossier(
             $request,
             'Ingénierie',
             ['Licence Professionnelle'],
-            $fileFields
+            DocumentFields::INGENIEUR_PREPA
         );
 
         return $this->createdResponse($result, 'Dossier Ingénieur Prépa soumis avec succès');
@@ -258,17 +222,11 @@ class DossierSubmissionController extends Controller
             $request->department_id
         );
 
-        $fileFields = [
-            'certificat_prepa' => 'Certificat de Classes Préparatoires',
-            'quittance_rectorat' => 'Quittance Rectorat',
-            'quittance_cap' => 'Quittance CAP',
-        ];
-
         $result = $this->submissionService->submitDossier(
             $request,
             'Ingénierie',
             ['Certificat de Classes Préparatoires', 'Quittance Rectorat', 'Quittance CAP'],
-            $fileFields,
+            DocumentFields::INGENIEUR_SPECIALITE,
             false
         );
 
@@ -323,5 +281,80 @@ class DossierSubmissionController extends Controller
         );
 
         return $this->createdResponse($result, 'Compléments soumis avec succès');
+    }
+
+    /**
+     * Vérifie si un candidat a déjà un dossier en attente pour l'année académique.
+     */
+    public function checkExistingDossier(Request $request): JsonResponse
+    {
+        $email = (string) $request->query('email', '');
+        $academicYearId = $request->query('academic_year_id') ? (int) $request->query('academic_year_id') : null;
+        $targetCycle = (string) $request->query('target_cycle', $request->query('cycle', ''));
+
+        if (empty($email)) {
+            return $this->errorResponse("L'adresse email est requise.", 422, 'EMAIL_REQUIRED');
+        }
+
+        $existing = $this->submissionService->checkExistingPendingDossier($email, $academicYearId, $targetCycle);
+
+        if (!$existing) {
+            return $this->successResponse(['exists' => false], 'Aucun dossier en attente trouvé.');
+        }
+
+        return $this->successResponse([
+            'exists' => true,
+            'dossier' => $existing,
+        ], 'Dossier existant en attente détecté.');
+    }
+
+    /**
+     * Récupère les données complètes du dossier pour le formulaire de modification.
+     */
+    public function getDossierForUpdate(Request $request): JsonResponse
+    {
+        $email = (string) $request->input('email', '');
+        $trackingCode = (string) $request->input('tracking_code', '');
+
+        if (empty($email)) {
+            return $this->errorResponse("L'adresse email est requise.", 422, 'MISSING_FIELDS');
+        }
+
+        $dossier = $this->submissionService->getDossierForUpdate($email, $trackingCode ?: null);
+
+        return $this->successResponse($dossier, 'Données du dossier récupérées avec succès.');
+    }
+
+    /**
+     * Met à jour le dossier existant (Vague 1 conservée).
+     */
+    public function updateExistingDossier(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'tracking_code' => 'required|string',
+        ]);
+
+        $result = $this->submissionService->updateExistingDossier($request, DocumentFields::allFields());
+
+        return $this->successResponse($result, 'Dossier mis à jour avec succès.');
+    }
+
+    /**
+     * Transfère directement le dossier existant vers la vague active en cours (sans modification des champs).
+     */
+    public function transferWaveByCandidate(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'tracking_code' => 'required|string',
+        ]);
+
+        $result = $this->submissionService->transferDossierWaveByCandidate(
+            (string) $request->input('email'),
+            (string) $request->input('tracking_code')
+        );
+
+        return $this->successResponse($result, $result['message'] ?? 'Dossier transféré avec succès.');
     }
 }

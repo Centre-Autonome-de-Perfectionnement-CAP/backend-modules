@@ -490,4 +490,27 @@ class PendingStudentController extends Controller
 
         return $this->successResponse($files, 'Documents récupérés avec succès');
     }
+
+    /**
+     * Transférer un étudiant vers une autre vague
+     */
+    public function transferWave(Request $request, PendingStudent $pendingStudent): JsonResponse
+    {
+        $request->validate([
+            'to_wave' => 'required|integer|min:1|max:10',
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        $updatedStudent = $this->pendingStudentService->transferWave(
+            $pendingStudent,
+            (int) $request->input('to_wave'),
+            $request->input('reason'),
+            $request->user()
+        );
+
+        return $this->successResponse(
+            new PendingStudentResource($updatedStudent),
+            "Dossier transféré avec succès vers la Vague {$request->input('to_wave')}."
+        );
+    }
 }

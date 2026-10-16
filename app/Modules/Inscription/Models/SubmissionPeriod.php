@@ -5,10 +5,11 @@ namespace App\Modules\Inscription\Models;
 use App\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class SubmissionPeriod extends Model
 {
-    use HasFactory, HasUuid;
+    use HasFactory, HasUuid, SoftDeletes;
 
     /**
      * Create a new factory instance for the model.
@@ -23,11 +24,13 @@ class SubmissionPeriod extends Model
         'department_id',
         'start_date',
         'end_date',
+        'is_active',
     ];
 
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
+        'is_active' => 'boolean',
     ];
 
 

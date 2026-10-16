@@ -51,9 +51,9 @@ class UpdateProgramRequest extends FormRequest
                     
                     // Vérifier que la somme fait 100
                     $sum = array_sum($value);
-                    if ($sum != 100) {
-                        $fail("La somme des pondérations doit être égale à 100 (actuellement: {$sum}).");
-                    }
+                     //if ($sum != 100) {
+                        // $fail("La somme des pondérations doit être égale à 100 (actuellement: {$sum}).");
+                     //}
                 },
             ],
             'weighting.*' => 'numeric|min:0|max:100',

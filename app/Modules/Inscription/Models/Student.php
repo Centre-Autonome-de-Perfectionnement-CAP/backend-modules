@@ -63,6 +63,14 @@ class Student extends Authenticatable
     }
 
     /**
+     * Groupes d'étudiants
+     */
+    public function studentGroups()
+    {
+        return $this->hasMany(StudentGroup::class, 'student_id');
+    }
+
+    /**
      * Parcours académiques
      */
     public function academicPaths()

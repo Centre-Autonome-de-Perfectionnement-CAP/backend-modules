@@ -242,6 +242,12 @@ class AttestationService
         });
     }
 
+    // FUSION develop/main : la version main de getEligibleForPassage() (critère
+    // unique year_decision = 'pass') est supprimée au profit de la version develop
+    // plus bas (délibération renseignée, exclusion de la dernière année, des
+    // redoublants et du cycle préparatoire via checkPassageEligibility()).
+    // Les deux méthodes portaient le même nom → erreur fatale PHP.
+
     /**
      * Génère une attestation de succès
      */
@@ -474,7 +480,7 @@ class AttestationService
                         'code' => $program->code,
                         'name' => $program->name,
                         'credits' => $program->credits,
-                        'average' => $gradeRecord->average ?? 0,
+                        'average' => max((float) ($gradeRecord->average ?? 0), 0),
                         'semester' => $program->semester,
                         'has_retake' => false
                     ];
@@ -548,7 +554,7 @@ class AttestationService
                 new \BaconQrCode\Renderer\Image\SvgImageBackEnd()
             );
             $writer = new \BaconQrCode\Writer($renderer);
-            $qrCodeSvg = $writer->writeString($qrData);
+            $qrCodeSvg = $writer->writeString($qrData, 'UTF-8');
             $qrCodeBase64 = base64_encode($qrCodeSvg);
 
             $bulletins[] = [
@@ -671,7 +677,7 @@ class AttestationService
                     'code' => $program->code,
                     'name' => $program->name,
                     'credits' => $program->credits,
-                    'average' => $gradeRecord->average ?? 0,
+                    'average' => max((float) ($gradeRecord->average ?? 0), 0),
                     'semester' => $program->semester,
                     'has_retake' => false // TODO: vérifier si l'étudiant a fait un rattrapage
                 ];
@@ -753,7 +759,7 @@ class AttestationService
             new \BaconQrCode\Renderer\Image\SvgImageBackEnd()
         );
         $writer = new \BaconQrCode\Writer($renderer);
-        $qrCodeSvg = $writer->writeString($qrData);
+        $qrCodeSvg = $writer->writeString($qrData, 'UTF-8');
         $qrCodeBase64 = base64_encode($qrCodeSvg);
 
         return $this->pdfService->downloadPdf('core::pdfs.bulletin', [

@@ -225,17 +225,34 @@ class ClassGroupService
                 return null;
             }
             
-            // Créer le groupe unique "A"
-            $classGroup = ClassGroup::create([
-                'uuid' => (string) Str::uuid(),
-                'academic_year_id' => $academicYearId,
-                'department_id' => $departmentId,
-                'study_level' => $studyLevel,
-                'group_name' => 'A',
-            ]);
-            
-            // Ajouter tous les étudiants au groupe
+            // Réutiliser le groupe "A" s'il existe déjà : un second clic ne doit pas
+            // créer un groupe en double (les étudiants sortiraient en double partout).
+            $classGroup = ClassGroup::where('academic_year_id', $academicYearId)
+                ->where('department_id', $departmentId)
+                ->where('study_level', $studyLevel)
+                ->where('group_name', 'A')
+                ->orderBy('id')
+                ->first();
+
+            if (!$classGroup) {
+                $classGroup = ClassGroup::create([
+                    'uuid' => (string) Str::uuid(),
+                    'academic_year_id' => $academicYearId,
+                    'department_id' => $departmentId,
+                    'study_level' => $studyLevel,
+                    'group_name' => 'A',
+                ]);
+            }
+
+            // Ajouter uniquement les étudiants qui ne sont pas déjà dans le groupe
+            $alreadyInGroup = StudentGroup::where('class_group_id', $classGroup->id)
+                ->pluck('student_id')
+                ->all();
+
             foreach ($students as $student) {
+                if (in_array($student->id, $alreadyInGroup, true)) {
+                    continue;
+                }
                 StudentGroup::create([
                     'uuid' => (string) Str::uuid(),
                     'class_group_id' => $classGroup->id,
@@ -276,5 +293,51 @@ class ClassGroupService
             $classGroup->department_id,
             $classGroup->study_level
         );
+    }
+
+    /**
+     * Range un étudiant dans le groupe de sa classe (année, filière, niveau) lorsque
+     * cette classe n'a qu'un seul groupe (cas du "Groupe unique"). Les étudiants
+     * approuvés après la création du groupe n'y étaient jamais ajoutés et
+     * n'apparaissaient donc pas dans les fiches de présence / d'émargement d'un groupe.
+     *
+     * Ne fait rien si la classe a plusieurs groupes distincts (choix à faire par
+     * l'administration) ou si l'étudiant est déjà dans un groupe de cette classe.
+     */
+    public function assignStudentToSingleGroup(int $studentId, int $academicYearId, int $departmentId, $studyLevel): ?ClassGroup
+    {
+        $groups = ClassGroup::where('academic_year_id', $academicYearId)
+            ->where('department_id', $departmentId)
+            ->where('study_level', $studyLevel)
+            ->orderBy('id')
+            ->get();
+
+        if ($groups->pluck('group_name')->unique()->count() !== 1) {
+            return null;
+        }
+
+        $alreadyGrouped = StudentGroup::where('student_id', $studentId)
+            ->whereIn('class_group_id', $groups->pluck('id'))
+            ->exists();
+
+        if ($alreadyGrouped) {
+            return null;
+        }
+
+        $group = $groups->first();
+
+        StudentGroup::create([
+            'uuid' => (string) Str::uuid(),
+            'class_group_id' => $group->id,
+            'student_id' => $studentId,
+        ]);
+
+        Log::info('Étudiant ajouté au groupe unique de sa classe', [
+            'student_id' => $studentId,
+            'class_group_id' => $group->id,
+            'group_name' => $group->group_name,
+        ]);
+
+        return $group;
     }
 }

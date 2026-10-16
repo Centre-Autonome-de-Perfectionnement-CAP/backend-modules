@@ -5,10 +5,11 @@ namespace App\Modules\Inscription\Models;
 use App\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PendingStudent extends Model
 {
-    use HasFactory, HasUuid;
+    use HasFactory, HasUuid, SoftDeletes;
 
     /**
      * Create a new factory instance for the model.
@@ -34,6 +35,12 @@ class PendingStudent extends Model
         'sponsorise',
         'exonere',
         'status',
+        'initial_wave',
+        'transferred_from_wave',
+        'transfer_history',
+        'is_updated_by_student',
+        'last_student_update_at',
+        'student_update_summary',
         'mail_cuca_sent',
         'mail_cuca_count',
         'mail_cuo_sent',
@@ -42,6 +49,12 @@ class PendingStudent extends Model
 
     protected $casts = [
         'documents' => 'array',
+        'initial_wave' => 'integer',
+        'transferred_from_wave' => 'integer',
+        'transfer_history' => 'array',
+        'is_updated_by_student' => 'boolean',
+        'last_student_update_at' => 'datetime',
+        'student_update_summary' => 'array',
         'mail_cuca_sent' => 'boolean',
         'mail_cuo_sent' => 'boolean',
         'mail_cuca_count' => 'integer',

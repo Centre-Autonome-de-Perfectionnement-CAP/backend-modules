@@ -29,11 +29,15 @@ class CreatePaiementRequest extends FormRequest
             'matricule' => [
                 'required',
                 'string',
-                'max:11',
+                'max:50',
                 function ($attribute, $value, $fail) {
-                    $student = Student::where('student_id_number', $value)->first();
+                    $matricule = strtoupper(trim($value));
+                    $student = Student::where('student_id_number', $matricule)->first();
                     if (!$student) {
-                        $fail('Le matricule fourni n\'existe pas dans notre base de données.');
+                        $legacy = \App\Modules\LegacyStudent\Models\LegacyStudent::where('matricule', $matricule)->first();
+                        if (!$legacy) {
+                            $fail('Le matricule fourni n\'existe pas dans notre base de données.');
+                        }
                     }
                 },
             ],
@@ -66,7 +70,7 @@ class CreatePaiementRequest extends FormRequest
             'date_versement' => 'nullable|date|before_or_equal:today',
             'quittance' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120', // Max 5MB
             'motif' => 'required|string',
-            'email' => 'nullable|email|max:255',
+            'email' => ['nullable', 'string', 'max:255', new \App\Rules\ValidRealEmail()],
             'contact' => 'nullable|string|max:255',
         ];
     }

@@ -41,12 +41,25 @@ class Paiement extends Model
         'status' => 'pending',
     ];
 
+    protected $appends = [
+        'receipt_url',
+        'student_full_name',
+    ];
+
     /**
      * Relation avec le modèle Student via le matricule (student_id_number)
      */
     public function student()
     {
         return $this->belongsTo(Student::class, 'student_id_number', 'student_id_number');
+    }
+
+    /**
+     * Relation avec LegacyStudent pour les anciens étudiants (< 2023)
+     */
+    public function legacyStudent()
+    {
+        return $this->belongsTo(\App\Modules\LegacyStudent\Models\LegacyStudent::class, 'student_id_number', 'matricule');
     }
 
     /**
@@ -58,12 +71,43 @@ class Paiement extends Model
     }
 
     /**
+     * Nom complet de l'étudiant (qu'il soit moderne ou ancien étudiant)
+     */
+    public function getStudentFullNameAttribute(): ?string
+    {
+        if ($this->legacyStudent) {
+            return trim("{$this->legacyStudent->first_name} {$this->legacyStudent->last_name}");
+        }
+
+        if ($this->studentPendingStudent?->pendingStudent?->personalInformation) {
+            $pi = $this->studentPendingStudent->pendingStudent->personalInformation;
+            return trim("{$pi->first_names} {$pi->last_name}");
+        }
+
+        if ($this->relationLoaded('student') && $this->student) {
+            $studentPending = $this->student->pendingStudents()->with('personalInformation')->first();
+            $pi = $studentPending?->personalInformation;
+            if ($pi) {
+                return trim("{$pi->first_names} {$pi->last_name}");
+            }
+        }
+
+        // Fallback: rechercher dans legacy_students si non chargé
+        $legacy = \App\Modules\LegacyStudent\Models\LegacyStudent::where('matricule', $this->student_id_number)->first();
+        if ($legacy) {
+            return trim("{$legacy->first_name} {$legacy->last_name}");
+        }
+
+        return null;
+    }
+
+    /**
      * Obtenir l'URL de téléchargement de la quittance
      */
     public function getReceiptUrlAttribute(): ?string
     {
-        if ($this->receipt_path) {
-            return route('api.finance.paiements.download', ['reference' => $this->reference]);
+        if ($this->receipt_path && $this->reference) {
+            return url('/api/finance/paiements/' . urlencode((string)$this->reference) . '/download');
         }
         return null;
     }

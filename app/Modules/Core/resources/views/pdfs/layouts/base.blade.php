@@ -6,62 +6,19 @@
     <title>@yield('title', 'Document PDF')</title>
     <style>
         @page {
-            size: A3 landscape;
-            margin: 1cm;
+            size: A4 landscape;
+            margin: 0cm;
             counter-increment: page;
         }
 
         body {
             font-family: Arial, sans-serif;
-            margin: 1cm;
+            margin: 0;
+            padding: 0;
         }
 
         .contenu {
-            height: 200px;
-        }
-
-        .logoepac {
-            width: 150px;
-            position: relative;
-            top: 10px;
-            left: 50px;
-        }
-
-        .logouac {
-            width: 150px;
-            position: absolute;
-            top: 10px;
-            right: 50px;
-        }
-
-        .header {
-            text-align: center;
-            position: absolute;
-            top: 10px;
-            left: 35%;
-            right: 35%;
-        }
-
-        .header h3 {
-            font-size: 20px;
-            margin: 2px 0;
-        }
-
-        .header h4 {
-            position: relative;
-            top: -20px;
-        }
-
-        .header p {
-            position: relative;
-            top: -35px;
-            font-size: 11px;
-        }
-
-        hr {
-            border: .7px solid black;
-            position: relative;
-            top: -35px;
+            margin: 0;
         }
 
         table {
@@ -69,25 +26,23 @@
             border-collapse: collapse;
             margin-bottom: 10px;
             text-align: center;
-            font-size: 15px;
+            font-size: 13px;
         }
 
         table th,
         table td {
             border: 1px solid #ccc;
-            padding: 2px;
+            padding: 3px;
             text-align: center;
         }
 
         .main {
             text-align: center;
-            margin-bottom: 20px;
-            position: relative;
-            top: -15px;
+            margin: 5px 25px 35px 25px;
         }
 
         .top-page {
-            font-size: 17px;
+            font-size: 14px;
             text-align: left;
         }
 
@@ -100,17 +55,18 @@
         }
 
         .pg {
-            min-height: 96%;
+            margin: 0;
+            padding: 0;
         }
 
         footer {
-            text-align: right;
             position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 30px;
-            font-size: 12px;
+            bottom: 10px;
+            left: 25px;
+            right: 25px;
+            height: 20px;
+            font-size: 11px;
+            color: #333333;
         }
 
         footer .page:after {
@@ -128,10 +84,11 @@
     @yield('content')
 
     <footer>
-        <div style="text-align: left; font-size: 12px;">
+        <div style="float: left; width: 80%; text-align: left; font-size: 11px;">
             Imprimé le {{ date('d/m/Y à H:i') }} par la Cellule Informatique de la Division Formation Continue CAP
         </div>
-        <div class="page"></div>
+        <div class="page" style="float: right; width: 18%; text-align: right; font-size: 11px;"></div>
+        <div style="clear: both;"></div>
     </footer>
 </body>
 </html>

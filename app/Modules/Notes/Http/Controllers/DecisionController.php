@@ -130,11 +130,22 @@ class DecisionController extends Controller
     {
         $request->validate([
             'decisions' => 'required|array',
-            'decisions.*.student_pending_student_id' => 'required|integer',
-            'decisions.*.semester_decision' => 'required|string'
         ]);
 
-        $result = $this->decisionService->saveSemesterDecisions($request->decisions);
+        $decisions = array_map(function ($d) {
+            $studentId = $d['student_id'] ?? null;
+            $spsId = $d['student_pending_student_id'] ?? null;
+            if (!$spsId && $studentId) {
+                $spsId = \App\Modules\Inscription\Models\StudentPendingStudent::where('student_id', $studentId)->value('id');
+            }
+            return [
+                'student_pending_student_id' => $spsId,
+                'student_id' => $studentId,
+                'semester_decision' => $d['semester_decision'] ?? $d['decision'] ?? '',
+            ];
+        }, $request->decisions);
+
+        $result = $this->decisionService->saveSemesterDecisions($decisions);
         return $this->successResponse($result, 'Décisions semestrielles enregistrées');
     }
 
@@ -142,22 +153,36 @@ class DecisionController extends Controller
     {
         $request->validate([
             'academic_year_id' => 'required|integer',
-            'class_group_id' => 'required|integer',
+            'class_group_id' => 'nullable|integer',
             'decisions' => 'required|array',
-            'decisions.*.student_pending_student_id' => 'required|integer',
-            'decisions.*.year_decision' => 'required|string'
         ]);
 
-        $result = $this->decisionService->saveYearDecisions($request->decisions);
+        $decisions = array_map(function ($d) {
+            $studentId = $d['student_id'] ?? null;
+            $spsId = $d['student_pending_student_id'] ?? null;
+            if (!$spsId && $studentId) {
+                $spsId = \App\Modules\Inscription\Models\StudentPendingStudent::where('student_id', $studentId)->value('id');
+            }
+            return [
+                'student_pending_student_id' => $spsId,
+                'student_id' => $studentId,
+                'year_decision' => $d['year_decision'] ?? $d['decision'] ?? '',
+            ];
+        }, $request->decisions);
+
+        $result = $this->decisionService->saveYearDecisions($decisions);
         
-        $retakes = $this->retakeService->processYearEndRetakes(
-            $request->academic_year_id,
-            $request->class_group_id
-        );
+        $retakes = [];
+        if ($request->class_group_id) {
+            $retakes = $this->retakeService->processYearEndRetakes(
+                $request->academic_year_id,
+                $request->class_group_id
+            );
+        }
 
         return $this->successResponse([
             'decisions' => $result,
             'retakes_created' => count($retakes)
-        ], 'Décisions annuelles enregistrées et reprises créées');
+        ], 'Décisions annuelles enregistrées');
     }
 }

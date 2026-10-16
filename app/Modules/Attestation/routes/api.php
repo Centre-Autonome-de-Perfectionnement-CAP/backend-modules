@@ -53,6 +53,7 @@ Route::prefix('api/attestations')->group(function () {
         Route::get('eligible/preparatory',           [AttestationController::class, 'getEligibleForPreparatory']);
         Route::get('eligible/definitive',            [AttestationController::class, 'getEligibleForDefinitive']);
         Route::get('eligible/inscription',           [AttestationController::class, 'getEligibleForInscription']);
+        Route::get('eligible/bulletins',             [AttestationController::class, 'getStudentsForBulletins']); // ← ajouté sur main
 
         // Génération unitaire
         Route::post('generate/passage',              [AttestationController::class, 'generatePassage']);
@@ -73,5 +74,10 @@ Route::prefix('api/attestations')->group(function () {
         // Utilitaires étudiants
         Route::put('students/{studentPendingStudentId}/names',             [AttestationController::class, 'updateStudentNames']);
         Route::get('students/{studentPendingStudentId}/birth-certificate', [AttestationController::class, 'getBirthCertificate']);
+        // FUSION develop/main : la route provisoire de main
+        // « document-requests/badge-count → {count: 0} » n'est pas reprise : la même
+        // URI est servie par le module Demandes (DocumentRequestBadgeController,
+        // compteur réel). La garder aurait masqué le vrai compteur selon l'ordre
+        // de chargement des providers.
     });
 });

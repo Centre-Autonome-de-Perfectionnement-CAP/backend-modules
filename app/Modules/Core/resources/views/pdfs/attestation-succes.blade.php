@@ -1,4 +1,4 @@
-@extends('Core::pdfs.epac-base')
+@extends('core::pdfs.epac-base')
 
 @section('title', 'Attestation de Succès')
 
@@ -21,8 +21,9 @@
 }
 @endsection
 
-@section('body-font-size', '14pt')
-@section('body-margin', '2.5cm 2cm 1.5cm 2cm')
+@section('body-font-size', '13pt')
+@section('body-margin', '10px 40px 60px 40px')
+@section('hide-annee', 'true')
 
 @section('extra-styles')
 .attestation {
@@ -71,7 +72,7 @@
     font-family: 'Berlin Sans FB';
 }
 .directeur {
-    margin-top: 35px;
+    margin-top: 15px;
     text-align: center;
     padding-left: 60%;
 }
@@ -120,27 +121,8 @@
 }
 @endsection
 
-@section('custom-header')
-<div class="header">
-    <img src="{{ storage_path('images/1.png') }}" class="logoepac" alt="logo EPAC UAC" style="position: absolute; left: 20px; top: 17px; width: 100px;">
-    <div class="entete" style="text-align: center;">
-        <span style="font-size: 12px;">République du Bénin</span>
-        <div style="height: 2px; background: #000; width: 50px; margin: 5px auto;"></div>
-        <span style="font-size: 17px; display: block;">Université d'Abomey-Calavi</span>
-        <span style="display: block;">Ecole polytechnique d'Abomey-Calavi</span>
-        <img src="{{ storage_path('images/sep.png') }}" alt="" style="margin: 5px 0;">
-        <span style="font-size: 18px; display: block; position: relative; top: -15px;">Direction</span>
-    </div>
-    <img src="{{ storage_path('images/2.png') }}" class="logouac" alt="logo UAC" style="position: absolute; right: 20px; top: 17px; width: 100px;">
-    <hr style="width: 97%; margin-left: 12px; position: relative; top: -13px;">
-</div>
-@endsection
-
-@section('hide-annee')
-@endsection
-
 @section('content')
-<div class="middle" style="position: relative; top: 30px;">
+<div class="middle" style="position: relative; margin-top: 10px;">
     <div class="top">
         @if($posD ?? false)
             <img src="{{ storage_path('images/par1.png') }}" alt="" style="position: absolute; top: 27px; left: {{ 10.34*$posD }}px;">
@@ -175,31 +157,19 @@
     </div>
     <div class="filiere"> {{ $Etudiant->filiere?->nom }}</div>
     <div class="text" style="margin-bottom: 6px;"><span class="avant"><span class="retrait">La présente attestation revêtue du seau de l'EPAC est délivrée à l'intéressé en attendant l'établissement de l'attestation du diplôme.</span></span></div>
-    <div style="position:relative;margin-top: 30px;">
+    <div style="position:relative;margin-top: 15px;">
         <div class="directeur">
             <p class="first" style="text-transform: capitalize;">{{ $signataire->poste }}, </p>
-            <div style="height: 70px;"> </div>
+            <div style="height: 45px;"> </div>
             <p style="text-decoration: underline;"> <strong class="first">{{ $titreSignataire }}</strong><strong class="name">{{ $nomSignataire }}</strong></p>
         </div>
         @if($ccap ?? false)
         <div class="ccap">
             <p class="first" style="text-transform: capitalize;">{{ $ccap?->poste }}, </p>
-            <div style="height: 40px;"> </div>
+            <div style="height: 35px;"> </div>
             <p style="text-decoration: underline;">{{ $ccap?->nomination }}</p>
         </div>
         @endif
-    </div>
-</div>
-@endsection
-
-@section('hide-footer')
-@endsection
-
-@section('additional-content')
-<div style="position: fixed; left: 15px; right: 15px; bottom: 5px; width: 100%; margin-top: 10px;">
-    <div style="width: 97%; margin-left: -6px; height: 1px; background-color: #000;"></div>
-    <div style="font-size: 13px; width: 100%; margin-left: -15px; text-align: center;">
-        01 B.P. 2009 COTONOU - Téléphone : 21 36 09 93 - FAX : 21 36 01 99 Email : epac.uac@epac.uac.bj - epacuac@bj.refer.org
     </div>
 </div>
 @endsection
