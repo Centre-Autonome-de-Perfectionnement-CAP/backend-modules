@@ -187,9 +187,23 @@ jobs:
               chmod +x "$RELEASE_DIR/scripts/queue-worker-loop.sh"
               for i in 1 2 3; do
                 # Le script tourne depuis la release ; il exécute toujours "current".
-                nohup "$RELEASE_DIR/scripts/queue-worker-loop.sh" "$CURRENT_DIR" < /dev/null > /dev/null 2>&1 &
+                # setsid : détache complètement de la session SSH (sinon les
+                # workers meurent à la fin du déploiement — même méthode que le Node).
+                nohup setsid "$RELEASE_DIR/scripts/queue-worker-loop.sh" "$CURRENT_DIR" < /dev/null > /dev/null 2>&1 &
               done
             fi
+
+            # Filet de sécurité : le scheduler Laravel vide la file chaque minute
+            # (workers tués, redémarrage du serveur…). Ajouté une seule fois.
+            if command -v crontab &> /dev/null; then
+              CRON_LINE="* * * * * cd $CURRENT_DIR && php artisan schedule:run >> /dev/null 2>&1"
+              if ! crontab -l 2>/dev/null | grep -Fq "$CURRENT_DIR && php artisan schedule:run"; then
+                ( crontab -l 2>/dev/null; echo "$CRON_LINE" ) | crontab - && echo "⏰ Cron du scheduler Laravel installé"
+              fi
+            fi
+
+            sleep 2
+            echo "👷 Workers actifs : $(pgrep -fc 'artisan queue:work' || true)"
 
             echo "🔄 Restarting WhatsApp Node via Artisan..."
             # 1. Tuer l'ancien processus Node WhatsApp s'il tourne
