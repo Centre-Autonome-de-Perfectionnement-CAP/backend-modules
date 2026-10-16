@@ -42,6 +42,9 @@ Route::prefix('api/attestations')->group(function () {
         Route::post('bulletins',            [DemandeController::class, 'storeBulletinDemande']);
         Route::post('quittance/generate',   [QuittanceController::class, 'generateAndSendQuittance']);
         Route::post('demandes/complement',  [ComplementDossierController::class, 'store']);
+        // Validation par code (WhatsApp + email enregistrés) avant le dépôt du complément
+        Route::post('demandes/complement/otp',        [ComplementDossierController::class, 'sendOtp']);
+        Route::post('demandes/complement/otp/verify', [ComplementDossierController::class, 'verifyOtp']);
     });
 
     // ── Routes protégées (progiciel interne) ──────────────────────────────────

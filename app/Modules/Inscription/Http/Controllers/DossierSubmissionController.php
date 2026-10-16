@@ -304,8 +304,20 @@ class DossierSubmissionController extends Controller
             return $this->successResponse(['exists' => false], 'Aucun dossier en attente trouvé.');
         }
 
+        // SÉCURITÉ : sans preuve que le demandeur possède l'email (code OTP),
+        // seule l'existence du dossier et son cycle sont renvoyés — jamais le
+        // code de suivi ni les données personnelles (qui permettaient, avec le
+        // seul email d'un tiers, de consulter puis modifier son dossier).
+        $verified = $this->hasValidEmailToken($request, $email);
+        if (!$verified) {
+            $existing = array_diff_key($existing, array_flip([
+                'id', 'tracking_code', 'first_names', 'last_name', 'prefill_data', 'transfer_history',
+            ]));
+        }
+
         return $this->successResponse([
             'exists' => true,
+            'requires_verification' => !$verified,
             'dossier' => $existing,
         ], 'Dossier existant en attente détecté.');
     }
@@ -320,6 +332,10 @@ class DossierSubmissionController extends Controller
 
         if (empty($email)) {
             return $this->errorResponse("L'adresse email est requise.", 422, 'MISSING_FIELDS');
+        }
+
+        if (!$this->hasValidEmailToken($request, $email)) {
+            return $this->otpRequiredResponse();
         }
 
         $dossier = $this->submissionService->getDossierForUpdate($email, $trackingCode ?: null);
@@ -345,6 +361,10 @@ class DossierSubmissionController extends Controller
             'photo' => $this->photoRule(),
         ], $fileRules), $this->uploadMessages());
 
+        if (!$this->hasValidEmailToken($request, (string) $request->input('email'))) {
+            return $this->otpRequiredResponse();
+        }
+
         $result = $this->submissionService->updateExistingDossier($request, DocumentFields::allFields());
 
         return $this->successResponse($result, 'Dossier mis à jour avec succès.');
@@ -360,11 +380,36 @@ class DossierSubmissionController extends Controller
             'tracking_code' => 'required|string',
         ]);
 
+        if (!$this->hasValidEmailToken($request, (string) $request->input('email'))) {
+            return $this->otpRequiredResponse();
+        }
+
         $result = $this->submissionService->transferDossierWaveByCandidate(
             (string) $request->input('email'),
             (string) $request->input('tracking_code')
         );
 
         return $this->successResponse($result, $result['message'] ?? 'Dossier transféré avec succès.');
+    }
+
+    /**
+     * Preuve de possession de l'email : jeton délivré après vérification du
+     * code OTP (POST /api/core/otp/verify). Accepté en champ ou en paramètre.
+     */
+    private function hasValidEmailToken(Request $request, string $email): bool
+    {
+        $token = (string) ($request->input('verification_token') ?? $request->input('_verificationToken') ?? '');
+
+        return $token !== '' && $email !== ''
+            && app(\App\Modules\Core\Services\OtpService::class)->validateToken($token, $email);
+    }
+
+    private function otpRequiredResponse(): JsonResponse
+    {
+        return $this->errorResponse(
+            'Veuillez confirmer votre adresse email avec le code reçu avant d\'accéder à votre dossier.',
+            403,
+            'OTP_REQUIRED'
+        );
     }
 }

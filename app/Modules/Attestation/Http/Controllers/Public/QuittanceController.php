@@ -38,6 +38,18 @@ class QuittanceController extends Controller
             'simulation'       => 'boolean',
         ]);
 
+        // SÉCURITÉ : cette adresse est publique. Sans contrôle, n'importe qui
+        // pouvait fabriquer une « quittance CAP » (montant libre) et la faire
+        // envoyer à n'importe quelle adresse au nom du CAP. La quittance n'est
+        // délivrée que pour une demande existante, à son email enregistré et
+        // pour le matricule de son titulaire.
+        if (!$this->isGenuineRequest($request)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Demande introuvable ou informations non concordantes (référence, matricule, email).',
+            ], 404);
+        }
+
         try {
             $datePaiement = Carbon::parse($request->paidAt)
                 ->setTimezone('Africa/Porto-Novo')
@@ -99,6 +111,26 @@ class QuittanceController extends Controller
             'datePaiement'     => $datePaiement,
             'simulation'       => $request->boolean('simulation', true),
         ])->setPaper('A4', 'portrait')->output();
+    }
+
+    private function isGenuineRequest(Request $request): bool
+    {
+        $query = \Illuminate\Support\Facades\DB::table('document_requests as dr');
+        \App\Modules\Demandes\Support\Requester::join($query, 'dr', false);
+
+        $demande = $query
+            ->where('dr.reference', strtoupper(trim((string) $request->referenceDemande)))
+            ->select('dr.email', \Illuminate\Support\Facades\DB::raw(\App\Modules\Demandes\Support\Requester::matriculeSql() . ' as matricule'))
+            ->first();
+
+        if (!$demande) {
+            return false;
+        }
+
+        $sameEmail = mb_strtolower(trim((string) $demande->email)) === mb_strtolower(trim((string) $request->email));
+        $sameMatricule = strtoupper(trim((string) $demande->matricule)) === strtoupper(trim((string) $request->matricule));
+
+        return $sameEmail && $sameMatricule;
     }
 
     private function storePdf(string $quittanceNumber, string $pdfContent): ?string

@@ -35,9 +35,13 @@ class ComplementDossierController extends Controller
         'application/pdf',
         'image/jpeg',
         'image/png',
+        'image/webp',
+        'image/heic', // photos iPhone
+        'image/heif',
     ];
 
-    private const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 Mo
+    // 10 Mo : les photos prises au téléphone dépassaient souvent 5 Mo.
+    private const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
     /**
      * Statuts terminaux : plus aucun complément accepté (dossier clos).
@@ -76,7 +80,72 @@ class ComplementDossierController extends Controller
         protected NotificationService    $notificationService,
         protected WhatsAppService        $whatsAppService,
         protected DocumentStorageService $storageService,
+        protected \App\Modules\Attestation\Services\ComplementOtpService $complementOtp,
     ) {}
+
+    // ── POST /api/attestations/demandes/complement/otp ────────────────────────
+    // Envoie un code au WhatsApp (et à l'email) ENREGISTRÉS dans la demande.
+
+    public function sendOtp(Request $request): JsonResponse
+    {
+        $request->validate(['reference' => 'required|string|max:50']);
+        $reference = strtoupper(trim($request->reference));
+
+        if (DemandeController::isLegacyServiceReference($reference)) {
+            return response()->json(['message' => self::LEGACY_REF_MESSAGE], 409);
+        }
+
+        $demande = DB::table('document_requests')->where('reference', $reference)->first();
+        if (!$demande) {
+            return response()->json(['message' => 'Référence introuvable.'], 404);
+        }
+        if (in_array($demande->status, self::CLOSED_STATUSES, true)) {
+            return response()->json(['message' => "Ce dossier est clôturé : il n'accepte plus de complément."], 409);
+        }
+
+        $result = $this->complementOtp->send($demande);
+
+        if (!$result['sent'] && isset($result['retry_after'])) {
+            return response()->json([
+                'message'     => "Un code vient déjà d'être envoyé. Patientez {$result['retry_after']} s avant d'en demander un nouveau.",
+                'retry_after' => $result['retry_after'],
+                'data'        => $result,
+            ], 429);
+        }
+        if (!$result['sent']) {
+            return response()->json([
+                'message' => "Aucun numéro WhatsApp ni email n'est enregistré pour cette demande : présentez-vous au secrétariat.",
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Un code de vérification a été envoyé sur votre WhatsApp'
+                . (in_array('email', $result['channels'], true) ? ' et votre email' : '') . ' enregistrés.',
+            'data'    => $result,
+        ]);
+    }
+
+    // ── POST /api/attestations/demandes/complement/otp/verify ─────────────────
+
+    public function verifyOtp(Request $request): JsonResponse
+    {
+        $request->validate([
+            'reference' => 'required|string|max:50',
+            'code'      => 'required|string|size:6',
+        ]);
+
+        $result = $this->complementOtp->verify($request->reference, $request->code);
+
+        if (!$result['ok']) {
+            return response()->json(['message' => $result['message']], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data'    => ['complement_token' => $result['token']],
+        ]);
+    }
 
     // ── GET /api/attestations/demandes/complement/find ────────────────────────
 
@@ -164,7 +233,9 @@ class ComplementDossierController extends Controller
             'email'          => 'required|email|max:255',
             'whatsapp'       => 'required|string|max:30',
             'pieces'         => 'required|array|min:1',
-            'pieces.*'       => 'file|max:5120|mimes:pdf,jpg,jpeg,png',
+            'pieces.*'       => 'file|max:10240|mimes:pdf,jpg,jpeg,png,webp,heic,heif',
+            // Jeton obtenu après validation du code reçu par WhatsApp / email
+            'complement_token' => 'required|string|max:100',
             'piece_labels'   => 'nullable|array',
             'piece_labels.*' => 'nullable|string|max:200',
         ]);
@@ -232,16 +303,25 @@ class ComplementDossierController extends Controller
                 continue;
             }
             if ($file->getSize() > self::MAX_FILE_SIZE) {
-                return response()->json(['message' => "Le fichier « {$key} » dépasse 5 Mo."], 422);
+                return response()->json(['message' => "Le fichier « {$key} » dépasse 10 Mo. Réduisez sa taille ou envoyez un PDF."], 422);
             }
             if (!in_array($file->getMimeType(), self::ALLOWED_MIMES)) {
-                return response()->json(['message' => "Format non accepté pour « {$key} » (PDF, JPG, PNG uniquement)."], 422);
+                return response()->json(['message' => "Format non accepté pour « {$key} » (PDF, JPG, PNG, WEBP, HEIC)."], 422);
             }
             $filesToStore[$key] = $file;
         }
 
         if (empty($filesToStore)) {
             return response()->json(['message' => 'Aucun fichier valide reçu.'], 422);
+        }
+
+        // SÉCURITÉ : seul le demandeur (code reçu sur le WhatsApp / l'email
+        // enregistrés dans la demande) peut compléter le dossier.
+        if (!$this->complementOtp->consumeToken($request->input('complement_token'), $reference)) {
+            return response()->json([
+                'message' => 'Vérification expirée ou invalide. Demandez un nouveau code de vérification.',
+                'code'    => 'COMPLEMENT_OTP_REQUIRED',
+            ], 403);
         }
 
         // Stocker dans complement/ — DocumentStorageService gère la structure
@@ -297,10 +377,12 @@ class ComplementDossierController extends Controller
         //   - Email + WhatsApp → toutes les secrétaires
         // Ne doit jamais faire échouer la réponse : les pièces sont déjà enregistrées.
         try {
+            // Accusé de réception aux coordonnées ENREGISTRÉES de la demande
+            // (celles qui ont reçu le code), à défaut celles saisies.
             $this->notificationService->sendComplementSecretaire(
-                etudiantEmail:    $request->email,
+                etudiantEmail:    $demande->email ?: $request->email,
                 vars:             compact('nomComplet', 'matricule', 'reference', 'dateComplement', 'piecesList'),
-                whatsappEtudiant: $whatsappNormalized,
+                whatsappEtudiant: $demande->demandeur_whatsapp ?: $whatsappNormalized,
             );
         } catch (\Throwable $e) {
             Log::error('[ComplementDossier] Erreur mise en file des notifications', [

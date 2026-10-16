@@ -873,17 +873,15 @@ class DossierSubmissionService
                 );
             }
 
-            // Vérification du jeton OTP si présent
-            $verificationToken = $request->input('verification_token', $request->input('_verificationToken'));
-            if (!empty($verificationToken)) {
-                $otpService = app(\App\Modules\Core\Services\OtpService::class);
-                if (!$otpService->validateToken((string)$verificationToken, $email)) {
-                    throw new BusinessException(
-                        message: "Le jeton de vérification est invalide ou a expiré.",
-                        errorCode: 'INVALID_VERIFICATION_TOKEN',
-                        statusCode: 403
-                    );
-                }
+            // Vérification du jeton OTP — OBLIGATOIRE (avant : vérifié seulement
+            // s'il était fourni ; email + code de suivi suffisaient à modifier).
+            $verificationToken = (string) $request->input('verification_token', $request->input('_verificationToken'));
+            if (!app(\App\Modules\Core\Services\OtpService::class)->validateToken($verificationToken, $email)) {
+                throw new BusinessException(
+                    message: "Le jeton de vérification est invalide ou a expiré.",
+                    errorCode: 'INVALID_VERIFICATION_TOKEN',
+                    statusCode: 403
+                );
             }
 
             $isValidated = (
