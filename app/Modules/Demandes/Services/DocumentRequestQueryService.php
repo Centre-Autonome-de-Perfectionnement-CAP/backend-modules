@@ -187,6 +187,13 @@ class DocumentRequestQueryService
         return array_merge(Requester::identityColumns(), [
             DB::raw(Requester::DEPARTMENT . ' as department'),
             DB::raw('COALESCE(ay.academic_year, dr.bulletin_year) as academic_year'),
+            // Ancien étudiant : éléments de la déclaration à vérifier (panneau du dossier)
+            'ls.enrollment_year as legacy_enrollment_year',
+            'ls.cycle as legacy_cycle',
+            'ls.place_of_birth as legacy_place_of_birth',
+            'ls.email as legacy_email',
+            'ls.phone as legacy_phone',
+            'ls.rejection_reason as legacy_rejection_reason',
         ]);
     }
 
@@ -341,14 +348,7 @@ class DocumentRequestQueryService
             array_map(fn($sq) => DB::raw($sq), $this->historySubqueries()),
             [
                 DB::raw('ps.level as study_level'),
-                // Ancien étudiant : éléments de la déclaration à vérifier.
                 'ls.id as legacy_id',
-                'ls.enrollment_year as legacy_enrollment_year',
-                'ls.cycle as legacy_cycle',
-                'ls.place_of_birth as legacy_place_of_birth',
-                'ls.email as legacy_email',
-                'ls.phone as legacy_phone',
-                'ls.rejection_reason as legacy_rejection_reason',
             ]
         );
 

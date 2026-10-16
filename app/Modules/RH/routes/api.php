@@ -73,10 +73,10 @@ Route::prefix('rh')->group(function () {
         // ─── Email de transfert (+ WhatsApp automatique, voir ContratController) ──
         Route::post('contrats/{id}/send-transfer-email', [ContratController::class, 'sendTransferEmail']);
 
-        Route::apiResource('documents', DocumentManagementController::class)->except(['index']);
+        Route::apiResource('documents', DocumentManagementController::class)->except(['index', 'show']);
 
         Route::get('important-informations/admin', [ImportantInformationController::class, 'indexAdmin']);
-        Route::apiResource('important-informations', ImportantInformationController::class)->except(['index']);
+        Route::apiResource('important-informations', ImportantInformationController::class)->except(['index', 'show']);
 
         Route::apiResource('professors', ProfessorController::class)->only(['store', 'show', 'update', 'destroy']);
 

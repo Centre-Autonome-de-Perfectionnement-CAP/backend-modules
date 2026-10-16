@@ -54,8 +54,8 @@ class SendNotificationJob implements ShouldQueue
     private const BACKOFF = [15, 30, 60, 120, 300, 600];
 
     public function __construct(
-        public readonly string $channel,
-        public readonly array  $payload,
+        public string $channel,
+        public array  $payload,
     ) {
         // Dispatch dans une transaction → publié seulement après le COMMIT.
         $this->afterCommit();
