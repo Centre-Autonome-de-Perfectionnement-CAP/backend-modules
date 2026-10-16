@@ -8,6 +8,10 @@ use App\Modules\Demandes\WorkflowConstants;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
+use App\Modules\Demandes\Jobs\SendNotificationJob;
+use App\Modules\WhatsApp\Services\WhatsAppBridgeClient;
 
 /**
  * Envoi d'un message libre (texte + pièces jointes) de la secrétaire vers
@@ -23,10 +27,12 @@ use Illuminate\Support\Facades\Log;
  *   propriété $attachments typée en conflit avec Mailable + variable de vue
  *   'message' réservée par Laravel).
  *
- *   Désormais, chaque canal est mis en file d'envoi (SendNotificationJob),
- *   indépendamment l'un de l'autre, avec retry automatique 24 h en cas
- *   d'incident (bridge déconnecté, SMTP indisponible). La réponse HTTP est
- *   immédiate.
+ *   (16/10/2026) Retour à l'envoi SYNCHRONE à la demande du CAP : la
+ *   secrétaire doit savoir si le message est réellement parti. Texte
+ *   WhatsApp et email sont envoyés pendant la requête et leur résultat réel
+ *   est renvoyé. Les pièces jointes WhatsApp sont bornées dans le temps
+ *   (SYNC_BUDGET_SECONDS) pour ne jamais dépasser le délai du serveur web ;
+ *   le reste part juste après la réponse avec relance automatique.
  */
 class ContactDemandeurService
 {
@@ -35,6 +41,7 @@ class ContactDemandeurService
         private readonly NotificationService           $notificationService,
         private readonly WhatsAppService               $whatsApp,
         private readonly DocumentRequestHistoryService $historyService,
+        private readonly WhatsAppBridgeClient          $bridge,
     ) {}
 
     /**
@@ -90,53 +97,174 @@ class ContactDemandeurService
             $stored[] = ['path' => $path, 'name' => $this->safeFileName($file->getClientOriginalName())];
         }
 
-        $queued = $this->notificationService->sendMessageDemandeur(
-            demande:        $demande,
-            nomDemandeur:   $nomDemandeur,
-            typeLabel:      $typeLabel,
-            message:        $message,
-            secretaireName: $secretaireName,
-            attachments:    $stored,
-        );
+        // ── Envoi SYNCHRONE : la secrétaire voit le résultat réel ─────────────
+        $context   = "message-secretariat:{$demande->reference}";
+        $startedAt = microtime(true);
 
-        // Traçabilité dans l'historique du dossier (jamais bloquant).
-        try {
-            $this->historyService->recordMail($demande->id, 'Message du secrétariat au demandeur');
-        } catch (\Throwable $e) {
-            Log::warning('[ContactDemandeur] Historique non enregistré', [
-                'reference' => $demande->reference,
-                'error'     => $e->getMessage(),
-            ]);
+        $whatsapp = $this->sendWhatsAppNow($demande, $nomDemandeur, $message, $secretaireName, $stored, $context, $startedAt);
+        $email    = $this->sendEmailNow($demande, $nomDemandeur, $typeLabel, $message, $secretaireName, $stored);
+
+        // Traçabilité dans l'historique du dossier (jamais bloquant), seulement
+        // si au moins un canal a réellement abouti.
+        if ($whatsapp['success'] || $email['success']) {
+            try {
+                $this->historyService->recordMail($demande->id, 'Message du secrétariat au demandeur');
+            } catch (\Throwable $e) {
+                Log::warning('[ContactDemandeur] Historique non enregistré', [
+                    'reference' => $demande->reference,
+                    'error'     => $e->getMessage(),
+                ]);
+            }
         }
 
-        Log::info('[ContactDemandeur] Message mis en file d\'envoi', [
+        Log::info('[ContactDemandeur] Message au demandeur', [
             'reference'   => $demande->reference,
-            'whatsapp'    => $queued['whatsapp'],
-            'email'       => $queued['email'],
+            'whatsapp'    => $whatsapp,
+            'email'       => $email,
             'attachments' => count($stored),
+            'duration_ms' => (int) ((microtime(true) - $startedAt) * 1000),
         ]);
 
-        // Information (non bloquante) : bridge actuellement déconnecté →
-        // le message partira automatiquement à la reconnexion.
-        $waReason = null;
-        if ($queued['whatsapp'] && !$this->whatsApp->isConnected()) {
-            $waReason = "WhatsApp est momentanément déconnecté : le message partira automatiquement dès la reconnexion.";
+        return ['whatsapp' => $whatsapp, 'email' => $email];
+    }
+
+    /**
+     * Durée maximale passée à envoyer les pièces jointes WhatsApp pendant la
+     * requête (le serveur web coupe vers 60 s). Les fichiers restants partent
+     * juste après la réponse, avec relance automatique en cas d'échec.
+     */
+    private const SYNC_BUDGET_SECONDS = 35;
+
+    /** @return array{attempted: bool, success: bool, queued: bool, reason: ?string} */
+    private function sendWhatsAppNow(
+        DocumentRequest $demande,
+        string $nomDemandeur,
+        string $message,
+        string $secretaireName,
+        array $stored,
+        string $context,
+        float $startedAt,
+    ): array {
+        $phone = (string) ($demande->demandeur_whatsapp ?? '');
+        if ($phone === '') {
+            return ['attempted' => false, 'success' => false, 'queued' => false, 'reason' => null];
+        }
+
+        if (!$this->bridge->isConnected()) {
+            return $this->failed("WhatsApp du CAP déconnecté : le message n'est pas parti. Reconnectez WhatsApp puis renvoyez.");
+        }
+
+        $res = $this->bridge->sendDetailed(
+            $phone,
+            $this->whatsApp->templateMessageSecretariat($nomDemandeur, $message, $secretaireName),
+            $context,
+            'Demandes',
+        );
+        if (!$res['ok']) {
+            return $this->failed($this->explainWhatsAppError($res));
+        }
+
+        // Pièces jointes : envoyées tant que le délai le permet, le reste
+        // part juste après la réponse (avec relance automatique).
+        $failed = []; $later = 0;
+        foreach ($stored as $att) {
+            if ((microtime(true) - $startedAt) >= self::SYNC_BUDGET_SECONDS) {
+                SendNotificationJob::send('whatsapp_file', [
+                    'phone' => $phone, 'disk' => 'public', 'path' => $att['path'], 'file_name' => $att['name'],
+                    'caption' => "Pièce jointe — dossier {$demande->reference}", 'context' => $context, 'module' => 'Demandes',
+                ]);
+                $later++;
+                continue;
+            }
+
+            $fileRes = $this->bridge->sendFileDetailed(
+                $phone, 'public', $att['path'], $att['name'],
+                "Pièce jointe — dossier {$demande->reference}", $context, 'Demandes',
+            );
+            if (!$fileRes['ok']) {
+                $failed[] = $att['name'];
+            }
+        }
+
+        $notes = [];
+        if ($failed) {
+            $notes[] = 'Pièce(s) jointe(s) non envoyée(s) par WhatsApp : ' . implode(', ', $failed) . '.';
+        }
+        if ($later) {
+            $notes[] = "{$later} pièce(s) jointe(s) en cours d'envoi (relance automatique en cas d'échec).";
         }
 
         return [
-            'whatsapp' => [
-                'attempted' => $queued['whatsapp'],
-                'success'   => $queued['whatsapp'],
-                'queued'    => $queued['whatsapp'],
-                'reason'    => $waReason,
-            ],
-            'email' => [
-                'attempted' => $queued['email'],
-                'success'   => $queued['email'],
-                'queued'    => $queued['email'],
-                'reason'    => null,
-            ],
+            'attempted' => true,
+            'success'   => true,
+            'queued'    => false,
+            'reason'    => $notes ? implode(' ', $notes) : null,
         ];
+    }
+
+    /** @return array{attempted: bool, success: bool, queued: bool, reason: ?string} */
+    private function sendEmailNow(
+        DocumentRequest $demande,
+        string $nomDemandeur,
+        string $typeLabel,
+        string $message,
+        string $secretaireName,
+        array $stored,
+    ): array {
+        $to = trim((string) ($demande->email ?? ''));
+        if ($to === '') {
+            return ['attempted' => false, 'success' => false, 'queued' => false, 'reason' => null];
+        }
+        if (filter_var($to, FILTER_VALIDATE_EMAIL) === false) {
+            return $this->failed("Adresse email du demandeur invalide ({$to}).");
+        }
+
+        try {
+            Mail::send('core::emails.secretaire-message', [
+                'reference'      => $demande->reference,
+                'typeLabel'      => $typeLabel,
+                'nomDemandeur'   => $nomDemandeur,
+                // 'message' est réservé par Laravel dans les vues mail.
+                'messageBody'    => $message,
+                'secretaireName' => $secretaireName,
+            ], function ($m) use ($to, $nomDemandeur, $demande, $stored) {
+                $m->to($to, $nomDemandeur)
+                  ->subject("CAP-EPAC — Message concernant votre dossier {$demande->reference}");
+                foreach ($stored as $att) {
+                    if (Storage::disk('public')->exists($att['path'])) {
+                        $m->attachFromStorageDisk('public', $att['path'], $att['name']);
+                    }
+                }
+            });
+        } catch (\Throwable $e) {
+            Log::error('[ContactDemandeur] Email non envoyé', [
+                'reference' => $demande->reference, 'to' => $to, 'error' => $e->getMessage(),
+            ]);
+            return $this->failed("Le serveur email a refusé l'envoi. Réessayez dans quelques minutes.");
+        }
+
+        return ['attempted' => true, 'success' => true, 'queued' => false, 'reason' => null];
+    }
+
+    /** @return array{attempted: bool, success: bool, queued: bool, reason: ?string} */
+    private function failed(string $reason): array
+    {
+        return ['attempted' => true, 'success' => false, 'queued' => false, 'reason' => $reason];
+    }
+
+    /** @param array{ok: bool, retryable: bool, http: int, error: ?string} $res */
+    private function explainWhatsAppError(array $res): string
+    {
+        $error = (string) ($res['error'] ?? '');
+
+        return match (true) {
+            str_contains(mb_strtolower($error), 'invalide')
+                => "Numéro WhatsApp du demandeur invalide : le message n'est pas parti.",
+            $res['retryable']
+                => "WhatsApp momentanément indisponible : le message n'est pas parti. Réessayez dans quelques minutes.",
+            default
+                => "Le message WhatsApp n'a pas pu être remis (numéro sans WhatsApp ou refusé).",
+        };
     }
 
     /**

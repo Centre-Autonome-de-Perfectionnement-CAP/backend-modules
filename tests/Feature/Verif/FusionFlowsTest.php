@@ -287,6 +287,76 @@ class FusionFlowsTest extends TestCase
         $this->assertContains('0197000077', $this->jobs('whatsapp')->pluck('payload.phone')->all());
     }
 
+    private function fakeBridge(bool $connected, bool $ok = true): void
+    {
+        $this->app->instance(\App\Modules\WhatsApp\Services\WhatsAppBridgeClient::class, new class($connected, $ok) extends \App\Modules\WhatsApp\Services\WhatsAppBridgeClient {
+            public array $sent = [];
+            public function __construct(private bool $c, private bool $o) { parent::__construct(); }
+            public function isConnected(): bool { return $this->c; }
+            public function sendDetailed(string $phone, string $message, string $context = '', ?string $module = null): array
+            { $this->sent[] = [$phone, $message]; return ['ok' => $this->o, 'retryable' => !$this->o, 'http' => $this->o ? 200 : 503, 'error' => $this->o ? null : 'down']; }
+            public function sendFileDetailed(string $phone, string $disk, string $path, string $fileName, string $caption = '', string $context = '', ?string $module = null): array
+            { $this->sent[] = [$phone, $fileName]; return ['ok' => true, 'retryable' => false, 'http' => 200, 'error' => null]; }
+        });
+    }
+
+    private function contactDemande(): int
+    {
+        $r = $this->regularStudent();
+        return DB::table('document_requests')->insertGetId([
+            'reference' => 'ATT-CT' . random_int(1000, 9999), 'student_pending_student_id' => $r['sps'], 'type' => 'attestation_inscription', 'status' => 'submitted',
+            'email' => 'luc@example.org', 'demandeur_whatsapp' => '+2290197334455', 'created_at' => now(), 'updated_at' => now(), 'submitted_at' => now(),
+        ]);
+    }
+
+    public function test_contact_demandeur_is_synchronous_and_reports_success(): void
+    {
+        \Illuminate\Support\Facades\Queue::fake();
+        Mail::fake();
+        $this->fakeBridge(true);
+        $id = $this->contactDemande();
+        $this->actingAs(\App\Models\User::find($this->secId), 'sanctum');
+        $res = $this->postJson("/api/attestations/document-requests/{$id}/contact-demandeur", ['message' => 'Bonjour, merci de passer au CAP.'])->assertOk()->json('data');
+        $this->assertTrue($res['whatsapp']['success']);
+        $this->assertFalse($res['whatsapp']['queued']);
+        $this->assertTrue($res['email']['success']);
+        $this->assertFalse($res['email']['queued']);
+        $this->assertSame('0197334455', substr(preg_replace('/\D/', '', app(\App\Modules\WhatsApp\Services\WhatsAppBridgeClient::class)->sent[0][0]), -10));
+        \Illuminate\Support\Facades\Queue::assertNothingPushed();
+    }
+
+    public function test_contact_demandeur_reports_whatsapp_failure(): void
+    {
+        \Illuminate\Support\Facades\Queue::fake();
+        Mail::fake();
+        $this->fakeBridge(false);
+        $id = $this->contactDemande();
+        $this->actingAs(\App\Models\User::find($this->secId), 'sanctum');
+        $res = $this->postJson("/api/attestations/document-requests/{$id}/contact-demandeur", ['message' => 'Bonjour, merci de passer au CAP.'])->assertOk()->json('data');
+        $this->assertFalse($res['whatsapp']['success']);
+        $this->assertStringContainsString('déconnecté', $res['whatsapp']['reason']);
+        $this->assertTrue($res['email']['success']);
+    }
+
+    public function test_send_now_delivers_or_requeues_on_failure(): void
+    {
+        config(['queue.default' => 'database']);
+        \Illuminate\Support\Facades\Queue::fake();
+        $this->fakeBridge(true, true);
+        SendNotificationJob::sendNow('whatsapp', ['phone' => '0197000001', 'message' => 'x', 'context' => 't', 'module' => 'Core']);
+        \Illuminate\Support\Facades\Queue::assertNothingPushed();
+
+        $this->fakeBridge(false);
+        SendNotificationJob::sendNow('whatsapp', ['phone' => '0197000001', 'message' => 'x', 'context' => 't', 'module' => 'Core']);
+        \Illuminate\Support\Facades\Queue::assertPushed(SendNotificationJob::class, 1);
+
+        // Mailable envoyé immédiatement → WhatsApp de suivi envoyé immédiatement.
+        Mail::fake();
+        $this->fakeBridge(true, true);
+        SendNotificationJob::sendNow('email', ['to' => 'a@example.org', 'subject' => 'S', 'view' => 'core::emails.notification', 'vars' => ['title' => 'T', 'body' => 'B']]);
+        \Illuminate\Support\Facades\Queue::assertPushed(SendNotificationJob::class, 1);
+    }
+
     public function test_payment_validation_notifies_email_and_whatsapp(): void
     {
         Bus::fake([SendNotificationJob::class, \App\Modules\Demandes\Jobs\SendNotificationJob::class]);

@@ -260,7 +260,7 @@ class DocumentRequestController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            return $this->errorResponse("Erreur lors de la mise en file d'envoi du message. Veuillez réessayer.", 500);
+            return $this->errorResponse("Le message n'a pas pu être envoyé (erreur inattendue). Veuillez réessayer.", 500);
         }
 
         return $this->successResponse($result, 'Envoi traité.');

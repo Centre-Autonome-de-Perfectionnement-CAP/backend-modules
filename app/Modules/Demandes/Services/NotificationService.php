@@ -65,7 +65,7 @@ class NotificationService
     ): void {
         if (empty($to)) return;
 
-        SendNotificationJob::dispatch('email', [
+        SendNotificationJob::send('email', [
             'to'          => $to,
             'to_name'     => $toName,
             'subject'     => $subject,
@@ -79,7 +79,7 @@ class NotificationService
     {
         if (empty($phone)) return;
 
-        SendNotificationJob::dispatch('whatsapp', [
+        SendNotificationJob::send('whatsapp', [
             'phone'   => $phone,
             'message' => $message,
             'context' => $context,
@@ -600,7 +600,7 @@ class NotificationService
             );
 
             foreach ($attachments as $att) {
-                SendNotificationJob::dispatch('whatsapp_file', [
+                SendNotificationJob::send('whatsapp_file', [
                     'phone'     => $demande->demandeur_whatsapp,
                     'disk'      => 'public',
                     'path'      => $att['path'],

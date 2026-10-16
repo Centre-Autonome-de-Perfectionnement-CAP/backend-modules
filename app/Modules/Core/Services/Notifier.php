@@ -148,6 +148,12 @@ class Notifier
     private function dispatch(string $channel, array $payload, bool $bulk): void
     {
         try {
+            if (!$bulk) {
+                // Transactionnel : part juste après la réponse, sans worker.
+                SendNotificationJob::send($channel, $payload);
+                return;
+            }
+
             $pending = SendNotificationJob::dispatch($channel, $payload);
 
             if ($bulk) {

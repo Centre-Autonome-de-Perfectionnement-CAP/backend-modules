@@ -34,6 +34,12 @@ use Illuminate\Support\Facades\Storage;
  *   - les échecs définitifs (numéro invalide / absent de WhatsApp, fichier
  *     introuvable, adresse email invalide) sont journalisés, jamais retentés.
  *
+ * Envoi immédiat (send()) : depuis une requête HTTP, le message part
+ * juste APRÈS la réponse (l'utilisateur n'attend pas) sans dépendre d'un
+ * worker. Seuls les nouveaux essais (bridge déconnecté, SMTP indisponible)
+ * passent par la file — traitée par les workers ou, à défaut, par le
+ * scheduler chaque minute.
+ *
  * Historique : ce job vivait dans App\Modules\Demandes\Jobs. La classe
  * Demandes l'étend désormais (compatibilité des jobs déjà en file).
  */
@@ -59,6 +65,77 @@ class SendNotificationJob implements ShouldQueue
     ) {
         // Dispatch dans une transaction → publié seulement après le COMMIT.
         $this->afterCommit();
+    }
+
+    /**
+     * Point d'entrée transactionnel : envoi juste après la réponse HTTP (et
+     * après le COMMIT éventuel), sinon mise en file classique (console,
+     * worker, tests). Ne lève jamais d'exception.
+     */
+    public static function send(string $channel, array $payload): void
+    {
+        if (app()->runningInConsole()) {
+            static::dispatch($channel, $payload);
+            return;
+        }
+
+        try {
+            // Annulé si la transaction englobante est annulée (rollback).
+            \Illuminate\Support\Facades\DB::afterCommit(
+                fn () => app()->terminating(fn () => static::sendNow($channel, $payload))
+            );
+        } catch (\Throwable $e) {
+            static::queueRetry($channel, $payload, 0);
+        }
+    }
+
+    /**
+     * Exécute l'envoi tout de suite, dans le processus courant. Tout échec
+     * (exception ou échec transitoire) est remis en file pour un nouvel
+     * essai : rien n'est perdu.
+     */
+    public static function sendNow(string $channel, array $payload): void
+    {
+        try {
+            app(\Illuminate\Contracts\Bus\Dispatcher::class)->dispatchNow(new static($channel, $payload));
+        } catch (\Throwable $e) {
+            Log::warning('[SendNotificationJob] Envoi immédiat en échec — remis en file', [
+                'channel' => $channel,
+                'to'      => $payload['phone'] ?? ($payload['to'] ?? null),
+                'error'   => $e->getMessage(),
+            ]);
+            static::queueRetry($channel, $payload, self::BACKOFF[0]);
+        }
+    }
+
+    /** Exécution hors file (sendNow / dispatchNow) : pas de release() possible. */
+    private function isImmediate(): bool
+    {
+        return $this->job === null || $this->job instanceof \Illuminate\Queue\Jobs\SyncJob;
+    }
+
+    private static function queueRetry(string $channel, array $payload, int $delaySeconds): void
+    {
+        // Sans vraie file (QUEUE_CONNECTION=sync), un nouvel essai
+        // s'exécuterait tout de suite, en boucle : on journalise seulement.
+        if (config('queue.default') === 'sync') {
+            Log::error('[SendNotificationJob] Notification non envoyée (aucune file configurée pour réessayer)', [
+                'channel' => $channel,
+                'to'      => $payload['phone'] ?? ($payload['to'] ?? null),
+            ]);
+            return;
+        }
+
+        try {
+            // Nouvel essai : indépendant de toute transaction en cours.
+            static::dispatch($channel, $payload)->beforeCommit()->delay(now()->addSeconds($delaySeconds));
+        } catch (\Throwable $e) {
+            Log::error('[SendNotificationJob] Mise en file impossible — notification perdue', [
+                'channel' => $channel,
+                'to'      => $payload['phone'] ?? ($payload['to'] ?? null),
+                'error'   => $e->getMessage(),
+            ]);
+        }
     }
 
     public function retryUntil(): \DateTimeInterface
@@ -156,7 +233,10 @@ class SendNotificationJob implements ShouldQueue
     {
         foreach ($followUps as $followUp) {
             try {
-                static::dispatch($followUp['channel'], $followUp['payload']);
+                // Envoi immédiat → suivi immédiat ; depuis la file → en file.
+                $this->isImmediate()
+                    ? static::sendNow($followUp['channel'], $followUp['payload'])
+                    : static::dispatch($followUp['channel'], $followUp['payload']);
             } catch (\Throwable $e) {
                 Log::error('[SendNotificationJob] Notification de suivi non publiée', [
                     'channel' => $followUp['channel'] ?? null,
@@ -240,6 +320,16 @@ class SendNotificationJob implements ShouldQueue
     {
         $attempt = max(1, $this->attempts());
         $delay   = self::BACKOFF[min($attempt - 1, count(self::BACKOFF) - 1)];
+
+        // Envoi immédiat (hors file) : le nouvel essai passe par la file.
+        if ($this->isImmediate()) {
+            Log::warning("[SendNotificationJob] {$reason} — remis en file (nouvel essai dans {$delay}s)", [
+                'to'  => $this->payload['phone'] ?? ($this->payload['to'] ?? null),
+                'ctx' => $this->payload['context'] ?? '',
+            ]);
+            static::queueRetry($this->channel, $this->payload, $delay);
+            return;
+        }
 
         Log::warning("[SendNotificationJob] {$reason} — nouvelle tentative dans {$delay}s", [
             'to' => $this->payload['phone'] ?? ($this->payload['to'] ?? null),
