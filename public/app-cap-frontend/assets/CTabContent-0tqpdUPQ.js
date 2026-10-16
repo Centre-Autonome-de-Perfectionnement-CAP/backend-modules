@@ -1,1 +1,0 @@
-import{r as o,ab as l,R as m,ac as p,ad as e}from"./index-Dq0L_FV2.js";const s=o.forwardRef((a,r)=>{var{children:t,className:c}=a,n=l(a,["children","className"]);return m.createElement("div",Object.assign({className:p("tab-content",c)},n,{ref:r}),t)});s.propTypes={children:e.node,className:e.string};s.displayName="CTabContent";export{s as C};
