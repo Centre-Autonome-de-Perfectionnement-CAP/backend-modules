@@ -51,10 +51,11 @@ class ContactService
         foreach ($this->formationContinueManagers() as $manager) {
             $alerts[] = [
                 'phone'   => $manager->phone,
-                'message' => "*CAP-EPAC — Nouveau message de contact*\n"
-                    . "Bonjour {$manager->first_name},\n"
-                    . "Un nouveau message a été reçu via le formulaire de contact du site. "
-                    . "Merci de consulter la boîte mail {$primaryEmail} pour le traiter.",
+                'message' => \App\Modules\Core\Support\WhatsAppText::compose('Nouveau message de contact', [
+                    "Bonjour {$manager->first_name},",
+                    'Un nouveau message a été reçu via le formulaire de contact du site.',
+                    "Merci de le traiter depuis la boîte mail *{$primaryEmail}*.",
+                ]),
                 'context' => "contact:{$contact->id}:{$manager->id}",
                 'module'  => 'Contact',
             ];

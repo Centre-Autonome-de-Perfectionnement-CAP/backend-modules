@@ -14,7 +14,7 @@
 
     <div style="background: #ffebee; padding: 20px; border-left: 4px solid #d32f2f; margin: 20px 0;">
         <p style="margin: 0; font-size: 14pt; color: #c62828;">
-            <strong>❌ QUITTANCE NON VALIDÉE</strong>
+            <strong>QUITTANCE NON VALIDÉE</strong>
         </p>
     </div>
 
@@ -22,7 +22,7 @@
 
     @if(isset($motifsRejet) && count($motifsRejet) > 0)
         <div style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0;">
-            <p style="margin: 0 0 10px 0;"><strong>⚠️ Motifs de rejet :</strong></p>
+            <p style="margin: 0 0 10px 0;"><strong>Motifs de rejet :</strong></p>
             <ul style="margin: 0 0 0 20px; padding: 0;">
                 @foreach($motifsRejet as $motif)
                     <li style="margin: 5px 0; color: #856404;">{{ $motif }}</li>
@@ -61,7 +61,7 @@
         </tr>
     </table>
 
-    <h3>🔄 Actions à effectuer :</h3>
+    <h3>Actions à effectuer :</h3>
     <ol style="line-height: 1.8; background: #f9f9f9; padding: 20px 20px 20px 40px;">
         @if(isset($actionsRequises) && count($actionsRequises) > 0)
             @foreach($actionsRequises as $action)
@@ -76,7 +76,7 @@
 
     @if(isset($documentsCorriges) && count($documentsCorriges) > 0)
         <div style="background: #e3f2fd; padding: 15px; border-left: 4px solid #2196F3; margin: 20px 0;">
-            <p style="margin: 0 0 10px 0;"><strong>📎 Documents à fournir :</strong></p>
+            <p style="margin: 0 0 10px 0;"><strong>Documents à fournir :</strong></p>
             <ul style="margin: 0 0 0 20px; padding: 0;">
                 @foreach($documentsCorriges as $doc)
                     <li style="margin: 5px 0;">{{ $doc }}</li>
@@ -87,7 +87,7 @@
 
     @if(isset($montantCorrect))
         <div style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0;">
-            <p style="margin: 0;"><strong>💰 Montant correct à payer :</strong> <span style="font-size: 14pt; font-weight: bold;">{{ $montantCorrect }}</span></p>
+            <p style="margin: 0;"><strong>Montant correct à payer :</strong> <span style="font-size: 14pt; font-weight: bold;">{{ $montantCorrect }}</span></p>
             @if(isset($detailsMontant))
                 <p style="margin: 10px 0 0 0; font-size: 10pt;">{{ $detailsMontant }}</p>
             @endif
@@ -96,7 +96,7 @@
 
     @if(isset($delaiResoumission))
         <div style="background: #ffebee; padding: 15px; border-left: 4px solid #d32f2f; margin: 20px 0;">
-            <p style="margin: 0; color: #c62828;"><strong>⏰ Date limite de resoumission :</strong> {{ $delaiResoumission }}</p>
+            <p style="margin: 0; color: #c62828;"><strong>Date limite de resoumission :</strong> {{ $delaiResoumission }}</p>
         </div>
     @endif
 
@@ -107,7 +107,7 @@
     @endif
 
     <div style="background: #f5f5f5; padding: 15px; margin: 20px 0;">
-        <p style="margin: 0 0 10px 0;"><strong>ℹ️ Informations importantes :</strong></p>
+        <p style="margin: 0 0 10px 0;"><strong>Informations importantes :</strong></p>
         <ul style="margin: 0 0 0 20px; padding: 0;">
             <li>Votre paiement n'est pas enregistré tant que la quittance n'est pas validée</li>
             <li>Veuillez effectuer la correction dans les meilleurs délais pour éviter tout retard</li>
@@ -121,7 +121,7 @@
 
     @if(isset($consequences) && count($consequences) > 0)
         <div style="background: #ffebee; padding: 15px; border-left: 4px solid #d32f2f; margin: 20px 0;">
-            <p style="margin: 0 0 10px 0; color: #c62828;"><strong>⚠️ Conséquences en cas de non-régularisation :</strong></p>
+            <p style="margin: 0 0 10px 0; color: #c62828;"><strong>Conséquences en cas de non-régularisation :</strong></p>
             <ul style="margin: 0 0 0 20px; padding: 0;">
                 @foreach($consequences as $consequence)
                     <li style="margin: 5px 0; color: #c62828;">{{ $consequence }}</li>
@@ -132,14 +132,14 @@
 
     @if(isset($aideDisponible))
         <div style="background: #e8f5e9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0;">
-            <p style="margin: 0;"><strong>💡 Besoin d'aide ?</strong></p>
+            <p style="margin: 0;"><strong>Besoin d'aide ?</strong></p>
             <p style="margin: 10px 0 0 0;">{{ $aideDisponible }}</p>
         </div>
     @endif
 
     @if(isset($contact))
         <div style="background: #f5f5f5; padding: 15px; margin: 20px 0;">
-            <p style="margin: 0 0 10px 0;"><strong>📞 Contactez le Service Financier :</strong></p>
+            <p style="margin: 0 0 10px 0;"><strong>Contactez le Service Financier :</strong></p>
             @if(isset($contact['email']))
                 <p style="margin: 5px 0;">Email : {{ $contact['email'] }}</p>
             @endif

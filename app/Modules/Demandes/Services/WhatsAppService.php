@@ -118,19 +118,70 @@ class WhatsAppService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
+    // MISE EN FORME COMMUNE
+    // ══════════════════════════════════════════════════════════════════════════
+    //
+    // Tous les messages suivent la même structure, aérée et lisible sur
+    // téléphone (aucun émoji) :
+    //
+    //   *CAP-EPAC*
+    //   _Titre du message_
+    //
+    //   Bonjour Nom,
+    //
+    //   Paragraphe principal.
+    //
+    //   *Référence :* ATT-XXXX
+    //   *Document :* Attestation …
+    //
+    //   Consigne ou lien.
+
+    /**
+     * @param string[] $blocks Blocs de texte, séparés par une ligne vide.
+     *                         Les blocs vides sont ignorés.
+     */
+    private function compose(string $title, array $blocks): string
+    {
+        $blocks = array_values(array_filter(
+            array_map(fn ($b) => trim((string) $b), $blocks),
+            fn ($b) => $b !== ''
+        ));
+
+        return "*CAP-EPAC*\n_{$title}_\n\n" . implode("\n\n", $blocks);
+    }
+
+    /**
+     * Lignes « *Libellé :* valeur » (les valeurs vides sont omises).
+     *
+     * @param array<string, ?string> $fields
+     */
+    private function fields(array $fields): string
+    {
+        $lines = [];
+        foreach ($fields as $label => $value) {
+            if ($value === null || trim($value) === '') continue;
+            $lines[] = "*{$label} :* {$value}";
+        }
+        return implode("\n", $lines);
+    }
+
+    private function student(string $nom, string $matricule): string
+    {
+        return $nom . ($matricule ? " ({$matricule})" : '');
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     // TEMPLATES — ÉTUDIANT
     // ══════════════════════════════════════════════════════════════════════════
 
     public function templateSoumission(string $reference, string $typeLabel, string $nomEtudiant): string
     {
-        return implode("\n", [
-            '*CAP-EPAC — Demande enregistrée*',
+        return $this->compose('Demande enregistrée', [
             "Bonjour {$nomEtudiant},",
-            "Votre demande de *{$typeLabel}* a bien été enregistrée sous la référence *{$reference}*.",
-            'Veuillez conserver cette référence : elle vous sera utile pour tout suivi ou réclamation.',
-            "Vous serez notifié(e) en temps réel sur l'état de votre demande.",
-            '',
-            'Suivi de votre dossier sur : ' . $this->urlSuivi() . "&ref={$reference}",
+            "Votre demande de *{$typeLabel}* a bien été enregistrée.",
+            $this->fields(['Référence' => $reference]),
+            "Conservez cette référence : elle vous sera demandée pour tout suivi.\nVous serez informé(e) à chaque étape du traitement.",
+            "_Suivre votre dossier :_\n" . $this->urlSuivi() . "&ref={$reference}",
         ]);
     }
 
@@ -138,49 +189,44 @@ class WhatsAppService
     {
         $nb    = count($piecesList);
         $label = $nb > 1 ? 'pièces complémentaires' : 'pièce complémentaire';
-        $lines = [
-            '*CAP-EPAC — Complément reçu*',
+        $list  = implode("\n", array_map(fn ($p) => "• {$p}", $piecesList));
+
+        return $this->compose('Complément reçu', [
             "Bonjour {$nomEtudiant},",
-            "Nous avons bien reçu {$nb} {$label} pour votre dossier (Réf : *{$reference}*) :",
-        ];
-        foreach ($piecesList as $piece) {
-            $lines[] = "• {$piece}";
-        }
-        $lines[] = 'Elles ont été transmises au secrétariat pour vérification.';
-        $lines[] = '';
-        $lines[] = 'Suivi de votre dossier sur : ' . $this->urlSuivi() . "&ref={$reference}";
-        return implode("\n", $lines);
+            "Nous avons bien reçu {$nb} {$label} pour votre dossier *{$reference}* :",
+            $list,
+            'Elles ont été transmises au secrétariat pour vérification.',
+            "_Suivre votre dossier :_\n" . $this->urlSuivi() . "&ref={$reference}",
+        ]);
     }
 
     public function templatePret(string $reference, string $typeLabel, string $nomEtudiant): string
     {
-        return implode("\n", [
-            '*CAP-EPAC — Document prêt*',
+        return $this->compose('Document prêt', [
             "Bonjour {$nomEtudiant},",
-            "Votre *{$typeLabel}* (Réf : *{$reference}*) est prêt.",
-            "Vous pouvez venir le récupérer au secrétariat durant les heures d'ouverture.",
+            "Votre *{$typeLabel}* est prêt.",
+            $this->fields(['Référence' => $reference]),
+            "Vous pouvez le retirer au secrétariat du CAP aux heures d'ouverture.",
         ]);
     }
 
     public function templateRejete(string $reference, string $typeLabel, string $motif, string $nomEtudiant): string
     {
-        return implode("\n", [
-            '*CAP-EPAC — Demande rejetée*',
+        return $this->compose('Demande non aboutie', [
             "Bonjour {$nomEtudiant},",
-            "Votre demande de *{$typeLabel}* (Réf : *{$reference}*) n'a pas pu aboutir.",
-            "Motif : {$motif}",
-            'Rapprochez-vous du secrétariat pour plus d\'informations.',
+            "Votre demande de *{$typeLabel}* n'a pas pu aboutir.",
+            $this->fields(['Référence' => $reference, 'Motif' => $motif]),
+            "Pour toute question, rapprochez-vous du secrétariat du CAP.",
         ]);
     }
 
     public function templateSousReserve(string $reference, string $typeLabel, string $motif, string $nomEtudiant): string
     {
-        return implode("\n", [
-            '*CAP-EPAC — Action requise*',
+        return $this->compose('Pièce à compléter', [
             "Bonjour {$nomEtudiant},",
-            "Votre demande de *{$typeLabel}* (Réf : *{$reference}*) nécessite un complément.",
-            "Motif : {$motif}",
-            'Merci de soumettre les pièces manquantes via ce lien : ' . $this->urlComplement() . "&ref={$reference}",
+            "Votre demande de *{$typeLabel}* nécessite un complément.",
+            $this->fields(['Référence' => $reference, 'Motif' => $motif]),
+            "_Déposer les pièces demandées :_\n" . $this->urlComplement() . "&ref={$reference}",
         ]);
     }
 
@@ -189,20 +235,19 @@ class WhatsAppService
      */
     public function templateMessageSecretariat(string $nomDemandeur, string $message, string $secretaireName): string
     {
-        return implode("\n\n", [
-            '*CAP-EPAC — Message du secrétariat*',
+        return $this->compose('Message du secrétariat', [
             "Bonjour {$nomDemandeur},",
             $message,
-            "— {$secretaireName}, Secrétariat CAP-EPAC",
+            "_{$secretaireName}_\n_Secrétariat CAP-EPAC_",
         ]);
     }
 
     public function templateRemis(string $reference, string $typeLabel, string $nomEtudiant): string
     {
-        return implode("\n", [
-            '*CAP-EPAC — Document remis*',
+        return $this->compose('Document remis', [
             "Bonjour {$nomEtudiant},",
-            "Votre *{$typeLabel}* (Réf : *{$reference}*) vous a bien été remis.",
+            "Votre *{$typeLabel}* vous a bien été remis.",
+            $this->fields(['Référence' => $reference]),
             'Merci de votre confiance.',
         ]);
     }
@@ -218,12 +263,15 @@ class WhatsAppService
         string $nomEtudiant,
         string $matricule,
     ): string {
-        return implode("\n", [
-            '*CAP-EPAC — Nouvelle demande*',
+        return $this->compose('Nouvelle demande', [
             "Bonjour {$destinataireNom},",
-            "L'étudiant(e) *{$nomEtudiant}*" . ($matricule ? " ({$matricule})" : '') . " a soumis une demande de *{$typeDocument}*.",
-            "Référence : *{$reference}*",
-            'Merci d\'initier le traitement depuis votre tableau de bord.',
+            'Une nouvelle demande vient d\'être déposée.',
+            $this->fields([
+                'Référence' => $reference,
+                'Document'  => $typeDocument,
+                'Étudiant'  => $this->student($nomEtudiant, $matricule),
+            ]),
+            'Merci de la traiter depuis votre tableau de bord.',
         ]);
     }
 
@@ -234,10 +282,10 @@ class WhatsAppService
         int    $nbPieces,
     ): string {
         $label = $nbPieces > 1 ? 'pièces complémentaires' : 'pièce complémentaire';
-        return implode("\n", [
-            '*CAP-EPAC — Complément déposé*',
+        return $this->compose('Complément déposé', [
             "Bonjour {$destinataireNom},",
-            "*{$nomEtudiant}* a déposé {$nbPieces} {$label} pour le dossier *{$reference}*.",
+            "*{$nomEtudiant}* a déposé {$nbPieces} {$label}.",
+            $this->fields(['Référence' => $reference]),
             'Merci de vérifier ces nouveaux éléments.',
         ]);
     }
@@ -257,17 +305,17 @@ class WhatsAppService
         string  $matricule,
         ?string $commentaire,
     ): string {
-        $etudiantAffiche = $etudiantNom . ($matricule ? " ({$matricule})" : '');
-        $lines = [
-            '*CAP-EPAC — Dossier à traiter*',
+        return $this->compose('Dossier à traiter', [
             "Bonjour {$destinataireNom},",
-            "*[{$expediteurRole}]* vous a transmis le dossier *{$reference}* (*{$typeDocument}* — {$etudiantAffiche}).",
-        ];
-        if ($commentaire) {
-            $lines[] = "Note : {$commentaire}";
-        }
-        $lines[] = 'Merci de vous connecter pour le traiter.';
-        return implode("\n", $lines);
+            "Un dossier vous a été transmis par *{$expediteurRole}*.",
+            $this->fields([
+                'Référence' => $reference,
+                'Document'  => $typeDocument,
+                'Étudiant'  => $this->student($etudiantNom, $matricule),
+                'Note'      => $commentaire,
+            ]),
+            'Merci de vous connecter pour le traiter.',
+        ]);
     }
 
     /**
@@ -283,17 +331,17 @@ class WhatsAppService
         string  $matricule,
         ?string $commentaire,
     ): string {
-        $etudiantAffiche = $etudiantNom . ($matricule ? " ({$matricule})" : '');
-        $lines = [
-            '*CAP-EPAC — Retour pour correction*',
+        return $this->compose('Dossier renvoyé pour correction', [
             "Bonjour {$destinataireNom},",
-            "Le dossier *{$reference}* ({$etudiantAffiche}) vous a été renvoyé par *[{$expediteurRole}]*.",
-        ];
-        if ($commentaire) {
-            $lines[] = "Motif : {$commentaire}";
-        }
-        $lines[] = 'Merci de corriger et renvoyer la demande.';
-        return implode("\n", $lines);
+            "Un dossier vous a été renvoyé par *{$expediteurRole}*.",
+            $this->fields([
+                'Référence' => $reference,
+                'Document'  => $typeDocument,
+                'Étudiant'  => $this->student($etudiantNom, $matricule),
+                'Motif'     => $commentaire,
+            ]),
+            'Merci de le corriger puis de le renvoyer.',
+        ]);
     }
 
     public function templateDossierDirection(
@@ -301,11 +349,11 @@ class WhatsAppService
         string $nomEtudiant,
         string $reference,
     ): string {
-        return implode("\n", [
-            '*CAP-EPAC — Dossier en Direction*',
+        return $this->compose('Dossier en Direction', [
             "Bonjour {$destinataireNom},",
-            "Le dossier de *{$nomEtudiant}* (Réf : *{$reference}*) est en cours de signature à la Direction.",
-            'Merci de préparer et acheminer le document physique correspondant.',
+            'Ce dossier est en cours de signature à la Direction.',
+            $this->fields(['Référence' => $reference, 'Étudiant' => $nomEtudiant]),
+            'Merci de préparer et d\'acheminer le document physique correspondant.',
         ]);
     }
 
@@ -316,12 +364,15 @@ class WhatsAppService
         string $typeDocument,
         string $matricule,
     ): string {
-        $etudiantAffiche = $nomEtudiant . ($matricule ? " ({$matricule})" : '');
-        return implode("\n", [
-            '*CAP-EPAC — Signature validée*',
+        return $this->compose('Signature du Directeur', [
             "Bonjour {$destinataireNom},",
-            "Le *Directeur* a signé le dossier *{$reference}* (*{$typeDocument}* — {$etudiantAffiche}).",
-            'Merci de préparer le document final et de le marquer "prêt" dans le système.',
+            'Le *Directeur* a signé ce dossier.',
+            $this->fields([
+                'Référence' => $reference,
+                'Document'  => $typeDocument,
+                'Étudiant'  => $this->student($nomEtudiant, $matricule),
+            ]),
+            'Merci de préparer le document final puis de le marquer _prêt_ dans le système.',
         ]);
     }
 }

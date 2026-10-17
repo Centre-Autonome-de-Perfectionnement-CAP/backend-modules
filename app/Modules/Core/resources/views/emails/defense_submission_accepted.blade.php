@@ -60,7 +60,7 @@
 <body>
     <div class="header">
         <img src="https://www.cap-epac.online/assets/imgs/logo.png" alt="CAP Logo" class="logo">
-        <h1>🎉 Félicitations ! Votre dossier est accepté</h1>
+        <h1>Félicitations ! Votre dossier est accepté</h1>
     </div>
     
     <div class="content">

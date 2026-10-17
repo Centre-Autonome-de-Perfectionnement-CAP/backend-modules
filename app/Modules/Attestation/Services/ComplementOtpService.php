@@ -67,8 +67,11 @@ class ComplementOtpService
         if (!empty($demande->demandeur_whatsapp)) {
             $this->notifier->whatsapp(
                 $demande->demandeur_whatsapp,
-                "*CAP-EPAC — Code de vérification*\nVotre code pour compléter le dossier *{$reference}* : *{$code}*\n"
-                    . "Valable " . self::CODE_TTL_MIN . " minutes. Ne le communiquez à personne.",
+                \App\Modules\Core\Support\WhatsAppText::compose('Code de vérification', [
+                    "Votre code pour compléter le dossier *{$reference}* :",
+                    "*{$code}*",
+                    '_Valable ' . self::CODE_TTL_MIN . ' minutes. Ne le communiquez à personne._',
+                ]),
                 "complement-otp:{$reference}",
                 'Attestation',
             );

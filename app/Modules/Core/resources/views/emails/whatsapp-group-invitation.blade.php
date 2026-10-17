@@ -3,7 +3,6 @@
 @section('title', 'Rejoignez le groupe WhatsApp')
 
 @section('header')
-    <div style="font-size: 48px; margin-bottom: 10px;">💬</div>
     <h1 style="margin: 0; font-size: 24px;">Rejoignez le groupe WhatsApp</h1>
     <p style="margin: 5px 0 0 0; font-size: 16px;">{{ $departmentName }}</p>
 @endsection
@@ -17,7 +16,7 @@
 
     <div style="text-align: center; margin: 30px 0;">
         <a href="{{ $whatsappLink }}" style="display: inline-block; padding: 15px 40px; background-color: #25D366; color: #ffffff; text-decoration: none; border-radius: 50px; font-weight: bold; font-size: 16px;">
-            📱 Rejoindre le groupe WhatsApp
+            Rejoindre le groupe WhatsApp
         </a>
     </div>
 
@@ -27,7 +26,7 @@
 
     @if($pdfPath)
     <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; text-align: center; font-size: 14px; margin: 20px 0; border-left: 4px solid #ffc107;">
-        📎 <strong>Document joint :</strong> Vous trouverez en pièce jointe la liste complète des étudiants de votre filière avec leurs coordonnées.
+        <strong>Document joint :</strong> Vous trouverez en pièce jointe la liste complète des étudiants de votre filière avec leurs coordonnées.
     </div>
     @endif
 

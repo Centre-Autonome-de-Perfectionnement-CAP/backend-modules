@@ -50,9 +50,10 @@ class BroadcastWhatsAppInvitationJob implements ShouldQueue
         $failedEmails = [];
         $skippedCount = 0;
         $notifier = app(\App\Modules\Core\Services\Notifier::class);
-        $waMessage = "*CAP-EPAC — Groupe WhatsApp {$this->departmentName}*\n"
-            . trim(strip_tags((string) $this->message))
-            . ($this->whatsappLink ? "\n\nRejoindre le groupe : {$this->whatsappLink}" : '');
+        $waMessage = \App\Modules\Core\Support\WhatsAppText::compose("Groupe WhatsApp {$this->departmentName}", [
+            trim(strip_tags((string) $this->message)),
+            $this->whatsappLink ? "_Rejoindre le groupe :_\n{$this->whatsappLink}" : '',
+        ]);
 
         foreach ($this->students as $student) {
             Log::debug('Processing student in WhatsApp broadcast job', [

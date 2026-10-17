@@ -171,7 +171,7 @@ class ContactDemandeurService
             if ((microtime(true) - $startedAt) >= self::SYNC_BUDGET_SECONDS) {
                 SendNotificationJob::send('whatsapp_file', [
                     'phone' => $phone, 'disk' => 'public', 'path' => $att['path'], 'file_name' => $att['name'],
-                    'caption' => "Pièce jointe — dossier {$demande->reference}", 'context' => $context, 'module' => 'Demandes',
+                    'caption' => "_Pièce jointe du dossier {$demande->reference}_", 'context' => $context, 'module' => 'Demandes',
                 ]);
                 $later++;
                 continue;

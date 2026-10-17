@@ -214,9 +214,12 @@ class InformationCorrectionService
             ]));
             $notifier->whatsapp(
                 $notifier->phoneFromContacts($phoneContacts),
-                "*CAP-EPAC — Correction d'informations*\nBonjour {$firstName},\n"
-                    . "Votre demande de correction (matricule *{$correctionRequest->student_id_number}*) a été *approuvée*. "
-                    . "Vos informations ont été mises à jour.",
+                \App\Modules\Core\Support\WhatsAppText::compose("Correction d'informations", [
+                    "Bonjour {$firstName},",
+                    'Votre demande de correction a été *approuvée*.',
+                    \App\Modules\Core\Support\WhatsAppText::fields(['Matricule' => $correctionRequest->student_id_number]),
+                    'Vos informations ont été mises à jour.',
+                ]),
                 "correction-approved:{$correctionRequest->id}",
                 'Inscription',
             );
@@ -262,9 +265,14 @@ class InformationCorrectionService
                     ?? ($this->lookupStudent($correctionRequest->student_id_number)['contacts'] ?? null);
                 $notifier->whatsapp(
                     $notifier->phoneFromContacts($contacts),
-                    "*CAP-EPAC — Correction d'informations*\nBonjour {$firstName},\n"
-                        . "Votre demande de correction (matricule *{$correctionRequest->student_id_number}*) n'a pas été retenue.\n"
-                        . "Motif : _{$rejectionReason}_",
+                    \App\Modules\Core\Support\WhatsAppText::compose("Correction d'informations", [
+                        "Bonjour {$firstName},",
+                        "Votre demande de correction n'a pas été retenue.",
+                        \App\Modules\Core\Support\WhatsAppText::fields([
+                            'Matricule' => $correctionRequest->student_id_number,
+                            'Motif'     => $rejectionReason,
+                        ]),
+                    ]),
                     "correction-rejected:{$correctionRequest->id}",
                     'Inscription',
                 );

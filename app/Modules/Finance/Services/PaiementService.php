@@ -258,9 +258,12 @@ class PaiementService
                 $montant = number_format((float) $paiement->amount, 0, ',', ' ');
                 $notifier->whatsapp(
                     $notifier->phoneFromContacts($paiement->contact),
-                    "*CAP-EPAC — Quittance reçue*\nBonjour {$nomComplet},\n"
-                        . "Votre quittance de *{$montant} FCFA* (réf. *{$paiement->reference}*) a bien été enregistrée. "
-                        . "Elle sera vérifiée par le service financier ; vous serez notifié(e) de la décision.",
+                    \App\Modules\Core\Support\WhatsAppText::compose('Quittance reçue', [
+                        "Bonjour {$nomComplet},",
+                        'Votre quittance a bien été enregistrée.',
+                        \App\Modules\Core\Support\WhatsAppText::fields(['Montant' => "{$montant} FCFA", 'Référence' => $paiement->reference]),
+                        'Elle sera vérifiée par le service financier. Vous serez informé(e) de la décision.',
+                    ]),
                     "paiement-soumis:{$paiement->reference}",
                     'Finance',
                 );

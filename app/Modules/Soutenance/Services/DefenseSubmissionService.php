@@ -119,9 +119,12 @@ class DefenseSubmissionService
             $notifier->mailable($data['email'], new DefenseSubmissionReceived($submission));
             $notifier->whatsapp(
                 $notifier->phoneFromContacts($data['contacts'] ?? null),
-                "*CAP-EPAC — Soutenance*\nBonjour {$submission->first_names},\n"
-                    . "Votre demande de soutenance « {$submission->thesis_title} » a bien été reçue. "
-                    . "Vous serez notifié(e) de la décision.",
+                \App\Modules\Core\Support\WhatsAppText::compose('Demande de soutenance reçue', [
+                    "Bonjour {$submission->first_names},",
+                    'Votre demande de soutenance a bien été reçue.',
+                    \App\Modules\Core\Support\WhatsAppText::fields(['Mémoire' => "_{$submission->thesis_title}_"]),
+                    'Vous serez informé(e) de la décision.',
+                ]),
                 "soutenance-soumission:{$submission->id}",
                 'Soutenance',
             );
@@ -164,9 +167,12 @@ class DefenseSubmissionService
             $notifier->mailable($submission->email, new DefenseSubmissionAccepted($submission));
             $notifier->whatsapp(
                 $phone,
-                "*CAP-EPAC — Soutenance acceptée*\nBonjour {$submission->first_names},\n"
-                    . "Votre demande de soutenance « {$submission->thesis_title} » a été *acceptée*. "
-                    . "La date et la salle vous seront communiquées.",
+                \App\Modules\Core\Support\WhatsAppText::compose('Soutenance acceptée', [
+                    "Bonjour {$submission->first_names},",
+                    'Votre demande de soutenance a été *acceptée*.',
+                    \App\Modules\Core\Support\WhatsAppText::fields(['Mémoire' => "_{$submission->thesis_title}_"]),
+                    'La date et la salle vous seront communiquées.',
+                ]),
                 "soutenance-acceptee:{$submission->id}",
                 'Soutenance',
             );
@@ -174,9 +180,14 @@ class DefenseSubmissionService
             $notifier->mailable($submission->email, new DefenseSubmissionRejected($submission, $rejectionReason));
             $notifier->whatsapp(
                 $phone,
-                "*CAP-EPAC — Soutenance*\nBonjour {$submission->first_names},\n"
-                    . "Votre demande de soutenance « {$submission->thesis_title} » n'a pas été retenue."
-                    . ($rejectionReason ? "\nMotif : _{$rejectionReason}_" : ''),
+                \App\Modules\Core\Support\WhatsAppText::compose('Demande de soutenance', [
+                    "Bonjour {$submission->first_names},",
+                    "Votre demande de soutenance n'a pas été retenue.",
+                    \App\Modules\Core\Support\WhatsAppText::fields([
+                        'Mémoire' => "_{$submission->thesis_title}_",
+                        'Motif'   => $rejectionReason,
+                    ]),
+                ]),
                 "soutenance-rejetee:{$submission->id}",
                 'Soutenance',
             );

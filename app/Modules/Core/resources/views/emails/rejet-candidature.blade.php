@@ -47,7 +47,7 @@
     @endif
 
     <div style="background: #e3f2fd; padding: 15px; border-left: 4px solid #2196F3; margin: 20px 0;">
-        <p style="margin: 0;"><strong>ℹ️ Information importante :</strong></p>
+        <p style="margin: 0;"><strong>Information importante :</strong></p>
         <p style="margin: 10px 0 0 0;">
             Nous vous encourageons à soumettre une nouvelle candidature pour la prochaine rentrée académique. N'hésitez pas à améliorer votre dossier en tenant compte des recommandations qui vous ont été communiquées.
         </p>
@@ -55,7 +55,7 @@
 
     @if(isset($contact))
         <div style="background: #f5f5f5; padding: 15px; margin: 20px 0;">
-            <p style="margin: 0 0 10px 0;"><strong>📞 Contact :</strong></p>
+            <p style="margin: 0 0 10px 0;"><strong>Contact :</strong></p>
             <p style="margin: 0;">Si vous souhaitez obtenir plus d'informations sur votre candidature :</p>
             @if(isset($contact['email']))
                 <p style="margin: 5px 0;">Email : {{ $contact['email'] }}</p>

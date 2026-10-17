@@ -159,9 +159,12 @@ class BroadcastImportantInformationJob implements ShouldQueue
         }
         $link = trim((string) ($this->informationData['link'] ?? ''));
 
-        return "*CAP-EPAC — Information importante*\n*{$title}*\n\n{$description}"
-            . ($link !== '' ? "\n\nLien : {$link}" : '')
-            . (!empty($this->fileUrls) ? "\n\n_Les pièces jointes vous ont été envoyées par e-mail._" : '');
+        return \App\Modules\Core\Support\WhatsAppText::compose('Information importante', [
+            "*{$title}*",
+            $description,
+            $link !== '' ? "_Lien :_\n{$link}" : '',
+            !empty($this->fileUrls) ? '_Les pièces jointes vous ont été envoyées par e-mail._' : '',
+        ]);
     }
 
     /**

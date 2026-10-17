@@ -91,9 +91,12 @@ class LegacyDeclarationService
             );
             $this->notifier->whatsapp(
                 $student->phone,
-                "*CAP-EPAC — Déclaration reçue*\nBonjour {$student->first_name},\n"
-                    . "Votre déclaration d'ancien étudiant (matricule *{$student->matricule}*) a bien été enregistrée. "
-                    . "Elle sera vérifiée par le secrétariat ; vos demandes seront traitées après cette vérification.",
+                \App\Modules\Core\Support\WhatsAppText::compose('Déclaration reçue', [
+                    "Bonjour {$student->first_name},",
+                    "Votre déclaration d'ancien étudiant a bien été enregistrée.",
+                    \App\Modules\Core\Support\WhatsAppText::fields(['Matricule' => $student->matricule]),
+                    'Elle sera vérifiée par le secrétariat. Vos demandes seront traitées après cette vérification.',
+                ]),
                 "legacy-declaration:{$student->id}",
                 'LegacyStudent',
             );
@@ -102,9 +105,16 @@ class LegacyDeclarationService
             $body = "Nouvelle déclaration d'ancien étudiant à vérifier :\n"
                 . "- Nom : {$nom}\n- Matricule : {$student->matricule}\n- Filière : {$filiere}\n"
                 . "- Année d'inscription : {$student->enrollment_year}";
-            $wa = "*CAP-EPAC — Nouvelle déclaration d'ancien étudiant*\n"
-                . "Nom : *{$nom}*\nMatricule : *{$student->matricule}*\nFilière : {$filiere}\n"
-                . "Année d'inscription : {$student->enrollment_year}\n\nÀ vérifier sur la plateforme : {$urlEspace}";
+            $wa = \App\Modules\Core\Support\WhatsAppText::compose("Nouvelle déclaration d'ancien étudiant", [
+                'Une déclaration est à vérifier :',
+                \App\Modules\Core\Support\WhatsAppText::fields([
+                    'Nom'                 => $nom,
+                    'Matricule'           => $student->matricule,
+                    'Filière'             => $filiere,
+                    "Année d'inscription" => $student->enrollment_year,
+                ]),
+                "_Vérifier sur la plateforme :_\n{$urlEspace}",
+            ]);
 
             foreach ($this->staffRecipients($divType) as $user) {
                 $this->notifier->email(
@@ -149,9 +159,12 @@ class LegacyDeclarationService
                 'Votre déclaration a été validée',
                 "Bonjour {$student->first_name},\n\nVotre déclaration d'ancien étudiant (matricule {$student->matricule}) a été validée par le secrétariat. "
                     . "Vos demandes en cours poursuivent leur traitement.",
-                "*CAP-EPAC — Déclaration validée*\nBonjour {$student->first_name},\n"
-                    . "Votre déclaration d'ancien étudiant (matricule *{$student->matricule}*) a été *validée*. "
-                    . "Vos demandes en cours poursuivent leur traitement.",
+                \App\Modules\Core\Support\WhatsAppText::compose('Déclaration validée', [
+                    "Bonjour {$student->first_name},",
+                    "Votre déclaration d'ancien étudiant a été *validée*.",
+                    \App\Modules\Core\Support\WhatsAppText::fields(['Matricule' => $student->matricule]),
+                    'Vos demandes en cours poursuivent leur traitement.',
+                ]),
                 "legacy-validated:{$student->id}",
                 $bulk,
             );
@@ -215,9 +228,16 @@ class LegacyDeclarationService
             "Votre déclaration n'a pas été validée",
             "Bonjour {$student->first_name},\n\nVotre déclaration d'ancien étudiant (matricule {$student->matricule}) n'a pas été validée.\n"
                 . "Motif : {$reason}{$refsText}\n\nVous pouvez corriger votre déclaration puis déposer de nouvelles demandes.",
-            "*CAP-EPAC — Déclaration non validée*\nBonjour {$student->first_name},\n"
-                . "Votre déclaration d'ancien étudiant (matricule *{$student->matricule}*) n'a pas été validée.\n"
-                . "Motif : _{$reason}_{$refsText}",
+            \App\Modules\Core\Support\WhatsAppText::compose('Déclaration non validée', [
+                "Bonjour {$student->first_name},",
+                "Votre déclaration d'ancien étudiant n'a pas été validée.",
+                \App\Modules\Core\Support\WhatsAppText::fields([
+                    'Matricule'             => $student->matricule,
+                    'Motif'                 => $reason,
+                    'Demande(s) clôturée(s)' => $references ? implode(', ', $references) : '',
+                ]),
+                'Vous pouvez corriger votre déclaration puis déposer de nouvelles demandes.',
+            ]),
             "legacy-rejected:{$student->id}",
             $bulk,
         );

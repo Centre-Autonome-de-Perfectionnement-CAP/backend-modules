@@ -82,7 +82,7 @@
 @section('title', 'Dossier à traiter')
 
 @section('header')
-    <h1 style="color: white;">📂 Nouveau dossier à traiter</h1>
+    <h1 style="color: white;">Nouveau dossier à traiter</h1>
     <p style="margin: 5px 0 0 0; color: white;">Un dossier vous a été transmis</p>
 @endsection
 
@@ -96,7 +96,7 @@
 
     <div style="background: #e3f2fd; padding: 20px; border-left: 4px solid #2196F3; margin: 20px 0; text-align: center;">
         <p style="margin: 0; font-size: 16pt; color: #1565c0;">
-            <strong>📋 DOSSIER EN ATTENTE DE TRAITEMENT</strong>
+            <strong>DOSSIER EN ATTENTE DE TRAITEMENT</strong>
         </p>
     </div>
 
@@ -132,13 +132,13 @@
 
     @if(!empty($commentaire))
     <div style="background: #fff8e1; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0;">
-        <p style="margin: 0 0 5px 0;"><strong>💬 Message de {{ $expediteurNom ?? 'l\'expéditeur' }} :</strong></p>
+        <p style="margin: 0 0 5px 0;"><strong>Message de {{ $expediteurNom ?? 'l\'expéditeur' }} :</strong></p>
         <p style="margin: 0; font-style: italic;">{{ $commentaire }}</p>
     </div>
     @endif
 
     <div style="background: #f3e5f5; padding: 15px; border-left: 4px solid #9c27b0; margin: 20px 0;">
-        <p style="margin: 0;"><strong>⚡ Action requise :</strong> Veuillez vous connecter à votre espace pour consulter et traiter ce dossier dans les meilleurs délais.</p>
+        <p style="margin: 0;"><strong>Action requise :</strong> Veuillez vous connecter à votre espace pour consulter et traiter ce dossier dans les meilleurs délais.</p>
     </div>
 
     @if(!empty($urlEspace))

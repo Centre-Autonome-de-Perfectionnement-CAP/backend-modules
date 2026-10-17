@@ -284,49 +284,32 @@ class ContratController extends Controller
      */
     private function buildTransferWhatsAppMessage(array $details): string
     {
-        // Ligne des programmes : "- CODE : Intitulé"
+        // Ligne des programmes : "• CODE : Intitulé"
         $programmesLines = !empty($details['programmes'])
-            ? implode("\n", array_map(fn($p) => "- {$p}", $details['programmes']))
-            : '- (aucun programme renseigné)';
+            ? implode("\n", array_map(fn($p) => "• {$p}", $details['programmes']))
+            : '• _Aucun programme renseigné_';
 
-        return
-            "Bonjour {$details['professor_name']},\n\n" .
-
-            "Le Centre Autonome de Perfectionnement (CAP) de l'École Polytechnique " .
-            "d'Abomey-Calavi vous a adressé un contrat d'enseignement pour l'année " .
-            "académique {$details['academic_year']}. Veuillez en prendre connaissance " .
-            "et procéder à sa validation dans les meilleurs délais.\n\n" .
-
-            "Votre contrat de prestation N° {$details['contrat_number']} est disponible " .
-            "et en attente de votre signature.\n\n" .
-
-            "Détails du contrat :\n" .
-            "Division : {$details['division_label']}\n" .
-            "Regroupement : {$details['regroupement_label']}\n" .
-            "Cycle : {$details['cycle']}\n" .
-            "Période : du {$details['start_date']} au {$details['end_date']}\n" .
-            "Montant : {$details['amount']} FCFA\n\n" .
-
-            "Programmes concernés :\n" .
-            "{$programmesLines}\n\n" .
-
-            "Procédure de signature :\n" .
-            "1. Connectez-vous à votre espace sur le lien ci-dessous\n" .
-            "2. Consultez votre e-mail ({$details['professor_email']}) pour le lien de signature sécurisé\n" .
-            "3. Vérifiez toutes les informations du contrat\n" .
-            "4. Signez électroniquement\n\n" .
-
-            "Accéder à votre espace :\n" .
-            "{$details['login_url']}\n\n" .
-
-            "⚠️ Attention : Ce lien est valable pendant {$details['link_expiry_hours']} heures " .
-            "à compter de la réception de ce message. Passé ce délai, veuillez contacter " .
-            "le service RH du CAP.\n\n" .
-
-            "Ce lien est strictement personnel et confidentiel.\n\n" .
-
-            "Cordialement,\n" .
-            "Service des Ressources Humaines — CAP-EPAC";
+        return \App\Modules\Core\Support\WhatsAppText::compose("Contrat d'enseignement", [
+            "Bonjour {$details['professor_name']},",
+            "Votre contrat de prestation *N° {$details['contrat_number']}* pour l'année académique "
+                . "*{$details['academic_year']}* est disponible et attend votre signature.",
+            \App\Modules\Core\Support\WhatsAppText::fields([
+                'Division'     => $details['division_label'] ?? '',
+                'Regroupement' => $details['regroupement_label'] ?? '',
+                'Cycle'        => $details['cycle'] ?? '',
+                'Période'      => "du {$details['start_date']} au {$details['end_date']}",
+                'Montant'      => "{$details['amount']} FCFA",
+            ]),
+            "*Programmes concernés :*\n{$programmesLines}",
+            "*Pour signer :*\n"
+                . "1. Connectez-vous à votre espace.\n"
+                . "2. Ouvrez le lien de signature reçu par e-mail ({$details['professor_email']}).\n"
+                . "3. Vérifiez les informations puis signez électroniquement.",
+            "_Accéder à votre espace :_\n{$details['login_url']}",
+            "_Ce lien est personnel et valable {$details['link_expiry_hours']} heures. "
+                . "Passé ce délai, contactez le service RH du CAP._",
+            "Cordialement,\n_Service des Ressources Humaines, CAP-EPAC_",
+        ]);
     }
 
     private function formatContrat(Contrat $c): array

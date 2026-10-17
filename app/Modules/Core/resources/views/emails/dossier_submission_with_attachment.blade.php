@@ -37,7 +37,7 @@
     </table>
 
     <div style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0;">
-        <h3 style="margin: 0 0 10px 0; color: #856404;">⚠️ IMPORTANT - FICHE DE CONFIRMATION JOINTE</h3>
+        <h3 style="margin: 0 0 10px 0; color: #856404;">IMPORTANT - FICHE DE CONFIRMATION JOINTE</h3>
         <p style="margin: 5px 0; color: #856404; line-height: 1.8;">
             <strong>Vous trouverez en pièce jointe votre FICHE DE CONFIRMATION D'INSCRIPTION EN LIGNE.</strong>
         </p>
@@ -60,7 +60,7 @@
 
     <div style="background: #ffebee; padding: 15px; border-left: 4px solid #f44336; margin: 20px 0;">
         <p style="margin: 0; color: #c62828; font-weight: bold;">
-            ⛔ ATTENTION : Toute candidature sans la fiche de confirmation imprimée sera automatiquement rejetée.
+            ATTENTION : Toute candidature sans la fiche de confirmation imprimée sera automatiquement rejetée.
         </p>
     </div>
 

@@ -3,7 +3,7 @@
 @section('title', 'Quittance Validée - Paiement Accepté')
 
 @section('header')
-    <h1 style="color: white;">✅ Paiement Validé</h1>
+    <h1 style="color: white;">Paiement Validé</h1>
     <p style="margin: 5px 0 0 0; color: white;">Votre quittance a été acceptée</p>
 @endsection
 
@@ -12,7 +12,7 @@
     
     <div style="background: #e8f5e9; padding: 20px; border-left: 4px solid #4CAF50; margin: 20px 0; text-align: center;">
         <p style="margin: 0; font-size: 16pt; color: #2e7d32;">
-            <strong>✅ PAIEMENT VALIDÉ</strong>
+            <strong>PAIEMENT VALIDÉ</strong>
         </p>
     </div>
 
@@ -62,7 +62,7 @@
 
     @if(isset($soldRestant))
         <div style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0;">
-            <p style="margin: 0;"><strong>💰 Solde restant :</strong></p>
+            <p style="margin: 0;"><strong>Solde restant :</strong></p>
             <table style="border: none; margin-top: 10px;">
                 <tr style="border: none;">
                     <td style="border: none; padding: 5px 0;"><strong>Montant total à payer :</strong></td>
@@ -80,12 +80,12 @@
         </div>
     @else
         <div style="background: #e8f5e9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0;">
-            <p style="margin: 0; color: #2e7d32;"><strong>✅ Votre compte est à jour !</strong></p>
+            <p style="margin: 0; color: #2e7d32;"><strong>Votre compte est à jour !</strong></p>
         </div>
     @endif
 
     @if(isset($avantagesDebloques) && count($avantagesDebloques) > 0)
-        <h3>✨ Accès débloqués :</h3>
+        <h3>Accès débloqués :</h3>
         <ul style="background: #f9f9f9; padding: 20px 20px 20px 40px; margin: 10px 0; line-height: 1.8;">
             @foreach($avantagesDebloques as $avantage)
                 <li style="margin: 5px 0;">{{ $avantage }}</li>
@@ -95,7 +95,7 @@
 
     @if(isset($prochainePaiement))
         <div style="background: #e3f2fd; padding: 15px; border-left: 4px solid #2196F3; margin: 20px 0;">
-            <p style="margin: 0 0 10px 0;"><strong>📅 Prochain paiement :</strong></p>
+            <p style="margin: 0 0 10px 0;"><strong>Prochain paiement :</strong></p>
             <p style="margin: 0;"><strong>Date limite :</strong> {{ $prochainePaiement['date'] ?? '' }}</p>
             <p style="margin: 5px 0 0 0;"><strong>Montant :</strong> {{ $prochainePaiement['montant'] ?? '' }}</p>
             @if(isset($prochainePaiement['description']))
@@ -111,7 +111,7 @@
     @endif
 
     <div style="background: #f5f5f5; padding: 15px; margin: 20px 0;">
-        <p style="margin: 0 0 10px 0;"><strong>ℹ️ Informations importantes :</strong></p>
+        <p style="margin: 0 0 10px 0;"><strong>Informations importantes :</strong></p>
         <ul style="margin: 0 0 0 20px; padding: 0;">
             <li>Conservez précieusement votre reçu de paiement</li>
             <li>Ce paiement apparaîtra sur votre relevé de compte étudiant dans 24h</li>
@@ -125,7 +125,7 @@
 
     @if(isset($contact))
         <div style="background: #f5f5f5; padding: 15px; margin: 20px 0;">
-            <p style="margin: 0 0 10px 0;"><strong>📞 Service Financier :</strong></p>
+            <p style="margin: 0 0 10px 0;"><strong>Service Financier :</strong></p>
             @if(isset($contact['email']))
                 <p style="margin: 5px 0;">Email : {{ $contact['email'] }}</p>
             @endif

@@ -484,7 +484,7 @@ class NotificationService
             $this->email(
                 to:      $sec->email,
                 toName:  $sec->name,
-                subject: "✅ Dossier signé par le Directeur — À finaliser — Réf : {$demande->reference}",
+                subject: "Dossier signé par le Directeur — À finaliser — Réf : {$demande->reference}",
                 view:    'core::emails.dossier-transmis',
                 vars:    [
                     'destinataireNom'   => $sec->name,

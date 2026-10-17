@@ -89,11 +89,17 @@ class SendPendingStudentMailJob implements ShouldQueue
             $filiere = $student->department->name ?? '';
             $commentaire = trim((string) ($this->studentData['commentaireCuo'] ?? $this->studentData['commentaireCuca'] ?? ''));
             $wa = $template === 'acceptation-candidature'
-                ? "*CAP-EPAC — Candidature acceptée*\nFélicitations {$nom} !\nVotre candidature en *{$filiere}* a été acceptée. "
-                    . "Les informations relatives à votre admission vous ont été transmises par e-mail."
-                : "*CAP-EPAC — Décision de candidature*\nBonjour {$nom},\nAprès examen, votre candidature en *{$filiere}* n'a pas été retenue."
-                    . ($commentaire !== '' ? "\nObservation : _{$commentaire}_" : '')
-                    . "\nLe détail vous a été transmis par e-mail.";
+                ? \App\Modules\Core\Support\WhatsAppText::compose('Candidature acceptée', [
+                    "Bonjour {$nom},",
+                    "Félicitations : votre candidature en *{$filiere}* a été *acceptée*.",
+                    '_Les informations relatives à votre admission vous ont été envoyées par e-mail._',
+                ])
+                : \App\Modules\Core\Support\WhatsAppText::compose('Décision de candidature', [
+                    "Bonjour {$nom},",
+                    "Après examen, votre candidature en *{$filiere}* n'a pas été retenue.",
+                    \App\Modules\Core\Support\WhatsAppText::fields(['Observation' => $commentaire]),
+                    '_Le détail vous a été envoyé par e-mail._',
+                ]);
 
             $notifier->whatsapp(
                 $notifier->phoneFromContacts($pi->contacts),

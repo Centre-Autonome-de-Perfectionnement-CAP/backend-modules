@@ -117,7 +117,12 @@ class SendGroupedReminders extends Command
                 $appName = config('app.name', 'CAP-EPAC');
                 $label = $count > 1 ? 'dossiers en attente de traitement' : 'dossier en attente de traitement';
 
-                $message = "*{$appName} — Relance*\n\nBonjour *{$user->name}*,\n\nVous avez *{$count} {$label}* depuis plus de 36h.\n\nMerci de vous connecter sur la plateforme pour les traiter dans les plus brefs délais.\n\n_Ceci est un message automatique._";
+                $message = \App\Modules\Core\Support\WhatsAppText::compose('Relance', [
+                    "Bonjour {$user->name},",
+                    "Vous avez *{$count} {$label}* depuis plus de 36 heures.",
+                    'Merci de vous connecter à la plateforme pour les traiter.',
+                    '_Message automatique._',
+                ]);
 
                 $notifier->whatsapp($user->phone, $message, "reminders:{$user->id}", 'Demandes');
             }

@@ -52,15 +52,22 @@ class SendPaymentNotificationJob implements ShouldQueue
             $subject = 'Paiement validé - CAP';
             $title   = 'Paiement validé avec succès';
             $body    = "Votre paiement de {$amount} FCFA (référence {$reference}) a été validé avec succès.";
-            $wa      = "*CAP-EPAC — Paiement validé*\nBonjour {$nom},\nVotre paiement de *{$amount} FCFA* (réf. *{$reference}*) a été validé.";
+            $wa      = \App\Modules\Core\Support\WhatsAppText::compose('Paiement validé', [
+                "Bonjour {$nom},",
+                'Votre paiement a été *validé*.',
+                \App\Modules\Core\Support\WhatsAppText::fields(['Montant' => "{$amount} FCFA", 'Référence' => $reference]),
+            ]);
         } else {
             $subject = 'Paiement rejeté - CAP';
             $title   = 'Paiement rejeté';
             $body    = "Votre paiement de {$amount} FCFA (référence {$reference}) a été rejeté."
                      . ($motif !== '' ? "\n\nMotif : {$motif}" : '');
-            $wa      = "*CAP-EPAC — Paiement rejeté*\nBonjour {$nom},\nVotre paiement de *{$amount} FCFA* (réf. *{$reference}*) a été rejeté."
-                     . ($motif !== '' ? "\nMotif : _{$motif}_" : '')
-                     . "\nLe détail vous a été transmis par e-mail.";
+            $wa      = \App\Modules\Core\Support\WhatsAppText::compose('Paiement non validé', [
+                "Bonjour {$nom},",
+                "Votre paiement n'a pas pu être validé.",
+                \App\Modules\Core\Support\WhatsAppText::fields(['Montant' => "{$amount} FCFA", 'Référence' => $reference, 'Motif' => $motif]),
+                '_Le détail vous a été envoyé par e-mail._',
+            ]);
         }
 
         $notifier->email($email, $subject, 'core::emails.notification', [

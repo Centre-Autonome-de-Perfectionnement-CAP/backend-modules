@@ -21,6 +21,6 @@
     </div>
 
     <p style="color: #4b5563; font-size: 10pt; line-height: 1.6;">
-        ⚠️ <strong>Important :</strong> Ne partagez ce code avec personne. Si vous n'avez pas initié cette démarche, vous pouvez ignorer cet email en toute sécurité.
+        <strong>Important :</strong> Ne partagez ce code avec personne. Si vous n'avez pas initié cette démarche, vous pouvez ignorer cet email en toute sécurité.
     </p>
 @endsection

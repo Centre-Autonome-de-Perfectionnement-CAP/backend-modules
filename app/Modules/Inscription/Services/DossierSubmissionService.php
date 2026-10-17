@@ -270,10 +270,16 @@ class DossierSubmissionService
                     'local',
                     $pdfRelPath,
                     'Fiche_Confirmation_Inscription_' . $pendingStudent->tracking_code . '.pdf',
-                    "*CAP-EPAC — Dossier soumis*\nBonjour {$nomComplet},\n"
-                        . "Votre dossier de candidature ({$department->name}, {$academicYear->academic_year}) a bien été reçu.\n"
-                        . "Code de suivi : *{$pendingStudent->tracking_code}*\n"
-                        . "Imprimez la fiche ci-jointe et joignez-la à votre dossier physique.",
+                    \App\Modules\Core\Support\WhatsAppText::compose('Dossier de candidature reçu', [
+                        "Bonjour {$nomComplet},",
+                        'Votre dossier de candidature a bien été reçu.',
+                        \App\Modules\Core\Support\WhatsAppText::fields([
+                            'Filière'        => $department->name,
+                            'Année'          => $academicYear->academic_year,
+                            'Code de suivi'  => $pendingStudent->tracking_code,
+                        ]),
+                        'Imprimez la fiche ci-jointe et joignez-la à votre dossier physique.',
+                    ]),
                     "inscription-soumission:{$pendingStudent->tracking_code}",
                     'Inscription',
                 );
@@ -371,9 +377,15 @@ class DossierSubmissionService
                 $notifier->mailable($personalInformation->email, new DossierCompletedConfirmation($mailData));
                 $notifier->whatsapp(
                     $notifier->phoneFromContacts($personalInformation->contacts),
-                    "*CAP-EPAC — Complément reçu*\nBonjour {$personalInformation->first_names},\n"
-                        . "Le complément de votre dossier *{$pendingStudent->tracking_code}* ({$department->name}) a bien été reçu : "
-                        . count($documents) . " document(s) ajouté(s).",
+                    \App\Modules\Core\Support\WhatsAppText::compose('Complément reçu', [
+                        "Bonjour {$personalInformation->first_names},",
+                        'Le complément de votre dossier a bien été reçu.',
+                        \App\Modules\Core\Support\WhatsAppText::fields([
+                            'Code de suivi'      => $pendingStudent->tracking_code,
+                            'Filière'            => $department->name,
+                            'Document(s) ajouté(s)' => (string) count($documents),
+                        ]),
+                    ]),
                     "inscription-complement:{$pendingStudent->tracking_code}",
                     'Inscription',
                 );
@@ -1112,8 +1124,12 @@ class DossierSubmissionService
                     'local',
                     $pdfRelPath,
                     'Fiche_Confirmation_Inscription_' . $pendingStudent->tracking_code . '.pdf',
-                    "*CAP-EPAC — Dossier mis à jour*\nBonjour " . trim($personalInfo->first_names . ' ' . $personalInfo->last_name) . ",\n"
-                        . "Votre dossier *{$pendingStudent->tracking_code}* a bien été mis à jour. Voici votre nouvelle fiche de confirmation.",
+                    \App\Modules\Core\Support\WhatsAppText::compose('Dossier mis à jour', [
+                        'Bonjour ' . trim($personalInfo->first_names . ' ' . $personalInfo->last_name) . ',',
+                        'Votre dossier a bien été mis à jour.',
+                        \App\Modules\Core\Support\WhatsAppText::fields(['Code de suivi' => $pendingStudent->tracking_code]),
+                        'Voici votre nouvelle fiche de confirmation.',
+                    ]),
                     "inscription-maj:{$pendingStudent->tracking_code}",
                     'Inscription',
                 );

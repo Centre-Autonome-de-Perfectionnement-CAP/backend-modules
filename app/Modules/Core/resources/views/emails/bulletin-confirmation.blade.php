@@ -111,7 +111,7 @@
       @endif
 
       <div class="action-box">
-        <h4>📌 Prochaine étape</h4>
+        <h4>Prochaine étape</h4>
         @if(($paymentMethod ?? 'manual') === 'tresor_online')
           <p>Votre paiement a été validé en ligne. Présentez-vous au secrétariat avec votre <strong>quittance PDF ci-jointe</strong> (imprimée ou sur mobile) et vos pièces justificatives pour finaliser votre demande.</p>
         @else

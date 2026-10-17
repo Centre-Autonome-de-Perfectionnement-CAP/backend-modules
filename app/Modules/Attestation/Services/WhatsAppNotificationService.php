@@ -68,11 +68,12 @@ class WhatsAppNotificationService
     /** Texte du message quittance (aussi utilisé comme légende du PDF envoyé en file). */
     public function quittanceMessage(string $quittanceNumber, string $reference, string $nomEtudiant): string
     {
-        return implode("\n", [
-            '*' . self::ETAB . ' — Quittance générée*',
+        return implode("\n\n", [
+            '*' . self::ETAB . "*\n_Quittance générée_",
             "Bonjour {$nomEtudiant},",
-            "Votre quittance n°*{$quittanceNumber}* a été générée avec succès pour la demande *{$reference}*.",
-            "Elle vous a également été transmise par e-mail sur l'adresse renseignée.",
+            'Votre quittance a été générée avec succès.',
+            "*Quittance :* n° {$quittanceNumber}\n*Demande :* {$reference}",
+            "Elle vous a également été envoyée par e-mail.",
         ]);
     }
 }
