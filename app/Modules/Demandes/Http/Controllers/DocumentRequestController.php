@@ -172,16 +172,22 @@ class DocumentRequestController extends Controller
     {
         $demande = DocumentRequest::findOrFail($id);
         $this->authorize('manageSecretaryFiles', $demande);
-        $request->validate(['comment' => 'nullable|string|max:1000']);
+        $request->validate([
+            'comment' => 'nullable|string|max:1000',
+            'name'    => 'sometimes|nullable|string|max:200',
+        ]);
 
         try {
-            $secretaryFiles = $this->secretaryFileService->updateComment($demande, $fileId, $request->input('comment'));
+            $secretaryFiles = $this->secretaryFileService->updateComment(
+                $demande, $fileId, $request->input('comment'),
+                $request->has('name') ? $request->input('name') : null
+            );
         } catch (BusinessException $e) {
             return $this->errorResponse($e->getMessage(), $e->getStatusCode());
         }
 
         return $this->successResponse([
-            'message'         => 'Commentaire mis à jour.',
+            'message'         => 'Pièce mise à jour.',
             'secretary_files' => $secretaryFiles,
         ]);
     }

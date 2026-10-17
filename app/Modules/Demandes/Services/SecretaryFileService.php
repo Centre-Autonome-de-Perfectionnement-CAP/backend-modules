@@ -76,9 +76,12 @@ class SecretaryFileService
     /**
      * @throws BusinessException
      */
-    public function updateComment(DocumentRequest $demande, string $fileId, ?string $comment): array
+    public function updateComment(DocumentRequest $demande, string $fileId, ?string $comment, ?string $name = null): array
     {
         $this->assertStatusAllowed($demande, 'la modification de commentaire');
+
+        // Le nom est facultatif : absent ou vide, l'ancien nom est conservé.
+        $cleanName = $name !== null ? trim(strip_tags($name)) : '';
 
         $secretaryFiles = $demande->secretary_files ?? [];
         $found          = false;
@@ -86,6 +89,9 @@ class SecretaryFileService
         foreach ($secretaryFiles as &$file) {
             if (($file['id'] ?? '') === $fileId) {
                 $file['comment'] = strip_tags($comment ?? '');
+                if ($cleanName !== '') {
+                    $file['original_name'] = $cleanName;
+                }
                 $found           = true;
                 break;
             }

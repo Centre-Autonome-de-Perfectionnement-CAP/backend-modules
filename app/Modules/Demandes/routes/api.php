@@ -6,6 +6,7 @@ use App\Modules\Demandes\Http\Controllers\DocumentRequestTransitionController;
 use App\Modules\Demandes\Http\Controllers\DocumentRequestHistoryController;
 use App\Modules\Demandes\Http\Controllers\DocumentRequestStatsController;
 use App\Modules\Demandes\Http\Controllers\DocumentRequestBadgeController;
+use App\Modules\Demandes\Http\Controllers\DocumentRequestFileCommentController;
 
 /*
  * CORRECTIF (v2) — basé sur le fichier de routes réel.
@@ -52,6 +53,14 @@ Route::prefix('api/attestations')->middleware(['api', 'auth:sanctum'])->group(fu
     Route::patch('document-requests/{id}/secretary-files/{fileId}',          [DocumentRequestController::class, 'updateSecretaryFileComment'])->whereNumber('id');
     Route::post('document-requests/{id}/secretary-files/{fileId}/replace',   [DocumentRequestController::class, 'replaceSecretaryFile'])->whereNumber('id');
     Route::delete('document-requests/{id}/secretary-files/{fileId}',         [DocumentRequestController::class, 'deleteSecretaryFile'])->whereNumber('id');
+
+    // ── Commentaires des acteurs sur les pièces du dossier ─────────────────────
+    Route::middleware('can:demandes.view')->group(function () {
+        Route::get('document-requests/{id}/file-comments', [DocumentRequestFileCommentController::class, 'index'])->whereNumber('id');
+        Route::post('document-requests/{id}/file-comments', [DocumentRequestFileCommentController::class, 'store'])->whereNumber('id')->middleware('throttle:30,1');
+        Route::patch('document-requests/{id}/file-comments/{commentId}', [DocumentRequestFileCommentController::class, 'update'])->whereNumber(['id', 'commentId'])->middleware('throttle:30,1');
+        Route::delete('document-requests/{id}/file-comments/{commentId}', [DocumentRequestFileCommentController::class, 'destroy'])->whereNumber(['id', 'commentId']);
+    });
 
     // ── Message libre secrétaire → demandeur (WhatsApp + email) ────────────────
     Route::post('document-requests/{id}/contact-demandeur', [DocumentRequestController::class, 'contactDemandeur'])->whereNumber('id');
