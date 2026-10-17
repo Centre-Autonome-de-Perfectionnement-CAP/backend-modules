@@ -50,13 +50,12 @@ class AttestationStatusService
         // Demandes déjà déposées, toutes inscriptions confondues. Tri ASC :
         // keyBy() garde la DERNIÈRE ligne → la demande la plus récente l'emporte.
         $linkIds = StudentPendingStudent::where('student_id', $student->id)->pluck('id');
-        $existingRequests = DB::table('document_requests')
+        $existingRequests = $this->latestPerType(DB::table('document_requests')
             ->whereIn('student_pending_student_id', $linkIds)
             ->where('type', '!=', 'bulletin_annuel')
             ->orderBy('submitted_at')
             ->orderBy('id')
-            ->get()
-            ->keyBy('type');
+            ->get());
 
         $documents = [];
         foreach ($targets as $type => $target) {
@@ -117,11 +116,12 @@ class AttestationStatusService
 
             if (!$this->eligibility->isBulletinEligible($link)) continue;
 
-            $existing = DB::table('document_requests')
+            $existing = $this->latestPerType(DB::table('document_requests')
                 ->where('student_pending_student_id', $link->id)
                 ->where('type', 'bulletin_annuel')
-                ->orderBy('submitted_at', 'desc')
-                ->first();
+                ->orderBy('submitted_at')
+                ->orderBy('id')
+                ->get())->get('bulletin_annuel');
 
             $bulletinData = $existing
                 ? DocumentStatusDTO::fromExisting($existing)->toArray()
@@ -228,13 +228,12 @@ class AttestationStatusService
      */
     private function legacyAttestationStatus(\App\Modules\LegacyStudent\Models\LegacyStudent $legacy): array
     {
-        $existingRequests = DB::table('document_requests')
+        $existingRequests = $this->latestPerType(DB::table('document_requests')
             ->where('legacy_student_id', $legacy->id)
             ->where('type', '!=', 'bulletin_annuel')
             ->orderBy('submitted_at')
             ->orderBy('id')
-            ->get()
-            ->keyBy('type');
+            ->get());
 
         $documents = [];
         foreach (['attestation_passage', 'attestation_definitive', 'attestation_inscription'] as $type) {
@@ -263,7 +262,8 @@ class AttestationStatusService
             ->orderBy('submitted_at')
             ->orderBy('id')
             ->get()
-            ->keyBy('bulletin_year');
+            ->groupBy('bulletin_year')
+            ->map(fn ($g) => $g->filter(fn ($r) => !in_array($r->status, ['rejected', 'picked_up'], true))->last() ?? $g->last());
 
         $years = [];
         foreach ($rows as $year => $row) {
@@ -309,5 +309,22 @@ class AttestationStatusService
         }
 
         return $student;
+    }
+
+    /**
+     * Demande retenue par type : une demande encore active (ni rejetée ni
+     * retirée) l'emporte toujours, sinon la plus récente. Le statut affiché
+     * (et donc le bouton Demander / Refaire / Suivre) concorde ainsi avec la
+     * règle de dépôt, qui refuse une nouvelle demande tant qu'une autre est active.
+     *
+     * @param \Illuminate\Support\Collection<int, object> $rows triées du plus ancien au plus récent
+     */
+    private function latestPerType(\Illuminate\Support\Collection $rows): \Illuminate\Support\Collection
+    {
+        $inactive = ['rejected', 'picked_up'];
+
+        return $rows->groupBy('type')->map(function ($group) use ($inactive) {
+            return $group->filter(fn ($r) => !in_array($r->status, $inactive, true))->last() ?? $group->last();
+        });
     }
 }

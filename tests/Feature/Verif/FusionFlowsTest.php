@@ -417,6 +417,17 @@ class FusionFlowsTest extends TestCase
         $this->assertEquals('submitted', $this->statusTypes($s['mat'])['attestation_passage']);
     }
 
+    public function test_status_shows_active_request_even_if_a_newer_one_was_picked_up(): void
+    {
+        // Statut et règle de dépôt doivent concorder : une demande active
+        // (même plus ancienne) l'emporte sur une demande récente déjà retirée.
+        $s = $this->twoYearStudent();
+        $base = ['student_pending_student_id' => $s['sps1'], 'type' => 'attestation_passage', 'email' => 'e@example.org', 'created_at' => now(), 'updated_at' => now()];
+        DB::table('document_requests')->insert($base + ['reference' => 'ATT-OLD001', 'status' => 'director_review', 'submitted_at' => now()->subDays(10)]);
+        DB::table('document_requests')->insert($base + ['reference' => 'ATT-NEW001', 'status' => 'picked_up', 'submitted_at' => now()->subDay()]);
+        $this->assertEquals('director_review', $this->statusTypes($s['mat'])['attestation_passage']);
+    }
+
     public function test_definitive_eligible_and_prepa_excluded(): void
     {
         $s = $this->twoYearStudent('Licence Professionnelle', 3, '3', 'L3');
