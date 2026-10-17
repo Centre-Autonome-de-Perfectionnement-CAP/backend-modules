@@ -52,6 +52,98 @@ class EligibilityService
         ];
     }
 
+    /**
+     * Éligibilité réelle d'un étudiant à chaque attestation, sur TOUTES ses
+     * inscriptions approuvées et TOUS ses parcours (et non plus seulement la
+     * dernière inscription / le dernier parcours) :
+     *
+     *   - attestation_inscription : dernière inscription approuvée ;
+     *   - attestation_passage     : un parcours « admis » (pass) délibéré, avec
+     *                               niveau < durée du cycle ;
+     *   - attestation_definitive  : un parcours « admis » délibéré, avec
+     *                               niveau >= durée du cycle ;
+     *   - les cycles préparatoires (« prépa ») n'ouvrent ni passage ni
+     *     définitive.
+     *
+     * CORRECTIF (17/10/2026) : l'ancienne règle ne regardait que le DERNIER
+     * parcours de la DERNIÈRE inscription. Un étudiant admis en L1 puis inscrit
+     * en L2 (décision de L2 pas encore rendue) était déclaré non éligible à
+     * l'attestation de passage de L1.
+     *
+     * Pour chaque type éligible, renvoie l'inscription (et l'année) à laquelle
+     * rattacher la demande — la plus récente qui ouvre ce droit.
+     *
+     * @return array<string, array{link: StudentPendingStudent, academic_year_id: ?int}|null>
+     */
+    public function attestationTargets(int $studentId): array
+    {
+        $targets = [
+            'attestation_passage'     => null,
+            'attestation_definitive'  => null,
+            'attestation_inscription' => null,
+        ];
+
+        $links = StudentPendingStudent::where('student_id', $studentId)
+            ->whereHas('pendingStudent', fn ($q) => $q->where('status', 'approved'))
+            ->with(['pendingStudent.department.cycle', 'pendingStudent.academicYear', 'pendingStudent.personalInformation'])
+            ->orderByDesc('id')
+            ->get();
+
+        if ($links->isEmpty()) {
+            return $targets;
+        }
+
+        $latest = $links->first();
+        $targets['attestation_inscription'] = [
+            'link'             => $latest,
+            'academic_year_id' => $latest->pendingStudent->academic_year_id,
+        ];
+
+        $paths = AcademicPath::whereIn('student_pending_student_id', $links->pluck('id'))
+            ->where('year_decision', 'pass')
+            ->whereNotNull('deliberation_date')
+            ->whereNotNull('study_level')
+            ->where('study_level', '!=', '')
+            ->orderByDesc('deliberation_date')
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($paths as $path) {
+            $link       = $links->firstWhere('id', $path->student_pending_student_id);
+            $cycle      = $link?->pendingStudent?->department?->cycle;
+            $yearsCount = (int) ($cycle?->years_count ?? 0);
+
+            if (!$link || $yearsCount <= 0 || $this->isPrepaCycle($cycle?->name)) {
+                continue;
+            }
+
+            $type = $this->studyLevel($path->study_level) < $yearsCount
+                ? 'attestation_passage'
+                : 'attestation_definitive';
+
+            $targets[$type] ??= [
+                'link'             => $link,
+                'academic_year_id' => $path->academic_year_id ?? $link->pendingStudent->academic_year_id,
+            ];
+        }
+
+        return $targets;
+    }
+
+    /** "L2", "2", "2ème année" → 2 */
+    private function studyLevel(mixed $raw): int
+    {
+        return is_numeric($raw)
+            ? (int) $raw
+            : (int) preg_replace('/^[A-Za-z]+/', '', trim((string) $raw));
+    }
+
+    private function isPrepaCycle(?string $name): bool
+    {
+        $n = mb_strtolower((string) $name);
+        return str_contains($n, 'prepa') || str_contains($n, 'prépa');
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // ÉLIGIBILITÉ BULLETIN (getBulletinStatus)
     // ══════════════════════════════════════════════════════════════════════════

@@ -368,6 +368,66 @@ class FusionFlowsTest extends TestCase
         $this->assertStringContainsString('Montant incorrect', $wa->payload['message']);
     }
 
+    /** Étudiant inscrit deux années : admis en L1 (2024), inscrit en L2 (2025) sans décision. */
+    private function twoYearStudent(string $cycleName = 'Licence Professionnelle', int $years = 3, string $lvl1 = 'L1', string $lvl2 = 'L2', ?string $dec2 = null): array
+    {
+        $cy  = DB::table('cycles')->where('name', $cycleName)->value('id')
+            ?? DB::table('cycles')->insertGetId(['uuid' => Str::uuid(), 'name' => $cycleName, 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('cycles')->where('id', $cy)->update(['years_count' => $years]);
+        $dep = DB::table('departments')->insertGetId(['uuid' => Str::uuid(), 'name' => 'Génie Civil ' . $cy, 'cycle_id' => $cy, 'created_at' => now(), 'updated_at' => now()]);
+        $mat = 'EL' . random_int(10000, 99999);
+        $st  = DB::table('students')->insertGetId(['uuid' => Str::uuid(), 'student_id_number' => $mat, 'password' => 'x', 'created_at' => now(), 'updated_at' => now()]);
+        $out = ['mat' => $mat];
+        foreach ([['2024-2025', $lvl1, 'pass', '2025-07-10'], ['2025-2026', $lvl2, $dec2, null]] as $i => [$yr, $lvl, $dec, $delib]) {
+            $ay  = DB::table('academic_years')->where('academic_year', $yr)->value('id') ?? DB::table('academic_years')->insertGetId(['uuid' => Str::uuid(), 'academic_year' => $yr, 'year_start' => substr($yr, 0, 4) . '-10-01', 'year_end' => substr($yr, 5) . '-07-31', 'created_at' => now(), 'updated_at' => now()]);
+            $pi  = DB::table('personal_information')->insertGetId(['uuid' => Str::uuid(), 'last_name' => 'DOSSOU', 'first_names' => 'Eli', 'email' => 'eli@example.org', 'contacts' => json_encode(['0197000222']), 'created_at' => now(), 'updated_at' => now()]);
+            $ps  = DB::table('pending_students')->insertGetId(['uuid' => Str::uuid(), 'tracking_code' => 'CAP-EL' . random_int(1000, 9999), 'personal_information_id' => $pi, 'academic_year_id' => $ay, 'department_id' => $dep, 'status' => 'approved', 'created_at' => now(), 'updated_at' => now()]);
+            $sps = DB::table('student_pending_student')->insertGetId(['uuid' => Str::uuid(), 'student_id' => $st, 'pending_student_id' => $ps, 'created_at' => now(), 'updated_at' => now()]);
+            DB::table('academic_paths')->insert(['uuid' => Str::uuid(), 'student_pending_student_id' => $sps, 'academic_year_id' => $ay, 'study_level' => $lvl, 'year_decision' => $dec, 'deliberation_date' => $delib, 'created_at' => now(), 'updated_at' => now()]);
+            $out['sps' . ($i + 1)] = $sps; $out['ay' . ($i + 1)] = $ay;
+        }
+        return $out;
+    }
+
+    private function statusTypes(string $mat): array
+    {
+        $docs = $this->getJson('/api/attestations/status?matricule=' . $mat)->assertOk()->json('data.documents') ?? $this->getJson('/api/attestations/status?matricule=' . $mat)->json('documents');
+        return collect($docs)->pluck('status', 'type')->all();
+    }
+
+    public function test_passage_eligible_from_earlier_year_and_request_attached_to_that_year(): void
+    {
+        Bus::fake([SendNotificationJob::class, \App\Modules\Demandes\Jobs\SendNotificationJob::class]);
+        $s = $this->twoYearStudent();
+        $types = $this->statusTypes($s['mat']);
+        $this->assertEquals('disponible', $types['attestation_passage'] ?? null, 'admis en L1 → passage disponible même inscrit en L2');
+        $this->assertArrayNotHasKey('attestation_definitive', $types);
+        $this->assertArrayHasKey('attestation_inscription', $types);
+
+        \Illuminate\Support\Facades\Storage::fake('local');
+        \Illuminate\Support\Facades\Storage::fake('public');
+        $file = fn () => \Illuminate\Http\UploadedFile::fake()->create('doc.pdf', 100, 'application/pdf');
+        $ref = $this->post('/api/attestations/demandes', [
+            'matricule' => $s['mat'], 'type' => 'attestation_passage', 'email' => 'eli@example.org', 'whatsapp' => '0197000222',
+            'demande_manuscrite' => $file(), 'recu_paiement' => $file(), 'acte_naissance' => $file(), 'bulletin' => $file(), 'quittance' => $file(),
+        ], ['Accept' => 'application/json'])->assertStatus(201)->json('reference');
+        $row = DB::table('document_requests')->where('reference', $ref)->first();
+        $this->assertEquals($s['sps1'], $row->student_pending_student_id, 'rattachée à l\'inscription de l\'année admise');
+        $this->assertEquals($s['ay1'], $row->academic_year_id);
+        $this->assertEquals('submitted', $this->statusTypes($s['mat'])['attestation_passage']);
+    }
+
+    public function test_definitive_eligible_and_prepa_excluded(): void
+    {
+        $s = $this->twoYearStudent('Licence Professionnelle', 3, '3', 'L3');
+        $this->assertEquals('disponible', $this->statusTypes($s['mat'])['attestation_definitive'] ?? null);
+
+        $p = $this->twoYearStudent('Cycle Ingénieur - Prépa', 2, '1', '2');
+        $types = $this->statusTypes($p['mat']);
+        $this->assertArrayNotHasKey('attestation_passage', $types);
+        $this->assertArrayNotHasKey('attestation_definitive', $types);
+    }
+
     public function test_check_existing_without_token_hides_personal_data(): void
     {
         $r = $this->regularStudent();

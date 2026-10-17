@@ -126,22 +126,33 @@ class DemandeSubmissionService
             throw new BusinessException('Étudiant introuvable.', 'STUDENT_NOT_FOUND', 404);
         }
 
-        $link = StudentPendingStudent::where('student_id', $student->id)
-            ->whereHas('pendingStudent', fn ($q) => $q->where('status', 'approved'))
-            ->with(['pendingStudent.academicYear', 'pendingStudent.personalInformation'])
-            ->latest('id')
-            ->first();
+        // Éligibilité sur l'ensemble des inscriptions / parcours : la demande est
+        // rattachée à l'inscription (et à l'année) qui ouvre ce droit.
+        $targets = $this->eligibilityService->attestationTargets($student->id);
 
-        if (!$link) {
+        if (!$targets['attestation_inscription']) {
             throw new BusinessException('Inscription approuvée introuvable.', 'APPROVED_LINK_NOT_FOUND', 404);
         }
 
-        $this->assertNoActivePendingRequest('student_pending_student_id', $link->id, $request->type);
+        // Une seule demande active par type, toutes inscriptions confondues.
+        $this->assertNoActivePendingRequest(
+            'student_pending_student_id',
+            StudentPendingStudent::where('student_id', $student->id)->pluck('id')->all(),
+            $request->type,
+        );
 
         // AJOUT (audit 13/10/2026) — contrôles serveur alignés sur le site vitrine.
         // Le client est falsifiable : sans ces contrôles, une requête forgée
         // pouvait soumettre un type non éligible ou un dossier sans pièces.
-        $this->assertEligible($link, $request->type);
+        $target = $targets[$request->type] ?? null;
+        if (!$target) {
+            throw new BusinessException(
+                "Vous n'êtes pas éligible à ce type d'attestation pour le moment.",
+                'NOT_ELIGIBLE',
+                422
+            );
+        }
+        $link = $target['link'];
         $this->assertRequiredFiles($request, $request->type);
 
         $reference = $this->generateReference('ATT');
@@ -173,6 +184,7 @@ class DemandeSubmissionService
 
         $id = DB::table('document_requests')->insertGetId([
             'student_pending_student_id' => $link->id,
+            'academic_year_id'           => $target['academic_year_id'],
             'type'                       => $request->type,
             'reference'                  => $reference,
             'status'                     => 'submitted',
@@ -475,6 +487,10 @@ class DemandeSubmissionService
             'has_flag'        => !empty($demande->has_flag),
             'flag_reason'     => $flagReason,
             'submitted_at'    => $demande->submitted_at,
+            'updated_at'      => $demande->updated_at,
+            'academic_year'   => (!empty($demande->academic_year_id)
+                ? DB::table('academic_years')->where('id', $demande->academic_year_id)->value('academic_year')
+                : null) ?? ($demande->bulletin_year ?? null),
             'rejected_reason' => $demande->status === 'rejected' ? $demande->rejected_reason : null,
             'bulletin_year'   => $demande->bulletin_year ?? null,
             'is_legacy'       => !empty($demande->legacy_student_id),
@@ -495,10 +511,10 @@ class DemandeSubmissionService
     /**
      * @throws BusinessException
      */
-    private function assertNoActivePendingRequest(string $ownerColumn, int $ownerId, string $type, ?string $bulletinYear = null): void
+    private function assertNoActivePendingRequest(string $ownerColumn, int|array $ownerId, string $type, ?string $bulletinYear = null): void
     {
         $existing = DB::table('document_requests')
-            ->where($ownerColumn, $ownerId)
+            ->whereIn($ownerColumn, (array) $ownerId)
             ->where('type', $type)
             ->when($bulletinYear !== null, fn ($q) => $q->where('bulletin_year', $bulletinYear))
             ->whereNotIn('status', self::INACTIVE_STATUSES)
@@ -550,18 +566,6 @@ class DemandeSubmissionService
     /**
      * @throws BusinessException
      */
-    private function assertEligible(StudentPendingStudent $link, string $type): void
-    {
-        $eligibility = $this->eligibilityService->getAttestationEligibility($link);
-
-        if (empty($eligibility[$type])) {
-            throw new BusinessException(
-                "Vous n'êtes pas éligible à ce type d'attestation pour le moment.",
-                'NOT_ELIGIBLE',
-                422
-            );
-        }
-    }
 
     /**
      * @throws BusinessException

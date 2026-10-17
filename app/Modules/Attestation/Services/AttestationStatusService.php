@@ -36,11 +36,9 @@ class AttestationStatusService
 
         $student = $this->findStudentOrFail($matricule);
 
-        $link = StudentPendingStudent::where('student_id', $student->id)
-            ->whereHas('pendingStudent', fn ($q) => $q->where('status', 'approved'))
-            ->with(['pendingStudent.personalInformation', 'pendingStudent.department.cycle', 'pendingStudent.academicYear'])
-            ->latest('id')
-            ->first();
+        // Éligibilité sur l'ensemble des inscriptions / parcours (voir EligibilityService).
+        $targets = $this->eligibility->attestationTargets($student->id);
+        $link    = $targets['attestation_inscription']['link'] ?? null;
 
         if (!$link) {
             throw new \Illuminate\Database\Eloquent\ModelNotFoundException('Aucune inscription approuvée trouvée.');
@@ -49,26 +47,28 @@ class AttestationStatusService
         $pending  = $link->pendingStudent;
         $personal = $pending->personalInformation;
 
-        // CORRECTIF (13/10/2026) : keyBy() conserve la DERNIÈRE ligne de chaque
-        // type. Avec un tri DESC, c'était donc la demande la PLUS ANCIENNE qui
-        // était affichée (ex. un ancien rejet masquant la demande en cours →
-        // l'étudiant se voyait proposer une nouvelle soumission, refusée en 409).
-        // Tri ASC : la demande la plus récente l'emporte.
+        // Demandes déjà déposées, toutes inscriptions confondues. Tri ASC :
+        // keyBy() garde la DERNIÈRE ligne → la demande la plus récente l'emporte.
+        $linkIds = StudentPendingStudent::where('student_id', $student->id)->pluck('id');
         $existingRequests = DB::table('document_requests')
-            ->where('student_pending_student_id', $link->id)
+            ->whereIn('student_pending_student_id', $linkIds)
+            ->where('type', '!=', 'bulletin_annuel')
             ->orderBy('submitted_at')
             ->orderBy('id')
             ->get()
             ->keyBy('type');
 
-        $eligibility = $this->eligibility->getAttestationEligibility($link);
-
         $documents = [];
-        foreach ($eligibility as $type => $eligible) {
+        foreach ($targets as $type => $target) {
             $existing = $existingRequests->get($type);
+            // Document déjà retiré : une nouvelle demande reste possible tant
+            // que l'étudiant est éligible (autre année, second exemplaire).
+            if ($existing && $existing->status === 'picked_up' && $target) {
+                $existing = null;
+            }
             if ($existing) {
                 $documents[] = DocumentStatusDTO::fromExisting($existing)->toArray();
-            } elseif ($eligible) {
+            } elseif ($target) {
                 $documents[] = DocumentStatusDTO::available($type)->toArray();
             }
         }
