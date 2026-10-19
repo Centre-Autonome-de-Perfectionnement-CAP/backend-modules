@@ -117,4 +117,23 @@ class FileCommentsTest extends TestCase
         $this->actingAs($this->user('comptable'), 'sanctum');
         $this->patchJson("/api/attestations/document-requests/{$this->demandeId}/secretary-files/sec_abc", ['name' => 'x'])->assertStatus(403);
     }
+
+    public function test_preview_as_json_returns_base64_content(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+        \Illuminate\Support\Facades\Storage::disk('public')->put('demandes/x/acte.pdf', "%PDF-1.4 test");
+        $this->actingAs($this->user('comptable'), 'sanctum');
+        $url = "/api/attestations/document-requests/{$this->demandeId}/files/initial/acte_naissance";
+
+        $json = $this->getJson($url . '?format=json')->assertOk()->json('data');
+        $this->assertSame("%PDF-1.4 test", base64_decode($json['content']));
+        $this->assertNotEmpty($json['mime']);
+
+        // Sans le paramètre : comportement inchangé (fichier brut)
+        $this->get($url)->assertOk()->assertHeader('content-disposition');
+
+        // Accès toujours protégé
+        $this->actingAs($this->user('professeur'), 'sanctum');
+        $this->getJson($url . '?format=json')->assertStatus(403);
+    }
 }

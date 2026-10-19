@@ -139,6 +139,24 @@ class DocumentRequestController extends Controller
             return $this->notFoundResponse('Fichier introuvable sur le serveur.');
         }
 
+        // Visualiseur du progiciel : contenu renvoyé en JSON (base64).
+        // Les gestionnaires de téléchargement installés sur certains PC
+        // (Internet Download Manager…) interceptent toute réponse PDF/image,
+        // même chargée en arrière-plan : le fichier se télécharge au lieu de
+        // s'afficher, et le visualiseur reste vide. Une réponse JSON n'est
+        // jamais interceptée.
+        if ($request->query('format') === 'json') {
+            $disk = Storage::disk('public');
+            return response()->json([
+                'success' => true,
+                'data'    => [
+                    'name'    => $displayName,
+                    'mime'    => $disk->mimeType($path) ?: 'application/octet-stream',
+                    'content' => base64_encode($disk->get($path)),
+                ],
+            ])->header('Cache-Control', 'private, no-store');
+        }
+
         $disposition = $request->boolean('download') ? 'attachment' : 'inline';
         return Storage::disk('public')->response($path, $displayName, [], $disposition);
     }
