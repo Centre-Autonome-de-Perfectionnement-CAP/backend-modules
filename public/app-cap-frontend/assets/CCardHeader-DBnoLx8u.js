@@ -1,0 +1,1 @@
+import{r as l,af as m,R as o,ag as p,ah as e}from"./index-DRsTAHHW.js";const s=l.forwardRef((a,r)=>{var{children:t,as:c="div",className:d}=a,n=m(a,["children","as","className"]);return o.createElement(c,Object.assign({className:p("card-header",d)},n,{ref:r}),t)});s.propTypes={as:e.elementType,children:e.node,className:e.string};s.displayName="CCardHeader";export{s as C};
