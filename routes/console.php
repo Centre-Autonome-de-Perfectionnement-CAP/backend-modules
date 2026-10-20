@@ -14,6 +14,13 @@ Schedule::command('demandes:send-reminders')
     ->dailyAt('10:00')
     ->timezone('Africa/Porto-Novo');
 
+// Stages : relance (J+3) puis expiration (J+7) des propositions sans réponse.
+// Tous les jours : ces messages vont aux demandeurs, pas au personnel.
+Schedule::command('stages:process-deadlines')
+    ->dailyAt('09:00')
+    ->timezone('Africa/Porto-Novo')
+    ->withoutOverlapping(30);
+
 // Filet de sécurité des notifications : si aucun worker ne tourne (crash,
 // redémarrage serveur), le scheduler vide la file chaque minute. Sans effet
 // gênant quand les workers sont actifs (withoutOverlapping, arrêt à vide).

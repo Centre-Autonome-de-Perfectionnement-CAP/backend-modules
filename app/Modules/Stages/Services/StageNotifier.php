@@ -1,0 +1,149 @@
+<?php
+
+namespace App\Modules\Stages\Services;
+
+use App\Modules\Core\Jobs\SendNotificationJob;
+use App\Modules\Core\Services\Notifier;
+use App\Modules\Core\Support\WhatsAppText;
+use App\Modules\Stages\Models\StageRequest;
+use App\Modules\Stages\Support\BusinessHours;
+use App\Modules\Stages\Support\StageAccess;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * Notifications du module Stages (email + WhatsApp).
+ *
+ *  - demandeur / stagiaire : envoi immédiat, à toute heure ;
+ *  - personnel (responsable de division…) : jamais la nuit ni le week-end,
+ *    la notification est reportée au prochain créneau ouvré (07h30).
+ */
+class StageNotifier
+{
+    private const MODULE = 'Stages';
+
+    public function __construct(private readonly Notifier $notifier) {}
+
+    /**
+     * @param string[]             $paragraphs
+     * @param array<string,mixed>  $fields
+     */
+    public function toDemandeur(
+        StageRequest $req,
+        string $title,
+        array $paragraphs,
+        array $fields = [],
+        ?string $highlight = null,
+        ?string $highlightTitle = null,
+        ?string $ctaLabel = null,
+        ?string $ctaUrl = null,
+        string $context = 'stage',
+    ): void {
+        $greeting = 'Bonjour ' . trim($req->civilite . ' ' . $req->fullName()) . ',';
+
+        $this->notifier->whatsapp(
+            $req->whatsapp,
+            WhatsAppText::compose($title, [
+                $greeting,
+                implode("\n\n", $paragraphs),
+                WhatsAppText::fields($fields),
+                $highlight ? ($highlightTitle ? "*{$highlightTitle} :*\n{$highlight}" : $highlight) : '',
+                $ctaUrl ? (($ctaLabel ? "{$ctaLabel} :\n" : '') . $ctaUrl) : '',
+            ]),
+            "{$context}:{$req->reference}",
+            self::MODULE,
+        );
+
+        $this->notifier->email(
+            $req->email,
+            "{$title} — {$req->reference}",
+            'stages::emails.message',
+            [
+                'title'          => $title,
+                'greeting'       => $greeting,
+                'paragraphs'     => $paragraphs,
+                'fields'         => $fields,
+                'highlight'      => $highlight,
+                'highlightTitle' => $highlightTitle,
+                'ctaLabel'       => $ctaLabel,
+                'ctaUrl'         => $ctaUrl,
+            ],
+            toName: $req->fullName(),
+        );
+    }
+
+    /**
+     * Notifie les responsables de division concernés, en respectant les
+     * heures ouvrées.
+     *
+     * @param string[]            $paragraphs
+     * @param array<string,mixed> $fields
+     */
+    public function toManagers(StageRequest $req, string $title, array $paragraphs, array $fields = [], string $context = 'stage-staff'): void
+    {
+        $managers = StageAccess::managers();
+        if ($managers->isEmpty()) {
+            Log::warning('[Stages] Aucun responsable de division (formation continue) à notifier', ['reference' => $req->reference]);
+            return;
+        }
+
+        $url  = $this->staffUrl($req);
+        $slot = BusinessHours::nextStaffSlot();
+
+        foreach ($managers as $m) {
+            $greeting = 'Bonjour ' . trim(($m->first_name ?? '') . ' ' . ($m->last_name ?? '')) . ',';
+
+            if (!empty($m->phone)) {
+                $this->send('whatsapp', [
+                    'phone'   => $m->phone,
+                    'message' => WhatsAppText::compose($title, [
+                        $greeting,
+                        implode("\n\n", $paragraphs),
+                        WhatsAppText::fields($fields),
+                        "Traiter le dossier :\n{$url}",
+                    ]),
+                    'context' => "{$context}:{$req->reference}",
+                    'module'  => self::MODULE,
+                ], $slot);
+            }
+
+            if (!empty($m->email) && filter_var($m->email, FILTER_VALIDATE_EMAIL)) {
+                $this->send('email', [
+                    'to'      => $m->email,
+                    'to_name' => trim(($m->first_name ?? '') . ' ' . ($m->last_name ?? '')),
+                    'subject' => "{$title} — {$req->reference}",
+                    'view'    => 'stages::emails.message',
+                    'vars'    => [
+                        'title' => $title, 'greeting' => $greeting, 'paragraphs' => $paragraphs,
+                        'fields' => $fields, 'highlight' => null, 'highlightTitle' => null,
+                        'ctaLabel' => 'Ouvrir le dossier', 'ctaUrl' => $url,
+                    ],
+                ], $slot);
+            }
+        }
+    }
+
+    public function suiviUrl(StageRequest $req): string
+    {
+        return rtrim((string) config('app.frontend_url', config('app.url')), '/')
+            . '/stage/suivi?ref=' . urlencode($req->reference);
+    }
+
+    public function staffUrl(StageRequest $req): string
+    {
+        return rtrim((string) config('app.url'), '/') . '/services/stages?ref=' . urlencode($req->reference);
+    }
+
+    /** Envoi immédiat, ou différé au prochain créneau ouvré. */
+    private function send(string $channel, array $payload, ?\DateTimeInterface $slot): void
+    {
+        try {
+            if ($slot === null) {
+                SendNotificationJob::send($channel, $payload);
+                return;
+            }
+            SendNotificationJob::dispatch($channel, $payload)->delay($slot);
+        } catch (\Throwable $e) {
+            Log::error('[Stages] Notification non programmée', ['channel' => $channel, 'error' => $e->getMessage()]);
+        }
+    }
+}
