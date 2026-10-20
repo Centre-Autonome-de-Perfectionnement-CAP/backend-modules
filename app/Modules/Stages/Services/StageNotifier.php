@@ -80,14 +80,29 @@ class StageNotifier
      */
     public function toManagers(StageRequest $req, string $title, array $paragraphs, array $fields = [], string $context = 'stage-staff'): void
     {
+        $this->toManagersGeneric($title, $paragraphs, $fields, "{$context}:{$req->reference}", $this->staffUrl($req), $req->reference);
+    }
+
+    /**
+     * Notification aux responsables sans dossier précis (ex. action d'un
+     * superviseur sur plusieurs stagiaires), heures ouvrées respectées.
+     *
+     * @param string[]            $paragraphs
+     * @param array<string,mixed> $fields
+     */
+    public function toManagersGeneric(
+        string $title, array $paragraphs, array $fields = [], string $context = 'stage-staff',
+        ?string $url = null, ?string $reference = null,
+    ): void {
         $managers = StageAccess::managers();
         if ($managers->isEmpty()) {
-            Log::warning('[Stages] Aucun responsable de division (formation continue) à notifier', ['reference' => $req->reference]);
+            Log::warning('[Stages] Aucun responsable de division (formation continue) à notifier', ['context' => $context]);
             return;
         }
 
-        $url  = $this->staffUrl($req);
+        $url ??= rtrim((string) config('app.url'), '/') . '/services/stages';
         $slot = BusinessHours::nextStaffSlot();
+        $subject = $reference ? "{$title} — {$reference}" : $title;
 
         foreach ($managers as $m) {
             $greeting = 'Bonjour ' . trim(($m->first_name ?? '') . ' ' . ($m->last_name ?? '')) . ',';
@@ -99,9 +114,9 @@ class StageNotifier
                         $greeting,
                         implode("\n\n", $paragraphs),
                         WhatsAppText::fields($fields),
-                        "Traiter le dossier :\n{$url}",
+                        "Ouvrir :\n{$url}",
                     ]),
-                    'context' => "{$context}:{$req->reference}",
+                    'context' => $context,
                     'module'  => self::MODULE,
                 ], $slot);
             }
@@ -110,12 +125,12 @@ class StageNotifier
                 $this->send('email', [
                     'to'      => $m->email,
                     'to_name' => trim(($m->first_name ?? '') . ' ' . ($m->last_name ?? '')),
-                    'subject' => "{$title} — {$req->reference}",
+                    'subject' => $subject,
                     'view'    => 'stages::emails.message',
                     'vars'    => [
                         'title' => $title, 'greeting' => $greeting, 'paragraphs' => $paragraphs,
                         'fields' => $fields, 'highlight' => null, 'highlightTitle' => null,
-                        'ctaLabel' => 'Ouvrir le dossier', 'ctaUrl' => $url,
+                        'ctaLabel' => 'Ouvrir', 'ctaUrl' => $url,
                     ],
                 ], $slot);
             }

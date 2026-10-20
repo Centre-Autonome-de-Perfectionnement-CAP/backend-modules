@@ -1,6 +1,8 @@
 <?php
 
 use App\Modules\Stages\Http\Controllers\Public\StagePublicController;
+use App\Modules\Stages\Http\Controllers\Public\SupervisorInvitationController;
+use App\Modules\Stages\Http\Controllers\SupervisionController;
 use App\Modules\Stages\Http\Controllers\StageAdminController;
 use Illuminate\Support\Facades\Route;
 
@@ -22,10 +24,42 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         Route::post('reponse', [StagePublicController::class, 'respond'])->middleware('throttle:stages-public-code');
     });
 
-    // ── Progiciel (Responsable de division formation continue + admin) ────
-    Route::prefix('admin')->middleware(['auth:sanctum', 'can:stages.manage'])->group(function () {
+    // ── Invitation d'un superviseur (lien reçu sur WhatsApp) ─────────────
+    Route::get('invitation', [SupervisorInvitationController::class, 'show'])->middleware('throttle:stages-public-code');
+    Route::post('invitation/accepter', [SupervisorInvitationController::class, 'accept'])->middleware('throttle:stages-public-code');
+
+    // ── Progiciel : responsables (admin, Responsable de division FC) ──────
+    Route::prefix('admin')->middleware(['auth:sanctum', 'can:stages.lead'])->group(function () {
         Route::get('reglages', [StageAdminController::class, 'getSettings']);
         Route::put('reglages', [StageAdminController::class, 'updateSettings'])->middleware('throttle:30,1');
+
+        Route::get('invitations', [SupervisionController::class, 'invitationsIndex']);
+        Route::middleware('throttle:20,1')->group(function () {
+            Route::post('invitations', [SupervisionController::class, 'invite']);
+            Route::post('invitations/{id}/renvoyer', [SupervisionController::class, 'resendInvitation'])->whereNumber('id');
+            Route::delete('invitations/{id}', [SupervisionController::class, 'revokeInvitation'])->whereNumber('id');
+        });
+
+        Route::get('groupe-whatsapp', [SupervisionController::class, 'whatsappGroup']);
+        Route::middleware('throttle:10,1')->group(function () {
+            Route::post('groupe-whatsapp/creer', [SupervisionController::class, 'createWhatsappGroup']);
+            Route::post('groupe-whatsapp/lier', [SupervisionController::class, 'linkWhatsappGroup']);
+            Route::post('groupe-whatsapp/synchroniser', [SupervisionController::class, 'syncWhatsappGroup']);
+            Route::post('groupe-whatsapp/{id}/dissoudre', [SupervisionController::class, 'dissolveWhatsappGroup'])->whereNumber('id');
+        });
+    });
+
+    // ── Progiciel : responsables + superviseurs ───────────────────────────
+    Route::prefix('admin')->middleware(['auth:sanctum', 'can:stages.manage'])->group(function () {
+        Route::get('stagiaires', [SupervisionController::class, 'interns']);
+        Route::post('stagiaires/superviseur', [SupervisionController::class, 'setSupervisor'])->middleware('throttle:30,1');
+        Route::get('superviseurs', [SupervisionController::class, 'supervisors']);
+        Route::get('equipes', [SupervisionController::class, 'teams']);
+        Route::middleware('throttle:30,1')->group(function () {
+            Route::post('equipes', [SupervisionController::class, 'saveTeam']);
+            Route::put('equipes/{id}', [SupervisionController::class, 'saveTeam'])->whereNumber('id');
+            Route::delete('equipes/{id}', [SupervisionController::class, 'deleteTeam'])->whereNumber('id');
+        });
 
         Route::get('demandes', [StageAdminController::class, 'index']);
         Route::get('demandes/{id}', [StageAdminController::class, 'show'])->where('id', '[A-Za-z0-9\-]+');

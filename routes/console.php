@@ -21,6 +21,13 @@ Schedule::command('stages:process-deadlines')
     ->timezone('Africa/Porto-Novo')
     ->withoutOverlapping(30);
 
+// Stages : groupe WhatsApp annuel (ajout des stagiaires qui commencent,
+// retrait une semaine après la fin).
+Schedule::command('stages:sync-whatsapp-group')
+    ->dailyAt('10:30')
+    ->timezone('Africa/Porto-Novo')
+    ->withoutOverlapping(60);
+
 // Filet de sécurité des notifications : si aucun worker ne tourne (crash,
 // redémarrage serveur), le scheduler vide la file chaque minute. Sans effet
 // gênant quand les workers sont actifs (withoutOverlapping, arrêt à vide).

@@ -3,6 +3,11 @@
 namespace App\Modules\Stages\Providers;
 
 use App\Modules\Stages\Console\Commands\ProcessStageDeadlines;
+use App\Modules\Stages\Console\Commands\SyncStageWhatsAppGroup;
+use App\Modules\Stages\Http\Middleware\RestrictSupervisorScope;
+use App\Modules\Stages\Services\StageWhatsAppGroupService;
+use App\Modules\Stages\Services\SupervisionService;
+use App\Modules\Stages\Services\SupervisorInvitationService;
 use App\Modules\Stages\Services\StageNotifier;
 use App\Modules\Stages\Services\StageRequestService;
 use App\Modules\Stages\Services\StageSettingsService;
@@ -22,6 +27,9 @@ class StagesServiceProvider extends ServiceProvider
         $this->app->singleton(StageNotifier::class);
         $this->app->singleton(StageSuiviOtpService::class);
         $this->app->singleton(StageRequestService::class);
+        $this->app->singleton(SupervisionService::class);
+        $this->app->singleton(SupervisorInvitationService::class);
+        $this->app->singleton(StageWhatsAppGroupService::class);
     }
 
     public function boot(): void
@@ -31,6 +39,12 @@ class StagesServiceProvider extends ServiceProvider
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'stages');
 
         Gate::define('stages.manage', fn ($user) => StageAccess::canManage($user));
+        Gate::define('stages.lead', fn ($user) => StageAccess::isLead($user));
+
+        // Les comptes superviseurs n'ont accès qu'au module Stages : filtre
+        // global (certains modules enregistrent leurs routes hors du groupe
+        // « api »).
+        $this->app->make(\Illuminate\Contracts\Http\Kernel::class)->pushMiddleware(RestrictSupervisorScope::class);
 
         RateLimiter::for('stages-public-read', fn (Request $r) => Limit::perMinute(60)->by($r->ip()));
         RateLimiter::for('stages-public-submit', fn (Request $r) => [
@@ -43,7 +57,7 @@ class StagesServiceProvider extends ServiceProvider
         ]);
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ProcessStageDeadlines::class]);
+            $this->commands([ProcessStageDeadlines::class, SyncStageWhatsAppGroup::class]);
         }
     }
 }

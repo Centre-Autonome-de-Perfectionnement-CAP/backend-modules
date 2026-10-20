@@ -6,7 +6,9 @@ use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Services\StageRequestService;
+use App\Modules\Stages\Services\StageNotifier;
 use App\Modules\Stages\Services\StageSettingsService;
+use App\Modules\Stages\Support\StageAccess;
 use App\Modules\Stages\Support\StageStatus;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -27,6 +29,7 @@ class StageAdminController extends Controller
     public function __construct(
         private readonly StageRequestService $service,
         private readonly StageSettingsService $settings,
+        private readonly StageNotifier $notifier,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -197,7 +200,18 @@ class StageAdminController extends Controller
             return $this->errorResponse($e->getMessage(), $e->getStatusCode(), $e->getErrorCode());
         }
 
-        return $this->successResponse($this->detail($req->fresh()), $message($req));
+        $text = $message($req);
+
+        // Action d'un superviseur : le responsable de division en est informé.
+        $user = request()->user();
+        if ($user && !StageAccess::isLead($user)) {
+            $who = trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''));
+            $this->notifier->toManagers($req, 'Action d\'un superviseur', [
+                "{$who} (superviseur) a agi sur cette demande de stage : {$text}",
+            ], ['Référence' => $req->reference, 'Demandeur' => $req->fullName(), 'Statut' => StageStatus::label($req->status)], 'stage-superviseur');
+        }
+
+        return $this->successResponse($this->detail($req->fresh()), $text);
     }
 
     private function validatedTerms(Request $request): array
