@@ -182,6 +182,9 @@ class StageAdminController extends Controller
             'lieu_rayon'               => ['sometimes', 'integer', 'min:20', 'max:500'],
             'reglement_text'           => ['sometimes', 'string', 'min:50', 'max:10000'],
             'permission_delay_days'    => ['sometimes', 'integer', 'min:0', 'max:15'],
+            'report_frequency'         => ['sometimes', Rule::in(\App\Modules\Stages\Support\ReportPlan::FREQUENCIES)],
+            'report_grace_days'        => ['sometimes', 'integer', 'min:0', 'max:10'],
+            'final_report_open_days'   => ['sometimes', 'integer', 'min:3', 'max:60'],
         ]);
         if (array_key_exists('lieu_position', $data) && $data['lieu_position'] !== null) {
             $data['lieu_position'] = ['lat' => round((float) $data['lieu_position']['lat'], 7), 'lng' => round((float) $data['lieu_position']['lng'], 7)];

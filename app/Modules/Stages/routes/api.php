@@ -4,6 +4,7 @@ use App\Modules\Stages\Http\Controllers\Public\StagePublicController;
 use App\Modules\Stages\Http\Controllers\Public\SupervisorInvitationController;
 use App\Modules\Stages\Http\Controllers\SupervisionController;
 use App\Modules\Stages\Http\Controllers\InternFollowController;
+use App\Modules\Stages\Http\Controllers\ReportController;
 use App\Modules\Stages\Http\Controllers\Public\InternSpaceController;
 use App\Modules\Stages\Http\Middleware\AuthenticateIntern;
 use App\Modules\Stages\Http\Controllers\StageAdminController;
@@ -62,6 +63,12 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         Route::get('demandes-stagiaires', [InternFollowController::class, 'requestsIndex']);
         Route::post('demandes-stagiaires/{id}/decision', [InternFollowController::class, 'decide'])->whereNumber('id')->middleware('throttle:60,1');
         Route::get('demandes-stagiaires/{id}/piece', [InternFollowController::class, 'requestFile'])->whereNumber('id');
+        Route::get('stagiaires/{id}/rapports', [ReportController::class, 'forIntern'])->whereNumber('id');
+        Route::get('rapports', [ReportController::class, 'index']);
+        Route::get('rapports/{id}', [ReportController::class, 'show'])->whereNumber('id');
+        Route::get('rapports/{id}/versions/{version}', [ReportController::class, 'file'])->whereNumber(['id', 'version']);
+        Route::post('rapports/{id}/commentaires', [ReportController::class, 'comment'])->whereNumber('id')->middleware('throttle:30,1');
+        Route::post('rapports/{id}/decision', [ReportController::class, 'decide'])->whereNumber('id')->middleware('throttle:30,1');
         Route::get('equipes', [SupervisionController::class, 'teams']);
         Route::middleware('throttle:30,1')->group(function () {
             Route::post('equipes', [SupervisionController::class, 'saveTeam']);
@@ -107,5 +114,10 @@ Route::prefix('api/stagiaire')->middleware('api')->group(function () {
         Route::get('demandes', [InternSpaceController::class, 'requestsIndex']);
         Route::post('demandes', [InternSpaceController::class, 'requestsStore'])->middleware('throttle:10,1');
         Route::delete('demandes/{id}', [InternSpaceController::class, 'requestsCancel'])->whereNumber('id');
+        Route::get('rapports', [InternSpaceController::class, 'reportsIndex']);
+        Route::post('rapports', [InternSpaceController::class, 'reportsStore'])->middleware('throttle:10,1');
+        Route::get('rapports/{id}', [InternSpaceController::class, 'reportShow'])->whereNumber('id');
+        Route::post('rapports/{id}/commentaires', [InternSpaceController::class, 'reportComment'])->whereNumber('id')->middleware('throttle:20,1');
+        Route::get('rapports/{id}/versions/{version}', [InternSpaceController::class, 'reportFile'])->whereNumber(['id', 'version']);
     });
 });

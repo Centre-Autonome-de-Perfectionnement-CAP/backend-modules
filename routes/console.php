@@ -27,6 +27,17 @@ Schedule::command('stages:process-activations')
     ->everyFifteenMinutes()
     ->withoutOverlapping(15);
 
+// Stages : rapports (rappels aux stagiaires le matin, récapitulatif des
+// rapports journaliers au responsable en fin de journée ouvrée).
+Schedule::command('stages:process-reports')
+    ->dailyAt('08:00')
+    ->timezone('Africa/Porto-Novo')
+    ->withoutOverlapping(30);
+Schedule::command('stages:process-reports --digest')
+    ->weekdays()
+    ->dailyAt('17:45')
+    ->timezone('Africa/Porto-Novo');
+
 Schedule::command('stages:sync-whatsapp-group')
     ->dailyAt('10:30')
     ->timezone('Africa/Porto-Novo')

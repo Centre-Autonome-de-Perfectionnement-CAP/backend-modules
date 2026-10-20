@@ -11,6 +11,9 @@ use App\Modules\Stages\Services\InternActivationService;
 use App\Modules\Stages\Services\InternAuthService;
 use App\Modules\Stages\Services\InternRequestService;
 use App\Modules\Stages\Services\InternWebAuthnService;
+use App\Modules\Stages\Services\ReportService;
+use App\Modules\Stages\Models\StageReport;
+use Illuminate\Support\Facades\Storage;
 use App\Modules\Stages\Services\StageRequestService;
 use App\Modules\Stages\Services\StageSettingsService;
 use App\Modules\Stages\Support\BusinessHours;
@@ -44,6 +47,7 @@ class InternSpaceController extends Controller
         private readonly InternRequestService $requests,
         private readonly StageRequestService $stages,
         private readonly StageSettingsService $settings,
+        private readonly ReportService $reports,
     ) {}
 
     // ── Activation (lien du premier jour) ───────────────────────────────
@@ -275,7 +279,72 @@ class InternSpaceController extends Controller
         });
     }
 
+    // ── Rapports ────────────────────────────────────────────────────────
+
+    public function reportsIndex(Request $request): JsonResponse
+    {
+        return $this->successResponse($this->reports->overview($this->account($request)->stage));
+    }
+
+    public function reportsStore(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'period_key' => ['required', 'string', 'max:20', 'regex:/^(FINAL|J\d{4}-\d{2}-\d{2}|S\d{4}-W\d{2}|M\d{4}-\d{2})$/'],
+            'fichier'    => ['required', 'file', 'mimes:pdf', 'max:' . ReportService::MAX_KB],
+            'note'       => ['nullable', 'string', 'max:1000'],
+        ], ['fichier.mimes' => 'Le rapport doit être un fichier PDF.', 'fichier.max' => 'Le rapport ne doit pas dépasser 10 Mo.']);
+        $note = isset($data['note']) ? (trim(strip_tags($data['note'])) ?: null) : null;
+
+        return $this->guard(function () use ($data, $note, $request) {
+            $r = $this->reports->submit($this->ready($request)->stage, $data['period_key'], $request->file('fichier'), $note);
+
+            return $this->successResponse($this->reports->detail($r->load('stage'), false),
+                $r->late ? 'Rapport déposé (hors délai).' : 'Rapport déposé. Votre superviseur en est informé.', 201);
+        });
+    }
+
+    public function reportShow(Request $request, int $id): JsonResponse
+    {
+        return $this->successResponse($this->reports->detail($this->ownReport($request, $id), false));
+    }
+
+    public function reportComment(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate(['body' => ['required', 'string', 'max:2000']]);
+        $report = $this->ownReport($request, $id);
+
+        return $this->guard(function () use ($report, $data) {
+            $this->reports->comment($report, $data['body'], null);
+
+            return $this->successResponse($this->reports->detail($report->fresh('stage'), false), 'Message envoyé.');
+        });
+    }
+
+    public function reportFile(Request $request, int $id, int $version): JsonResponse
+    {
+        $report = $this->ownReport($request, $id);
+        $path = $this->reports->filePath($report, $version);
+        if (!$path) {
+            return $this->errorResponse('Fichier introuvable.', 404, 'STAGE_FILE_NOT_FOUND');
+        }
+
+        return response()->json([
+            'name' => $this->reports->labelFor($report) . " - v{$version}.pdf", 'mime' => 'application/pdf',
+            'content' => base64_encode(Storage::disk(StageRequestService::DISK)->get($path)),
+        ])->header('Cache-Control', 'private, no-store');
+    }
+
     // ── Interne ─────────────────────────────────────────────────────────
+
+    private function ownReport(Request $request, int $id): StageReport
+    {
+        $report = StageReport::with('stage')->where('id', $id)->where('stage_request_id', $this->account($request)->stage_request_id)->first();
+        if (!$report) {
+            abort(404);
+        }
+
+        return $report;
+    }
 
     private function account(Request $request): StageInternAccount
     {

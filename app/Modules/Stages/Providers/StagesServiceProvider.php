@@ -5,6 +5,8 @@ namespace App\Modules\Stages\Providers;
 use App\Modules\Stages\Console\Commands\ProcessStageDeadlines;
 use App\Modules\Stages\Console\Commands\SyncStageWhatsAppGroup;
 use App\Modules\Stages\Console\Commands\ProcessStageActivations;
+use App\Modules\Stages\Console\Commands\ProcessStageReports;
+use App\Modules\Stages\Services\ReportService;
 use App\Modules\Stages\Services\AttendanceService;
 use App\Modules\Stages\Services\InternActivationService;
 use App\Modules\Stages\Services\InternAuthService;
@@ -52,6 +54,7 @@ class StagesServiceProvider extends ServiceProvider
         $this->app->singleton(InternWebAuthnService::class);
         $this->app->singleton(InternActivationService::class);
         $this->app->singleton(InternRequestService::class);
+        $this->app->singleton(ReportService::class);
     }
 
     public function boot(): void
@@ -79,7 +82,7 @@ class StagesServiceProvider extends ServiceProvider
         ]);
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ProcessStageDeadlines::class, SyncStageWhatsAppGroup::class, ProcessStageActivations::class]);
+            $this->commands([ProcessStageDeadlines::class, SyncStageWhatsAppGroup::class, ProcessStageActivations::class, ProcessStageReports::class]);
         }
     }
 }
