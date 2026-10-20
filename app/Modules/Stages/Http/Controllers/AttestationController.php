@@ -112,13 +112,14 @@ class AttestationController extends Controller
     public function printed(Request $request, int $id): JsonResponse
     {
         $data = $request->validate([
-            'numero' => ['required', 'string', 'min:2', 'max:60', 'regex:/^[A-Za-z0-9\/\-_. ]+$/'],
+            'numero' => ['nullable', 'string', 'max:60', 'regex:/^[A-Za-z0-9\/\-_. ]+$/'],
+            'date'   => ['nullable', 'date_format:Y-m-d'],
         ]);
         $a = $this->find($request, $id);
 
         return $this->guard(fn () => $this->successResponse(
-            $this->attestations->present($this->attestations->markPrinted($a, $data['numero'], $request->user())->load('stage')),
-            $a->status === 'a_imprimer' ? 'Attestation marquée imprimée. Le stagiaire est prévenu qu\'il peut la retirer.' : 'Numéro modifié.',
+            $this->attestations->present($this->attestations->markPrinted($a, $data['numero'] ?? null, $data['date'] ?? null, $request->user())->load('stage')),
+            $a->status === 'a_imprimer' ? 'Attestation marquée imprimée. Le stagiaire est prévenu qu\'il peut la retirer.' : 'Modification enregistrée.',
         ));
     }
 
@@ -163,24 +164,22 @@ class AttestationController extends Controller
         ])->header('Cache-Control', 'private, no-store');
     }
 
-    /** PDF de l'attestation (aperçu tant qu'elle n'est pas validée). */
+    /** PDF de l'attestation (aperçu tant qu'elle n'est pas validée). Le N° est écrit à la main. */
     public function pdf(Request $request, int $id): JsonResponse
     {
-        $data = $request->validate([
-            'numero' => ['nullable', 'string', 'min:2', 'max:60', 'regex:/^[A-Za-z0-9\/\-_. ]+$/'],
-        ]);
+        $data = $request->validate(['date' => ['nullable', 'date_format:Y-m-d']]);
         $a = $this->find($request, $id);
         if ($a->status === 'annulee') {
             return $this->errorResponse('Cette attestation est annulée.', 409, 'STAGE_ATT_STATUS');
         }
-        // Le numéro saisi n'est pris en compte qu'avant l'impression ; ensuite, celui enregistré.
-        $numero = $a->status === 'a_imprimer'
-            ? (isset($data['numero']) ? trim($data['numero']) : ($a->numero ?? $this->attestations->nextNumber()))
-            : $a->numero;
-        $f = $this->pdfs->attestation($a, $numero);
 
-        return response()->json(['name' => $f['name'], 'mime' => 'application/pdf', 'content' => base64_encode($f['content'])])
-            ->header('Cache-Control', 'private, no-store');
+        return $this->guard(function () use ($a, $data) {
+            $date = in_array($a->status, ['a_valider', 'a_imprimer'], true) ? ($data['date'] ?? null) : null;
+            $f = $this->pdfs->attestation($a, $this->attestations->documentDate($a, $date));
+
+            return response()->json(['name' => $f['name'], 'mime' => 'application/pdf', 'content' => base64_encode($f['content'])])
+                ->header('Cache-Control', 'private, no-store');
+        });
     }
 
     public function cancel(Request $request, int $id): JsonResponse

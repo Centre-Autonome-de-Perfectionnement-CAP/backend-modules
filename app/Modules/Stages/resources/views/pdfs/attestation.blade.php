@@ -29,7 +29,6 @@
     .sign { font-family: 'Albertus'; font-style: italic; font-size: 14pt; }
     .sign .titre-s { margin-left: 100mm; }
     .sign .nom-s { margin-left: 87.4mm; margin-top: 30mm; text-decoration: underline; }
-    s { text-decoration: line-through; }
     .apercu { position: fixed; top: 130mm; left: 15mm; width: 180mm; text-align: center; font-size: 34pt; font-weight: bold; color: #94a3b8; opacity: 0.22; z-index: -1; transform: rotate(-30deg); }
 @endsection
 
@@ -43,7 +42,8 @@
 @endphp
 @if($apercu)<div class="apercu">APERÇU — NON VALIDÉE</div>@endif
 <div class="ref">
-    <span class="num">N° {{ $numero ? $numero : str_repeat("\u{00A0}", 18) }}/{{ $suffixe }}</span>
+    {{-- Numéro écrit à la main sur l'original --}}
+    <span class="num">N°{{ str_repeat("\u{00A0}", 26) }}/{{ $suffixe }}</span>
     <span class="date">{{ $ville }}, le {{ $date }}</span>
 </div>
 
@@ -56,7 +56,7 @@
 <p class="pristina p1">Le Chef du Centre Autonome de Perfectionnement (CAP) de l’EPAC, atteste par la présente, que :</p>
 
 <p class="alb civ">
-    @if($d['masculin'])<s>Mlle</s> / Mr @else {{ $d['civilite'] === 'Mme' ? 'Mme' : 'Mlle' }} / <s>Mr</s> @endif :
+    {{ $d['masculin'] ? 'Mr' : ($d['civilite'] === 'Mme' ? 'Mme' : 'Mlle') }} :
     <span class="nom">{{ $d['nom'] }} {{ $d['prenoms'] }}</span>
 </p>
 

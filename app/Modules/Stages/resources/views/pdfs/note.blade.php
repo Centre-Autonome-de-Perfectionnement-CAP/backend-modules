@@ -2,6 +2,7 @@
     Note de service (initiale ou rectificative) — style des documents du
     CAP (en-tête et pied de page officiels), adapté du modèle de note
     d'admission en stage. Tout en texte ; signature et cachet à la main.
+    Les horaires et l'usage de l'espace stagiaire figurent au règlement intérieur.
 --}}
 @extends('stages::pdfs.layout')
 
@@ -20,8 +21,6 @@
     table.chg th { background: #eef2f7; }
     .sign { margin-top: 9mm; margin-left: 92mm; text-align: center; }
     .sign .nom-s { margin-top: 26mm; font-weight: bold; text-decoration: underline; }
-    .ampl { position: absolute; left: 25mm; bottom: 27mm; font-size: 8pt; line-height: 1.35; }
-    .ampl b { text-decoration: underline; }
 @endsection
 
 @section('content')
@@ -39,14 +38,7 @@
         au {{ $d['service'] ?: 'Centre' }} du Centre Autonome de Perfectionnement (CAP){{ $d['lieu'] && $d['lieu'] !== 'CAP-EPAC' ? ', à ' . $d['lieu'] : '' }}.
     </p>
 
-    @if($d['horaires'])
-        <p class="txt">Les horaires de stage sont fixés {{ $d['horaires'] }}, du lundi au vendredi.</p>
-    @endif
-
-    <p class="txt">
-        Durant le stage, {{ $d['masculin'] ? "l'intéressé" : "l'intéressée" }} pointe chaque jour depuis son espace stagiaire et dépose
-        les rapports demandés. À la fin du stage, {{ $d['masculin'] ? 'il' : 'elle' }} devra déposer un rapport de stage final.
-    </p>
+    <p class="txt">À la fin du stage, {{ $d['masculin'] ? 'il' : 'elle' }} devra déposer un rapport de stage final.</p>
 @else
     <div class="objet"><b>OBJET</b> : Rectification de la note de service N° {{ $initial['number'] ?? '' }}/{{ $suffixe }}{{ $initial ? ' du ' . $initial['date'] : '' }}</div>
 
@@ -81,8 +73,4 @@
     <div class="nom-s">{{ $signataire_nom }}</div>
 </div>
 
-<div class="ampl">
-    <b>Ampliations</b> :<br>
-    {{ $d['masculin'] ? 'Intéressé' : 'Intéressée' }} · Division Formation Continue et Perfectionnement · Secrétariat · Classeur
-</div>
 @endsection

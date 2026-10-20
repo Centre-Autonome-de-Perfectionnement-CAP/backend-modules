@@ -19,6 +19,7 @@ class StageAttestation extends Model
             'eligibility'  => 'array',
             'validated_at' => 'datetime',
             'printed_at'   => 'datetime',
+            'document_date' => 'date',
             'delivered_on' => 'date',
             'delivered_at' => 'datetime',
             'cancelled_at' => 'datetime',

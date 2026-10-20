@@ -41,18 +41,25 @@ class StageSettingsService
         'signataire_titre'         => 'Le Chef CAP,',
         'signataire_nom'           => 'Professeur Fidèle Paul TCHOBO',
         'pdf_pied_de_page'         => '01 B.P. 2009 COTONOU - Tél. : +229 01 99 54 62 67 / 01 91 94 73 67 - www.cap-epac.bj',
-        'reglement_version'        => 1,
+        'reglement_version'        => 2,
         'reglement_text'           => self::REGLEMENT,
     ];
 
+    /**
+     * Règlement par défaut. Les champs entre accolades sont remplacés à
+     * l'affichage par les valeurs du stagiaire et des réglages : {horaires},
+     * {tolerance}, {delai_permission}, {rapports}, {seuil}.
+     */
     private const REGLEMENT = "Bienvenue au CAP-EPAC. En acceptant ce règlement, vous vous engagez à :\n\n"
-        . "1. Respecter les horaires de votre stage et pointer vous-même, chaque jour ouvré : à l'arrivée, au départ en pause, au retour de pause et à la sortie.\n"
-        . "2. Pointer uniquement sur votre lieu de stage, avec votre propre téléphone. Le pointage pour une autre personne est interdit.\n"
-        . "3. Signaler toute absence ou tout retard par une demande de permission dans votre espace, au plus tard 3 jours ouvrés après.\n"
-        . "4. Déposer vos rapports dans les délais demandés.\n"
-        . "5. Respecter le personnel, le matériel et la confidentialité des informations auxquelles vous avez accès.\n"
-        . "6. Adopter une tenue et un comportement corrects.\n\n"
+        . "1. Respecter les horaires de votre stage : du lundi au vendredi, {horaires}. Au-delà de {tolerance} minutes après l'heure prévue, vous êtes en retard.\n"
+        . "2. Pointer vous-même chaque jour ouvré depuis votre espace stagiaire : à l'arrivée, au départ en pause, au retour de pause et à la sortie.\n"
+        . "3. Pointer uniquement sur votre lieu de stage, avec votre propre téléphone. Le pointage pour une autre personne est interdit.\n"
+        . "4. Signaler toute absence ou tout retard par une demande de permission dans votre espace, au plus tard {delai_permission} jours ouvrés après.\n"
+        . "5. Déposer dans votre espace les rapports demandés ({rapports}), dans les délais, puis votre rapport de stage final avant la fin du stage.\n"
+        . "6. Respecter le personnel, le matériel et la confidentialité des informations auxquelles vous avez accès.\n"
+        . "7. Adopter une tenue et un comportement corrects.\n\n"
         . "Votre présence est vérifiée par votre empreinte (gérée par votre téléphone : aucune donnée biométrique n'est envoyée) et par votre position au moment du pointage (seule la distance au lieu de stage est conservée).\n\n"
+        . "L'attestation de stage est délivrée si votre assiduité atteint au moins {seuil} % et si votre rapport final est validé.\n\n"
         . "Le non-respect de ce règlement peut entraîner la fin du stage et l'absence d'attestation.";
 
     /** Réglages modifiables depuis le progiciel. */
@@ -79,6 +86,22 @@ class StageSettingsService
     public function get(string $key): mixed
     {
         return $this->all()[$key] ?? null;
+    }
+
+    /** Règlement à afficher, champs remplacés (horaires du stagiaire s'il est connu). */
+    public function reglementFor(?\App\Modules\Stages\Models\StageRequest $req = null): string
+    {
+        $h = $req?->horaires ?: $this->get('default_horaires');
+        $f = fn (?string $v) => str_replace(':', 'h', (string) $v);
+        $freq = ['journalier' => 'chaque jour', 'hebdomadaire' => 'chaque semaine', 'mensuel' => 'chaque mois'][$this->get('report_frequency')] ?? 'chaque semaine';
+
+        return strtr((string) $this->get('reglement_text'), [
+            '{horaires}'         => "de {$f($h['arrivee'] ?? '08:00')} à {$f($h['pause_debut'] ?? '13:00')} et de {$f($h['pause_fin'] ?? '15:00')} à {$f($h['sortie'] ?? '18:00')}",
+            '{tolerance}'        => (string) AttendanceService::TOLERANCE_MIN,
+            '{delai_permission}' => (string) $this->get('permission_delay_days'),
+            '{rapports}'         => $freq,
+            '{seuil}'            => (string) $this->get('seuil_assiduite'),
+        ]);
     }
 
     public function update(array $values, ?int $userId): array

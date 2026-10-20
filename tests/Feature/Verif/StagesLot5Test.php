@@ -204,8 +204,7 @@ class StagesLot5Test extends TestCase
             ->assertOk()->assertJsonPath('data.content.structure', 'du Service Informatique du CAP')
             ->assertJsonPath('data.content.type_stage', 'professionnel')->assertJsonPath('data.content.pays_naissance', 'Rép. du BENIN');
         $this->postJson("/api/stages/admin/attestations/{$id}/valider")->assertOk()
-            ->assertJsonPath('data.status', 'a_imprimer')->assertJsonPath('data.eligibility.eligible', true)
-            ->assertJsonPath('data.suggested_numero', '01-26');
+            ->assertJsonPath('data.status', 'a_imprimer')->assertJsonPath('data.eligibility.eligible', true);
         $this->putJson("/api/stages/admin/attestations/{$id}", ['type_stage' => 'x'])->assertStatus(409);
         Queue::assertPushed(SendNotificationJob::class); // secrétariat prévenu (heures ouvrées)
 
@@ -213,8 +212,8 @@ class StagesLot5Test extends TestCase
         $this->actingAs($sec, 'sanctum');
         $this->assertSame([$id], array_column($this->getJson('/api/stages/admin/attestations')->assertOk()->json('data'), 'id'));
         $this->postJson("/api/stages/admin/attestations/{$id}/remise", ['date' => '2026-11-20'])->assertStatus(409);
-        $this->postJson("/api/stages/admin/attestations/{$id}/imprimee", ['numero' => '14-26'])->assertOk()
-            ->assertJsonPath('data.status', 'imprimee')->assertJsonPath('data.numero', '14-26');
+        $this->postJson("/api/stages/admin/attestations/{$id}/imprimee", ['numero' => '14-26', 'date' => '2026-11-19'])->assertOk()
+            ->assertJsonPath('data.status', 'imprimee')->assertJsonPath('data.numero', '14-26')->assertJsonPath('data.document_date', '2026-11-19');
         $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['to'] === $req->whatsapp && str_contains($m['text'], 'retirer')));
         $this->postJson("/api/stages/admin/attestations/{$id}/remise", ['date' => '2026-11-25'])->assertStatus(422);
         $this->postJson("/api/stages/admin/attestations/{$id}/remise", ['date' => '2026-11-20'])->assertOk()
@@ -234,9 +233,12 @@ class StagesLot5Test extends TestCase
         $this->finalReport($other);
         $this->actingAs($lead, 'sanctum');
         $id2 = $this->postJson("/api/stages/admin/stagiaires/{$other->id}/attestation")->json('data.id');
-        $this->postJson("/api/stages/admin/attestations/{$id2}/valider")->assertOk()->assertJsonPath('data.suggested_numero', '15-26');
+        $this->postJson("/api/stages/admin/attestations/{$id2}/valider")->assertOk();
+        $this->postJson("/api/stages/admin/attestations/{$id2}/imprimee", ['date' => '2026-10-01'])->assertStatus(422)->assertJsonPath('error_code', 'STAGE_ATT_DATE');
         $this->postJson("/api/stages/admin/attestations/{$id2}/imprimee", ['numero' => '14-26'])
             ->assertStatus(409)->assertJsonPath('error_code', 'STAGE_ATT_NUMBER_TAKEN');
+        $this->postJson("/api/stages/admin/attestations/{$id2}/imprimee", [])->assertOk()
+            ->assertJsonPath('data.numero', null)->assertJsonPath('data.document_date', '2026-11-20');
     }
 
     public function test_exceptional_requires_password_and_motif(): void

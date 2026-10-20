@@ -150,7 +150,7 @@ class InternSpaceController extends Controller
             'team'        => $req->team_id ? DB::table('stage_teams')->where('id', $req->team_id)->value('name') : null,
             'reglement'   => [
                 'version'  => $version,
-                'text'     => $this->settings->get('reglement_text'),
+                'text'     => $this->settings->reglementFor($req),
                 'accepted' => (int) $account->reglement_version === $version,
             ],
             'webauthn'    => ['enrolled' => $this->webauthn->hasCredential($account), 'rp_id' => $this->webauthn->rpId()],

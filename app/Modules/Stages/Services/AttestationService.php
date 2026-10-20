@@ -294,25 +294,29 @@ class AttestationService
     }
 
     /** Impression : le secrétariat confirme le numéro (proposé, modifiable). */
-    public function markPrinted(StageAttestation $a, string $numero, User $by): StageAttestation
+    public function markPrinted(StageAttestation $a, ?string $numero, ?string $date, User $by): StageAttestation
     {
-        $numero = trim(preg_replace('/\s+/u', ' ', $numero));
+        $numero = $numero !== null ? (trim(preg_replace('/\s+/u', ' ', $numero)) ?: null) : null;
 
         $first = false;
-        $a = DB::transaction(function () use ($a, $numero, $by, &$first) {
+        $a = DB::transaction(function () use ($a, $numero, $date, $by, &$first) {
             $a = StageAttestation::with('stage')->whereKey($a->id)->lockForUpdate()->first();
             $this->assertStatus($a, ['a_imprimer', 'imprimee']);
-            $taken = StageAttestation::where('numero', $numero)->where('id', '!=', $a->id)
-                ->where('status', '!=', 'annulee')->where('stage_request_id', '!=', $a->stage_request_id)->exists();
-            if ($taken) {
-                throw new BusinessException("Le numéro {$numero} est déjà utilisé pour un autre stagiaire.", 'STAGE_ATT_NUMBER_TAKEN', 409);
+            $docDate = $this->documentDate($a, $date);
+            if ($numero !== null) {
+                $taken = StageAttestation::where('numero', $numero)->where('id', '!=', $a->id)
+                    ->where('status', '!=', 'annulee')->where('stage_request_id', '!=', $a->stage_request_id)->exists();
+                if ($taken) {
+                    throw new BusinessException("Le numéro {$numero} est déjà utilisé pour un autre stagiaire.", 'STAGE_ATT_NUMBER_TAKEN', 409);
+                }
             }
             $first = $a->status === 'a_imprimer';
             $a->forceFill([
-                'numero' => $numero, 'status' => 'imprimee',
+                'numero' => $numero, 'status' => 'imprimee', 'document_date' => $docDate->toDateString(),
                 'printed_by' => $first ? $by->id : $a->printed_by, 'printed_at' => $first ? now() : $a->printed_at,
             ])->save();
-            $this->history($a->stage, $first ? 'attestation_printed' : 'attestation_number_changed', $by, "N° {$numero}");
+            $this->history($a->stage, $first ? 'attestation_printed' : 'attestation_number_changed', $by,
+                trim(($numero ? "N° {$numero} — " : '') . 'datée du ' . $docDate->format('d/m/Y')));
 
             return $a;
         });
@@ -323,13 +327,33 @@ class AttestationService
                 $a->stage,
                 'Votre attestation de stage est prête',
                 ['Votre attestation de stage est prête. Vous pouvez la retirer au secrétariat du CAP-EPAC, aux heures d\'ouverture, muni(e) d\'une pièce d\'identité.'],
-                ['Attestation n°' => $a->numero] + (!empty($c['date_debut']) && !empty($c['date_fin'])
+                ($a->numero ? ['Attestation n°' => $a->numero] : []) + (!empty($c['date_debut']) && !empty($c['date_fin'])
                     ? ['Stage' => 'Du ' . $this->requests->frDate($c['date_debut']) . ' au ' . $this->requests->frDate($c['date_fin'])] : []),
                 context: 'stage-attestation-prete',
             );
         }
 
         return $a;
+    }
+
+    /**
+     * Date portée sur l'attestation : celle choisie, sinon celle déjà
+     * enregistrée, sinon aujourd'hui. Pas avant le début du stage, pas plus de
+     * 60 jours dans le futur.
+     */
+    public function documentDate(StageAttestation $a, ?string $date): CarbonImmutable
+    {
+        $d = $date ? CarbonImmutable::parse($date, BusinessHours::TZ)->startOfDay()
+            : ($a->document_date ? CarbonImmutable::parse($a->document_date->toDateString(), BusinessHours::TZ) : BusinessHours::today());
+        $start = $a->stage->date_debut_reelle ?? $a->stage->date_debut;
+        if ($start && $d->toDateString() < $start->toDateString()) {
+            throw new BusinessException('La date de l\'attestation ne peut pas précéder le début du stage.', 'STAGE_ATT_DATE', 422);
+        }
+        if ($d->greaterThan(BusinessHours::today()->addDays(60))) {
+            throw new BusinessException('La date de l\'attestation est trop éloignée.', 'STAGE_ATT_DATE', 422);
+        }
+
+        return $d;
     }
 
     /** Remise au stagiaire (datée). */
@@ -518,7 +542,7 @@ class AttestationService
             'status'       => $a->status,
             'status_label' => self::STATUS_LABELS[$a->status] ?? $a->status,
             'numero'       => $a->numero,
-            'suggested_numero' => $a->status === 'a_imprimer' && !$a->numero ? $this->nextNumber() : null,
+            'document_date' => $a->document_date?->toDateString(),
             'motif_type'   => $a->motif_type,
             'motif_type_label' => $a->motif_type ? (self::MOTIF_TYPES[$a->motif_type] ?? $a->motif_type) : null,
             'motif'        => $a->motif,

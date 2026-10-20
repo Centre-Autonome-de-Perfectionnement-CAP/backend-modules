@@ -19,15 +19,15 @@ class StagePdfService
     public function __construct(private readonly StageSettingsService $settings) {}
 
     /** @return array{name: string, content: string} */
-    public function attestation(StageAttestation $a, ?string $numero = null): array
+    public function attestation(StageAttestation $a, ?CarbonImmutable $documentDate = null): array
     {
         $req = $a->stage;
         $c   = $a->content ?: app(AttestationService::class)->content($req, $a->overrides);
         $o   = $a->overrides ?? [];
         $masculin = $req->civilite === 'M.';
         $pays = $c['pays_naissance'] ?? $o['pays_naissance'] ?? $this->defaultCountry($req->nationalite);
-        $date = $a->printed_at ? CarbonImmutable::parse($a->printed_at)->setTimezone(BusinessHours::TZ) : BusinessHours::today();
-        $numero ??= $a->numero;
+        $date = $documentDate
+            ?? ($a->document_date ? CarbonImmutable::parse($a->document_date->toDateString()) : BusinessHours::today());
 
         $html = view('stages::pdfs.attestation', [
             'd' => [
@@ -45,7 +45,6 @@ class StagePdfService
                 'type_stage'     => $c['type_stage'] ?? $o['type_stage'] ?? 'académique',
                 'structure'      => $c['structure'] ?? $o['structure'] ?? $this->settings->get('attestation_structure'),
             ],
-            'numero'   => $numero,
             'apercu'   => $a->status === 'a_valider',
             'suffixe'  => trim((string) $this->settings->get('numero_suffixe'), '/'),
             'ville'    => $this->settings->get('pdf_ville'),
