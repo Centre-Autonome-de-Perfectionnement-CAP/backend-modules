@@ -6,6 +6,7 @@ use App\Modules\Stages\Http\Controllers\SupervisionController;
 use App\Modules\Stages\Http\Controllers\InternFollowController;
 use App\Modules\Stages\Http\Controllers\ReportController;
 use App\Modules\Stages\Http\Controllers\AttestationController;
+use App\Modules\Stages\Http\Controllers\DashboardController;
 use App\Modules\Stages\Http\Controllers\Public\InternSpaceController;
 use App\Modules\Stages\Http\Middleware\AuthenticateIntern;
 use App\Modules\Stages\Http\Controllers\StageAdminController;
@@ -62,6 +63,7 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         });
         Route::post('stagiaires/{id}/attestation-exceptionnelle', [AttestationController::class, 'exceptional'])
             ->whereNumber('id')->middleware('throttle:5,1');
+        Route::get('exports/demandes', [DashboardController::class, 'exportDemandes'])->middleware('throttle:10,1');
     });
 
     // ── Progiciel : attestations (responsables + secrétariat) ─────────────
@@ -69,6 +71,7 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         Route::get('attestations', [AttestationController::class, 'index']);
         Route::get('attestations/{id}', [AttestationController::class, 'show'])->whereNumber('id');
         Route::get('attestations/{id}/scan', [AttestationController::class, 'scanFile'])->whereNumber('id');
+        Route::get('exports/attestations', [DashboardController::class, 'exportAttestations'])->middleware('throttle:10,1');
         Route::middleware('throttle:30,1')->group(function () {
             Route::post('attestations/{id}/imprimee', [AttestationController::class, 'printed'])->whereNumber('id');
             Route::post('attestations/{id}/remise', [AttestationController::class, 'delivered'])->whereNumber('id');
@@ -88,6 +91,12 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         Route::get('demandes-stagiaires/{id}/piece', [InternFollowController::class, 'requestFile'])->whereNumber('id');
         Route::get('stagiaires/{id}/rapports', [ReportController::class, 'forIntern'])->whereNumber('id');
         Route::get('stagiaires/{id}/attestation', [AttestationController::class, 'forStage'])->whereNumber('id');
+        Route::get('tableau-de-bord', [DashboardController::class, 'overview']);
+        Route::get('suivi', [DashboardController::class, 'follow']);
+        Route::middleware('throttle:10,1')->group(function () {
+            Route::get('exports/stagiaires', [DashboardController::class, 'exportInterns']);
+            Route::get('exports/stagiaires/{id}/presences', [DashboardController::class, 'exportPresences'])->whereNumber('id');
+        });
         Route::get('rapports', [ReportController::class, 'index']);
         Route::get('rapports/{id}', [ReportController::class, 'show'])->whereNumber('id');
         Route::get('rapports/{id}/versions/{version}', [ReportController::class, 'file'])->whereNumber(['id', 'version']);

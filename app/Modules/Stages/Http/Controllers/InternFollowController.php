@@ -71,6 +71,7 @@ class InternFollowController extends Controller
             ] : null,
             'today'    => $req->date_debut ? $this->attendance->today($req) : null,
             'summary'  => $report['summary'],
+            'seuil'    => (int) app(\App\Modules\Stages\Services\StageSettingsService::class)->get('seuil_assiduite'),
             'days'     => $report['days'],
             'failures' => DB::table('stage_attendance_failures')->where('stage_request_id', $req->id)
                 ->where('created_at', '>=', now()->subDays(30))->groupBy('reason')

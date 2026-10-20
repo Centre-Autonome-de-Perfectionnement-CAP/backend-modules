@@ -58,6 +58,8 @@ class StagesServiceProvider extends ServiceProvider
         $this->app->singleton(InternRequestService::class);
         $this->app->singleton(ReportService::class);
         $this->app->singleton(AttestationService::class);
+        $this->app->singleton(\App\Modules\Stages\Services\DashboardService::class);
+        $this->app->singleton(\App\Modules\Stages\Services\ExportService::class);
     }
 
     public function boot(): void
