@@ -304,12 +304,33 @@ class StageRequestService
             $this->log($req, 'rectified', StageStatus::ACCEPTED, StageStatus::ACCEPTED, 'staff', $by->id, $motif,
                 ['avant' => $this->termsMeta($before), 'apres' => $this->termsMeta($terms)]);
             $this->issueNote($req, 'rectificative', $motif, $by->id);
+            if (($before['date_fin'] ?? null) !== ($terms['date_fin'] ?? null)) {
+                $this->endDateChanged($req, $by);
+            }
         });
 
         $req->refresh();
         $this->notifyNote($req, 'rectificative', $motif);
 
         return $req;
+    }
+
+    /**
+     * Date de fin modifiée : une attestation validée mais pas encore imprimée
+     * repasse « à valider » (son contenu daté n'est plus juste) ; sans
+     * attestation, la préparation automatique suivra la nouvelle date.
+     */
+    private function endDateChanged(StageRequest $req, User $by): void
+    {
+        $toFix = \App\Modules\Stages\Models\StageAttestation::where('stage_request_id', $req->id)
+            ->where('status', 'a_imprimer')->lockForUpdate()->get();
+        foreach ($toFix as $a) {
+            $a->forceFill(['status' => 'a_valider', 'content' => null, 'eligibility' => null, 'validated_by' => null, 'validated_at' => null, 'reminded_at' => null])->save();
+            $this->log($req, 'attestation_reset', $req->status, $req->status, 'staff', $by->id, 'Date de fin modifiée : attestation à valider de nouveau.');
+        }
+        if (!\App\Modules\Stages\Models\StageAttestation::where('stage_request_id', $req->id)->exists()) {
+            $req->forceFill(['attestation_prepared_at' => null])->save();
+        }
     }
 
     // ════════════════════════════════════════════════════════════════════

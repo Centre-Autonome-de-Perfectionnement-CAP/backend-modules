@@ -12,6 +12,7 @@ use App\Modules\Stages\Services\InternAuthService;
 use App\Modules\Stages\Services\InternRequestService;
 use App\Modules\Stages\Services\InternWebAuthnService;
 use App\Modules\Stages\Services\ReportService;
+use App\Modules\Stages\Services\AttestationService;
 use App\Modules\Stages\Models\StageReport;
 use Illuminate\Support\Facades\Storage;
 use App\Modules\Stages\Services\StageRequestService;
@@ -48,6 +49,7 @@ class InternSpaceController extends Controller
         private readonly StageRequestService $stages,
         private readonly StageSettingsService $settings,
         private readonly ReportService $reports,
+        private readonly AttestationService $attestations,
     ) {}
 
     // ── Activation (lien du premier jour) ───────────────────────────────
@@ -276,6 +278,33 @@ class InternSpaceController extends Controller
             $this->requests->cancel($this->ready($request)->stage, $id);
 
             return $this->successResponse(null, 'Demande annulée.');
+        });
+    }
+
+    // ── Attestation ─────────────────────────────────────────────────────
+
+    public function attestation(Request $request): JsonResponse
+    {
+        return $this->successResponse($this->attestations->forIntern($this->account($request)->stage));
+    }
+
+    public function attestationRequest(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'motif_type' => ['required', Rule::in(array_keys(AttestationService::MOTIF_TYPES))],
+            'motif'      => ['nullable', 'string', 'max:1000'],
+        ]);
+        $motif = isset($data['motif']) ? (trim(strip_tags($data['motif'])) ?: null) : null;
+        if ($data['motif_type'] === 'autre' && (!$motif || mb_strlen($motif) < 5)) {
+            return $this->errorResponse('Précisez votre motif.', 422, 'STAGE_ATT_MOTIF');
+        }
+
+        return $this->guard(function () use ($request, $data, $motif) {
+            $req = $this->ready($request)->stage;
+            $this->attestations->internRequest($req, $data['motif_type'], $motif);
+
+            return $this->successResponse($this->attestations->forIntern($req->fresh()),
+                'Demande envoyée. Vous serez prévenu(e) dès que votre attestation sera prête.', 201);
         });
     }
 

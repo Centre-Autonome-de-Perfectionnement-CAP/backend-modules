@@ -7,6 +7,8 @@ use App\Modules\Stages\Console\Commands\SyncStageWhatsAppGroup;
 use App\Modules\Stages\Console\Commands\ProcessStageActivations;
 use App\Modules\Stages\Console\Commands\ProcessStageReports;
 use App\Modules\Stages\Services\ReportService;
+use App\Modules\Stages\Services\AttestationService;
+use App\Modules\Stages\Console\Commands\ProcessStageAttestations;
 use App\Modules\Stages\Services\AttendanceService;
 use App\Modules\Stages\Services\InternActivationService;
 use App\Modules\Stages\Services\InternAuthService;
@@ -55,6 +57,7 @@ class StagesServiceProvider extends ServiceProvider
         $this->app->singleton(InternActivationService::class);
         $this->app->singleton(InternRequestService::class);
         $this->app->singleton(ReportService::class);
+        $this->app->singleton(AttestationService::class);
     }
 
     public function boot(): void
@@ -65,6 +68,7 @@ class StagesServiceProvider extends ServiceProvider
 
         Gate::define('stages.manage', fn ($user) => StageAccess::canManage($user));
         Gate::define('stages.lead', fn ($user) => StageAccess::isLead($user));
+        Gate::define('stages.attestations', fn ($user) => StageAccess::canHandleAttestations($user));
 
         // Les comptes superviseurs n'ont accès qu'au module Stages : filtre
         // global (certains modules enregistrent leurs routes hors du groupe
@@ -82,7 +86,7 @@ class StagesServiceProvider extends ServiceProvider
         ]);
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ProcessStageDeadlines::class, SyncStageWhatsAppGroup::class, ProcessStageActivations::class, ProcessStageReports::class]);
+            $this->commands([ProcessStageDeadlines::class, SyncStageWhatsAppGroup::class, ProcessStageActivations::class, ProcessStageReports::class, ProcessStageAttestations::class]);
         }
     }
 }

@@ -38,6 +38,13 @@ Schedule::command('stages:process-reports --digest')
     ->dailyAt('17:45')
     ->timezone('Africa/Porto-Novo');
 
+// Stages : attestations (préparation à J-7, relances), jours ouvrés.
+Schedule::command('stages:process-attestations')
+    ->weekdays()
+    ->dailyAt('08:15')
+    ->timezone('Africa/Porto-Novo')
+    ->withoutOverlapping(30);
+
 Schedule::command('stages:sync-whatsapp-group')
     ->dailyAt('10:30')
     ->timezone('Africa/Porto-Novo')

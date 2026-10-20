@@ -33,6 +33,7 @@ class StageRequest extends Model
             'activation_sent_at'    => 'datetime',
             'activated_at'          => 'datetime',
             'withdrawn_at'          => 'datetime',
+            'attestation_prepared_at' => 'datetime',
         ];
     }
 

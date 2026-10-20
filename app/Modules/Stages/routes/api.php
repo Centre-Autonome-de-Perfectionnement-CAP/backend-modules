@@ -5,6 +5,7 @@ use App\Modules\Stages\Http\Controllers\Public\SupervisorInvitationController;
 use App\Modules\Stages\Http\Controllers\SupervisionController;
 use App\Modules\Stages\Http\Controllers\InternFollowController;
 use App\Modules\Stages\Http\Controllers\ReportController;
+use App\Modules\Stages\Http\Controllers\AttestationController;
 use App\Modules\Stages\Http\Controllers\Public\InternSpaceController;
 use App\Modules\Stages\Http\Middleware\AuthenticateIntern;
 use App\Modules\Stages\Http\Controllers\StageAdminController;
@@ -51,6 +52,28 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
             Route::post('groupe-whatsapp/synchroniser', [SupervisionController::class, 'syncWhatsappGroup']);
             Route::post('groupe-whatsapp/{id}/dissoudre', [SupervisionController::class, 'dissolveWhatsappGroup'])->whereNumber('id');
         });
+
+        // Attestations : décisions réservées au responsable.
+        Route::middleware('throttle:30,1')->group(function () {
+            Route::post('stagiaires/{id}/attestation', [AttestationController::class, 'prepare'])->whereNumber('id');
+            Route::put('attestations/{id}', [AttestationController::class, 'update'])->whereNumber('id');
+            Route::post('attestations/{id}/valider', [AttestationController::class, 'validateAttestation'])->whereNumber('id');
+            Route::post('attestations/{id}/annuler', [AttestationController::class, 'cancel'])->whereNumber('id');
+        });
+        Route::post('stagiaires/{id}/attestation-exceptionnelle', [AttestationController::class, 'exceptional'])
+            ->whereNumber('id')->middleware('throttle:5,1');
+    });
+
+    // ── Progiciel : attestations (responsables + secrétariat) ─────────────
+    Route::prefix('admin')->middleware(['auth:sanctum', 'can:stages.attestations'])->group(function () {
+        Route::get('attestations', [AttestationController::class, 'index']);
+        Route::get('attestations/{id}', [AttestationController::class, 'show'])->whereNumber('id');
+        Route::get('attestations/{id}/scan', [AttestationController::class, 'scanFile'])->whereNumber('id');
+        Route::middleware('throttle:30,1')->group(function () {
+            Route::post('attestations/{id}/imprimee', [AttestationController::class, 'printed'])->whereNumber('id');
+            Route::post('attestations/{id}/remise', [AttestationController::class, 'delivered'])->whereNumber('id');
+            Route::post('attestations/{id}/scan', [AttestationController::class, 'scan'])->whereNumber('id');
+        });
     });
 
     // ── Progiciel : responsables + superviseurs ───────────────────────────
@@ -64,6 +87,7 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         Route::post('demandes-stagiaires/{id}/decision', [InternFollowController::class, 'decide'])->whereNumber('id')->middleware('throttle:60,1');
         Route::get('demandes-stagiaires/{id}/piece', [InternFollowController::class, 'requestFile'])->whereNumber('id');
         Route::get('stagiaires/{id}/rapports', [ReportController::class, 'forIntern'])->whereNumber('id');
+        Route::get('stagiaires/{id}/attestation', [AttestationController::class, 'forStage'])->whereNumber('id');
         Route::get('rapports', [ReportController::class, 'index']);
         Route::get('rapports/{id}', [ReportController::class, 'show'])->whereNumber('id');
         Route::get('rapports/{id}/versions/{version}', [ReportController::class, 'file'])->whereNumber(['id', 'version']);
@@ -119,5 +143,7 @@ Route::prefix('api/stagiaire')->middleware('api')->group(function () {
         Route::get('rapports/{id}', [InternSpaceController::class, 'reportShow'])->whereNumber('id');
         Route::post('rapports/{id}/commentaires', [InternSpaceController::class, 'reportComment'])->whereNumber('id')->middleware('throttle:20,1');
         Route::get('rapports/{id}/versions/{version}', [InternSpaceController::class, 'reportFile'])->whereNumber(['id', 'version']);
+        Route::get('attestation', [InternSpaceController::class, 'attestation']);
+        Route::post('attestation', [InternSpaceController::class, 'attestationRequest'])->middleware('throttle:10,1');
     });
 });

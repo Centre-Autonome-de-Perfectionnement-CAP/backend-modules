@@ -32,6 +32,9 @@ class StageSettingsService
         'report_frequency'         => 'hebdomadaire', // journalier | hebdomadaire | mensuel
         'report_grace_days'        => 2,              // jours ouvrés après la fin de la période
         'final_report_open_days'   => 14,             // dépôt du rapport final ouvert N jours avant la fin
+        // ── Lot 5 : attestations ─────────────────────────────────────────
+        'seuil_assiduite'          => 80,             // % minimal de présence pour l'attestation
+        'attestation_prefix'       => 'CAP-EPAC/STG', // numéro proposé : PREFIXE/AAAA/NNN
         'reglement_version'        => 1,
         'reglement_text'           => self::REGLEMENT,
     ];
@@ -52,6 +55,7 @@ class StageSettingsService
         'default_service', 'default_lieu', 'default_horaires',
         'lieu_position', 'lieu_rayon', 'reglement_text', 'permission_delay_days',
         'report_frequency', 'report_grace_days', 'final_report_open_days',
+        'seuil_assiduite', 'attestation_prefix',
     ];
 
     public function all(): array

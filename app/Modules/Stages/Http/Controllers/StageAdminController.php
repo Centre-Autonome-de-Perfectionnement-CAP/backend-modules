@@ -185,6 +185,8 @@ class StageAdminController extends Controller
             'report_frequency'         => ['sometimes', Rule::in(\App\Modules\Stages\Support\ReportPlan::FREQUENCIES)],
             'report_grace_days'        => ['sometimes', 'integer', 'min:0', 'max:10'],
             'final_report_open_days'   => ['sometimes', 'integer', 'min:3', 'max:60'],
+            'seuil_assiduite'          => ['sometimes', 'integer', 'min:50', 'max:100'],
+            'attestation_prefix'       => ['sometimes', 'string', 'min:2', 'max:30', 'regex:/^[A-Za-z0-9\/\-_.]+$/'],
         ]);
         if (array_key_exists('lieu_position', $data) && $data['lieu_position'] !== null) {
             $data['lieu_position'] = ['lat' => round((float) $data['lieu_position']['lat'], 7), 'lng' => round((float) $data['lieu_position']['lng'], 7)];
