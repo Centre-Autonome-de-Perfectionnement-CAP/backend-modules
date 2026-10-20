@@ -44,6 +44,10 @@ class DemandeController extends Controller
             'bulletin'          => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp,heic,heif,doc,docx|max:5120',
         ]);
 
+        if ($closed = $this->onlinePaymentClosed($request)) {
+            return $closed;
+        }
+
         try {
             $result = $this->submissionService->submitAttestationRequest($request);
 
@@ -80,6 +84,10 @@ class DemandeController extends Controller
             'quittance'         => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp,heic,heif,doc,docx|max:5120',
         ]);
 
+        if ($closed = $this->onlinePaymentClosed($request)) {
+            return $closed;
+        }
+
         try {
             $result = $this->submissionService->submitBulletinRequest($request);
 
@@ -91,6 +99,18 @@ class DemandeController extends Controller
         } catch (BusinessException $e) {
             return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
         }
+    }
+
+    /** Paiement en ligne non ouvert : la quittance du Trésor reste obligatoire. */
+    private function onlinePaymentClosed(Request $request): ?JsonResponse
+    {
+        if ($request->input('payment_method') === 'tresor_online' && !config('services.tresor.online_payment')) {
+            return response()->json([
+                'message' => "Le paiement en ligne n'est pas disponible. Joignez la quittance du Trésor Public.",
+            ], 422);
+        }
+
+        return null;
     }
 
     // ══════════════════════════════════════════════════════════════════════════

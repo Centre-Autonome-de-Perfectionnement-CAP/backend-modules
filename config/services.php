@@ -41,6 +41,13 @@ return [
         ],
     ],
 
+    // Paiement en ligne via le Trésor Public. Fermé tant que l'API réelle du
+    // Trésor n'est pas branchée : sans contrôle côté serveur, une référence
+    // de paiement inventée dispenserait de la quittance.
+    'tresor' => [
+        'online_payment' => (bool) env('TRESOR_ONLINE_PAYMENT', false),
+    ],
+
     'whatsapp_bridge' => [
         'url'        => env('WHATSAPP_BRIDGE_URL', 'http://127.0.0.1:3005'),
         'timeout'    => env('WHATSAPP_BRIDGE_TIMEOUT', 30),

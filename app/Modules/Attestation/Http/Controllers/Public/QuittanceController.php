@@ -26,6 +26,13 @@ class QuittanceController extends Controller
 
     public function generateAndSendQuittance(Request $request): JsonResponse
     {
+        if (!config('services.tresor.online_payment')) {
+            return response()->json([
+                'success' => false,
+                'message' => "Le paiement en ligne n'est pas disponible.",
+            ], 404);
+        }
+
         $request->validate([
             'quittanceNumber'  => 'required|string',
             'montant'          => 'required|integer|min:1',

@@ -478,6 +478,37 @@ class FusionFlowsTest extends TestCase
         ])->assertStatus(404);
     }
 
+    public function test_online_payment_closed_requires_quittance(): void
+    {
+        $this->postJson('/api/attestations/demandes', [
+            'matricule' => 'M1', 'type' => 'attestation_inscription', 'email' => 'a@example.org',
+            'whatsapp' => '+2290158370390', 'payment_method' => 'tresor_online', 'payment_reference' => 'QUI-TRESO-1',
+        ])->assertStatus(422)->assertJsonPath('message', "Le paiement en ligne n'est pas disponible. Joignez la quittance du Trésor Public.");
+        $this->postJson('/api/attestations/bulletins', [
+            'legacy_matricule' => 'M1', 'bulletin_year' => '2020-2021', 'type' => 'bulletin_annuel', 'email' => 'a@example.org',
+            'whatsapp' => '+2290158370390', 'payment_method' => 'tresor_online', 'payment_reference' => 'QUI-TRESO-1',
+        ])->assertStatus(422);
+    }
+
+    public function test_frontend_url_never_localhost_when_app_url_is_public(): void
+    {
+        $this->assertDoesNotMatchRegularExpression('#localhost|127\.0\.0\.1#', $this->resolveFrontendUrl('http://localhost:5173', 'https://test.cap-epac.bj'));
+        $this->assertSame('https://cap-epac.bj', $this->resolveFrontendUrl('', 'https://cap-epac.bj/'));
+        $this->assertSame('https://test.cap-epac.bj', $this->resolveFrontendUrl('https://test.cap-epac.bj/', 'http://localhost'));
+    }
+
+    private function resolveFrontendUrl(string $front, string $app): string
+    {
+        $old = [getenv('FRONTEND_URL'), getenv('APP_URL')];
+        $set = function ($k, $v) { putenv("{$k}={$v}"); $_ENV[$k] = $v; $_SERVER[$k] = $v; };
+        $set('FRONTEND_URL', $front); $set('APP_URL', $app);
+        try {
+            return (require base_path('config/app.php'))['frontend_url'];
+        } finally {
+            $set('FRONTEND_URL', (string) $old[0]); $set('APP_URL', (string) $old[1]);
+        }
+    }
+
     public function test_candidature_existing_dossier_hidden_without_otp(): void
     {
         $this->postJson('/api/inscription/dossiers/fetch-for-update', ['email' => 'x@example.org'])->assertStatus(403);
