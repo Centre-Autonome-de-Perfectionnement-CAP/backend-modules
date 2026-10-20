@@ -56,7 +56,7 @@
 <p class="pristina p1">Le Chef du Centre Autonome de Perfectionnement (CAP) de l’EPAC, atteste par la présente, que :</p>
 
 <p class="alb civ">
-    {{ $d['masculin'] ? 'Mr' : ($d['civilite'] === 'Mme' ? 'Mme' : 'Mlle') }} :
+    {{ $d['masculin'] ? 'M.' : ($d['civilite'] === 'Mme' ? 'Mme' : 'Mlle') }} :
     <span class="nom">{{ $d['nom'] }} {{ $d['prenoms'] }}</span>
 </p>
 
