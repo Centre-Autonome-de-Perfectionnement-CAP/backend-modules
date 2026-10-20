@@ -4,6 +4,12 @@ namespace App\Modules\Stages\Providers;
 
 use App\Modules\Stages\Console\Commands\ProcessStageDeadlines;
 use App\Modules\Stages\Console\Commands\SyncStageWhatsAppGroup;
+use App\Modules\Stages\Console\Commands\ProcessStageActivations;
+use App\Modules\Stages\Services\AttendanceService;
+use App\Modules\Stages\Services\InternActivationService;
+use App\Modules\Stages\Services\InternAuthService;
+use App\Modules\Stages\Services\InternRequestService;
+use App\Modules\Stages\Services\InternWebAuthnService;
 use App\Modules\Stages\Http\Middleware\RestrictSupervisorScope;
 use App\Modules\Stages\Services\StageWhatsAppGroupService;
 use App\Modules\Stages\Services\SupervisionService;
@@ -23,6 +29,17 @@ class StagesServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        // Bibliothèque WebAuthn vendorisée (voir Vendor/WebAuthn/VENDOR-NOTES.md).
+        spl_autoload_register(static function (string $class): void {
+            $prefix = 'lbuchs\\WebAuthn\\';
+            if (str_starts_with($class, $prefix)) {
+                $file = __DIR__ . '/../Vendor/WebAuthn/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+                if (is_file($file)) {
+                    require_once $file;
+                }
+            }
+        });
+
         $this->app->singleton(StageSettingsService::class);
         $this->app->singleton(StageNotifier::class);
         $this->app->singleton(StageSuiviOtpService::class);
@@ -30,6 +47,11 @@ class StagesServiceProvider extends ServiceProvider
         $this->app->singleton(SupervisionService::class);
         $this->app->singleton(SupervisorInvitationService::class);
         $this->app->singleton(StageWhatsAppGroupService::class);
+        $this->app->singleton(AttendanceService::class);
+        $this->app->singleton(InternAuthService::class);
+        $this->app->singleton(InternWebAuthnService::class);
+        $this->app->singleton(InternActivationService::class);
+        $this->app->singleton(InternRequestService::class);
     }
 
     public function boot(): void
@@ -57,7 +79,7 @@ class StagesServiceProvider extends ServiceProvider
         ]);
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ProcessStageDeadlines::class, SyncStageWhatsAppGroup::class]);
+            $this->commands([ProcessStageDeadlines::class, SyncStageWhatsAppGroup::class, ProcessStageActivations::class]);
         }
     }
 }

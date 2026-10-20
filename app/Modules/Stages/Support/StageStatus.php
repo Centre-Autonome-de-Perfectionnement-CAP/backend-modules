@@ -15,6 +15,8 @@ final class StageStatus
     public const REJECTED = 'rejected';
     /** Proposition restée sans réponse. */
     public const EXPIRED = 'expired';
+    /** Le stagiaire ne s'est jamais présenté (lien d'activation non utilisé). */
+    public const WITHDRAWN = 'withdrawn';
 
     public const LABELS = [
         self::SUBMITTED        => 'Nouvelle demande',
@@ -23,6 +25,7 @@ final class StageStatus
         self::ACCEPTED         => 'Acceptée — note de service émise',
         self::REJECTED         => 'Non retenue',
         self::EXPIRED          => 'Expirée (sans réponse)',
+        self::WITHDRAWN        => 'Désistement (jamais présenté)',
     ];
 
     /** Libellés côté demandeur. */
@@ -33,6 +36,7 @@ final class StageStatus
         self::ACCEPTED         => 'Acceptée',
         self::REJECTED         => 'Non retenue',
         self::EXPIRED          => 'Expirée',
+        self::WITHDRAWN        => 'Close (stage non commencé)',
     ];
 
     /** Une demande « active » bloque un nouveau dépôt avec le même contact. */

@@ -23,6 +23,10 @@ Schedule::command('stages:process-deadlines')
 
 // Stages : groupe WhatsApp annuel (ajout des stagiaires qui commencent,
 // retrait une semaine après la fin).
+Schedule::command('stages:process-activations')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping(15);
+
 Schedule::command('stages:sync-whatsapp-group')
     ->dailyAt('10:30')
     ->timezone('Africa/Porto-Novo')

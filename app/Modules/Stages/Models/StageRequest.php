@@ -26,6 +26,13 @@ class StageRequest extends Model
             'accepted_at'           => 'datetime',
             'rejected_at'           => 'datetime',
             'expired_at'            => 'datetime',
+            'date_debut_reelle'     => 'date',
+            'wa_added_at'           => 'datetime',
+            'wa_invite_sent_at'     => 'datetime',
+            'wa_removed_at'         => 'datetime',
+            'activation_sent_at'    => 'datetime',
+            'activated_at'          => 'datetime',
+            'withdrawn_at'          => 'datetime',
         ];
     }
 

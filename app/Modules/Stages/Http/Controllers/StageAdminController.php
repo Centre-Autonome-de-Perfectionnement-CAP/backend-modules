@@ -176,7 +176,19 @@ class StageAdminController extends Controller
             'default_horaires.pause_debut' => ['required_with:default_horaires', 'date_format:H:i'],
             'default_horaires.pause_fin'   => ['required_with:default_horaires', 'date_format:H:i'],
             'default_horaires.sortie'      => ['required_with:default_horaires', 'date_format:H:i'],
+            'lieu_position'            => ['sometimes', 'nullable', 'array'],
+            'lieu_position.lat'        => ['required_with:lieu_position', 'numeric', 'between:-90,90'],
+            'lieu_position.lng'        => ['required_with:lieu_position', 'numeric', 'between:-180,180'],
+            'lieu_rayon'               => ['sometimes', 'integer', 'min:20', 'max:500'],
+            'reglement_text'           => ['sometimes', 'string', 'min:50', 'max:10000'],
+            'permission_delay_days'    => ['sometimes', 'integer', 'min:0', 'max:15'],
         ]);
+        if (array_key_exists('lieu_position', $data) && $data['lieu_position'] !== null) {
+            $data['lieu_position'] = ['lat' => round((float) $data['lieu_position']['lat'], 7), 'lng' => round((float) $data['lieu_position']['lng'], 7)];
+        }
+        if (isset($data['reglement_text'])) {
+            $data['reglement_text'] = trim(strip_tags($data['reglement_text']));
+        }
 
         foreach (['closed_message', 'default_rejection_reason', 'default_service', 'default_lieu'] as $k) {
             if (isset($data[$k])) {
@@ -315,6 +327,9 @@ class StageAdminController extends Controller
             'whatsapp'        => $r->whatsapp,
             'files'           => $files,
             'terms'           => $r->date_debut ? $this->service->currentTerms($r) : null,
+            'date_debut_reelle' => $r->date_debut_reelle?->toDateString(),
+            'activated_at'    => $r->activated_at?->toIso8601String(),
+            'activation_sent_at' => $r->activation_sent_at?->toIso8601String(),
             'rejection_reason' => $r->rejection_reason,
             'proposal_sent_at' => $r->proposal_sent_at?->toIso8601String(),
             'proposal_expires_at' => $r->status === StageStatus::PROPOSAL_SENT

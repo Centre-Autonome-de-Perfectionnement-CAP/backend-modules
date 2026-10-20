@@ -100,6 +100,20 @@ class StageNotifier
             return;
         }
 
+        $this->toStaff($managers, $title, $paragraphs, $fields, $context, $url, $reference);
+    }
+
+    /**
+     * Notification à des membres du personnel (responsables, superviseurs),
+     * jamais la nuit ni le week-end.
+     *
+     * @param \Illuminate\Support\Collection<int, object{email: ?string, phone: ?string, first_name: ?string, last_name: ?string}> $recipients
+     */
+    public function toStaff(
+        \Illuminate\Support\Collection $recipients, string $title, array $paragraphs, array $fields = [],
+        string $context = 'stage-staff', ?string $url = null, ?string $reference = null,
+    ): void {
+        $managers = $recipients->unique(fn ($m) => $m->email ?? $m->phone);
         $url ??= rtrim((string) config('app.url'), '/') . '/services/stages';
         $slot = BusinessHours::nextStaffSlot();
         $subject = $reference ? "{$title} — {$reference}" : $title;
