@@ -24,7 +24,10 @@ class AttestationController extends Controller
 {
     use ApiResponse;
 
-    public function __construct(private readonly AttestationService $attestations) {}
+    public function __construct(
+        private readonly AttestationService $attestations,
+        private readonly \App\Modules\Stages\Services\StagePdfService $pdfs,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -68,11 +71,8 @@ class AttestationController extends Controller
 
     public function update(Request $request, int $id): JsonResponse
     {
-        $data = $request->validate([
-            'theme'        => ['sometimes', 'nullable', 'string', 'max:200'],
-            'service'      => ['sometimes', 'nullable', 'string', 'max:150'],
-            'observations' => ['sometimes', 'nullable', 'string', 'max:500'],
-        ]);
+        $data = $request->validate(collect(AttestationService::EDITABLE)
+            ->mapWithKeys(fn ($max, $k) => [$k => ['sometimes', 'nullable', 'string', "max:{$max}"]])->all());
         $a = $this->find($request, $id);
 
         return $this->guard(fn () => $this->successResponse(
@@ -161,6 +161,26 @@ class AttestationController extends Controller
             'mime'    => match ($ext) { 'pdf' => 'application/pdf', 'png' => 'image/png', default => 'image/jpeg' },
             'content' => base64_encode($disk->get($path)),
         ])->header('Cache-Control', 'private, no-store');
+    }
+
+    /** PDF de l'attestation (aperçu tant qu'elle n'est pas validée). */
+    public function pdf(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'numero' => ['nullable', 'string', 'min:2', 'max:60', 'regex:/^[A-Za-z0-9\/\-_. ]+$/'],
+        ]);
+        $a = $this->find($request, $id);
+        if ($a->status === 'annulee') {
+            return $this->errorResponse('Cette attestation est annulée.', 409, 'STAGE_ATT_STATUS');
+        }
+        // Le numéro saisi n'est pris en compte qu'avant l'impression ; ensuite, celui enregistré.
+        $numero = $a->status === 'a_imprimer'
+            ? (isset($data['numero']) ? trim($data['numero']) : ($a->numero ?? $this->attestations->nextNumber()))
+            : $a->numero;
+        $f = $this->pdfs->attestation($a, $numero);
+
+        return response()->json(['name' => $f['name'], 'mime' => 'application/pdf', 'content' => base64_encode($f['content'])])
+            ->header('Cache-Control', 'private, no-store');
     }
 
     public function cancel(Request $request, int $id): JsonResponse

@@ -163,6 +163,16 @@ class StageAdminController extends Controller
         return $this->successResponse($this->settings->all());
     }
 
+    /** PDF d'une note de service (initiale ou rectificative). */
+    public function notePdf(int $id, int $noteId): JsonResponse
+    {
+        $note = \App\Modules\Stages\Models\StageNote::where('stage_request_id', $id)->findOrFail($noteId);
+        $f = app(\App\Modules\Stages\Services\StagePdfService::class)->note($note);
+
+        return response()->json(['name' => $f['name'], 'mime' => 'application/pdf', 'content' => base64_encode($f['content'])])
+            ->header('Cache-Control', 'private, no-store');
+    }
+
     public function updateSettings(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -186,7 +196,12 @@ class StageAdminController extends Controller
             'report_grace_days'        => ['sometimes', 'integer', 'min:0', 'max:10'],
             'final_report_open_days'   => ['sometimes', 'integer', 'min:3', 'max:60'],
             'seuil_assiduite'          => ['sometimes', 'integer', 'min:50', 'max:100'],
-            'attestation_prefix'       => ['sometimes', 'string', 'min:2', 'max:30', 'regex:/^[A-Za-z0-9\/\-_.]+$/'],
+            'attestation_structure'    => ['sometimes', 'string', 'min:5', 'max:200'],
+            'numero_suffixe'           => ['sometimes', 'string', 'min:2', 'max:40', 'regex:/^[A-Za-z0-9\/\-_. ]+$/'],
+            'pdf_ville'                => ['sometimes', 'string', 'min:2', 'max:60'],
+            'signataire_titre'         => ['sometimes', 'string', 'min:2', 'max:80'],
+            'signataire_nom'           => ['sometimes', 'string', 'min:2', 'max:100'],
+            'pdf_pied_de_page'         => ['sometimes', 'string', 'min:5', 'max:150'],
         ]);
         if (array_key_exists('lieu_position', $data) && $data['lieu_position'] !== null) {
             $data['lieu_position'] = ['lat' => round((float) $data['lieu_position']['lat'], 7), 'lng' => round((float) $data['lieu_position']['lng'], 7)];
@@ -195,7 +210,8 @@ class StageAdminController extends Controller
             $data['reglement_text'] = trim(strip_tags($data['reglement_text']));
         }
 
-        foreach (['closed_message', 'default_rejection_reason', 'default_service', 'default_lieu'] as $k) {
+        foreach (['closed_message', 'default_rejection_reason', 'default_service', 'default_lieu',
+            'attestation_structure', 'numero_suffixe', 'pdf_ville', 'signataire_titre', 'signataire_nom', 'pdf_pied_de_page'] as $k) {
             if (isset($data[$k])) {
                 $data[$k] = $this->cleanText($data[$k]);
             }

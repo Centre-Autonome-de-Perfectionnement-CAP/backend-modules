@@ -145,7 +145,7 @@ class InternSpaceController extends Controller
                 'date_debut_reelle' => $req->date_debut_reelle?->toDateString(),
                 'duree' => $req->date_debut && $req->date_fin ? $this->stages->durationLabel($req->date_debut->toDateString(), $req->date_fin->toDateString()) : null,
             ],
-            'notes'       => $req->notes()->get()->map(fn ($n) => ['number' => $n->number, 'kind' => $n->kind, 'issued_at' => $n->issued_at?->toIso8601String()]),
+            'notes'       => $req->notes()->get()->map(fn ($n) => ['id' => $n->id, 'number' => $n->number, 'kind' => $n->kind, 'issued_at' => $n->issued_at?->toIso8601String()]),
             'supervisors' => $sup->map(fn ($u) => ['name' => trim($u->first_name . ' ' . $u->last_name), 'phone' => $u->phone]),
             'team'        => $req->team_id ? DB::table('stage_teams')->where('id', $req->team_id)->value('name') : null,
             'reglement'   => [
@@ -279,6 +279,18 @@ class InternSpaceController extends Controller
 
             return $this->successResponse(null, 'Demande annulée.');
         });
+    }
+
+    // ── Notes de service ────────────────────────────────────────────────
+
+    public function notePdf(Request $request, int $id): JsonResponse
+    {
+        $req  = $this->account($request)->stage;
+        $note = \App\Modules\Stages\Models\StageNote::where('stage_request_id', $req->id)->findOrFail($id);
+        $f = app(\App\Modules\Stages\Services\StagePdfService::class)->note($note);
+
+        return response()->json(['name' => $f['name'], 'mime' => 'application/pdf', 'content' => base64_encode($f['content'])])
+            ->header('Cache-Control', 'private, no-store');
     }
 
     // ── Attestation ─────────────────────────────────────────────────────

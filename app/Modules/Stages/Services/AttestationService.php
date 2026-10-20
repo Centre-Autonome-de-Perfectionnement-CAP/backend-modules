@@ -66,6 +66,9 @@ class AttestationService
     public const OPEN = ['a_valider', 'a_imprimer', 'imprimee'];
 
     public const DAYS_BEFORE_END = 7;
+
+    /** Corrections possibles avant validation (longueur maximale). */
+    public const EDITABLE = ['pays_naissance' => 60, 'type_stage' => 40, 'structure' => 200];
     public const SCAN_MAX_KB = 10240;
 
     public function __construct(
@@ -147,7 +150,10 @@ class AttestationService
             'date_fin'       => $req->date_fin?->toDateString(),
             'duree'          => $start && $req->date_fin ? $this->requests->durationLabel($start->toDateString(), $req->date_fin->toDateString()) : null,
             'theme'          => $o['theme'] ?? $req->theme_souhaite,
-            'observations'   => $o['observations'] ?? null,
+            // Champs du modèle officiel (modifiables par le responsable avant validation)
+            'pays_naissance' => $o['pays_naissance'] ?? $this->defaultCountry($req->nationalite),
+            'type_stage'     => $o['type_stage'] ?? 'académique',
+            'structure'      => $o['structure'] ?? (string) $this->settings->get('attestation_structure'),
         ];
     }
 
@@ -214,7 +220,7 @@ class AttestationService
             $a = StageAttestation::whereKey($a->id)->lockForUpdate()->first();
             $this->assertStatus($a, ['a_valider']);
             $clean = [];
-            foreach (['theme', 'service', 'observations'] as $k) {
+            foreach (array_keys(self::EDITABLE) as $k) {
                 if (array_key_exists($k, $overrides)) {
                     $v = trim(preg_replace('/\s+/u', ' ', strip_tags((string) $overrides[$k])));
                     $clean[$k] = $v === '' ? null : $v;
@@ -568,16 +574,21 @@ class AttestationService
         return $a->scan_path && Storage::disk(StageRequestService::DISK)->exists($a->scan_path) ? $a->scan_path : null;
     }
 
-    /** Numéro proposé : PREFIXE/AAAA/NNN (séquence annuelle). */
+    /** Numéro proposé : « NN-AA » (séquence annuelle), imprimé « N° NN-AA/CAP/EPAC/UAC ». */
     public function nextNumber(): string
     {
-        $prefix = rtrim((string) $this->settings->get('attestation_prefix'), '/') . '/' . BusinessHours::today()->year . '/';
-        $max = StageAttestation::where('numero', 'like', str_replace(['%', '_'], ['\\%', '\\_'], $prefix) . '%')
+        $yy  = BusinessHours::today()->format('y');
+        $max = StageAttestation::where('numero', 'like', '%-' . $yy)
             ->pluck('numero')
-            ->map(fn ($n) => (int) substr($n, strlen($prefix)))
+            ->map(fn ($n) => preg_match('/^(\d+)-' . $yy . '$/', (string) $n, $m) ? (int) $m[1] : 0)
             ->max() ?? 0;
 
-        return $prefix . str_pad((string) ($max + 1), 3, '0', STR_PAD_LEFT);
+        return str_pad((string) ($max + 1), 2, '0', STR_PAD_LEFT) . '-' . $yy;
+    }
+
+    private function defaultCountry(?string $nationalite): ?string
+    {
+        return $nationalite && preg_match('/b[ée]nin/iu', $nationalite) ? 'Rép. du BENIN' : null;
     }
 
     // ── Interne ──────────────────────────────────────────────────────────

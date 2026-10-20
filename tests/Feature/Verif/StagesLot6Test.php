@@ -227,4 +227,28 @@ class StagesLot6Test extends TestCase
         $reg = $this->xlsx($this->actingAs($sec, 'sanctum')->getJson('/api/stages/admin/exports/attestations?status=a_valider')->assertOk()->json());
         $this->assertCount(3, array_filter($reg, fn ($r) => array_filter($r, fn ($c) => $c !== null && $c !== '')), 'aucune ligne « à valider » pour le secrétariat');
     }
+
+    public function test_note_pdf_staff_and_own_intern_only(): void
+    {
+        $this->at('2026-11-20 10:00');
+        [$req, $h] = $this->intern('2026-11-02', '2026-12-31');
+        [, $other] = $this->intern('2026-11-02', '2026-12-31');
+        $snap = ['reference' => $req->reference, 'civilite' => 'M.', 'nom' => 'Aho', 'prenoms' => 'Luc', 'etablissement' => 'UAC', 'formation' => 'L3',
+            'service' => 'Service Informatique', 'lieu' => 'CAP-EPAC', 'date_debut' => '2026-11-02', 'date_fin' => '2026-12-31',
+            'horaires' => ['arrivee' => '08:00', 'pause_debut' => '13:00', 'pause_fin' => '15:00', 'sortie' => '18:00']];
+        $n1 = DB::table('stage_notes')->insertGetId(['stage_request_id' => $req->id, 'number' => 'NS-T-' . $req->id, 'kind' => 'initiale', 'version' => 1,
+            'snapshot' => json_encode($snap), 'issued_at' => now()]);
+        $n2 = DB::table('stage_notes')->insertGetId(['stage_request_id' => $req->id, 'number' => 'NS-T-' . $req->id . '-R1', 'kind' => 'rectificative', 'version' => 2,
+            'snapshot' => json_encode(['date_fin' => '2027-01-29'] + $snap), 'motif' => 'Prolongation', 'issued_at' => now()]);
+
+        $this->actingAs($this->lead(), 'sanctum');
+        foreach ([$n1, $n2] as $n) {
+            $pdf = base64_decode($this->getJson("/api/stages/admin/demandes/{$req->id}/notes/{$n}/pdf")->assertOk()->json('content'));
+            $this->assertStringStartsWith('%PDF-', $pdf);
+        }
+        $this->getJson("/api/stages/admin/demandes/" . ($req->id + 99999) . "/notes/{$n1}/pdf")->assertStatus(404);
+
+        $this->getJson("/api/stagiaire/notes/{$n1}/pdf", $h)->assertOk()->assertJsonStructure(['name', 'content']);
+        $this->getJson("/api/stagiaire/notes/{$n1}/pdf", $other)->assertStatus(404);
+    }
 }

@@ -34,7 +34,13 @@ class StageSettingsService
         'final_report_open_days'   => 14,             // dépôt du rapport final ouvert N jours avant la fin
         // ── Lot 5 : attestations ─────────────────────────────────────────
         'seuil_assiduite'          => 80,             // % minimal de présence pour l'attestation
-        'attestation_prefix'       => 'CAP-EPAC/STG', // numéro proposé : PREFIXE/AAAA/NNN
+        'attestation_structure'    => 'de la Cellule Informatique de la Division Formation Continue et Perfectionnement du CAP',
+        // ── Documents PDF (attestation, note de service) ─────────────────
+        'numero_suffixe'           => 'CAP/EPAC/UAC',   // « N° 22-26/CAP/EPAC/UAC »
+        'pdf_ville'                => 'Abomey-Calavi',
+        'signataire_titre'         => 'Le Chef CAP,',
+        'signataire_nom'           => 'Professeur Fidèle Paul TCHOBO',
+        'pdf_pied_de_page'         => '01 B.P. 2009 COTONOU - Tél. : +229 01 99 54 62 67 / 01 91 94 73 67 - www.cap-epac.bj',
         'reglement_version'        => 1,
         'reglement_text'           => self::REGLEMENT,
     ];
@@ -55,7 +61,8 @@ class StageSettingsService
         'default_service', 'default_lieu', 'default_horaires',
         'lieu_position', 'lieu_rayon', 'reglement_text', 'permission_delay_days',
         'report_frequency', 'report_grace_days', 'final_report_open_days',
-        'seuil_assiduite', 'attestation_prefix',
+        'seuil_assiduite', 'attestation_structure', 'numero_suffixe', 'pdf_ville',
+        'signataire_titre', 'signataire_nom', 'pdf_pied_de_page',
     ];
 
     public function all(): array

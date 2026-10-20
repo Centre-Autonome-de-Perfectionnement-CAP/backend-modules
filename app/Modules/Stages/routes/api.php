@@ -71,6 +71,7 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         Route::get('attestations', [AttestationController::class, 'index']);
         Route::get('attestations/{id}', [AttestationController::class, 'show'])->whereNumber('id');
         Route::get('attestations/{id}/scan', [AttestationController::class, 'scanFile'])->whereNumber('id');
+        Route::get('attestations/{id}/pdf', [AttestationController::class, 'pdf'])->whereNumber('id')->middleware('throttle:30,1');
         Route::get('exports/attestations', [DashboardController::class, 'exportAttestations'])->middleware('throttle:10,1');
         Route::middleware('throttle:30,1')->group(function () {
             Route::post('attestations/{id}/imprimee', [AttestationController::class, 'printed'])->whereNumber('id');
@@ -111,6 +112,8 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
 
         Route::get('demandes', [StageAdminController::class, 'index']);
         Route::get('demandes/{id}', [StageAdminController::class, 'show'])->where('id', '[A-Za-z0-9\-]+');
+        Route::get('demandes/{id}/notes/{noteId}/pdf', [StageAdminController::class, 'notePdf'])
+            ->whereNumber(['id', 'noteId'])->middleware('throttle:30,1');
         Route::get('demandes/{id}/pieces/{key}', [StageAdminController::class, 'file'])
             ->where(['id' => '[0-9]+', 'key' => '[a-z_]+']);
 
@@ -152,6 +155,7 @@ Route::prefix('api/stagiaire')->middleware('api')->group(function () {
         Route::get('rapports/{id}', [InternSpaceController::class, 'reportShow'])->whereNumber('id');
         Route::post('rapports/{id}/commentaires', [InternSpaceController::class, 'reportComment'])->whereNumber('id')->middleware('throttle:20,1');
         Route::get('rapports/{id}/versions/{version}', [InternSpaceController::class, 'reportFile'])->whereNumber(['id', 'version']);
+        Route::get('notes/{id}/pdf', [InternSpaceController::class, 'notePdf'])->whereNumber('id')->middleware('throttle:20,1');
         Route::get('attestation', [InternSpaceController::class, 'attestation']);
         Route::post('attestation', [InternSpaceController::class, 'attestationRequest'])->middleware('throttle:10,1');
     });
