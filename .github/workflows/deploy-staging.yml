@@ -96,6 +96,14 @@ jobs:
 
             # ── Fin build Node ─────────────────────────────────────────────────
             
+            # Polices des PDF (storage/fonts du dépôt) : storage est remplacé par
+            # le dossier partagé ci-dessous, on y copie donc les polices
+            # manquantes (sans jamais écraser l'existant).
+            mkdir -p $SHARED_DIR/storage/fonts
+            cp -n $RELEASE_DIR/storage/fonts/* $SHARED_DIR/storage/fonts/ 2>/dev/null || true
+            chown -R deployer:www-data $SHARED_DIR/storage/fonts || true
+            chmod -R 775 $SHARED_DIR/storage/fonts || true
+
             # Create symlinks to shared directories
             echo "🔗 Creating symlinks..."
             rm -rf $RELEASE_DIR/storage
