@@ -32,6 +32,7 @@
     .cachet td.qr { width: 23mm; }
     .cachet td.qr img { width: 21mm; height: 21mm; }
     .cachet .l { font-size: 9pt; line-height: 1.55; }
+    .mention { margin-top: 9mm; text-align: center; font-size: 9.5pt; font-style: italic; color: #475569; }
     .cachet .code { font-family: 'DejaVu Sans Mono', monospace; font-weight: bold; letter-spacing: 0.6pt; }
 @endsection
 
@@ -93,5 +94,7 @@
         </td>
     </tr></table>
 </div></div>
+
+<div class="mention">Document émis par le système de gestion des stages du CAP-EPAC.</div>
 
 @endsection
