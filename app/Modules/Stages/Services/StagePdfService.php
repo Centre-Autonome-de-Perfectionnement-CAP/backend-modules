@@ -16,7 +16,10 @@ use Carbon\CarbonImmutable;
  */
 class StagePdfService
 {
-    public function __construct(private readonly StageSettingsService $settings) {}
+    public function __construct(
+        private readonly StageSettingsService $settings,
+        private readonly NoteSignatureService $signature,
+    ) {}
 
     /** @return array{name: string, content: string} */
     public function attestation(StageAttestation $a, ?CarbonImmutable $documentDate = null): array
@@ -94,17 +97,13 @@ class StagePdfService
                 'horaires'   => $this->hoursSentence($h),
             ],
             'numero'    => $note->number,
-            'cachet'    => [
-                'code'  => $note->verify_code,
-                'date'  => $issued->format('d/m/Y'),
-                'heure' => $issued->format('H\\hi'),
-                'qr'    => $this->qrDataUri($this->verifyUrl((string) $note->verify_code)),
-            ],
             'suffixe'   => trim((string) $this->settings->get('numero_suffixe'), '/'),
             'ville'     => $this->settings->get('pdf_ville'),
             'date'      => $issued->format('d/m/Y'),
-            'signataire_titre' => $this->settings->get('signataire_titre'),
-            'signataire_nom'   => $this->settings->get('signataire_nom'),
+            'signataire_titre' => $this->settings->get('note_signataire_titre'),
+            'signataire_nom'   => $this->settings->get('note_signataire_nom'),
+            'signature' => $this->signature->forPdf(),
+            'signature_box' => ['w' => NoteSignatureService::BOX_W_MM, 'h' => NoteSignatureService::BOX_H_MM],
             'footer'    => $this->settings->get('pdf_pied_de_page'),
         ])->render();
 
@@ -114,47 +113,7 @@ class StagePdfService
         ];
     }
 
-    /** Adresse publique de vérification d'un cachet numérique. */
-    public function verifyUrl(string $code): string
-    {
-        return $this->siteUrl() . '/verifier?code=' . rawurlencode($code);
-    }
-
-    /**
-     * Adresse du site qui émet le document. Le site et l'API partagent le même
-     * domaine : on prend celui de la requête en cours (test.cap-epac.bj sur le
-     * site de test, cap-epac.bj en production), ce qui garantit un QR code
-     * toujours juste quel que soit le serveur. Hors requête (tâche planifiée,
-     * file d'attente) : l'adresse configurée.
-     */
-    public function siteUrl(): string
-    {
-        // Seuls les domaines du CAP sont acceptés (un en-tête Host forgé ne
-        // peut pas détourner le QR code vers un autre site).
-        $host = strtolower((string) request()->getHost());
-        foreach ((array) config('app.site_domains', ['cap-epac.bj']) as $domain) {
-            if ($host === $domain || str_ends_with($host, '.' . $domain)) {
-                return 'https://' . $host;
-            }
-        }
-
-        return rtrim((string) config('app.frontend_url'), '/');
-    }
-
     // ── Interne ──────────────────────────────────────────────────────────
-
-    /** QR code (SVG vert CAP) en data URI : aucune ressource extérieure. */
-    private function qrDataUri(string $text): string
-    {
-        $renderer = new \BaconQrCode\Renderer\ImageRenderer(
-            new \BaconQrCode\Renderer\RendererStyle\RendererStyle(240, 0),
-            new \BaconQrCode\Renderer\Image\SvgImageBackEnd(),
-        );
-        $svg = (new \BaconQrCode\Writer($renderer))->writeString($text);
-        $svg = str_replace(['fill="#000000"', 'fill="#fefefe"'], ['fill="#326761"', 'fill="#ffffff"'], $svg);
-
-        return 'data:image/svg+xml;base64,' . base64_encode($svg);
-    }
 
     private function render(string $html): string
     {

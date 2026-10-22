@@ -41,6 +41,10 @@ class StageSettingsService
         'pdf_ville'                => 'Abomey-Calavi',
         'signataire_titre'         => 'Le Chef CAP,',
         'signataire_nom'           => 'Professeur Fidèle Paul TCHOBO',
+        // Notes de service (initiale et rectificative) : signature numérique du RD / FC-P
+        'note_signataire_titre'    => 'Le Responsable Division Formation Continue et Perfectionnement (RD / FC-P)',
+        'note_signataire_nom'      => '',
+        'note_signature'           => null,   // image : voir NoteSignatureService
         'pdf_pied_de_page'         => '01 B.P. 2009 COTONOU - Tél. : +229 01 99 54 62 67 / 01 91 94 73 67 - www.cap-epac.bj',
         'reglement_version'        => 2,
         'reglement_text'           => self::REGLEMENT,
@@ -71,6 +75,7 @@ class StageSettingsService
         'report_frequency', 'report_grace_days', 'final_report_open_days', 'final_correction_days',
         'seuil_assiduite', 'attestation_structure', 'numero_suffixe', 'pdf_ville',
         'signataire_titre', 'signataire_nom', 'pdf_pied_de_page',
+        'note_signataire_titre', 'note_signataire_nom',
     ];
 
     public function all(): array
@@ -113,13 +118,28 @@ class StageSettingsService
         }
 
         foreach (array_intersect_key($values, array_flip([...self::EDITABLE, 'reglement_version'])) as $key => $value) {
-            DB::table('stage_settings')->updateOrInsert(
-                ['key' => $key],
-                ['value' => json_encode($value, JSON_UNESCAPED_UNICODE), 'updated_by' => $userId, 'updated_at' => now()],
-            );
+            $this->write($key, $value, $userId);
         }
         Cache::forget(self::CACHE_KEY);
 
         return $this->all();
+    }
+
+    /** Réglage géré par un service dédié (ex. image de la signature). */
+    public function set(string $key, mixed $value, ?int $userId): void
+    {
+        if (!array_key_exists($key, self::DEFAULTS)) {
+            throw new \InvalidArgumentException("Réglage inconnu : {$key}");
+        }
+        $this->write($key, $value, $userId);
+        Cache::forget(self::CACHE_KEY);
+    }
+
+    private function write(string $key, mixed $value, ?int $userId): void
+    {
+        DB::table('stage_settings')->updateOrInsert(
+            ['key' => $key],
+            ['value' => json_encode($value, JSON_UNESCAPED_UNICODE), 'updated_by' => $userId, 'updated_at' => now()],
+        );
     }
 }

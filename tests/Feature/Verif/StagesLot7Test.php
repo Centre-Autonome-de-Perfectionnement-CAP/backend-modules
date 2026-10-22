@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
-/** Module Stages - Lot 7 : stagiaires arrivés avant le système (invitation par numéro). */
+/** Module Stages - Lot 7 : stagiaires arrivés avant le système (invitation par numéro), signature des notes. */
 class StagesLot7Test extends TestCase
 {
     use DatabaseTransactions;
@@ -131,7 +131,7 @@ class StagesLot7Test extends TestCase
             [$req->origin, $req->status, $req->attendance_from->toDateString(), $req->whatsapp, $req->nom]);
         $this->assertArrayHasKey('note_papier', $req->files);
 
-        // Note de service datée du début déclaré (cachet compris), date réelle gardée par le système
+        // Note de service datée du début déclaré, date réelle gardée par le système
         $note = $req->notes()->first();
         $issued = CarbonImmutable::parse($note->issued_at)->setTimezone(BusinessHours::TZ);
         $this->assertSame('2026-03-02 08:30', $issued->format('Y-m-d H:i'));
@@ -188,5 +188,73 @@ class StagesLot7Test extends TestCase
         $this->assertSame('pending', $list[0]['status']);
         $this->at('2026-10-30 10:00');
         $this->getJson("/api/stages/rejoindre?token={$token}")->assertStatus(410);
+    }
+
+    /** Image de test : fond clair (photo d'une feuille) ou transparent, trait sombre au milieu. */
+    private function signatureImage(bool $transparent): UploadedFile
+    {
+        $img = imagecreatetruecolor(900, 450);
+        imagealphablending($img, false);
+        imagesavealpha($img, true);
+        imagefill($img, 0, 0, $transparent ? imagecolorallocatealpha($img, 255, 255, 255, 127) : imagecolorallocate($img, 232, 230, 226));
+        imagesetthickness($img, 6);
+        imageline($img, 250, 200, 650, 260, imagecolorallocate($img, 20, 40, 120));
+        imageline($img, 250, 260, 650, 200, imagecolorallocate($img, 20, 40, 120));
+        $path = tempnam(sys_get_temp_dir(), 'sig');
+        $transparent ? imagepng($img, $path) : imagejpeg($img, $path, 92);
+
+        return new UploadedFile($path, $transparent ? 'signature.png' : 'signature.jpg', $transparent ? 'image/png' : 'image/jpeg', null, true);
+    }
+
+    public function test_note_signed_by_rd_fcp_with_clean_image(): void
+    {
+        $this->at('2026-10-22 10:00');
+        $token = $this->invite('0195667788');
+        $r = $this->postJson('/api/stages/rejoindre', $this->form($token, '2026-09-01', '2026-12-18'))->assertStatus(201);
+        $req = StageRequest::where('reference', $r->json('data.reference'))->first();
+        $note = $req->notes()->first();
+
+        $lead = $this->lead();
+        $pdfImages = function () use ($lead, $req, $note): int {
+            $b64 = $this->actingAs($lead, 'sanctum')->getJson("/api/stages/admin/demandes/{$req->id}/notes/{$note->id}/pdf")->assertOk()->json('content');
+
+            return substr_count(base64_decode($b64), '/Subtype /Image');
+        };
+        $before = $pdfImages();
+
+        // Réglages : titre par défaut, nom saisi ; seul le responsable gère la signature
+        $this->actingAs($lead, 'sanctum')->putJson('/api/stages/admin/reglages', ['note_signataire_nom' => ' <b>Dr Jean DOSSOU</b> '])
+            ->assertOk()->assertJsonPath('data.note_signataire_nom', 'Dr Jean DOSSOU')
+            ->assertJsonPath('data.note_signataire_titre', 'Le Responsable Division Formation Continue et Perfectionnement (RD / FC-P)');
+        $this->actingAs($this->user('superviseur'), 'sanctum')
+            ->post('/api/stages/admin/reglages/signature', ['image' => $this->signatureImage(true)], ['Accept' => 'application/json'])->assertStatus(403);
+        $this->actingAs($lead, 'sanctum')->post('/api/stages/admin/reglages/signature',
+            ['image' => UploadedFile::fake()->create('s.pdf', 50, 'application/pdf')], ['Accept' => 'application/json'])->assertStatus(422);
+        $this->actingAs($lead, 'sanctum')->post('/api/stages/admin/reglages/signature',
+            ['image' => UploadedFile::fake()->image('s.png', 900, 400)->size(2100)], ['Accept' => 'application/json'])->assertStatus(422);
+
+        // Photo sur fond clair : fond retiré, marges coupées, proportions gardées
+        $meta = $this->actingAs($lead, 'sanctum')->post('/api/stages/admin/reglages/signature', ['image' => $this->signatureImage(false)], ['Accept' => 'application/json'])
+            ->assertOk()->json('data.note_signature');
+        $this->assertArrayNotHasKey('path', $meta);
+        $this->assertEqualsWithDelta(426 / 86, $meta['width'] / $meta['height'], 0.4); // tracé 406 × 66 px + petite marge
+        $png = imagecreatefromstring(base64_decode($this->actingAs($lead, 'sanctum')->getJson('/api/stages/admin/reglages/signature')->assertOk()->json('content')));
+        $this->assertSame(127, (imagecolorat($png, 0, 0) >> 24) & 0x7F); // coin transparent
+        $this->assertLessThan(60, (imagecolorat($png, intdiv(imagesx($png), 2), intdiv(imagesy($png), 2)) >> 24) & 0x7F); // trait visible
+
+        // Cadre fixe : jamais plus grand que 60 × 24 mm, jamais déformé
+        $fit = app(\App\Modules\Stages\Services\NoteSignatureService::class)->forPdf();
+        $this->assertLessThanOrEqual(60, $fit['width_mm']);
+        $this->assertLessThanOrEqual(24, $fit['height_mm']);
+        $this->assertEqualsWithDelta($meta['width'] / $meta['height'], $fit['width_mm'] / $fit['height_mm'], 0.05);
+
+        // La note (même déjà émise) sort désormais signée ; une seule image remplacée à chaque envoi
+        $this->assertSame($before + 2, $pdfImages()); // image + son masque de transparence
+        $this->actingAs($lead, 'sanctum')->post('/api/stages/admin/reglages/signature', ['image' => $this->signatureImage(true)], ['Accept' => 'application/json'])->assertOk();
+        $this->assertCount(1, Storage::disk('local')->files('stages/signature'));
+
+        $this->actingAs($lead, 'sanctum')->deleteJson('/api/stages/admin/reglages/signature')->assertOk()->assertJsonPath('data.note_signature', null);
+        $this->assertCount(0, Storage::disk('local')->files('stages/signature'));
+        $this->assertSame($before, $pdfImages());
     }
 }

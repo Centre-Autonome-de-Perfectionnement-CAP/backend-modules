@@ -242,30 +242,11 @@ class StagesLot1Test extends TestCase
         $this->assertSame(1, $req->fresh()->notes()->count());
         Queue::assertPushed(SendNotificationJob::class); // responsable informé
 
-        // Note de service en PDF (cachet numérique) jointe au WhatsApp et à l'email
+        // Note de service en PDF jointe au WhatsApp et à l'email
         $note = $req->fresh()->notes()->first();
-        $this->assertMatchesRegularExpression('/^[A-Z2-9]{4}-[A-Z2-9]{4}$/', $note->verify_code);
         Queue::assertPushed(SendNotificationJob::class, fn ($j) => $j->channel === 'whatsapp_file' && str_ends_with($j->payload['path'], '.pdf'));
         $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['channel'] === 'email' && str_contains($m['text'], '[PJ:Note de service ' . $note->number)));
         $this->assertTrue(\Illuminate\Support\Facades\Storage::disk('local')->exists('stages/notes/' . $note->number . '.pdf'));
-
-        // Vérification publique du cachet (code saisi librement)
-        $this->getJson('/api/stages/verification?code=' . strtolower(str_replace('-', ' ', $note->verify_code)))
-            ->assertOk()->assertJsonPath('data.number', $note->number)->assertJsonPath('data.in_force', true);
-        $this->getJson('/api/stages/verification?code=AAAA-AAAA')->assertStatus(404);
-
-        // QR code : toujours l'adresse du site qui émet le document
-        $pdf = app(\App\Modules\Stages\Services\StagePdfService::class);
-        $this->app->instance('request', \Illuminate\Http\Request::create('https://cap-epac.bj/api/stages/suivi/reponse'));
-        $this->assertSame('https://cap-epac.bj/verifier?code=ABCD-2345', $pdf->verifyUrl('ABCD-2345'));
-        $this->app->instance('request', \Illuminate\Http\Request::create('http://test.cap-epac.bj/api/x'));
-        $this->assertSame('https://test.cap-epac.bj/verifier?code=ABCD-2345', $pdf->verifyUrl('ABCD-2345'));
-        $this->app->instance('request', \Illuminate\Http\Request::create('https://pirate.example/api/x'));
-        config(['app.frontend_url' => 'https://test.cap-epac.bj']);
-        $this->assertSame('https://test.cap-epac.bj/verifier?code=ABCD-2345', $pdf->verifyUrl('ABCD-2345'));
-        $this->app->instance('request', \Illuminate\Http\Request::create('http://localhost/api/x'));
-        config(['app.frontend_url' => 'https://cap-epac.bj']);
-        $this->assertSame('https://cap-epac.bj/verifier?code=ABCD-2345', $pdf->verifyUrl('ABCD-2345'));
     }
 
     public function test_proposal_identical_to_request_issues_note_directly(): void

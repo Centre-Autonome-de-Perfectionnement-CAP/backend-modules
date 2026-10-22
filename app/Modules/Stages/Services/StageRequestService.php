@@ -498,7 +498,7 @@ class StageRequestService
      */
     /**
      * Stagiaire arrivé avant le système : note de service initiale portant la
-     * date déclarée (date et cachet), envoyée au stagiaire avec son PDF. La date
+     * date déclarée, envoyée au stagiaire avec son PDF. La date
      * réelle d'enregistrement reste dans le système (recorded_at).
      */
     public function issueDeclaredNote(StageRequest $req, CarbonImmutable $declaredAt): StageNote
@@ -538,14 +538,9 @@ class StageRequestService
             $kind    = 'rectificative';
         }
 
-        do {
-            $code = StageNoteCode::generate();
-        } while (StageNote::where('verify_code', $code)->exists());
-
         return StageNote::create([
             'stage_request_id' => $req->id,
             'number'           => $number,
-            'verify_code'      => $code,
             'kind'             => $kind,
             'version'          => $version,
             'snapshot'         => [
@@ -602,7 +597,7 @@ class StageRequestService
     }
 
     /**
-     * PDF de la note (avec son cachet numérique), rangé sur le disque privé
+     * PDF de la note (signée), rangé sur le disque privé
      * pour être joint au WhatsApp et à l'email. Un échec n'empêche jamais le
      * message d'informer le stagiaire.
      *

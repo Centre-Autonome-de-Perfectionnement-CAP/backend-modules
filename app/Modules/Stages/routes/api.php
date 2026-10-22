@@ -22,8 +22,6 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
 
     // ── Site vitrine (public) ─────────────────────────────────────────────
     Route::get('statut', [StagePublicController::class, 'status'])->middleware('throttle:stages-public-read');
-    // Vérification d'un cachet numérique (QR code des notes de service)
-    Route::get('verification', [StagePublicController::class, 'verify'])->middleware('throttle:stages-public-code');
     Route::post('demandes', [StagePublicController::class, 'store'])->middleware('throttle:stages-public-submit');
 
     Route::prefix('suivi')->group(function () {
@@ -45,6 +43,9 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
     Route::prefix('admin')->middleware(['auth:sanctum', 'can:stages.lead'])->group(function () {
         Route::get('reglages', [StageAdminController::class, 'getSettings']);
         Route::put('reglages', [StageAdminController::class, 'updateSettings'])->middleware('throttle:30,1');
+        Route::get('reglages/signature', [StageAdminController::class, 'signatureImage']);
+        Route::post('reglages/signature', [StageAdminController::class, 'uploadSignature'])->middleware('throttle:10,1');
+        Route::delete('reglages/signature', [StageAdminController::class, 'deleteSignature'])->middleware('throttle:10,1');
 
         Route::get('invitations', [SupervisionController::class, 'invitationsIndex']);
         Route::middleware('throttle:20,1')->group(function () {

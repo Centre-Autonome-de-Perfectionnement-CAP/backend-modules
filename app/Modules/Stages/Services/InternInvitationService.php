@@ -28,7 +28,7 @@ use Illuminate\Support\Str;
  *    rapports) ; les jours d'avant ne comptent pas comme absences ;
  *  - stage terminé : seul le rapport final est dû, puis l'attestation.
  *
- * Les documents portent les dates déclarées (note de service et cachet datés
+ * Les documents portent les dates déclarées (note de service datée
  * du début du stage, attestation de sa fin) ; le système garde la date réelle
  * d'enregistrement (historique, recorded_at, attendance_from).
  */
@@ -231,7 +231,7 @@ class InternInvitationService
 
         $req = $result['request']->fresh();
 
-        // Note de service datée du début du stage déclaré (cachet compris).
+        // Note de service datée du début du stage déclaré.
         try {
             $this->requests->issueDeclaredNote($req, CarbonImmutable::parse($start->toDateString() . ' ' . self::DECLARED_NOTE_TIME, BusinessHours::TZ));
         } catch (\Throwable $e) {

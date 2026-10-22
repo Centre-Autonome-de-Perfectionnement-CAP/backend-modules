@@ -5,6 +5,7 @@ namespace App\Modules\Stages\Http\Controllers;
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Modules\Stages\Models\StageRequest;
+use App\Modules\Stages\Services\NoteSignatureService;
 use App\Modules\Stages\Services\StageRequestService;
 use App\Modules\Stages\Services\StageNotifier;
 use App\Modules\Stages\Services\StageSettingsService;
@@ -160,7 +161,45 @@ class StageAdminController extends Controller
 
     public function getSettings(): JsonResponse
     {
-        return $this->successResponse($this->settings->all());
+        return $this->successResponse($this->settingsPayload($this->settings->all()));
+    }
+
+    /** Image de la signature des notes de service (fond retiré, marges coupées). */
+    public function uploadSignature(Request $request, NoteSignatureService $signature): JsonResponse
+    {
+        $request->validate([
+            'image' => ['required', 'file', 'mimes:png,jpg,jpeg,webp', 'max:2048', 'dimensions:min_width=80,min_height=30,max_width=8000,max_height=8000'],
+        ], [
+            'image.max'        => "L'image ne doit pas dépasser 2 Mo.",
+            'image.mimes'      => 'Envoyez une image PNG, JPG ou WEBP.',
+            'image.dimensions' => "L'image est trop petite pour une signature lisible.",
+        ]);
+
+        try {
+            $signature->store($request->file('image'), $request->user()?->id);
+        } catch (BusinessException $e) {
+            return $this->errorResponse($e->getMessage(), $e->getStatusCode(), $e->getErrorCode());
+        }
+
+        return $this->successResponse($this->settingsPayload($this->settings->all()), 'Signature enregistrée.');
+    }
+
+    public function deleteSignature(Request $request, NoteSignatureService $signature): JsonResponse
+    {
+        $signature->remove($request->user()?->id);
+
+        return $this->successResponse($this->settingsPayload($this->settings->all()), 'Signature retirée.');
+    }
+
+    public function signatureImage(NoteSignatureService $signature): JsonResponse
+    {
+        $png = $signature->content();
+        if ($png === null) {
+            return $this->errorResponse('Aucune signature enregistrée.', 404, 'STAGE_SIGNATURE_NONE');
+        }
+
+        return response()->json(['mime' => 'image/png', 'content' => base64_encode($png)])
+            ->header('Cache-Control', 'private, no-store');
     }
 
     /** PDF d'une note de service (initiale ou rectificative). */
@@ -202,6 +241,8 @@ class StageAdminController extends Controller
             'pdf_ville'                => ['sometimes', 'string', 'min:2', 'max:60'],
             'signataire_titre'         => ['sometimes', 'string', 'min:2', 'max:80'],
             'signataire_nom'           => ['sometimes', 'string', 'min:2', 'max:100'],
+            'note_signataire_titre'    => ['sometimes', 'string', 'min:2', 'max:150'],
+            'note_signataire_nom'      => ['sometimes', 'nullable', 'string', 'max:100'],
             'pdf_pied_de_page'         => ['sometimes', 'string', 'min:5', 'max:150'],
         ]);
         if (array_key_exists('lieu_position', $data) && $data['lieu_position'] !== null) {
@@ -212,16 +253,28 @@ class StageAdminController extends Controller
         }
 
         foreach (['closed_message', 'default_rejection_reason', 'default_service', 'default_lieu',
-            'attestation_structure', 'numero_suffixe', 'pdf_ville', 'signataire_titre', 'signataire_nom', 'pdf_pied_de_page'] as $k) {
+            'attestation_structure', 'numero_suffixe', 'pdf_ville', 'signataire_titre', 'signataire_nom', 'pdf_pied_de_page',
+            'note_signataire_titre'] as $k) {
             if (isset($data[$k])) {
                 $data[$k] = $this->cleanText($data[$k]);
             }
+        }
+        if (array_key_exists('note_signataire_nom', $data)) {
+            $data['note_signataire_nom'] = (string) $this->cleanText($data['note_signataire_nom']);
         }
         if (isset($data['default_horaires'])) {
             $data['default_horaires'] = $this->orderedHoraires($data['default_horaires'], 'default_horaires');
         }
 
-        return $this->successResponse($this->settings->update($data, $request->user()?->id), 'Réglages enregistrés.');
+        return $this->successResponse($this->settingsPayload($this->settings->update($data, $request->user()?->id)), 'Réglages enregistrés.');
+    }
+
+    /** Réglages pour le progiciel : la signature sans son emplacement sur le disque. */
+    private function settingsPayload(array $all): array
+    {
+        $all['note_signature'] = app(NoteSignatureService::class)->publicMeta();
+
+        return $all;
     }
 
     // ── Interne ─────────────────────────────────────────────────────────

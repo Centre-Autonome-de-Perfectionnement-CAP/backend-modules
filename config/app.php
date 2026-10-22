@@ -30,10 +30,6 @@ return [
     // FRONTEND_URL est absent ou pointe encore sur une machine locale alors
     // qu'APP_URL est une vraie adresse (test.cap-epac.bj, cap-epac.bj), on
     // prend APP_URL. Ainsi aucun lien « localhost » ne part chez un étudiant.
-    // Domaines du site (QR codes des documents : on garde le domaine de la
-    // requête s'il en fait partie, sinon frontend_url).
-    'site_domains' => array_filter(array_map('trim', explode(',', (string) env('SITE_DOMAINS', 'cap-epac.bj')))),
-
     'frontend_url' => (static function (): string {
         $front = rtrim(trim((string) env('FRONTEND_URL', '')), '/');
         $app   = rtrim(trim((string) env('APP_URL', '')), '/');
