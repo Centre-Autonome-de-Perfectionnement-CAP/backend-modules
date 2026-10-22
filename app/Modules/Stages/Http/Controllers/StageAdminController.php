@@ -195,6 +195,7 @@ class StageAdminController extends Controller
             'report_frequency'         => ['sometimes', Rule::in(\App\Modules\Stages\Support\ReportPlan::FREQUENCIES)],
             'report_grace_days'        => ['sometimes', 'integer', 'min:0', 'max:10'],
             'final_report_open_days'   => ['sometimes', 'integer', 'min:3', 'max:60'],
+            'final_correction_days'    => ['sometimes', 'integer', 'min:0', 'max:365'],
             'seuil_assiduite'          => ['sometimes', 'integer', 'min:50', 'max:100'],
             'attestation_structure'    => ['sometimes', 'string', 'min:5', 'max:200'],
             'numero_suffixe'           => ['sometimes', 'string', 'min:2', 'max:40', 'regex:/^[A-Za-z0-9\/\-_. ]+$/'],

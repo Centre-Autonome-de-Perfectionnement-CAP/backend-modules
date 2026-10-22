@@ -6,6 +6,8 @@ use App\Models\User;
 use App\Modules\Core\Jobs\SendNotificationJob;
 use App\Modules\Core\Services\Notifier;
 use App\Modules\Stages\Models\StageInternAccount;
+use App\Modules\Stages\Models\StageReport;
+use App\Modules\Stages\Models\StageReportVersion;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Services\ReportService;
 use App\Modules\Stages\Services\StageSettingsService;
@@ -224,6 +226,49 @@ class StagesLot4Test extends TestCase
         $this->actingAs($lead, 'sanctum')->postJson("/api/stages/admin/rapports/{$id}/decision", ['decision' => 'approved'])->assertOk();
         $this->assertTrue($svc->finalValidated($req));
         $this->getJson("/api/stages/admin/stagiaires/{$req->id}/rapports")->assertOk()->assertJsonPath('data.stats.final_validated', true);
+    }
+
+    public function test_final_report_corrected_after_defense(): void
+    {
+        [$req, $h] = $this->intern();
+        $lead = $this->lead();
+        $svc = app(ReportService::class);
+
+        $this->at('2026-12-18 10:00');
+        $id = $this->post('/api/stagiaire/rapports', ['period_key' => 'FINAL', 'fichier' => $this->pdf()], $h)->assertStatus(201)->json('data.id');
+        $this->actingAs($lead, 'sanctum')->postJson("/api/stages/admin/rapports/{$id}/decision", ['decision' => 'approved'])->assertOk();
+        $this->assertSame(1, StageReport::find($id)->official_version);
+
+        // Après la soutenance (stage terminé) : version corrigée, la validation reste acquise
+        $this->at('2027-01-20 10:00');
+        $token = 'stg_' . Str::random(60); // le stagiaire se reconnecte
+        DB::table('stage_intern_sessions')->insert([
+            'account_id' => StageInternAccount::where('stage_request_id', $req->id)->value('id'),
+            'token_hash' => hash('sha256', $token), 'expires_at' => now()->addYear(), 'created_at' => now(),
+        ]);
+        $h['X-Stagiaire-Token'] = $token;
+        $this->post('/api/stagiaire/rapports', ['period_key' => 'FINAL', 'fichier' => $this->pdf(), 'note' => 'Corrections du jury'], $h)
+            ->assertStatus(201)->assertJsonPath('data.correction_status', 'pending')->assertJsonPath('data.validated', true);
+        $this->assertTrue($svc->finalValidated($req));
+        $this->post('/api/stagiaire/rapports', ['period_key' => 'FINAL', 'fichier' => $this->pdf()], $h)->assertStatus(409);
+        $this->getJson('/api/stages/admin/rapports?filter=to_review')->assertOk()->assertJsonFragment(['id' => $id]);
+
+        // Non retenue : la version validée précédente fait toujours foi
+        $this->actingAs($lead, 'sanctum')->postJson("/api/stages/admin/rapports/{$id}/decision", ['decision' => 'rejected', 'comment' => 'Annexe manquante'])->assertOk();
+        $r = StageReport::find($id);
+        $this->assertSame(['rejected', 1, 'approved'], [$r->correction_status, $r->official_version, $r->status]);
+        $this->assertTrue($svc->finalValidated($req));
+
+        // Nouvelle version corrigée, validée : elle devient officielle
+        $this->post('/api/stagiaire/rapports', ['period_key' => 'FINAL', 'fichier' => $this->pdf()], $h)->assertStatus(201);
+        $this->actingAs($lead, 'sanctum')->postJson("/api/stages/admin/rapports/{$id}/decision", ['decision' => 'approved'])->assertOk();
+        $this->assertSame(3, StageReport::find($id)->official_version);
+        $this->assertTrue((bool) StageReportVersion::where('report_id', $id)->where('version', 3)->value('post_defense'));
+
+        // Délai dépassé (90 jours après la fin du stage)
+        $this->at('2027-04-01 10:00');
+        DB::table('stage_intern_sessions')->where('token_hash', hash('sha256', $token))->update(['expires_at' => now()->addDay()]);
+        $this->post('/api/stagiaire/rapports', ['period_key' => 'FINAL', 'fichier' => $this->pdf()], $h)->assertStatus(409);
     }
 
     public function test_reminders_once_and_daily_digest(): void

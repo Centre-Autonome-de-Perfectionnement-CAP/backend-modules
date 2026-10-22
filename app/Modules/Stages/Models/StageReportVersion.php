@@ -15,7 +15,7 @@ class StageReportVersion extends Model
 
     protected function casts(): array
     {
-        return ['late' => 'boolean', 'created_at' => 'datetime'];
+        return ['late' => 'boolean', 'post_defense' => 'boolean', 'created_at' => 'datetime'];
     }
 
     protected static function booted(): void

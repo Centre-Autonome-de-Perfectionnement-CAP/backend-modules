@@ -129,11 +129,23 @@ class ReportService
         $late = $today->toDateString() > $period['closes'];
 
         $stored = null;
+        $postDefense = false;
         try {
-            $report = DB::transaction(function () use ($req, $period, $file, $note, $late, &$stored) {
+            $report = DB::transaction(function () use ($req, $period, $file, $note, &$late, &$stored, &$postDefense) {
                 $report = StageReport::where('stage_request_id', $req->id)->where('period_key', $period['key'])->lockForUpdate()->first();
-                if ($report && $this->isValidated($report)) {
-                    throw new BusinessException('Ce rapport est déjà validé : il ne peut plus être modifié.', 'STAGE_REPORT_LOCKED', 409);
+                // Rapport final validé : seule une version corrigée après la
+                // soutenance est encore possible (dans le délai prévu).
+                $postDefense = $report && $this->isValidated($report);
+                if ($postDefense) {
+                    if (!$this->canSubmitCorrection($report)) {
+                        throw new BusinessException(
+                            $report->correction_status === 'pending'
+                                ? 'Votre version corrigée est en cours de relecture.'
+                                : 'Ce rapport est déjà validé : il ne peut plus être modifié.',
+                            'STAGE_REPORT_LOCKED', 409,
+                        );
+                    }
+                    $late = false;
                 }
                 if (!$report) {
                     $report = StageReport::create([
@@ -151,10 +163,16 @@ class ReportService
                 StageReportVersion::create([
                     'report_id' => $report->id, 'version' => $version, 'file_path' => $stored,
                     'original_name' => mb_substr(preg_replace('/[^\pL\pN\s._-]/u', '', $file->getClientOriginalName()) ?: 'rapport.pdf', 0, 200),
-                    'size' => (int) $file->getSize(), 'note' => $note, 'late' => $late,
+                    'size' => (int) $file->getSize(), 'note' => $note, 'late' => $late, 'post_defense' => $postDefense,
                 ]);
-                $report->fill(['current_version' => $version, 'status' => 'submitted', 'submitted_at' => now()])->save();
-                $this->history($req, 'report_submitted', null, $this->labelFor($report) . " - version {$version}" . ($late ? ' (en retard)' : ''));
+                if ($postDefense) {
+                    // La validation reste acquise (attestation comprise) : la version corrigée est relue à part.
+                    $report->fill(['current_version' => $version, 'correction_status' => 'pending'])->save();
+                    $this->history($req, 'report_submitted', null, $this->labelFor($report) . " - version {$version} corrigée après soutenance");
+                } else {
+                    $report->fill(['current_version' => $version, 'status' => 'submitted', 'submitted_at' => now()])->save();
+                    $this->history($req, 'report_submitted', null, $this->labelFor($report) . " - version {$version}" . ($late ? ' (en retard)' : ''));
+                }
 
                 return $report;
             });
@@ -169,8 +187,10 @@ class ReportService
         if ($report->kind === 'final' || $report->frequency !== 'journalier') {
             $this->notifier->toStaff(
                 $this->staffFor($req),
-                $report->kind === 'final' ? 'Rapport final déposé' : 'Rapport déposé',
-                [$report->current_version > 1 ? 'Le stagiaire a déposé une nouvelle version de son rapport.' : 'Le stagiaire a déposé son rapport.'],
+                $postDefense ? 'Rapport final corrigé après soutenance' : ($report->kind === 'final' ? 'Rapport final déposé' : 'Rapport déposé'),
+                [$postDefense
+                    ? 'Le stagiaire a déposé la version corrigée de son rapport final, après la soutenance. Sa validation précédente reste acquise.'
+                    : ($report->current_version > 1 ? 'Le stagiaire a déposé une nouvelle version de son rapport.' : 'Le stagiaire a déposé son rapport.')],
                 ['Stagiaire' => $req->fullName(), 'Rapport' => $this->labelFor($report), 'Version' => (string) $report->current_version, 'Dépôt' => $late ? 'En retard' : null],
                 "stage-rapport:{$req->reference}",
                 $this->staffUrl($report),
@@ -221,6 +241,10 @@ class ReportService
         $lead = StageAccess::isLead($by);
         $role = $lead ? 'responsable' : 'superviseur';
 
+        if ($report->correction_status === 'pending') {
+            return $this->decideCorrection($report, $decision, $comment, $by, $lead, $role);
+        }
+
         $before = $this->isValidated($report);
         if (!$lead && $this->leadDecision($report) !== null) {
             throw new BusinessException('Le responsable de division a déjà tranché sur cette version.', 'STAGE_REPORT_LEAD_DECIDED', 409);
@@ -232,6 +256,9 @@ class ReportService
                 'role' => $role, 'decision' => $decision, 'comment' => $comment, 'created_at' => now(),
             ]);
             $report->status = $role === 'responsable' ? $decision : 'supervisor_' . $decision;
+            if ($this->isValidated($report)) {
+                $report->official_version = $report->current_version;
+            }
             $report->save();
             $this->history($report->stage, 'report_' . $decision, $by, $this->labelFor($report) . ($comment ? " : {$comment}" : ''));
         });
@@ -280,7 +307,7 @@ class ReportService
             ] : null,
             'versions' => $report->versions()->get()->map(fn ($v) => [
                 'version' => $v->version, 'name' => $v->original_name, 'size' => $v->size, 'note' => $v->note,
-                'late' => $v->late, 'at' => $v->created_at?->toIso8601String(),
+                'late' => $v->late, 'post_defense' => (bool) $v->post_defense, 'at' => $v->created_at?->toIso8601String(),
             ])->values(),
             'comments' => $comments->map(fn ($c) => [
                 'id' => $c->id, 'version' => $c->version, 'author' => $c->author,
@@ -304,8 +331,11 @@ class ReportService
             'status'          => $r->status,
             'status_label'    => self::STATUS_LABELS[$r->status] ?? $r->status,
             'validated'       => $this->isValidated($r),
-            'locked'          => $this->isValidated($r),
+            'locked'          => $this->isValidated($r) && !$this->canSubmitCorrection($r),
             'current_version' => $r->current_version,
+            'official_version'  => $r->official_version,
+            'correction_status' => $r->correction_status,
+            'can_submit_correction' => $this->canSubmitCorrection($r),
             'late'            => $r->late,
             'submitted_at'    => $r->submitted_at?->toIso8601String(),
         ];
@@ -316,7 +346,8 @@ class ReportService
     {
         $q = StageReport::with('stage')->orderByDesc('submitted_at')->limit(300);
         if ($filter === 'to_review') {
-            $q->whereIn('status', ['submitted', 'supervisor_approved', 'supervisor_rejected']);
+            $q->where(fn ($w) => $w->whereIn('status', ['submitted', 'supervisor_approved', 'supervisor_rejected'])
+                ->orWhere('correction_status', 'pending'));
         } elseif ($filter !== 'all') {
             $q->where('status', $filter);
         }
@@ -403,6 +434,69 @@ class ReportService
             (int) $this->settings->get('report_grace_days'),
             (int) $this->settings->get('final_report_open_days'),
         );
+    }
+
+    /**
+     * Version corrigée après soutenance possible ? Rapport final validé, pas de
+     * version corrigée en cours de relecture, et dans le délai après la fin du stage.
+     */
+    public function canSubmitCorrection(StageReport $r): bool
+    {
+        if ($r->kind !== 'final' || !$this->isValidated($r) || $r->correction_status === 'pending') {
+            return false;
+        }
+        $end = $r->stage?->date_fin;
+        $days = (int) $this->settings->get('final_correction_days');
+
+        return $end !== null && $days > 0
+            && BusinessHours::today()->toDateString() <= CarbonImmutable::parse($end->toDateString())->addDays($days)->toDateString();
+    }
+
+    /** Relecture d'une version corrigée après soutenance (la validation du rapport reste acquise). */
+    private function decideCorrection(StageReport $report, string $decision, ?string $comment, User $by, bool $lead, string $role): StageReport
+    {
+        if (!$lead && DB::table('stage_report_reviews')->where('report_id', $report->id)->where('version', $report->current_version)
+            ->where('role', 'responsable')->exists()) {
+            throw new BusinessException('Le responsable de division a déjà tranché sur cette version.', 'STAGE_REPORT_LEAD_DECIDED', 409);
+        }
+
+        DB::transaction(function () use ($report, $decision, $comment, $by, $role, $lead) {
+            DB::table('stage_report_reviews')->insert([
+                'report_id' => $report->id, 'version' => $report->current_version, 'user_id' => $by->id,
+                'role' => $role, 'decision' => $decision, 'comment' => $comment, 'created_at' => now(),
+            ]);
+            // Le superviseur donne son avis ; le responsable tranche.
+            if ($lead) {
+                $report->correction_status = $decision;
+                if ($decision === 'approved') {
+                    $report->official_version = $report->current_version;
+                }
+                $report->save();
+            }
+            $this->history($report->stage, 'report_correction_' . $decision, $by,
+                $this->labelFor($report) . ' - version corrigée après soutenance' . ($comment ? " : {$comment}" : ''));
+        });
+
+        $req = $report->stage;
+        $who = trim($by->first_name . ' ' . $by->last_name);
+        if ($lead) {
+            $this->notifier->toDemandeur(
+                $req,
+                $decision === 'approved' ? 'Version corrigée validée' : 'Version corrigée non retenue',
+                [$decision === 'approved'
+                    ? "{$who} a validé la version corrigée de votre rapport final. C'est désormais la version officielle."
+                    : "{$who} n'a pas retenu la version corrigée de votre rapport final. Votre version validée précédente reste valable ; vous pouvez en déposer une autre."],
+                ['Rapport' => $this->labelFor($report)],
+                highlight: $comment, highlightTitle: 'Commentaire',
+                ctaLabel: 'Ouvrir mes rapports', ctaUrl: $this->internUrl(), context: 'stage-rapport-correction',
+            );
+        } else {
+            $this->notifier->toManagers($req, 'Avis d\'un superviseur', [
+                "{$who} (superviseur) a " . ($decision === 'approved' ? 'approuvé' : 'émis des réserves sur') . ' la version corrigée du rapport final. À vous de trancher.',
+            ], ['Stagiaire' => $req->fullName(), 'Rapport' => $this->labelFor($report)], 'stage-superviseur');
+        }
+
+        return $report->fresh();
     }
 
     public function isValidated(StageReport $r): bool
