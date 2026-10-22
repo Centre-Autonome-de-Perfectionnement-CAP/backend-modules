@@ -30,8 +30,13 @@ final class Geo
     public static function check(?array $place, int $radius, float $lat, float $lng, float $accuracy): array
     {
         if (!$place || !isset($place['lat'], $place['lng'])) {
-            // Lieu pas encore relevé : la présence est acceptée sans contrôle de distance.
-            return ['ok' => true, 'checked' => false, 'distance' => null, 'message' => null, 'reason' => null];
+            // Lieu pas encore relevé par le responsable : aucun pointage n'est
+            // accepté (sinon on pourrait pointer depuis chez soi).
+            return [
+                'ok' => false, 'checked' => false, 'distance' => null, 'reason' => 'no_place',
+                'message' => 'Le lieu de stage n\'est pas encore configuré : le pointage n\'est pas possible pour le moment. '
+                    . 'Prévenez votre responsable de stage.',
+            ];
         }
 
         if ($accuracy > self::MAX_ACCURACY_M) {

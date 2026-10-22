@@ -230,6 +230,21 @@ class StagesLot3Test extends TestCase
         $this->assertSame('withdrawn', $req->fresh()->status);
     }
 
+    public function test_no_presence_without_configured_place(): void
+    {
+        // Lieu non relevé : impossible de confirmer sa présence depuis n'importe où (chez soi…).
+        $req = $this->intern('2026-11-02', '2027-01-31');
+        $this->at('2026-11-02 10:30');
+        $this->artisan('stages:process-activations')->assertSuccessful();
+        $token = $this->linkToken();
+        $this->getJson("/api/stagiaire/activation?token={$token}")->assertOk()->assertJsonPath('data.checks_position', false);
+        $this->postJson('/api/stagiaire/activation', [
+            'token' => $token, 'position' => $this->pos(0.3), 'password' => 'Stage2026', 'password_confirmation' => 'Stage2026',
+        ])->assertStatus(422)->assertJsonPath('error_code', 'STAGE_PUNCH_POSITION');
+        $this->assertNull($req->fresh()->activated_at);
+        $this->assertSame(0, StageAttendance::where('stage_request_id', $req->id)->count());
+    }
+
     public function test_activation_checks_position_and_records_real_start(): void
     {
         $this->setPlace();
