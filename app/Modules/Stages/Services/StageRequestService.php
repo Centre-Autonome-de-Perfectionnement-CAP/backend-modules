@@ -496,9 +496,32 @@ class StageRequestService
      * Enregistre la note (contenu figé). Le PDF sera produit à partir de ce
      * contenu lorsque le modèle sera intégré.
      */
-    private function issueNote(StageRequest $req, string $kind, ?string $motif, ?int $by): StageNote
+    /**
+     * Stagiaire arrivé avant le système : note de service initiale portant la
+     * date déclarée (date et cachet), envoyée au stagiaire avec son PDF. La date
+     * réelle d'enregistrement reste dans le système (recorded_at).
+     */
+    public function issueDeclaredNote(StageRequest $req, CarbonImmutable $declaredAt): StageNote
     {
-        $year     = (int) BusinessHours::today()->format('Y');
+        $note = DB::transaction(fn () => $this->issueNote($req, 'initiale', null, null, $declaredAt));
+
+        $this->notifier->toDemandeur(
+            $req,
+            'Stage enregistré - note de service',
+            ['Votre stage est enregistré dans le système du CAP-EPAC. Voici votre note de service.'],
+            ['Note n°' => $note->number] + $this->termsFields($this->currentTerms($req)),
+            ctaLabel: 'Ouvrir mon espace stagiaire',
+            ctaUrl: rtrim((string) config('app.frontend_url'), '/') . '/espace-stagiaire',
+            context: 'stage-note',
+            file: $this->notePdfFile($note),
+        );
+
+        return $note;
+    }
+
+    private function issueNote(StageRequest $req, string $kind, ?string $motif, ?int $by, ?CarbonImmutable $declaredAt = null): StageNote
+    {
+        $year     = (int) ($declaredAt ?? BusinessHours::today())->format('Y');
         $previous = StageNote::where('stage_request_id', $req->id)->orderByDesc('version')->lockForUpdate()->first();
 
         if ($kind === 'initiale' || !$previous) {
@@ -536,7 +559,8 @@ class StageRequestService
             ] + $this->currentTerms($req),
             'motif'     => $motif,
             'issued_by' => $by,
-            'issued_at' => now(),
+            'issued_at'   => $declaredAt ? $declaredAt->utc() : now(),
+            'recorded_at' => now(),
         ]);
     }
 
@@ -787,7 +811,7 @@ class StageRequestService
         ]);
     }
 
-    private function newReference(): string
+    public function newReference(): string
     {
         for ($i = 0; $i < 10; $i++) {
             $code = '';

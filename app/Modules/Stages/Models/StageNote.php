@@ -17,6 +17,7 @@ class StageNote extends Model
         return [
             'snapshot'  => 'array',
             'issued_at' => 'datetime',
+            'recorded_at' => 'datetime',
         ];
     }
 }

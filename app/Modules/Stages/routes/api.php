@@ -4,6 +4,7 @@ use App\Modules\Stages\Http\Controllers\Public\StagePublicController;
 use App\Modules\Stages\Http\Controllers\Public\SupervisorInvitationController;
 use App\Modules\Stages\Http\Controllers\SupervisionController;
 use App\Modules\Stages\Http\Controllers\InternFollowController;
+use App\Modules\Stages\Http\Controllers\InternInvitationController;
 use App\Modules\Stages\Http\Controllers\ReportController;
 use App\Modules\Stages\Http\Controllers\AttestationController;
 use App\Modules\Stages\Http\Controllers\DashboardController;
@@ -36,6 +37,10 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
     Route::get('invitation', [SupervisorInvitationController::class, 'show'])->middleware('throttle:stages-public-code');
     Route::post('invitation/accepter', [SupervisorInvitationController::class, 'accept'])->middleware('throttle:stages-public-code');
 
+    // ── Stagiaire arrivé avant le système : dossier complété via son lien ─
+    Route::get('rejoindre', [InternInvitationController::class, 'show'])->middleware('throttle:stages-public-code');
+    Route::post('rejoindre', [InternInvitationController::class, 'register'])->middleware('throttle:stages-public-code');
+
     // ── Progiciel : responsables (admin, Responsable de division FC) ──────
     Route::prefix('admin')->middleware(['auth:sanctum', 'can:stages.lead'])->group(function () {
         Route::get('reglages', [StageAdminController::class, 'getSettings']);
@@ -46,6 +51,14 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
             Route::post('invitations', [SupervisionController::class, 'invite']);
             Route::post('invitations/{id}/renvoyer', [SupervisionController::class, 'resendInvitation'])->whereNumber('id');
             Route::delete('invitations/{id}', [SupervisionController::class, 'revokeInvitation'])->whereNumber('id');
+        });
+
+        // Stagiaires arrivés avant le système (invitation par numéro WhatsApp)
+        Route::get('invitations-stagiaires', [InternInvitationController::class, 'index']);
+        Route::middleware('throttle:20,1')->group(function () {
+            Route::post('invitations-stagiaires', [InternInvitationController::class, 'invite']);
+            Route::post('invitations-stagiaires/{id}/renvoyer', [InternInvitationController::class, 'resend'])->whereNumber('id');
+            Route::delete('invitations-stagiaires/{id}', [InternInvitationController::class, 'revoke'])->whereNumber('id');
         });
 
         Route::get('groupe-whatsapp', [SupervisionController::class, 'whatsappGroup']);

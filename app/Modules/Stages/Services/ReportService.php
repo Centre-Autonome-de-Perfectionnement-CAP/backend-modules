@@ -126,7 +126,9 @@ class ReportService
         if ($today->toDateString() < $period['opens']) {
             throw new BusinessException('Le dépôt de ce rapport ouvre le ' . $this->requests->frDate($period['opens']) . '.', 'STAGE_REPORT_NOT_OPEN', 422);
         }
-        $late = $today->toDateString() > $period['closes'];
+        $late = $today->toDateString() > $period['closes']
+            // entré dans le système après l'échéance : pas « en retard »
+            && !($req->attendance_from && $req->attendance_from->toDateString() > $period['closes']);
 
         $stored = null;
         $postDefense = false;
@@ -427,13 +429,22 @@ class ReportService
             return [];
         }
 
-        return ReportPlan::periods(
+        $periods = ReportPlan::periods(
             CarbonImmutable::parse($start->toDateString()),
             CarbonImmutable::parse($req->date_fin->toDateString()),
             (string) $this->settings->get('report_frequency'),
             (int) $this->settings->get('report_grace_days'),
             (int) $this->settings->get('final_report_open_days'),
         );
+
+        // Stagiaire arrivé avant le système : pas de rapports périodiques pour
+        // les périodes terminées avant son entrée ; le rapport final reste dû.
+        if ($req->attendance_from) {
+            $from = $req->attendance_from->toDateString();
+            $periods = array_values(array_filter($periods, fn ($p) => $p['kind'] === 'final' || ($p['end'] ?? '') >= $from));
+        }
+
+        return $periods;
     }
 
     /**

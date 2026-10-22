@@ -151,6 +151,11 @@ class AttendanceService
     public function report(StageRequest $req, ?CarbonImmutable $until = null): array
     {
         $start = $this->startDay($req);
+        // Stagiaire arrivé avant le système : les présences ne comptent qu'à
+        // partir de son entrée dans le système (rien avant ne peut être pointé).
+        if ($start && $req->attendance_from) {
+            $start = $start->max(CarbonImmutable::parse($req->attendance_from->toDateString(), BusinessHours::TZ));
+        }
         $today = BusinessHours::today();
         $empty = ['days' => [], 'summary' => $this->summary(0, 0, 0, 0, 0, 0)];
         if (!$start || !$req->date_fin) {

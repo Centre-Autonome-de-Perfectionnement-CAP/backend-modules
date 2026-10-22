@@ -103,7 +103,9 @@ class AttestationService
         $seuil   = (int) $this->settings->get('seuil_assiduite');
         $taux    = $summary['taux'];
         $final   = $this->reports->finalValidated($req);
-        $attOk   = $taux !== null && $taux >= $seuil;
+        // Stage (en partie) antérieur au système : seule la période suivie compte ;
+        // un stage déjà terminé à l'entrée dans le système n'a pas d'assiduité mesurable.
+        $attOk   = ($taux !== null && $taux >= $seuil) || ($taux === null && $req->attendance_from !== null);
 
         $missing = [];
         if (!$attOk) {
@@ -344,7 +346,7 @@ class AttestationService
     public function documentDate(StageAttestation $a, ?string $date): CarbonImmutable
     {
         $d = $date ? CarbonImmutable::parse($date, BusinessHours::TZ)->startOfDay()
-            : ($a->document_date ? CarbonImmutable::parse($a->document_date->toDateString(), BusinessHours::TZ) : BusinessHours::today());
+            : ($a->document_date ? CarbonImmutable::parse($a->document_date->toDateString(), BusinessHours::TZ) : $this->defaultDocumentDate($a));
         $start = $a->stage->date_debut_reelle ?? $a->stage->date_debut;
         if ($start && $d->toDateString() < $start->toDateString()) {
             throw new BusinessException('La date de l\'attestation ne peut pas précéder le début du stage.', 'STAGE_ATT_DATE', 422);
@@ -354,6 +356,21 @@ class AttestationService
         }
 
         return $d;
+    }
+
+    /**
+     * Date proposée par défaut : le jour même ; pour un stagiaire arrivé avant
+     * le système, la fin de stage déclarée (aucune trace d'un enregistrement tardif).
+     */
+    private function defaultDocumentDate(StageAttestation $a): CarbonImmutable
+    {
+        $today = BusinessHours::today();
+        $req   = $a->stage;
+        if ($req->origin === 'invitation' && $req->date_fin && $req->date_fin->toDateString() < $today->toDateString()) {
+            return CarbonImmutable::parse($req->date_fin->toDateString(), BusinessHours::TZ);
+        }
+
+        return $today;
     }
 
     /** Remise au stagiaire (datée). */
@@ -543,6 +560,7 @@ class AttestationService
             'status_label' => self::STATUS_LABELS[$a->status] ?? $a->status,
             'numero'       => $a->numero,
             'document_date' => $a->document_date?->toDateString(),
+            'default_document_date' => $this->defaultDocumentDate($a)->toDateString(),
             'motif_type'   => $a->motif_type,
             'motif_type_label' => $a->motif_type ? (self::MOTIF_TYPES[$a->motif_type] ?? $a->motif_type) : null,
             'motif'        => $a->motif,
