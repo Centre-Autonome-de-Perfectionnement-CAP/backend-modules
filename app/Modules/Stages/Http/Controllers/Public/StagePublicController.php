@@ -43,6 +43,37 @@ class StagePublicController extends Controller
         ]);
     }
 
+    /**
+     * Vérification publique d'un cachet numérique (QR code ou code saisi).
+     * Indique si la note est authentique et si elle est toujours en vigueur.
+     */
+    public function verify(Request $request): JsonResponse
+    {
+        $code = \App\Modules\Stages\Services\StageNoteCode::normalize($request->query('code'));
+        $note = $code ? \App\Modules\Stages\Models\StageNote::where('verify_code', $code)->first() : null;
+        if (!$note) {
+            return $this->errorResponse('Aucun document ne correspond à ce code. Vérifiez la saisie.', 404, 'STAGE_VERIFY_NOT_FOUND');
+        }
+
+        $s      = $note->snapshot ?? [];
+        $next   = \App\Modules\Stages\Models\StageNote::where('stage_request_id', $note->stage_request_id)
+            ->where('version', '>', $note->version)->orderBy('version')->first();
+        $issued = \Carbon\CarbonImmutable::parse($note->issued_at)->setTimezone(BusinessHours::TZ);
+        $fr     = fn (?string $d) => $d ? \Carbon\CarbonImmutable::parse($d)->format('d/m/Y') : null;
+
+        return $this->successResponse([
+            'document'    => $note->kind === 'rectificative' ? 'Note de service rectificative' : 'Note de service',
+            'number'      => $note->number,
+            'code'        => $note->verify_code,
+            'issued_on'   => $issued->format('d/m/Y'),
+            'holder'      => trim(($s['civilite'] ?? '') . ' ' . mb_strtoupper($s['nom'] ?? '') . ' ' . ($s['prenoms'] ?? '')),
+            'service'     => $s['service'] ?? null,
+            'period'      => ['start' => $fr($s['date_debut'] ?? null), 'end' => $fr($s['date_fin'] ?? null)],
+            'in_force'    => $next === null,
+            'replaced_by' => $next?->number,
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $text = fn (int $max, bool $required = true) => [$required ? 'required' : 'nullable', 'string', "max:{$max}"];

@@ -515,9 +515,14 @@ class StageRequestService
             $kind    = 'rectificative';
         }
 
+        do {
+            $code = StageNoteCode::generate();
+        } while (StageNote::where('verify_code', $code)->exists());
+
         return StageNote::create([
             'stage_request_id' => $req->id,
             'number'           => $number,
+            'verify_code'      => $code,
             'kind'             => $kind,
             'version'          => $version,
             'snapshot'         => [
@@ -539,6 +544,7 @@ class StageRequestService
     {
         $note  = $req->notes()->reorder('version', 'desc')->first();
         $terms = $this->currentTerms($req);
+        $file  = $note ? $this->notePdfFile($note) : null;
 
         if ($kind === 'rectificative') {
             $this->notifier->toDemandeur(
@@ -551,6 +557,7 @@ class StageRequestService
                 ctaLabel: 'Consulter mon dossier',
                 ctaUrl: $this->notifier->suiviUrl($req),
                 context: 'stage-note-rectificative',
+                file: $file,
             );
             return;
         }
@@ -566,7 +573,30 @@ class StageRequestService
             ctaLabel: 'Consulter mon dossier',
             ctaUrl: $this->notifier->suiviUrl($req),
             context: 'stage-note',
+            file: $file,
         );
+    }
+
+    /**
+     * PDF de la note (avec son cachet numérique), rangé sur le disque privé
+     * pour être joint au WhatsApp et à l'email. Un échec n'empêche jamais le
+     * message d'informer le stagiaire.
+     *
+     * @return array{disk: string, path: string, name: string, caption: string}|null
+     */
+    private function notePdfFile(StageNote $note): ?array
+    {
+        try {
+            $pdf  = app(StagePdfService::class)->note($note);
+            $path = 'stages/notes/' . preg_replace('/[^A-Za-z0-9-]/', '-', $note->number) . '.pdf';
+            Storage::disk(self::DISK)->put($path, $pdf['content']);
+
+            return ['disk' => self::DISK, 'path' => $path, 'name' => $pdf['name'], 'caption' => 'Note de service n° ' . $note->number];
+        } catch (\Throwable $e) {
+            Log::error('[Stages] PDF de la note de service non généré', ['note' => $note->number, 'error' => $e->getMessage()]);
+
+            return null;
+        }
     }
 
     // ════════════════════════════════════════════════════════════════════

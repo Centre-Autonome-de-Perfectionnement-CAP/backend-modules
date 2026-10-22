@@ -21,6 +21,8 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
 
     // ── Site vitrine (public) ─────────────────────────────────────────────
     Route::get('statut', [StagePublicController::class, 'status'])->middleware('throttle:stages-public-read');
+    // Vérification d'un cachet numérique (QR code des notes de service)
+    Route::get('verification', [StagePublicController::class, 'verify'])->middleware('throttle:stages-public-code');
     Route::post('demandes', [StagePublicController::class, 'store'])->middleware('throttle:stages-public-submit');
 
     Route::prefix('suivi')->group(function () {

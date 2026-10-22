@@ -94,6 +94,12 @@ class StagePdfService
                 'horaires'   => $this->hoursSentence($h),
             ],
             'numero'    => $note->number,
+            'cachet'    => [
+                'code'  => $note->verify_code,
+                'date'  => $issued->format('d/m/Y'),
+                'heure' => $issued->format('H\\hi'),
+                'qr'    => $this->qrDataUri($this->verifyUrl((string) $note->verify_code)),
+            ],
             'suffixe'   => trim((string) $this->settings->get('numero_suffixe'), '/'),
             'ville'     => $this->settings->get('pdf_ville'),
             'date'      => $issued->format('d/m/Y'),
@@ -108,7 +114,26 @@ class StagePdfService
         ];
     }
 
+    /** Adresse publique de vérification d'un cachet numérique. */
+    public function verifyUrl(string $code): string
+    {
+        return rtrim((string) config('app.frontend_url'), '/') . '/verifier?code=' . rawurlencode($code);
+    }
+
     // ── Interne ──────────────────────────────────────────────────────────
+
+    /** QR code (SVG vert CAP) en data URI : aucune ressource extérieure. */
+    private function qrDataUri(string $text): string
+    {
+        $renderer = new \BaconQrCode\Renderer\ImageRenderer(
+            new \BaconQrCode\Renderer\RendererStyle\RendererStyle(240, 0),
+            new \BaconQrCode\Renderer\Image\SvgImageBackEnd(),
+        );
+        $svg = (new \BaconQrCode\Writer($renderer))->writeString($text);
+        $svg = str_replace(['fill="#000000"', 'fill="#fefefe"'], ['fill="#326761"', 'fill="#ffffff"'], $svg);
+
+        return 'data:image/svg+xml;base64,' . base64_encode($svg);
+    }
 
     private function render(string $html): string
     {

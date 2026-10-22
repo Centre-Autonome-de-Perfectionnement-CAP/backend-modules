@@ -37,6 +37,7 @@ class StageNotifier
         ?string $ctaLabel = null,
         ?string $ctaUrl = null,
         string $context = 'stage',
+        ?array $file = null,
     ): void {
         $greeting = 'Bonjour ' . trim($req->civilite . ' ' . $req->fullName()) . ',';
 
@@ -53,6 +54,14 @@ class StageNotifier
             self::MODULE,
         );
 
+        // Document joint (ex. note de service en PDF) : envoyé juste après le message.
+        if ($file) {
+            $this->notifier->whatsappFile(
+                $req->whatsapp, $file['disk'], $file['path'], $file['name'], $file['caption'] ?? $title,
+                "{$context}-pdf:{$req->reference}", self::MODULE,
+            );
+        }
+
         $this->notifier->email(
             $req->email,
             "{$title} - {$req->reference}",
@@ -67,6 +76,7 @@ class StageNotifier
                 'ctaLabel'       => $ctaLabel,
                 'ctaUrl'         => $ctaUrl,
             ],
+            attachments: $file ? [['disk' => $file['disk'], 'path' => $file['path'], 'name' => $file['name']]] : [],
             toName: $req->fullName(),
         );
     }

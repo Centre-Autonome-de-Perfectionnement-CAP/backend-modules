@@ -46,7 +46,7 @@ class StagesLot1Test extends TestCase
             }
             public function email(?string $to, string $subject, string $view, array $vars = [], array $attachments = [], ?string $toName = null, array $cc = [], bool $bulk = false): void
             {
-                $this->test->record('email', $to, $subject . ' ' . json_encode($vars, JSON_UNESCAPED_UNICODE));
+                $this->test->record('email', $to, $subject . ' ' . json_encode($vars, JSON_UNESCAPED_UNICODE) . ($attachments ? ' [PJ:' . implode(',', array_column($attachments, 'name')) . ']' : ''));
             }
         });
     }
@@ -241,6 +241,18 @@ class StagesLot1Test extends TestCase
 
         $this->assertSame(1, $req->fresh()->notes()->count());
         Queue::assertPushed(SendNotificationJob::class); // responsable informé
+
+        // Note de service en PDF (cachet numérique) jointe au WhatsApp et à l'email
+        $note = $req->fresh()->notes()->first();
+        $this->assertMatchesRegularExpression('/^[A-Z2-9]{4}-[A-Z2-9]{4}$/', $note->verify_code);
+        Queue::assertPushed(SendNotificationJob::class, fn ($j) => $j->channel === 'whatsapp_file' && str_ends_with($j->payload['path'], '.pdf'));
+        $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['channel'] === 'email' && str_contains($m['text'], '[PJ:Note de service ' . $note->number)));
+        $this->assertTrue(\Illuminate\Support\Facades\Storage::disk('local')->exists('stages/notes/' . $note->number . '.pdf'));
+
+        // Vérification publique du cachet (code saisi librement)
+        $this->getJson('/api/stages/verification?code=' . strtolower(str_replace('-', ' ', $note->verify_code)))
+            ->assertOk()->assertJsonPath('data.number', $note->number)->assertJsonPath('data.in_force', true);
+        $this->getJson('/api/stages/verification?code=AAAA-AAAA')->assertStatus(404);
     }
 
     public function test_proposal_identical_to_request_issues_note_directly(): void

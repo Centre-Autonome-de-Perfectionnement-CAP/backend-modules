@@ -1,7 +1,8 @@
 {{--
     Note de service (initiale ou rectificative) - style des documents du
     CAP (en-tête et pied de page officiels), adapté du modèle de note
-    d'admission en stage. Tout en texte ; signature et cachet à la main.
+    d'admission en stage. Tout en texte. Pas de signature manuscrite : la note
+    porte le cachet numérique du système (code + QR de vérification).
     Les horaires et l'usage de l'espace stagiaire figurent au règlement intérieur.
 --}}
 @extends('stages::pdfs.layout')
@@ -19,8 +20,19 @@
     table.chg { width: 100%; border-collapse: collapse; margin: 1mm 0 5mm; font-size: 11pt; }
     table.chg th, table.chg td { border: 0.6pt solid #000; padding: 1.6mm 2.2mm; text-align: left; vertical-align: top; }
     table.chg th { background: #eef2f7; }
-    .sign { margin-top: 9mm; margin-left: 92mm; text-align: center; }
-    .sign .nom-s { margin-top: 26mm; font-weight: bold; text-decoration: underline; }
+    /* Cachet numérique (vert CAP, style tampon incliné) */
+    .cachet { margin-top: 10mm; margin-left: 62mm; width: 104mm; color: #326761;
+              border: 0.9mm solid #326761; border-radius: 1.6mm; padding: 0.7mm; transform: rotate(-2.5deg); }
+    .cachet .in { border: 0.25mm solid #326761; border-radius: 1.1mm; padding: 2mm 3mm 2.6mm; }
+    .cachet .t { text-align: center; font-weight: bold; font-size: 12.5pt; letter-spacing: 1.6pt; }
+    .cachet .s { text-align: center; font-weight: bold; font-size: 7.6pt; letter-spacing: 0.5pt; margin-top: 0.6mm; }
+    .cachet .r { border-top: 0.25mm solid #326761; margin: 1.8mm 0 2mm; }
+    .cachet table { width: 100%; border-collapse: collapse; }
+    .cachet td { vertical-align: middle; padding: 0; }
+    .cachet td.qr { width: 23mm; }
+    .cachet td.qr img { width: 21mm; height: 21mm; }
+    .cachet .l { font-size: 9pt; line-height: 1.55; }
+    .cachet .code { font-family: 'DejaVu Sans Mono', monospace; font-weight: bold; letter-spacing: 0.6pt; }
 @endsection
 
 @section('content')
@@ -68,9 +80,18 @@
     chacun en ce qui le concerne, de l'application de la présente note de service.
 </p>
 
-<div class="sign">
-    <div>{{ $signataire_titre }}</div>
-    <div class="nom-s">{{ $signataire_nom }}</div>
-</div>
+<div class="cachet"><div class="in">
+    <div class="t">CACHET NUMÉRIQUE</div>
+    <div class="s">CAP-EPAC · SYSTÈME DE GESTION DES STAGES</div>
+    <div class="r"></div>
+    <table><tr>
+        <td class="qr"><img src="{{ $cachet['qr'] }}" alt=""></td>
+        <td class="l">
+            Note de service{{ $rectif ? ' rectificative' : '' }} n° <b>{{ $numero }}</b><br>
+            Émise le {{ $cachet['date'] }} à {{ $cachet['heure'] }}<br>
+            Code de vérification : <span class="code">{{ $cachet['code'] }}</span>
+        </td>
+    </tr></table>
+</div></div>
 
 @endsection
