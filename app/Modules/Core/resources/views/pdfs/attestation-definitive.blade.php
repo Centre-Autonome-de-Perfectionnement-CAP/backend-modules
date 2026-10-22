@@ -319,7 +319,7 @@
                     </div>
                 @endif
 
-                {{-- Mention — colonne ajoutée par la migration --}}
+                {{-- Mention - colonne ajoutée par la migration --}}
                 @php
                     $mention = trim($attestation->mention ?? '');
                     $cote    = $cotes[$mention] ?? '';

@@ -17,7 +17,7 @@ class DocumentManagementController extends Controller
     use ApiResponse, RestrictsToRoles;
 
     /**
-     * AJOUT (audit sécurité) — ce contrôleur n'avait AUCUNE protection :
+     * AJOUT (audit sécurité) - ce contrôleur n'avait AUCUNE protection :
      * n'importe quel compte connecté pouvait lister/créer/modifier/supprimer
      * des documents RH.
      */

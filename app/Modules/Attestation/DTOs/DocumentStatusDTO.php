@@ -3,7 +3,7 @@
 namespace App\Modules\Attestation\DTOs;
 
 /**
- * B1.4 — DTO représentant le statut d'un document pour l'étudiant
+ * B1.4 - DTO représentant le statut d'un document pour l'étudiant
  *
  * Utilisé par AttestationController::getStatus() et getBulletinStatus()
  * pour éviter la construction de tableaux ad-hoc dispersés.

@@ -14,9 +14,9 @@ class WhatsAppGroupController extends Controller
     use ApiResponse, RestrictsToRoles;
 
     /**
-     * AJOUT (audit sécurité) — update/destroy n'avaient AUCUNE protection :
+     * AJOUT (audit sécurité) - update/destroy n'avaient AUCUNE protection :
      * n'importe quel compte connecté pouvait changer ou supprimer le lien
-     * WhatsApp d'une filière. `index()` n'est pas touché ici — il reste
+     * WhatsApp d'une filière. `index()` n'est pas touché ici - il reste
      * dans son état actuel (aucune authentification requise), comme avant
      * ce correctif. À confirmer si c'est le comportement voulu.
      */

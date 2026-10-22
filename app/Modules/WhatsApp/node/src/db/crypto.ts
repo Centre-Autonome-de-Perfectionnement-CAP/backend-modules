@@ -6,7 +6,7 @@
  *     longueur d'origine, on obtient toujours 32 octets exploitables par AES-256)
  *   - IV aléatoire (12 octets, recommandé pour GCM) généré à CHAQUE opération
  *   - le tag d'authentification GCM est stocké séparément et est OBLIGATOIRE
- *     pour déchiffrer (garantit l'intégrité — toute donnée altérée en base
+ *     pour déchiffrer (garantit l'intégrité - toute donnée altérée en base
  *     fait échouer le déchiffrement plutôt que de renvoyer des données corrompues)
  */
 

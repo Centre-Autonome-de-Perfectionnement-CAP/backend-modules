@@ -15,7 +15,7 @@ class ProcessStageAttestations extends Command
     public function handle(AttestationService $service): int
     {
         $s = $service->tick();
-        $this->info("Préparées : {$s['prepared']} — relances : {$s['reminded']}");
+        $this->info("Préparées : {$s['prepared']} - relances : {$s['reminded']}");
 
         return self::SUCCESS;
     }

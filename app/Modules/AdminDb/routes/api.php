@@ -7,7 +7,7 @@ use App\Modules\AdminDb\Http\Controllers\AdminTableController;
  * Routes de l'outil d'administration brute des tables.
  *
  * La whitelist des tables accessibles est gérée uniquement dans
- * AdminTableController::ALLOWED_TABLES — pas ici.
+ * AdminTableController::ALLOWED_TABLES - pas ici.
  *
  * Le rôle 'admin' est vérifié dans le contrôleur (assertAdmin), pas via un
  * middleware dédié, pour rester cohérent avec le reste du projet qui

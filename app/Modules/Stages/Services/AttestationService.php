@@ -42,14 +42,14 @@ class AttestationService
     public const STATUS_LABELS = [
         'a_valider'  => 'À valider (responsable)',
         'a_imprimer' => 'À imprimer (secrétariat)',
-        'imprimee'   => 'Imprimée — à remettre',
+        'imprimee'   => 'Imprimée - à remettre',
         'remise'     => 'Remise au stagiaire',
         'annulee'    => 'Annulée',
     ];
 
     public const PUBLIC_LABELS = [
         'a_valider'  => 'En préparation',
-        'a_imprimer' => 'Validée — en cours d\'impression',
+        'a_imprimer' => 'Validée - en cours d\'impression',
         'imprimee'   => 'Prête : à retirer au secrétariat',
         'remise'     => 'Remise',
         'annulee'    => 'Annulée',
@@ -185,7 +185,7 @@ class AttestationService
                 $stage->forceFill(['attestation_prepared_at' => now()])->save();
             }
             $this->history($stage, 'attestation_prepared', $by, $kind === 'demande'
-                ? 'Demandée par le stagiaire : ' . (self::MOTIF_TYPES[$motifType] ?? $motifType) . ($motif ? " — {$motif}" : '')
+                ? 'Demandée par le stagiaire : ' . (self::MOTIF_TYPES[$motifType] ?? $motifType) . ($motif ? " - {$motif}" : '')
                 : null, $kind === 'demande' ? 'demandeur' : null);
             $created = true;
 
@@ -316,7 +316,7 @@ class AttestationService
                 'printed_by' => $first ? $by->id : $a->printed_by, 'printed_at' => $first ? now() : $a->printed_at,
             ])->save();
             $this->history($a->stage, $first ? 'attestation_printed' : 'attestation_number_changed', $by,
-                trim(($numero ? "N° {$numero} — " : '') . 'datée du ' . $docDate->format('d/m/Y')));
+                trim(($numero ? "N° {$numero} - " : '') . 'datée du ' . $docDate->format('d/m/Y')));
 
             return $a;
         });
@@ -667,7 +667,7 @@ class AttestationService
         if ($a->kind === 'demande') {
             $this->notifier->toManagersGeneric('Demande d\'attestation de stage', [
                 'Un ancien stagiaire demande une attestation de stage.',
-            ], $staffFields + ['Motif' => (self::MOTIF_TYPES[$a->motif_type] ?? '') . ($a->motif ? " — {$a->motif}" : '')],
+            ], $staffFields + ['Motif' => (self::MOTIF_TYPES[$a->motif_type] ?? '') . ($a->motif ? " - {$a->motif}" : '')],
                 "stage-attestation-demande:{$req->reference}", $this->staffUrl($a), $req->reference);
 
             return;

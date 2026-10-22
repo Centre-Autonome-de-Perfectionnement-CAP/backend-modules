@@ -15,7 +15,7 @@ class SyncStageWhatsAppGroup extends Command
     public function handle(StageWhatsAppGroupService $service): int
     {
         $s = $service->sync();
-        $this->info("Ajoutés : {$s['added']} — invités : {$s['invited']} — retirés : {$s['removed']} — échecs : {$s['errors']}");
+        $this->info("Ajoutés : {$s['added']} - invités : {$s['invited']} - retirés : {$s['removed']} - échecs : {$s['errors']}");
 
         return self::SUCCESS;
     }

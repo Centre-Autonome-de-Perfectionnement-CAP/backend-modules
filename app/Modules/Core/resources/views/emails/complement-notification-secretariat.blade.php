@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Nouveau complément de dossier — {{ $reference ?? '—' }}</title>
+  <title>Nouveau complément de dossier - {{ $reference ?? '—' }}</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,'Open Sans','Helvetica Neue',sans-serif; background:#f4f6f8; color:#1a1a2e; font-size:15px; line-height:1.6; }
@@ -89,7 +89,7 @@
       </div>
     </div>
     <div class="footer">
-      <p>Notification automatique du système de gestion des demandes — CAP-EPAC.</p>
+      <p>Notification automatique du système de gestion des demandes - CAP-EPAC.</p>
     </div>
   </div>
 </body>

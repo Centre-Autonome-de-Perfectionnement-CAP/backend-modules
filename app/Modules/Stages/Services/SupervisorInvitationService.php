@@ -221,7 +221,7 @@ class SupervisorInvitationService
 
         $this->notifier->whatsapp(
             $phone,
-            WhatsAppText::compose('Invitation — superviseur de stage', [
+            WhatsAppText::compose('Invitation - superviseur de stage', [
                 'Bonjour' . ($name ? ' ' . $name : '') . ',',
                 ($from ? "{$from} vous invite" : 'Vous êtes invité(e)') . ' à rejoindre la plateforme du CAP-EPAC en tant que *superviseur de stage*.',
                 "Créez votre compte en ouvrant ce lien personnel (valable 72 heures, utilisable une seule fois) :\n{$url}",

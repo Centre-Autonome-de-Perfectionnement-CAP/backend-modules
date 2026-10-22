@@ -17,7 +17,7 @@ use App\Modules\WhatsApp\Services\WhatsAppBridgeClient;
  * Envoi d'un message libre (texte + pièces jointes) de la secrétaire vers
  * le demandeur d'un dossier, par WhatsApp ET email.
  *
- * REFONTE (13/10/2026) — ENVOI ASYNCHRONE :
+ * REFONTE (13/10/2026) - ENVOI ASYNCHRONE :
  *   L'ancienne version envoyait WhatsApp (texte + chaque fichier) de façon
  *   SYNCHRONE dans la requête HTTP : jusqu'à 30 s pour le texte + 60 s par
  *   pièce jointe. Au-delà du timeout du serveur web, le navigateur recevait
@@ -61,7 +61,7 @@ class ContactDemandeurService
 
         if (empty($demande->demandeur_whatsapp) && empty($demande->email)) {
             throw new BusinessException(
-                "Ce dossier n'a ni numéro WhatsApp ni email enregistré — impossible de contacter le demandeur.",
+                "Ce dossier n'a ni numéro WhatsApp ni email enregistré - impossible de contacter le demandeur.",
                 'NO_CONTACT_INFO',
                 422,
             );
@@ -179,7 +179,7 @@ class ContactDemandeurService
 
             $fileRes = $this->bridge->sendFileDetailed(
                 $phone, 'public', $att['path'], $att['name'],
-                "Pièce jointe — dossier {$demande->reference}", $context, 'Demandes',
+                "Pièce jointe - dossier {$demande->reference}", $context, 'Demandes',
             );
             if (!$fileRes['ok']) {
                 $failed[] = $att['name'];
@@ -229,7 +229,7 @@ class ContactDemandeurService
                 'secretaireName' => $secretaireName,
             ], function ($m) use ($to, $nomDemandeur, $demande, $stored) {
                 $m->to($to, $nomDemandeur)
-                  ->subject("CAP-EPAC — Message concernant votre dossier {$demande->reference}");
+                  ->subject("CAP-EPAC - Message concernant votre dossier {$demande->reference}");
                 foreach ($stored as $att) {
                     if (Storage::disk('public')->exists($att['path'])) {
                         $m->attachFromStorageDisk('public', $att['path'], $att['name']);

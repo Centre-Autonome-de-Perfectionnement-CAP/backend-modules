@@ -71,7 +71,7 @@ class ProfessorService
             // 24/08/2026) : mot de passe par défaut "password" pour tout
             // nouveau compte sans mot de passe fourni. Un mot de passe
             // aléatoire serait plus sûr en théorie, mais aucun flux
-            // d'invitation/email n'existe pour le transmettre au prof —
+            // d'invitation/email n'existe pour le transmettre au prof -
             // il serait donc inutilisable. À revoir le jour où un tel
             // flux existera.
             if (empty($data['password'])) {

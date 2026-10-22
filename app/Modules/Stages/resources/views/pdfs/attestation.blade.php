@@ -1,12 +1,12 @@
 {{--
-    Attestation de stage — reproduit le modèle Word du CAP
+    Attestation de stage - reproduit le modèle Word du CAP
     (Attestation_Stage_Nom_Prénoms.docx) : polices Algerian, Pristina et
     Albertus Medium, tout en texte. En-tête et pied de page : style officiel.
     Signature et cachet : apposés à la main sur l'original.
 --}}
 @extends('stages::pdfs.layout')
 
-@section('title', 'Attestation de stage — ' . $d['nom_complet'])
+@section('title', 'Attestation de stage - ' . $d['nom_complet'])
 
 @section('styles')
     .page { padding-top: 41mm; }
@@ -40,7 +40,7 @@
         . '<rect x="310" y="3" width="625" height="45" rx="4" fill="#fff" stroke="#000" stroke-width="7"/>'
         . '</svg>';
 @endphp
-@if($apercu)<div class="apercu">APERÇU — NON VALIDÉE</div>@endif
+@if($apercu)<div class="apercu">APERÇU - NON VALIDÉE</div>@endif
 <div class="ref">
     {{-- Numéro écrit à la main sur l'original --}}
     <span class="num">N°{{ str_repeat("\u{00A0}", 26) }}/{{ $suffixe }}</span>

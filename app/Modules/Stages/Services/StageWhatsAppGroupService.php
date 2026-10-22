@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Groupe WhatsApp des stagiaires — un seul par année.
+ * Groupe WhatsApp des stagiaires - un seul par année.
  *
  *  - créé automatiquement au premier stagiaire de l'année (ou à la main),
  *    le numéro du CAP le crée et les responsables de division en sont

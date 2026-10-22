@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
- * Module Stages — Lot 2 : superviseurs (rôle + invitations), suivi des
+ * Module Stages - Lot 2 : superviseurs (rôle + invitations), suivi des
  * stagiaires par superviseur, binômes / groupes de travail, groupe WhatsApp
  * annuel des stagiaires.
  *

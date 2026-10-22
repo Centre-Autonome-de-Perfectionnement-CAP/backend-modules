@@ -300,7 +300,7 @@ class EmploiDuTempsController extends Controller
     }
 
     // ──────────────────────────────────────────────────────────
-    // PRIVATE — Détection des conflits
+    // PRIVATE - Détection des conflits
     // ──────────────────────────────────────────────────────────
 
     private function detectConflicts(array $data, ?int $excludeId = null): array

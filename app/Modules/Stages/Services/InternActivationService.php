@@ -121,7 +121,7 @@ class InternActivationService
             StageHistory::create([
                 'stage_request_id' => $locked->id, 'action' => 'activated',
                 'from_status' => $locked->status, 'to_status' => $locked->status, 'actor' => 'demandeur',
-                'comment' => 'Présence confirmée — prise de service le ' . $today->locale('fr')->isoFormat('dddd D MMMM YYYY'),
+                'comment' => 'Présence confirmée - prise de service le ' . $today->locale('fr')->isoFormat('dddd D MMMM YYYY'),
             ]);
 
             return $account;

@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
- * Module Stages — Lot 1 : dépôt, suivi par code, proposition / contre-
+ * Module Stages - Lot 1 : dépôt, suivi par code, proposition / contre-
  * proposition, note de service (initiale + rectificative), rejet, échéances,
  * droits d'accès, heures ouvrées du personnel.
  */

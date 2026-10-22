@@ -65,7 +65,7 @@ class CreateTextbookEntryRequest extends FormRequest
     }
 
     /**
-     * AJOUT — règle métier : une entrée de cahier de texte ne peut être
+     * AJOUT - règle métier : une entrée de cahier de texte ne peut être
      * créée que si la séance (date + heure de début) a commencé il y a au
      * moins 1 heure. Évite qu'un responsable de classe remplisse un
      * cahier de texte pour un cours qui n'a pas encore eu lieu.

@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * NotificationService — version queue asynchrone.
+ * NotificationService - version queue asynchrone.
  *
  * SEUL CHANGEMENT vs l'original :
  *   Mail::send() direct       → SendNotificationJob::dispatch() canal 'email'
@@ -41,7 +41,7 @@ class NotificationService
     /**
      * CORRECTIF (16/08/2026) : cette propriété était utilisée 12 fois dans
      * ce fichier ($this->whatsApp->templateXxx()) sans jamais être déclarée
-     * ni injectée — erreur fatale "Undefined property" garantie à chaque
+     * ni injectée - erreur fatale "Undefined property" garantie à chaque
      * notification. Ajouté ici.
      */
     public function __construct(
@@ -51,7 +51,7 @@ class NotificationService
     // ── Mails étudiant ────────────────────────────────────────────────────────
 
     // ══════════════════════════════════════════════════════════════════════════
-    // HELPERS DISPATCH — remplacent Mail::send() et whatsApp->send() directs
+    // HELPERS DISPATCH - remplacent Mail::send() et whatsApp->send() directs
     // ══════════════════════════════════════════════════════════════════════════
 
     private function email(
@@ -105,7 +105,7 @@ class NotificationService
         $this->email(
             to:      $demande->email ?? '',
             toName:  $etudiantNom,
-            subject: "Demande reçue — Réf : {$demande->reference}",
+            subject: "Demande reçue - Réf : {$demande->reference}",
             view:    'core::emails.demande-soumission',
             vars:    [
                 'reference'   => $demande->reference,
@@ -136,7 +136,7 @@ class NotificationService
             $this->email(
                 to:      $sec->email,
                 toName:  $sec->name,
-                subject: "Nouvelle demande — Réf : {$demande->reference}",
+                subject: "Nouvelle demande - Réf : {$demande->reference}",
                 view:    'core::emails.dossier-transmis',
                 vars:    [
                     'destinataireNom'   => $sec->name,
@@ -184,7 +184,7 @@ class NotificationService
         $this->email(
             to:      $demande->email ?? '',
             toName:  '',
-            subject: "Votre demande a été rejetée — Réf : {$demande->reference}",
+            subject: "Votre demande a été rejetée - Réf : {$demande->reference}",
             view:    'core::emails.demande-rejected',
             vars:    [
                 'reference' => $demande->reference,
@@ -216,7 +216,7 @@ class NotificationService
         $this->email(
             to:      $demande->email ?? '',
             toName:  '',
-            subject: "Action requise : Votre dossier est sous réserve — Réf : {$demande->reference}",
+            subject: "Action requise : Votre dossier est sous réserve - Réf : {$demande->reference}",
             view:    'core::emails.demande-sous-reserve',
             vars:    [
                 'reference' => $demande->reference,
@@ -248,7 +248,7 @@ class NotificationService
         $this->email(
             to:      $demande->email ?? '',
             toName:  '',
-            subject: "Votre document est prêt — Réf : {$demande->reference}",
+            subject: "Votre document est prêt - Réf : {$demande->reference}",
             view:    'core::emails.demande-ready',
             vars:    [
                 'reference' => $demande->reference,
@@ -279,7 +279,7 @@ class NotificationService
         $this->email(
             to:      $demande->email ?? '',
             toName:  '',
-            subject: "Votre document vous a été remis — Réf : {$demande->reference}",
+            subject: "Votre document vous a été remis - Réf : {$demande->reference}",
             view:    'core::emails.demande-delivered',
             vars:    [
                 'reference' => $demande->reference,
@@ -319,7 +319,7 @@ class NotificationService
             $this->email(
                 to:      $etudiantEmail,
                 toName:  $nomComplet,
-                subject: "Complément de dossier reçu — Réf : {$reference}",
+                subject: "Complément de dossier reçu - Réf : {$reference}",
                 view:    'core::emails.complement-confirmation',
                 vars:    $vars,
                 context: "complement-etudiant:{$reference}",
@@ -342,7 +342,7 @@ class NotificationService
             $this->email(
                 to:      $sec->email,
                 toName:  $sec->name,
-                subject: "Nouveau complément — Réf : {$reference}",
+                subject: "Nouveau complément - Réf : {$reference}",
                 view:    'core::emails.complement-notification-secretariat',
                 vars:    array_merge($vars, ['email' => $etudiantEmail, 'urlEspace' => $this->urlEspace('secretaire')]),
                 context: "complement-secretaire:{$reference}",
@@ -386,10 +386,10 @@ class NotificationService
 
         // Filet de sécurité : si aucun Responsable Division n'est rattaché au
         // type du dossier (chef_division_type non renseigné sur l'utilisateur),
-        // on prévient tous les Responsables Division plutôt que personne —
+        // on prévient tous les Responsables Division plutôt que personne -
         // un dossier ne doit jamais arriver chez un acteur sans notification.
         if ($destinataires->isEmpty() && $targetRoleSlug === 'responsable-division' && $responsableDivisionType) {
-            Log::warning('notifyNextActor: aucun Responsable Division pour ce type — notification de tous les Responsables Division', [
+            Log::warning('notifyNextActor: aucun Responsable Division pour ce type - notification de tous les Responsables Division', [
                 'type' => $responsableDivisionType,
                 'ref'  => $demande->reference,
             ]);
@@ -418,7 +418,7 @@ class NotificationService
             $this->email(
                 to:      $dest->email,
                 toName:  $dest->name,
-                subject: "Dossier à traiter — Réf : {$demande->reference}",
+                subject: "Dossier à traiter - Réf : {$demande->reference}",
                 view:    'core::emails.dossier-transmis',
                 vars:    [
                     'destinataireNom'   => $dest->name,
@@ -486,7 +486,7 @@ class NotificationService
             $this->email(
                 to:      $sec->email,
                 toName:  $sec->name,
-                subject: "Dossier signé par le Directeur — À finaliser — Réf : {$demande->reference}",
+                subject: "Dossier signé par le Directeur - À finaliser - Réf : {$demande->reference}",
                 view:    'core::emails.dossier-transmis',
                 vars:    [
                     'destinataireNom'   => $sec->name,
@@ -537,7 +537,7 @@ class NotificationService
             $this->email(
                 to:      $sec->email,
                 toName:  $sec->name,
-                subject: "Dossier à transmettre physiquement (Direction) — Réf : {$demande->reference}",
+                subject: "Dossier à transmettre physiquement (Direction) - Réf : {$demande->reference}",
                 view:    'core::emails.dossier-transmis',
                 vars:    [
                     'destinataireNom'   => $sec->name,
@@ -607,7 +607,7 @@ class NotificationService
                     'disk'      => 'public',
                     'path'      => $att['path'],
                     'file_name' => $att['name'],
-                    'caption'   => "Pièce jointe — dossier {$demande->reference}",
+                    'caption'   => "Pièce jointe - dossier {$demande->reference}",
                     'context'   => $context,
                 ]);
             }
@@ -618,10 +618,10 @@ class NotificationService
             $this->email(
                 to:          $demande->email,
                 toName:      $nomDemandeur,
-                subject:     "CAP-EPAC — Message concernant votre dossier {$demande->reference}",
+                subject:     "CAP-EPAC - Message concernant votre dossier {$demande->reference}",
                 view:        'core::emails.secretaire-message',
                 // NB : la clé 'message' est réservée par Laravel dans les vues mail
-                // (instance Illuminate\Mail\Message) — d'où 'messageBody'.
+                // (instance Illuminate\Mail\Message) - d'où 'messageBody'.
                 vars:        [
                     'reference'      => $demande->reference,
                     'typeLabel'      => $typeLabel,

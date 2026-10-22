@@ -1,5 +1,5 @@
 /**
- * useDbAuthState — remplace useMultiFileAuthState de Baileys.
+ * useDbAuthState - remplace useMultiFileAuthState de Baileys.
  *
  * Reproduit exactement la même granularité que le stockage fichier
  * (un "fichier" = une ligne wa_session_keys, un par (type, id)), mais
@@ -9,7 +9,7 @@
  * dépendent de la version exacte de Baileys utilisée (fork local du
  * projet). Les types ci-dessous sont volontairement souples (any aux
  * points de contact avec Baileys) pour rester compatibles quelle que
- * soit la version finale vendorisée — à resserrer une fois le fork
+ * soit la version finale vendorisée - à resserrer une fois le fork
  * intégré si souhaité.
  */
 
@@ -50,7 +50,7 @@ export async function useDbAuthState(sessionId: string = 'primary-session') {
             const json = decrypt({ iv: row.creds_iv, tag: row.creds_tag, data: row.creds_data })
             return JSON.parse(json, BufferJSON.reviver)
         } catch (err) {
-            console.error('[SessionStore] Échec déchiffrement des creds — réinitialisation d\'une session vierge', err)
+            console.error('[SessionStore] Échec déchiffrement des creds - réinitialisation d\'une session vierge', err)
             return initAuthCreds()
         }
     }
@@ -100,7 +100,7 @@ export async function useDbAuthState(sessionId: string = 'primary-session') {
 
                 result[row.key_id] = value
             } catch (err) {
-                console.error(`[SessionStore] Échec déchiffrement clé ${type}/${row.key_id} — ignorée`, err)
+                console.error(`[SessionStore] Échec déchiffrement clé ${type}/${row.key_id} - ignorée`, err)
             }
         }
 

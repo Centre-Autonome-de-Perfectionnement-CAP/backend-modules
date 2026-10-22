@@ -116,7 +116,7 @@ class AttendanceController extends Controller
                 'absents'  => (int) $r->absents,
                 'retards'  => (int) $r->retards,
                 'label'    => \Carbon\Carbon::parse($r->date)->translatedFormat('l d F Y')
-                              . " — {$r->presents}/{$r->total} présents",
+                              . " - {$r->presents}/{$r->total} présents",
             ]);
 
         return response()->json(['success' => true, 'data' => $sessions]);
@@ -184,7 +184,7 @@ class AttendanceController extends Controller
         return response()->json(['success' => true, 'message' => 'Empreinte enregistrée']);
     }
 
-    // updateFingerprint — accepte maintenant fingerprint_index en plus de fingerprint
+    // updateFingerprint - accepte maintenant fingerprint_index en plus de fingerprint
     public function updateFingerprint(Request $request, int $id): JsonResponse
     {
         $request->validate([
@@ -211,9 +211,9 @@ class AttendanceController extends Controller
         return response()->json(['success' => true, 'message' => 'Empreinte réinitialisée']);
     }
 
-    // ── SCAN — reçoit les données de l'Arduino ────────────────────────────────
+    // ── SCAN - reçoit les données de l'Arduino ────────────────────────────────
     // Format Arduino : { fingerprint_index, date }
-    // on_time est calculé côté Laravel — plus fiable que l'Arduino
+    // on_time est calculé côté Laravel - plus fiable que l'Arduino
     public function scan(Request $request): JsonResponse
     {
         $request->validate([

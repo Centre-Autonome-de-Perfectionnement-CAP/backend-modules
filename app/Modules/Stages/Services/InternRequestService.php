@@ -102,7 +102,7 @@ class InternRequestService
         }
 
         $item = StageInternRequest::create($row);
-        $this->log($req, 'intern_request', null, self::KIND_LABELS[$kind] . ($kind === 'permission' ? ' — ' . self::TYPES[$row['type']] : ''));
+        $this->log($req, 'intern_request', null, self::KIND_LABELS[$kind] . ($kind === 'permission' ? ' - ' . self::TYPES[$row['type']] : ''));
 
         $this->notifier->toStaff(
             $this->recipients($req),
@@ -147,7 +147,7 @@ class InternRequestService
         });
 
         $req = $item->stage;
-        $label = self::KIND_LABELS[$item->kind] . ($item->kind === 'permission' ? ' — ' . self::TYPES[$item->type] : '');
+        $label = self::KIND_LABELS[$item->kind] . ($item->kind === 'permission' ? ' - ' . self::TYPES[$item->type] : '');
         $this->log($req, $decision === 'approved' ? 'intern_request_approved' : 'intern_request_rejected', $by, $label . ($comment ? " : {$comment}" : ''));
 
         // Changement de date de fin accordé : note rectificative automatique.

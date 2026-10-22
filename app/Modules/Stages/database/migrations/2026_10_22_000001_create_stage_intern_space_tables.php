@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Module Stages — Lot 3 : espace stagiaire (compte activé le jour du début,
+ * Module Stages - Lot 3 : espace stagiaire (compte activé le jour du début,
  * empreinte WebAuthn), pointage géolocalisé, demandes du stagiaire
  * (permissions, prolongation, raccourcissement).
  *

@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
- * Module Stages — Lot 2 : invitations de superviseurs, droits des
+ * Module Stages - Lot 2 : invitations de superviseurs, droits des
  * superviseurs, attribution, binômes, groupe WhatsApp annuel.
  */
 class StagesLot2Test extends TestCase

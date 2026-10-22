@@ -16,7 +16,7 @@ class ClassGroupController extends Controller{
     use ApiResponse, RestrictsToRoles;
 
     /**
-     * AJOUT (audit sécurité) — store/destroy/createDefault n'avaient aucun
+     * AJOUT (audit sécurité) - store/destroy/createDefault n'avaient aucun
      * contrôle de rôle. index/show/getStudents/getGroupsByClass (lecture)
      * restent inchangés.
      */

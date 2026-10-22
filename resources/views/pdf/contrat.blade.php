@@ -180,7 +180,7 @@ body {
 <b>Entre :</b><br><br>
 Le Centre Autonome de Perfectionnement de l'Ecole Polytechnique d'Abomey-Calavi de l'Université d'Abomey-Calavi,
 Représenté par son Chef, Monsieur Fidèle Paul TCHOBO
-Tél : (229) 01 99 54 62 67 —  E-mail professionnel : contact@cap-epac.online
+Tél : (229) 01 99 54 62 67 -  E-mail professionnel : contact@cap-epac.online
 ci-après dénommé CAP d'une part,
 </div>
 

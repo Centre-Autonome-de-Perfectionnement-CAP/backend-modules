@@ -5,7 +5,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Confirmation de demande — CAP-EPAC</title>
+  <title>Confirmation de demande - CAP-EPAC</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -82,7 +82,7 @@
           <td class="label">Mode de paiement</td>
           <td class="value">
             @if(($paymentMethod ?? 'manual') === 'tresor_online')
-              <span style="color:#005043;font-weight:700;">Paiement en ligne — Trésor Public</span>
+              <span style="color:#005043;font-weight:700;">Paiement en ligne - Trésor Public</span>
             @else
               Quittance physique
             @endif
@@ -100,7 +100,7 @@
         <div class="quittance-num">{{ $paymentRef }}</div>
         <p>
           Votre quittance officielle du Trésor Public du Bénin est jointe à cet email en pièce jointe <strong>(PDF)</strong>.<br>
-          Conservez-la soigneusement — elle vous sera demandée lors du retrait.
+          Conservez-la soigneusement - elle vous sera demandée lors du retrait.
         </p>
       </div>
       @endif
@@ -119,7 +119,7 @@
       </a>
     </div>
     <div class="footer">
-      <p><strong>CAP-EPAC — Université d'Abomey-Calavi</strong></p>
+      <p><strong>CAP-EPAC - Université d'Abomey-Calavi</strong></p>
       <p>Ceci est un message automatique, merci de ne pas y répondre.</p>
       <div style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
         &copy; {{ date('Y') }} CAP-EPAC. Tous droits réservés.

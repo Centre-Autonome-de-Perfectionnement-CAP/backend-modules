@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Log;
 /**
  * Gère le cycle de vie du process Node (whatsapp-service intégré).
  *
- * IMPORTANT — ce manager n'est JAMAIS appelé depuis WhatsAppServiceProvider::boot().
+ * IMPORTANT - ce manager n'est JAMAIS appelé depuis WhatsAppServiceProvider::boot().
  * boot() s'exécute à chaque requête HTTP (sauf Octane) : y appeler start() créerait
  * un risque de double-spawn en cas de requêtes concurrentes au démarrage, et un
  * process lancé depuis un worker PHP-FPM peut mourir avec ce worker si mal détaché.
@@ -51,7 +51,7 @@ class WhatsAppProcessManager
      *  - WA_AUTO_START=true
      *  - on obtient le verrou (évite le double-spawn concurrent)
      *
-     * Ne lève JAMAIS d'exception vers l'appelant — toute erreur est logguée.
+     * Ne lève JAMAIS d'exception vers l'appelant - toute erreur est logguée.
      * Retourne true si un démarrage a été tenté, false sinon (déjà up, verrou
      * pris ailleurs, ou auto-start désactivé).
      *
@@ -82,7 +82,7 @@ class WhatsAppProcessManager
                 $distFile = $nodePath . '/dist/index.js';
 
                 if (!file_exists($distFile)) {
-                    Log::warning("[WhatsApp] {$distFile} introuvable — le Node a-t-il été buildé ? (npm run build)");
+                    Log::warning("[WhatsApp] {$distFile} introuvable - le Node a-t-il été buildé ? (npm run build)");
                     return false;
                 }
 

@@ -96,7 +96,7 @@ return Application::configure(basePath: dirname(__DIR__))
         });
         
         // Erreurs HTTP volontaires (abort(403/404/409/422), limitation 429…) :
-        // CORRECTIF — le gestionnaire générique ci-dessous les transformait
+        // CORRECTIF - le gestionnaire générique ci-dessous les transformait
         // toutes en « 500 Une erreur interne est survenue » pour l'API, ce qui
         // masquait les vrais messages (accès refusé, action non autorisée,
         // trop de tentatives…). On conserve leur code et leur message.

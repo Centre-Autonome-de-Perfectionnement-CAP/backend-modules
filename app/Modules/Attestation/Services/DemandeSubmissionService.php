@@ -13,17 +13,17 @@ use Illuminate\Support\Facades\{DB, Log};
 use Illuminate\Support\Str;
 
 /**
- * CORRECTIF (v2) — Service extrait du DemandeController réel (site vitrine)
+ * CORRECTIF (v2) - Service extrait du DemandeController réel (site vitrine)
  *
  * Important : la v1 que j'avais livrée précédemment était INCORRECTE sur
  * plusieurs points, car reconstruite sans le vrai code source. Cette version
  * corrige fidèlement d'après le contrôleur réel fourni :
  *
  *   1. Le vrai contrôleur N'UTILISE PAS EligibilityService::checkAvailabilityForType()
- *      avant soumission — il ne vérifie QUE : étudiant existe, inscription approuvée
+ *      avant soumission - il ne vérifie QUE : étudiant existe, inscription approuvée
  *      existe, et absence de demande active du même type. Aucune vérification
  *      d'éligibilité métier (passage/définitive/inscription) n'est faite côté
- *      soumission publique — uniquement côté lecture (getStatus). J'avais ajouté
+ *      soumission publique - uniquement côté lecture (getStatus). J'avais ajouté
  *      à tort cette vérification dans ma v1, ce qui aurait bloqué des soumissions
  *      valides. CORRIGÉ : supprimée.
  *
@@ -34,11 +34,11 @@ use Illuminate\Support\Str;
  *      storeDemandeFiles() (méthode par lot), pas une méthode storeRequestFile()
  *      qui n'existe pas dans le vrai service. CORRIGÉ.
  *
- *   4. La référence est 'ATT-' . Str::upper(Str::random(4)) — 4 caractères,
+ *   4. La référence est 'ATT-' . Str::upper(Str::random(4)) - 4 caractères,
  *      pas une référence datée sur 6 caractères comme dans ma v1. CORRIGÉ.
  *
  *   5. Le paiement Trésor Public en ligne génère un PDF de quittance via
- *       Barryvdh\DomPDF — absent de ma v1. AJOUTÉ.
+ *       Barryvdh\DomPDF - absent de ma v1. AJOUTÉ.
  *
  *   6. La notification utilise NotificationService::sendSoumission(),
  *      pas une méthode sendSubmissionConfirmation() qui n'existe pas. CORRIGÉE.
@@ -70,7 +70,7 @@ class DemandeSubmissionService
     private const INACTIVE_STATUSES = ['rejected', 'picked_up'];
 
     /**
-     * Pièces OBLIGATOIRES par type — miroir exact des contrôles du site vitrine
+     * Pièces OBLIGATOIRES par type - miroir exact des contrôles du site vitrine
      * (AttestationsForm::validateDocuments). La quittance n'est pas exigée en
      * paiement Trésor en ligne (une quittance PDF est générée côté serveur).
      */
@@ -141,7 +141,7 @@ class DemandeSubmissionService
             $request->type,
         );
 
-        // AJOUT (audit 13/10/2026) — contrôles serveur alignés sur le site vitrine.
+        // AJOUT (audit 13/10/2026) - contrôles serveur alignés sur le site vitrine.
         // Le client est falsifiable : sans ces contrôles, une requête forgée
         // pouvait soumettre un type non éligible ou un dossier sans pièces.
         $target = $targets[$request->type] ?? null;
@@ -297,7 +297,7 @@ class DemandeSubmissionService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // ANCIENS ÉTUDIANTS (déclarés, avant 2023) — décisions D1/D2/D3
+    // ANCIENS ÉTUDIANTS (déclarés, avant 2023) - décisions D1/D2/D3
     // ══════════════════════════════════════════════════════════════════════════
 
     /**

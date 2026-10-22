@@ -20,7 +20,7 @@ class StudentController extends Controller{
     use ApiResponse, HasPagination, RestrictsToRoles;
 
     /**
-     * AJOUT (audit sécurité) — update/assignClassResponsible/
+     * AJOUT (audit sécurité) - update/assignClassResponsible/
      * removeClassResponsible n'avaient AUCUN contrôle de rôle au-delà de
      * "être connecté" (déjà le cas sur main pour update ; les deux autres
      * méthodes sont nouvelles). N'importe quel compte connecté pouvait

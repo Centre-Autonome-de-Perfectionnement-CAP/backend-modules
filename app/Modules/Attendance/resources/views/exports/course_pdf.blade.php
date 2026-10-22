@@ -74,7 +74,7 @@
                 <div class="epac">ECOLE POLYTECHNIQUE D'ABOMEY-CALAVI</div>
                 <div class="sep">-=-=-=-=-=-=-</div>
                 <div class="epac">CENTRE AUTONOME DE PERFECTIONNEMENT</div>
-                <div class="sep" style="font-size:7.5pt;">01 BP 2009 COTONOU — TÉL. 21 36 14 32 / 21 36 09 93</div>
+                <div class="sep" style="font-size:7.5pt;">01 BP 2009 COTONOU - TÉL. 21 36 14 32 / 21 36 09 93</div>
             </td>
             <td width="90" align="right">
                 <img src="{{ public_path('assets/cap.png') }}" class="logo-img" alt="CAP">

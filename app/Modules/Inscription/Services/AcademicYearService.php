@@ -225,17 +225,17 @@ class AcademicYearService
     }
 
     /**
-     * AJOUT — méthode appelée par SubmissionController::checkSubmissionStatus()
+     * AJOUT - méthode appelée par SubmissionController::checkSubmissionStatus()
      * mais qui n'existait nulle part (ni ici, ni même sur main/prod) : tout
      * appel à POST /inscription/submissions/check-status plantait avec une
      * erreur fatale "Call to undefined method".
      *
-     * CORRECTIF — la première version de cette méthode vérifiait "une
+     * CORRECTIF - la première version de cette méthode vérifiait "une
      * période toutes filières confondues", ce qui NE correspond PAS à la
      * vraie règle métier déjà active en prod. La logique réellement utilisée
      * (DossierSubmissionService::submitDossier(), ligne ~39) exige un
      * couple (academic_year_id, department_id) pour trouver une période
-     * active — la soumission est ouverte PAR FILIÈRE, jamais globalement.
+     * active - la soumission est ouverte PAR FILIÈRE, jamais globalement.
      * Aligné ici sur cette même règle.
      */
     public function checkSubmissionStatus(int $academicYearId, int $departmentId): array
@@ -258,10 +258,10 @@ class AcademicYearService
     }
 
     /**
-     * AJOUT — même situation que checkSubmissionStatus() ci-dessus, pour
+     * AJOUT - même situation que checkSubmissionStatus() ci-dessus, pour
      * SubmissionController::checkReclamationStatus(). Les réclamations ne
      * sont PAS scopées par filière dans le modèle ReclamationPeriod
-     * (pas de colonne department_id) — donc ici la vérification reste
+     * (pas de colonne department_id) - donc ici la vérification reste
      * globale par année académique, cohérent avec la structure de données
      * existante.
      */
@@ -717,7 +717,7 @@ class AcademicYearService
     }
 
     // FUSION develop/main : les versions main de checkSubmissionStatus(?int) et
-    // checkReclamationStatus(?int) sont retirées — elles redéclaraient les
+    // checkReclamationStatus(?int) sont retirées - elles redéclaraient les
     // méthodes develop plus haut (erreur fatale PHP). SubmissionController
     // (version develop) valide academic_year_id + department_id et appelle la
     // version develop, alignée sur la règle métier « période ouverte PAR

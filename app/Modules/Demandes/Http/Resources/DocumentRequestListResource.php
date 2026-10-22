@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * CORRECTIF (v2) — B3.1 : API Resource pour le listing
+ * CORRECTIF (v2) - B3.1 : API Resource pour le listing
  *
  * Les champs ci-dessous correspondent EXACTEMENT aux colonnes/sous-requêtes
  * réellement sélectionnées par DocumentRequestQueryService::listing()
@@ -15,7 +15,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *
  * Usage : optionnel, en remplacement de `return $demandes` brut dans
  * DocumentRequestController::index(). N'est PAS appliqué par défaut sur
- * l'endpoint existant pour ne rien casser côté frontend — voir le
+ * l'endpoint existant pour ne rien casser côté frontend - voir le
  * nouvel endpoint paginé qui l'utilise (B3.2).
  */
 class DocumentRequestListResource extends JsonResource

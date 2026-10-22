@@ -16,7 +16,7 @@ class ProcessStageReports extends Command
     {
         $digestOnly = (bool) $this->option('digest');
         $s = $service->tick(null, !$digestOnly, $digestOnly);
-        $this->info("Ouvertures : {$s['opened']} — derniers jours : {$s['closing']} — récapitulatif : {$s['digest']}");
+        $this->info("Ouvertures : {$s['opened']} - derniers jours : {$s['closing']} - récapitulatif : {$s['digest']}");
 
         return self::SUCCESS;
     }

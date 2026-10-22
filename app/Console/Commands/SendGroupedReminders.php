@@ -106,7 +106,7 @@ class SendGroupedReminders extends Command
                     'destinataireNom' => $user->name,
                     'count'           => $count,
                     'demandes'        => $listeDemandes, // stdClass : sérialisables
-                    // CORRECTIF : /dashboard n'existe pas — le progiciel est servi sous /services.
+                    // CORRECTIF : /dashboard n'existe pas - le progiciel est servi sous /services.
                     'urlEspace'       => rtrim((string) config('app.url'), '/') . '/services/demandes',
                     'etablissement'   => config('app.name', 'CAP-EPAC'),
                 ],

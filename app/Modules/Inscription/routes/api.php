@@ -161,7 +161,7 @@ Route::prefix('inscription')->group(function () {
     });
  
 
-    // Rattachement historique Prépa (anciens étudiants) — ajouté sur main
+    // Rattachement historique Prépa (anciens étudiants) - ajouté sur main
     Route::prefix('legacy-prepa')->middleware('auth:sanctum')->group(function () {
         Route::get('/candidates', [LegacyPrepaLinkController::class, 'candidates']);
         Route::get('/check/{pendingStudentId}', [LegacyPrepaLinkController::class, 'check']);

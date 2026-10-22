@@ -16,7 +16,7 @@ class StoreContactRequest extends FormRequest
 
     /**
      * Nettoyage avant validation : espaces superflus, et retours à la ligne
-     * retirés des champs d'une ligne (nom, objet) — ils faisaient échouer
+     * retirés des champs d'une ligne (nom, objet) - ils faisaient échouer
      * l'envoi de l'email (en-tête invalide).
      */
     protected function prepareForValidation(): void

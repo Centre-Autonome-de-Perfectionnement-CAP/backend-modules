@@ -23,7 +23,7 @@ return new class extends Migration
             $table->timestamp('transferred_at')
                   ->nullable()
                   ->after('authorization_date')
-                  ->comment('Date/heure d\'envoi de l\'e-mail de transfert — référence pour expiration 72 h');
+                  ->comment('Date/heure d\'envoi de l\'e-mail de transfert - référence pour expiration 72 h');
         });
     }
 

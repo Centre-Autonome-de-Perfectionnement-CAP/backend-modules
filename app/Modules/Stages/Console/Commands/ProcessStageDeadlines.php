@@ -15,7 +15,7 @@ class ProcessStageDeadlines extends Command
     public function handle(StageRequestService $service): int
     {
         $stats = $service->processDeadlines();
-        $this->info("Relances : {$stats['reminded']} — Expirations : {$stats['expired']}");
+        $this->info("Relances : {$stats['reminded']} - Expirations : {$stats['expired']}");
 
         return self::SUCCESS;
     }

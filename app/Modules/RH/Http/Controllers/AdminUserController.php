@@ -18,7 +18,7 @@ class AdminUserController extends Controller
     use ApiResponse, HasPagination;
 
     /**
-     * AJOUT (16/08/2026) — contrôle de rôle fin, absent jusqu'ici. Ce
+     * AJOUT (16/08/2026) - contrôle de rôle fin, absent jusqu'ici. Ce
      * contrôleur gère les comptes admin et l'attribution de rôles :
      * n'importe quel compte connecté pouvait auparavant s'attribuer le
      * rôle admin lui-même. Appliqué une seule fois ici (middleware de
@@ -26,7 +26,7 @@ class AdminUserController extends Controller
      * chaque méthode.
      *
      * ⚠️ 'admin' et 'rh' n'ont été retrouvés dans AUCUN seeder de rôles
-     * de ce dépôt — à vérifier en base avant mise en production.
+     * de ce dépôt - à vérifier en base avant mise en production.
      */
     private const ALLOWED_ROLES = ['admin', 'responsable-division', 'rh'];
 

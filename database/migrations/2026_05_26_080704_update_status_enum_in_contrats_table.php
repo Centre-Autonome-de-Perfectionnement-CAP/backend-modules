@@ -34,7 +34,7 @@ return new class extends Migration
                 ALTER TABLE contrats
                 ADD COLUMN transferred_at TIMESTAMP NULL DEFAULT NULL
                 AFTER authorization_date
-                COMMENT 'Date/heure envoi email transfert — référence expiration 72h'
+                COMMENT 'Date/heure envoi email transfert - référence expiration 72h'
             ");
         }
     }

@@ -51,7 +51,7 @@ class LegacyDeclarationService
     }
 
     /**
-     * Division compétente — même règle que pour les étudiants inscrits
+     * Division compétente - même règle que pour les étudiants inscrits
      * (TransitionService::resolveResponsableDivisionType) : Licence
      * Professionnelle → formation à distance, sinon formation continue.
      */
@@ -78,7 +78,7 @@ class LegacyDeclarationService
             // Accusé de réception à l'étudiant
             $this->notifier->email(
                 $student->email,
-                'Déclaration reçue — CAP-EPAC',
+                'Déclaration reçue - CAP-EPAC',
                 'core::emails.notification',
                 [
                     'title' => 'Votre déclaration a bien été reçue',
@@ -119,7 +119,7 @@ class LegacyDeclarationService
             foreach ($this->staffRecipients($divType) as $user) {
                 $this->notifier->email(
                     $user->email,
-                    "Nouvelle déclaration d'ancien étudiant — {$student->matricule}",
+                    "Nouvelle déclaration d'ancien étudiant - {$student->matricule}",
                     'core::emails.notification',
                     [
                         'title'      => "Nouvelle déclaration d'ancien étudiant",
@@ -155,7 +155,7 @@ class LegacyDeclarationService
         if (!$alreadyValidated) {
             $this->notifyStudent(
                 $student,
-                'Déclaration validée — CAP-EPAC',
+                'Déclaration validée - CAP-EPAC',
                 'Votre déclaration a été validée',
                 "Bonjour {$student->first_name},\n\nVotre déclaration d'ancien étudiant (matricule {$student->matricule}) a été validée par le secrétariat. "
                     . "Vos demandes en cours poursuivent leur traitement.",
@@ -224,7 +224,7 @@ class LegacyDeclarationService
 
         $this->notifyStudent(
             $student,
-            'Déclaration non validée — CAP-EPAC',
+            'Déclaration non validée - CAP-EPAC',
             "Votre déclaration n'a pas été validée",
             "Bonjour {$student->first_name},\n\nVotre déclaration d'ancien étudiant (matricule {$student->matricule}) n'a pas été validée.\n"
                 . "Motif : {$reason}{$refsText}\n\nVous pouvez corriger votre déclaration puis déposer de nouvelles demandes.",

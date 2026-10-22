@@ -8,7 +8,7 @@ use App\Modules\Attestation\DTOs\StudentEligibilityDTO;
 use Illuminate\Support\Facades\DB;
 
 /**
- * CORRECTIF (v2) — Extrait fidèle de AttestationController réel
+ * CORRECTIF (v2) - Extrait fidèle de AttestationController réel
  *
  * getStatus(), getBulletinStatus(), identify(), checkAvailability()
  * reproduisent exactement la logique (requêtes, with(), messages d'erreur)

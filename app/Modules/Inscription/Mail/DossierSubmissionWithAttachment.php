@@ -37,7 +37,7 @@ class DossierSubmissionWithAttachment extends Mailable
                 'mime' => 'application/pdf',
             ]);
         } else {
-            \Illuminate\Support\Facades\Log::warning('Fiche de confirmation introuvable — email envoyé sans pièce jointe', [
+            \Illuminate\Support\Facades\Log::warning('Fiche de confirmation introuvable - email envoyé sans pièce jointe', [
                 'tracking_code' => $this->mailData['tracking_code'] ?? null,
             ]);
         }

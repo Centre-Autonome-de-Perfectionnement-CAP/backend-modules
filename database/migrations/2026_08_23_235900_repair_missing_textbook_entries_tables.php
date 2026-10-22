@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 /**
  * FIX DE DÉRIVE (staging) : `textbook_entries` et `textbook_comments`
  * (dépendante via clé étrangère) sont marquées comme déjà migrées dans la
- * table `migrations`, mais n'existent plus physiquement en base —
+ * table `migrations`, mais n'existent plus physiquement en base -
  * probablement supprimées manuellement sans que le suivi Laravel soit mis
  * à jour en conséquence.
  *

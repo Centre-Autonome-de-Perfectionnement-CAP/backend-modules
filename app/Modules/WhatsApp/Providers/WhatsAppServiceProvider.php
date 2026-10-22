@@ -19,7 +19,7 @@ class WhatsAppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Pattern identique à tous les autres modules (voir CoursServiceProvider,
-        // RHServiceProvider, etc.) — prefix('api') + middleware('api') est
+        // RHServiceProvider, etc.) - prefix('api') + middleware('api') est
         // OBLIGATOIRE ici : c'est ce groupe qui applique CORS et le retrait du
         // middleware stateful Sanctum configurés dans bootstrap/app.php.
         // Sans ->middleware('api'), les routes existent mais perdent CORS.

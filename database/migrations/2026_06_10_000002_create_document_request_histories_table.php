@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Migration unique et finale — document_request_histories
+ * Migration unique et finale - document_request_histories
  *
  * L'historique est IMMUABLE : aucune ligne ne doit jamais être modifiée
  * après création. Pas d'updated_at.
@@ -30,7 +30,7 @@ return new class extends Migration
                   ->constrained('document_requests')
                   ->cascadeOnDelete();
 
-            // ── Acteur (snapshot — résiste à la suppression de l'utilisateur) ──
+            // ── Acteur (snapshot - résiste à la suppression de l'utilisateur) ──
             $table->unsignedBigInteger('actor_id')
                   ->comment('ID de l\'utilisateur au moment de l\'action');
             $table->foreign('actor_id')
@@ -58,7 +58,7 @@ return new class extends Migration
             $table->text('comment')->nullable()
                   ->comment('Motif de rejet, note de validation, commentaire de renvoi…');
 
-            // ── Horodatage immuable — pas d'updated_at ─────────────────────────
+            // ── Horodatage immuable - pas d'updated_at ─────────────────────────
             $table->timestamp('created_at')->useCurrent();
 
             // ── Index de performance ───────────────────────────────────────────

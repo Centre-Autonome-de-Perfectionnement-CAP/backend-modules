@@ -48,7 +48,7 @@
               $date = \Carbon\Carbon::parse($demande->updated_at)->format('d/m/Y à H:i');
           @endphp
           <li class="demande-item">
-            <div><span class="demande-ref">{{ $demande->reference }}</span> — <strong>{{ $typeLabel }}</strong></div>
+            <div><span class="demande-ref">{{ $demande->reference }}</span> - <strong>{{ $typeLabel }}</strong></div>
             <div class="demande-details">Étudiant(e) : {{ $demande->first_names }} {{ $demande->last_name }}</div>
             <div class="demande-date">En attente depuis le {{ $date }}</div>
           </li>

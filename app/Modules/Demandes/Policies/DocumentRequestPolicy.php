@@ -6,7 +6,7 @@ use App\Models\User;
 use App\Modules\Demandes\Models\DocumentRequest;
 
 /**
- * CORRECTIF (v2) — Policy basée sur la vérification réelle trouvée dans
+ * CORRECTIF (v2) - Policy basée sur la vérification réelle trouvée dans
  * DocumentRequestController :
  *
  *   if ($user->roles->first()?->slug !== 'secretaire') { ... 403 ... }
@@ -16,7 +16,7 @@ use App\Modules\Demandes\Models\DocumentRequest;
  * utilisé partout ailleurs dans le module. Cette vérification précise de
  * 'secretaire' n'a PAS d'alias connu dans WorkflowConstants::ROLE_SLUG_ALIASES,
  * donc la comparaison stricte au slug brut, comme dans l'original, est conservée
- * ici sans appel à canonicalRole() — pour ne pas changer un comportement qui
+ * ici sans appel à canonicalRole() - pour ne pas changer un comportement qui
  * fonctionne déjà correctement en production.
  */
 class DocumentRequestPolicy

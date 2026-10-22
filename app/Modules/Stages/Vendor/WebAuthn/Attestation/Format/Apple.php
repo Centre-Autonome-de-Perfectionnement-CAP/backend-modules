@@ -108,12 +108,12 @@ class Apple extends FormatBase {
         $nonceExtension = $parsedCredCert['extensions']['1.2.840.113635.100.8.2'] ?? '';
 
         // nonce padded by ASN.1 string: 30 24 A1 22 04 20
-        // 30     — type tag indicating sequence
-        // 24     — 36 byte following
-        //   A1   — Enumerated [1]
-        //   22   — 34 byte following
-        //     04 — type tag indicating octet string
-        //     20 — 32 byte following
+        // 30     - type tag indicating sequence
+        // 24     - 36 byte following
+        //   A1   - Enumerated [1]
+        //   22   - 34 byte following
+        //     04 - type tag indicating octet string
+        //     20 - 32 byte following
 
         $asn1Padding = "\x30\x24\xA1\x22\x04\x20";
         if (substr($nonceExtension, 0, strlen($asn1Padding)) === $asn1Padding) {

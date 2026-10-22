@@ -7,7 +7,7 @@ use App\Modules\Attestation\Http\Controllers\Public\QuittanceController;
 use App\Modules\Attestation\Http\Controllers\Public\ComplementDossierController;
 
 /*
- * Module Attestation — routes/api.php
+ * Module Attestation - routes/api.php
  *
  * Harmonisation : ajout des routes complément de dossier (publiques, sans auth)
  *   GET  /api/attestations/demandes/complement/find
@@ -22,7 +22,7 @@ Route::prefix('api/attestations')->group(function () {
 
     // ── Routes publiques (site vitrine) ───────────────────────────────────────
     //
-    // AJOUT (audit sécurité 13/10/2026) : limitation de débit — limiteurs
+    // AJOUT (audit sécurité 13/10/2026) : limitation de débit - limiteurs
     // nommés définis dans AttestationServiceProvider::boot().
 
     Route::middleware('throttle:attestation-public-read')->group(function () {
@@ -33,7 +33,7 @@ Route::prefix('api/attestations')->group(function () {
         Route::get('check-availability',    [AttestationController::class, 'checkAvailability']);
         Route::get('demandes/suivi',        [DemandeController::class, 'suiviDemande']);
 
-        // ── Complément de dossier (public — étudiant sans compte) ─────────────
+        // ── Complément de dossier (public - étudiant sans compte) ─────────────
         Route::get('demandes/complement/find', [ComplementDossierController::class, 'find']);
     });
 

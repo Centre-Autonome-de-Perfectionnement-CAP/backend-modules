@@ -9,14 +9,14 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
- * CORRECTIF (v2) — basé sur le TransitionService réel fourni.
+ * CORRECTIF (v2) - basé sur le TransitionService réel fourni.
  *
  * IMPORTANT : buildUpdate() est conservé À L'IDENTIQUE de l'original
  * (même ordre des if/elseif, mêmes valeurs de statut, mêmes champs
- * mis à jour) — aucune réécriture du contenu métier, uniquement
+ * mis à jour) - aucune réécriture du contenu métier, uniquement
  * l'ajout demandé par le Sprint B2 :
  *
- *   B2.5 — Transaction courte : apply() enveloppe désormais lecture +
+ *   B2.5 - Transaction courte : apply() enveloppe désormais lecture +
  *          update + historique dans une transaction DB::transaction(),
  *          alors que l'original ne transactionnait rien du tout (3 requêtes
  *          séquentielles non atomiques : SELECT, UPDATE, lecture historique).
@@ -24,11 +24,11 @@ use Illuminate\Support\Facades\DB;
  *          exactement comme dans l'original (déjà correct : elles sont
  *          après le `return $fresh` implicite de la logique de notif).
  *
- *   B2.6 — lockForUpdate() ajouté sur le SELECT initial de la ligne
+ *   B2.6 - lockForUpdate() ajouté sur le SELECT initial de la ligne
  *          document_requests, pour empêcher deux transitions concurrentes
  *          sur le même dossier (ex: deux clics rapides, ou deux acteurs
  *          qui valident en même temps un dossier déjà transmis). L'original
- *          ne verrouillait pas la ligne — risque réel de double-transition
+ *          ne verrouillait pas la ligne - risque réel de double-transition
  *          ou d'état incohérent en cas de requêtes simultanées.
  *
  * Aucun changement sur : assertActionAllowed(), buildUpdate(),
@@ -133,7 +133,7 @@ class TransitionService
 
             if ($newStatus && $mailTrigger !== 'directeur_signed_notify_secretaire') {
                 // CORRECTIF : sur directeur_sign / directeur_sign_flagged, la secrétaire
-                // recevait DEUX messages redondants — "Signature validée" (ci-dessus,
+                // recevait DEUX messages redondants - "Signature validée" (ci-dessus,
                 // via notifySecretaireAfterDirecteurSign) ET le message générique
                 // "Dossier à traiter" de notifyNextActor (elle est le prochain acteur
                 // après la signature du directeur). Le premier message contient déjà
@@ -159,7 +159,7 @@ class TransitionService
         return $fresh;
     }
 
-    // ── Constructeur d'update (INCHANGÉ — copie fidèle de l'original) ─────────
+    // ── Constructeur d'update (INCHANGÉ - copie fidèle de l'original) ─────────
 
     /**
      * @return array{0: array, 1: string|null, 2: string|null, 3: bool}
@@ -201,7 +201,7 @@ class TransitionService
             $update['rejected_by']              = 'Secrétaire';
             // Un dossier rejeté définitivement sort du circuit de correction :
             // sinon il reste marqué is_in_correction_circuit = true (navette active)
-            // en plus d'apparaître dans "rejeté" — double affichage incohérent.
+            // en plus d'apparaître dans "rejeté" - double affichage incohérent.
             $update['is_in_correction_circuit'] = false;
             $update['correction_origin_role']   = null;
             $update['correction_origin_status'] = null;

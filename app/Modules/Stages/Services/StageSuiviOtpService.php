@@ -56,7 +56,7 @@ class StageSuiviOtpService
             "stage-otp:{$reference}",
             'Stages',
         );
-        $this->notifier->email($req->email, "Code de vérification — {$reference}", 'core::emails.otp-verification', [
+        $this->notifier->email($req->email, "Code de vérification - {$reference}", 'core::emails.otp-verification', [
             'code' => $code, 'email' => $req->email, 'ttlMinutes' => self::CODE_TTL_MIN,
         ]);
 

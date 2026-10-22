@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Table wa_session_keys — magasin de clés Signal utilisé par Baileys
+ * Table wa_session_keys - magasin de clés Signal utilisé par Baileys
  * (pre-key, session, sender-key, app-state-sync-key, app-state-sync-version,
  * sender-key-memory...).
  *

@@ -1,5 +1,5 @@
 /**
- * Journal des messages envoyés — table wa_message_log.
+ * Journal des messages envoyés - table wa_message_log.
  *
  * Le Node écrit ici à chaque tentative d'envoi (texte ET fichier). Laravel
  * LIT cette même table directement (même base de données) pour les onglets

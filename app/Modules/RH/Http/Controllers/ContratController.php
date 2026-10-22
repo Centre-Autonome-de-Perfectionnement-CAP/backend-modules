@@ -25,13 +25,13 @@ class ContratController extends Controller
     ) {}
 
     /**
-     * AJOUT (16/08/2026) — contrôle de rôle fin, absent jusqu'ici (route
+     * AJOUT (16/08/2026) - contrôle de rôle fin, absent jusqu'ici (route
      * protégée par auth:sanctum seul, n'importe quel compte connecté
      * pouvait gérer les contrats). Pattern identique à
      * WhatsAppAdminController::assertAdmin().
      *
      * ⚠️ 'admin' et 'rh' n'ont été retrouvés dans AUCUN seeder de rôles
-     * de ce dépôt (RoleSeeder.php, RoleSeederCompleted.php, UsersSeeder.php) —
+     * de ce dépôt (RoleSeeder.php, RoleSeederCompleted.php, UsersSeeder.php) -
      * à vérifier en base avant mise en production. 'responsable-division'
      * est confirmé partout ailleurs dans le code (WorkflowConstants, etc.).
      */
@@ -57,7 +57,7 @@ class ContratController extends Controller
             abort(403, 'Accès réservé aux administrateurs et responsables de division.');
         }
 
-        // AJOUT — cloisonnement par division : rd-fad/rd-fc ne peuvent agir
+        // AJOUT - cloisonnement par division : rd-fad/rd-fc ne peuvent agir
         // que sur les contrats de LEUR division.
         $divisionByRole = ['rd-fad' => 'RD-FAD', 'rd-fc' => 'RD-FC'];
         if ($contrat && isset($divisionByRole[$slug]) && $contrat->division !== $divisionByRole[$slug]) {
@@ -126,10 +126,10 @@ class ContratController extends Controller
 
     // ─── EMAIL DE TRANSFERT ───────────────────────────────────────────────────
     /**
-     * CORRECTIF (16/08/2026 — résolution merge Benoite) :
+     * CORRECTIF (16/08/2026 - résolution merge Benoite) :
      *
      * Avant : le frontend (Contrats.tsx) ouvrait un lien whatsapp://
-     * (repli wa.me) après cet appel — l'ADMIN devait cliquer "Envoyer"
+     * (repli wa.me) après cet appel - l'ADMIN devait cliquer "Envoyer"
      * lui-même, depuis son propre numéro WhatsApp personnel. Aucune trace
      * dans wa_message_log, aucun lien avec le module WhatsApp du projet.
      *
@@ -141,7 +141,7 @@ class ContratController extends Controller
      * dans l'onglet admin WhatsApp, avec retry en cas d'échec.
      *
      * Un échec WhatsApp ne fait JAMAIS échouer l'envoi (l'email reste le
-     * canal de référence, WhatsApp est un plus) — juste loggué.
+     * canal de référence, WhatsApp est un plus) - juste loggué.
      */
     public function sendTransferEmail(Request $request, $id)
     {
@@ -214,7 +214,7 @@ class ContratController extends Controller
                 ->toArray();
 
             $details = [
-                'title'              => "Contrat N°{$contrat->contrat_number} — Signature requise",
+                'title'              => "Contrat N°{$contrat->contrat_number} - Signature requise",
                 'professor_name'     => $professor->full_name,
                 'professor_email'    => $professor->email,
                 'contrat_number'     => $contrat->contrat_number,
@@ -258,7 +258,7 @@ class ContratController extends Controller
                     );
                 }
             } else {
-                Log::info("[RH] Pas d'envoi WhatsApp pour le contrat {$contrat->contrat_number} — professeur sans numéro de téléphone renseigné.");
+                Log::info("[RH] Pas d'envoi WhatsApp pour le contrat {$contrat->contrat_number} - professeur sans numéro de téléphone renseigné.");
             }
 
             return response()->json([
@@ -279,7 +279,7 @@ class ContratController extends Controller
 
     /**
      * Message WhatsApp envoyé automatiquement au professeur lors du transfert
-     * d'un contrat — remplace l'ancien lien whatsapp://wa.me côté frontend
+     * d'un contrat - remplace l'ancien lien whatsapp://wa.me côté frontend
      * (Contrats.tsx) qui nécessitait une action manuelle de l'admin.
      */
     private function buildTransferWhatsAppMessage(array $details): string
@@ -376,7 +376,7 @@ class ContratController extends Controller
             'courseElementProfessors.classGroup',
         ]);
 
-        // AJOUT — cloisonnement par division : un responsable de division
+        // AJOUT - cloisonnement par division : un responsable de division
         // (rd-fad / rd-fc) ne voit que les contrats de SA division.
         // admin/chef-cap/rh/chef-division/responsable-division (générique)
         // gardent une vue complète, intentionnellement.
@@ -1296,7 +1296,7 @@ class ContratController extends Controller
 
     public function listProgramSupports(Request $request, $contratId, $programId)
     {
-        // Accessible au professeur et à l'admin — pas d'assertAdmin.
+        // Accessible au professeur et à l'admin - pas d'assertAdmin.
 
         $contrat = \App\Modules\RH\Models\Contrat::findOrFail($contratId);
 
@@ -1414,7 +1414,7 @@ class ContratController extends Controller
      */
     public function deleteProgramSupport(Request $request, $contratId, $programId, $index)
     {
-        // Accessible au professeur et à l'admin — pas d'assertAdmin.
+        // Accessible au professeur et à l'admin - pas d'assertAdmin.
 
         $pivot = \DB::table('contrat_programs')
             ->where('contrat_id', $contratId)
@@ -1560,7 +1560,7 @@ class ContratController extends Controller
 
     public function uploadFacturesNormalisees(Request $request, $id)
     {
-        // Accessible au professeur et à l'admin — pas d'assertAdmin.
+        // Accessible au professeur et à l'admin - pas d'assertAdmin.
 
         $request->validate([
             'factures_normalisees'   => 'required|array|min:1',

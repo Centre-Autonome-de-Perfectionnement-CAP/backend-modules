@@ -13,7 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{DB, Log};
 
 /**
- * Complément de dossier — site vitrine CAP-EPAC
+ * Complément de dossier - site vitrine CAP-EPAC
  *
  * GET  /api/attestations/demandes/complement/find
  * POST /api/attestations/demandes/complement
@@ -255,7 +255,7 @@ class ComplementDossierController extends Controller
         }
 
         // AJOUT (audit 13/10/2026) : un dossier clos (rejeté ou déjà retiré)
-        // n'accepte plus de complément — sinon les pièces étaient stockées et la
+        // n'accepte plus de complément - sinon les pièces étaient stockées et la
         // secrétaire notifiée pour un dossier qui ne sera plus jamais traité.
         if (in_array($demande->status, self::CLOSED_STATUSES, true)) {
             return response()->json([
@@ -285,7 +285,7 @@ class ComplementDossierController extends Controller
 
         $filesToStore = [];
         foreach ($uploadedFiles as $key => $file) {
-            // SÉCURITÉ : la clé sert à nommer le fichier stocké — seules les
+            // SÉCURITÉ : la clé sert à nommer le fichier stocké - seules les
             // clés métier connues sont acceptées (pas de nom arbitraire fourni
             // par le client).
             if (!is_string($key) || !array_key_exists($key, self::FILE_LABELS)) {
@@ -316,7 +316,7 @@ class ComplementDossierController extends Controller
             ], 403);
         }
 
-        // Stocker dans complement/ — DocumentStorageService gère la structure
+        // Stocker dans complement/ - DocumentStorageService gère la structure
         // et nomme les fichiers d'après leur clé métier
         // S'assurer que la structure existe (rétrocompatibilité demandes anciennes)
         $this->storageService->ensureStructure($demande->type, $reference);

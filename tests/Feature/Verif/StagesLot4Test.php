@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
-/** Module Stages — Lot 4 : rapports périodiques et final. */
+/** Module Stages - Lot 4 : rapports périodiques et final. */
 class StagesLot4Test extends TestCase
 {
     use DatabaseTransactions;

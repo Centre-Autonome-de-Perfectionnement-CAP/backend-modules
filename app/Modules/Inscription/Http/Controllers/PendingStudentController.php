@@ -28,13 +28,13 @@ class PendingStudentController extends Controller
     use ApiResponse, HasPagination, RestrictsToRoles;
 
     /**
-     * AJOUT (audit sécurité) — aucune action n'avait de contrôle de rôle
+     * AJOUT (audit sécurité) - aucune action n'avait de contrôle de rôle
      * au-delà de "être connecté". Restriction appliquée UNIQUEMENT aux
-     * actions sans ambiguïté (suppression, changement de statut/niveau —
+     * actions sans ambiguïté (suppression, changement de statut/niveau -
      * des décisions institutionnelles, jamais du self-service candidat).
      * store/update/submitDocuments/renamePiece NE SONT PAS touchés ici :
      * je ne suis pas certain qu'ils ne fassent pas partie d'un parcours
-     * candidat en self-service (via tracking code) — à confirmer.
+     * candidat en self-service (via tracking code) - à confirmer.
      */
     private const ALLOWED_ROLES = ['admin', 'chef-cap', 'responsable-division', 'secretaire'];
 

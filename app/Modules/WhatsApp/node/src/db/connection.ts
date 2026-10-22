@@ -1,5 +1,5 @@
 /**
- * Pool de connexions MySQL partagé — mêmes credentials que Laravel (DB_*
+ * Pool de connexions MySQL partagé - mêmes credentials que Laravel (DB_*
  * du .env unique de backend-modules/). Aucune configuration séparée.
  */
 

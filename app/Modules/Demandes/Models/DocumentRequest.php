@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * DocumentRequest — modèle Eloquent unifié.
+ * DocumentRequest - modèle Eloquent unifié.
  *
  * CORRECTIF : l'ancien fichier contenait DEUX déclarations de $fillable et
  * $casts, la seconde écrasant silencieusement la première. Résultat :
@@ -85,7 +85,7 @@ class DocumentRequest extends Model
         return $this->hasMany(DocumentRequestHistory::class)->orderBy('created_at');
     }
 
-    // ── Scopes (additifs — n'affectent aucun comportement existant) ───────────
+    // ── Scopes (additifs - n'affectent aucun comportement existant) ───────────
 
     /**
      * Demandes actives (ni rejetées, ni remises).

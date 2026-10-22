@@ -79,7 +79,7 @@ class ComplementOtpService
         }
 
         if (!empty($demande->email)) {
-            $this->notifier->email($demande->email, "Code de vérification — dossier {$reference}", 'core::emails.otp-verification', [
+            $this->notifier->email($demande->email, "Code de vérification - dossier {$reference}", 'core::emails.otp-verification', [
                 'code'       => $code,
                 'email'      => $demande->email,
                 'ttlMinutes' => self::CODE_TTL_MIN,

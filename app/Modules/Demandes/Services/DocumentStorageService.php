@@ -6,7 +6,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Service centralisé de stockage documentaire — CAP-EPAC
+ * Service centralisé de stockage documentaire - CAP-EPAC
  *
  * Structure normalisée :
  *   storage/app/public/demandes/

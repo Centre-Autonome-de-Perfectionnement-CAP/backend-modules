@@ -139,7 +139,7 @@ class StagePdfService
         return $txt;
     }
 
-    /** Petites capitales (comme « Rép. du BENIN » du modèle) — texte uniquement. */
+    /** Petites capitales (comme « Rép. du BENIN » du modèle) - texte uniquement. */
     private function smallCaps(string $text): string
     {
         $out = '';

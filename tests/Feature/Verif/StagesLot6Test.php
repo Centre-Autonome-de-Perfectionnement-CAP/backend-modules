@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
-/** Module Stages — Lot 6 : tableau de bord, suivi, exports. */
+/** Module Stages - Lot 6 : tableau de bord, suivi, exports. */
 class StagesLot6Test extends TestCase
 {
     use DatabaseTransactions;

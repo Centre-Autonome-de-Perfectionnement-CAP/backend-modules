@@ -233,7 +233,7 @@ class LegacyStudentPublicController extends Controller
 
         // CORRECTIF SÉCURITÉ (fusion) : la date de naissance devient obligatoire,
         // comme pour la recherche des étudiants récents (lookup-id). Sans elle,
-        // un simple nom suffisait à obtenir le matricule d'un tiers — matricule
+        // un simple nom suffisait à obtenir le matricule d'un tiers - matricule
         // qui permet ensuite de déposer des demandes en son nom.
         if (empty($lastName) || empty($firstNames) || empty($birthDate)) {
             return response()->json([

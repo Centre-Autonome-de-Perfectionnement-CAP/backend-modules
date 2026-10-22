@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-generate_edt_pdf.py  —  Generateur PDF emploi du temps UAC/EPAC/CAP
+generate_edt_pdf.py  -  Generateur PDF emploi du temps UAC/EPAC/CAP
 
 Usages :
   python generate_edt_pdf.py --json-file data.json --output edt.pdf

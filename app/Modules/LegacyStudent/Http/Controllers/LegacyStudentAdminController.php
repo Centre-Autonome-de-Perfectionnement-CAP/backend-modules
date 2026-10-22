@@ -285,7 +285,7 @@ class LegacyStudentAdminController extends Controller
     }
 
     /**
-     * Rejet d'un dossier avec motif — rejette en cascade les demandes
+     * Rejet d'un dossier avec motif - rejette en cascade les demandes
      * ouvertes de l'étudiant (décision D1) et le notifie.
      */
     public function rejectStudent(Request $request, int $id): JsonResponse

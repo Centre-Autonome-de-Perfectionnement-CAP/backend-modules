@@ -7,10 +7,10 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Ajoute à wa_message_log :
  *   - module      : détecté AUTOMATIQUEMENT par WhatsAppBridgeClient (namespace
- *                   de l'appelant, ex: 'Demandes', 'Attestation', 'RH'...) —
+ *                   de l'appelant, ex: 'Demandes', 'Attestation', 'RH'...) -
  *                   aucun module n'a besoin de le renseigner lui-même.
  *   - file_name   : nom du fichier joint, si envoi de document/image.
- *   - media_type  : 'text' | 'image' | 'document' — pour l'affichage admin.
+ *   - media_type  : 'text' | 'image' | 'document' - pour l'affichage admin.
  */
 return new class extends Migration
 {
@@ -27,7 +27,7 @@ return new class extends Migration
                 $table->string('media_type')->default('text')->after('file_name');
             }
             // Nécessaire pour que le RETRY d'un message avec fichier fonctionne
-            // même après expiration du token temporaire (10 min) — on peut
+            // même après expiration du token temporaire (10 min) - on peut
             // toujours régénérer une URL fraîche à partir de disk+path.
             if (!Schema::hasColumn('wa_message_log', 'file_disk')) {
                 $table->string('file_disk')->nullable()->after('media_type');

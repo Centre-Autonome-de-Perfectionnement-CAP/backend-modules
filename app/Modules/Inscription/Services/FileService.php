@@ -47,7 +47,7 @@ class FileService
                     ];
                 }
             } catch (\Throwable) {
-                // disk inexistant ou inaccessible — on essaie le suivant
+                // disk inexistant ou inaccessible - on essaie le suivant
             }
         }
 

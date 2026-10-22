@@ -3,7 +3,7 @@
 namespace App\Modules\Core\Services;
 
 /**
- * Classe de compatibilité — CE FICHIER REMPLACE l'ancienne implémentation.
+ * Classe de compatibilité - CE FICHIER REMPLACE l'ancienne implémentation.
  *
  * L'implémentation réelle a déménagé dans App\Modules\WhatsApp\Services\WhatsAppBridgeClient
  * (voir ce fichier pour la logique complète + le correctif X-Api-Key).

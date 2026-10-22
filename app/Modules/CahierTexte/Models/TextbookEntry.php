@@ -60,7 +60,7 @@ class TextbookEntry extends Model
     }
 
     /**
-     * Relation avec le cours planifié (ancien système — conservé pour les
+     * Relation avec le cours planifié (ancien système - conservé pour les
      * entrées déjà créées avant l'unification).
      */
     public function scheduledCourse()
@@ -69,7 +69,7 @@ class TextbookEntry extends Model
     }
 
     /**
-     * Relation avec la séance d'emploi du temps (nouveau système —
+     * Relation avec la séance d'emploi du temps (nouveau système -
      * utilisé pour toute nouvelle entrée).
      */
     public function emploiDuTemps()

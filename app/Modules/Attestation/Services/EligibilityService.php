@@ -7,11 +7,11 @@ use App\Modules\Finance\Models\Transaction;
 use App\Modules\Attestation\DTOs\StudentEligibilityDTO;
 
 /**
- * CORRECTIF (v2) — Service extrait de AttestationController réel
+ * CORRECTIF (v2) - Service extrait de AttestationController réel
  *
  * Le code source réel m'a permis de vérifier exactement la logique
  * d'éligibilité (commentaires originaux conservés ci-dessous).
- * Aucune divergence trouvée avec la v1 livrée — confirmé à l'identique.
+ * Aucune divergence trouvée avec la v1 livrée - confirmé à l'identique.
  *
  * Logiques d'éligibilité (commentaire original du contrôleur) :
  *   attestation_passage     = isApproved && hasPass && studyLevel < yearsCount
@@ -71,7 +71,7 @@ class EligibilityService
      * l'attestation de passage de L1.
      *
      * Pour chaque type éligible, renvoie l'inscription (et l'année) à laquelle
-     * rattacher la demande — la plus récente qui ouvre ce droit.
+     * rattacher la demande - la plus récente qui ouvre ce droit.
      *
      * @return array<string, array{link: StudentPendingStudent, academic_year_id: ?int}|null>
      */
@@ -159,7 +159,7 @@ class EligibilityService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // ÉLIGIBILITÉ PAR TYPE — checkAvailability
+    // ÉLIGIBILITÉ PAR TYPE - checkAvailability
     // ══════════════════════════════════════════════════════════════════════════
 
     /**

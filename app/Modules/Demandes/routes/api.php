@@ -9,7 +9,7 @@ use App\Modules\Demandes\Http\Controllers\DocumentRequestBadgeController;
 use App\Modules\Demandes\Http\Controllers\DocumentRequestFileCommentController;
 
 /*
- * CORRECTIF (v2) — basé sur le fichier de routes réel.
+ * CORRECTIF (v2) - basé sur le fichier de routes réel.
  *
  * BUG RÉEL CORRIGÉ (B3.6) : dans le fichier original, la route
  *   GET document-requests/{id}
@@ -32,7 +32,7 @@ use App\Modules\Demandes\Http\Controllers\DocumentRequestFileCommentController;
 
 Route::prefix('api/attestations')->middleware(['api', 'auth:sanctum'])->group(function () {
 
-    // ── Routes à chemin fixe — DOIVENT précéder {id} ──────────────────────────
+    // ── Routes à chemin fixe - DOIVENT précéder {id} ──────────────────────────
     Route::get('document-requests/stats',        DocumentRequestStatsController::class);
     Route::get('document-requests/badge-count',  DocumentRequestBadgeController::class);
     Route::get('document-requests/paginated',    [DocumentRequestController::class, 'indexPaginated']); // ← AJOUT B3.2

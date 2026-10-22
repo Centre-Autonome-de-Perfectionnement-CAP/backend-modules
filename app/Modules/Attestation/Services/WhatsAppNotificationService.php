@@ -13,10 +13,10 @@ use Illuminate\Support\Facades\Log;
  *
  * Règles :
  *  - Jamais bloquant : tout échec est absorbé silencieusement
- *  - Aucun emoji — mise en forme WhatsApp (*gras*, _italique_)
+ *  - Aucun emoji - mise en forme WhatsApp (*gras*, _italique_)
  *  - Le numéro est normalisé automatiquement (format béninois +229...)
  *
- * REFONTE (v2) — PÉRIMÈTRE RÉDUIT AU RÉELLEMENT UTILISÉ :
+ * REFONTE (v2) - PÉRIMÈTRE RÉDUIT AU RÉELLEMENT UTILISÉ :
  *   Un audit du code appelant a montré que seule sendQuittanceNotification()
  *   est effectivement invoquée (depuis QuittanceController). Les méthodes
  *   sendSoumission(), sendDocumentGenere(), sendBulletinGenere() et

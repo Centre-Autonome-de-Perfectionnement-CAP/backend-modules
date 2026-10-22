@@ -10,10 +10,10 @@ use Illuminate\Support\Facades\DB;
  * Toutes les lectures DB pour les demandes (index, show, stats).
  * Aucune écriture ici.
  *
- * CORRECTIF (16/08/2026 — résolution merge Benoite) :
+ * CORRECTIF (16/08/2026 - résolution merge Benoite) :
  *   Le schéma réel de document_requests (migration 2026_06_10_...) ne
  *   contient PAS de colonnes chef_division_comment / secretaire_comment /
- *   comptable_comment / *_reviewed_at directement sur la table — ces
+ *   comptable_comment / *_reviewed_at directement sur la table - ces
  *   informations sont dérivées de document_request_histories via les
  *   sous-requêtes corrélées ci-dessous (historySubqueries()), qui
  *   reconstituent le dernier commentaire/horodatage de chaque rôle à
@@ -23,11 +23,11 @@ use Illuminate\Support\Facades\DB;
  *   BASE_COLUMNS ne liste donc que les colonnes qui existent RÉELLEMENT
  *   sur document_requests (vérifié contre la migration réelle).
  *
- *   `chef_division_type` n'est PAS une colonne de document_requests —
+ *   `chef_division_type` n'est PAS une colonne de document_requests -
  *   c'est une colonne de `users` (accédée via $user->chef_division_type
  *   dans listing()), à ne jamais mettre dans BASE_COLUMNS.
  *
- * B2.2 — Index nécessaires pour rester performant (voir migration
+ * B2.2 - Index nécessaires pour rester performant (voir migration
  * 2026_07_01_000001_add_missing_indexes_to_document_requests.php) :
  *   - (student_pending_student_id, type, status)
  *   - (status, created_at)
@@ -81,7 +81,7 @@ class DocumentRequestQueryService
      * Méthode (et non constante) car le rôle "Responsable Division" peut être
      * enregistré sous deux graphies différentes dans actor_role
      * ('responsable-division' ou l'ancien alias 'chef-division') selon
-     * l'historique de la base — on doit chercher les deux.
+     * l'historique de la base - on doit chercher les deux.
      */
     private function historySubqueries(): array
     {
@@ -90,7 +90,7 @@ class DocumentRequestQueryService
         );
 
         return [
-            // Commentaires — dernière entrée avec comment non null pour chaque rôle
+            // Commentaires - dernière entrée avec comment non null pour chaque rôle
             "COALESCE((
                 SELECT h.comment FROM document_request_histories h
                 WHERE h.document_request_id = dr.id
@@ -115,7 +115,7 @@ class DocumentRequestQueryService
                 ORDER BY h.created_at DESC LIMIT 1
             ), NULL) AS responsable_division_comment",
 
-            // Horodatages — dernière action de chaque rôle
+            // Horodatages - dernière action de chaque rôle
             "(SELECT h.created_at FROM document_request_histories h
               WHERE h.document_request_id = dr.id
                 AND h.actor_role = 'comptable'
@@ -156,7 +156,7 @@ class DocumentRequestQueryService
 
     /**
      * Construit une clause IN(...) sûre à partir d'une liste fixe et interne
-     * de slugs de rôles (jamais d'entrée utilisateur) — pas de risque
+     * de slugs de rôles (jamais d'entrée utilisateur) - pas de risque
      * d'injection, ces valeurs viennent uniquement de WorkflowConstants.
      */
     private function sqlInClause(array $values): string
@@ -171,7 +171,7 @@ class DocumentRequestQueryService
 
     /**
      * Jointures GAUCHES : une demande appartient soit à un étudiant inscrit,
-     * soit à un ancien étudiant déclaré (legacy_students) — voir Requester.
+     * soit à un ancien étudiant déclaré (legacy_students) - voir Requester.
      */
     private function baseQuery()
     {
@@ -302,7 +302,7 @@ class DocumentRequestQueryService
         return $query->orderBy('dr.created_at', 'asc')->paginate($perPage);
     }
 
-    // ── Détail léger — pour previewFile uniquement ────────────────────────────
+    // ── Détail léger - pour previewFile uniquement ────────────────────────────
 
     /**
      * Retourne UNIQUEMENT les colonnes de fichiers nécessaires pour previewFile.
@@ -339,7 +339,7 @@ class DocumentRequestQueryService
         //
         // CORRECTIF : $select était construit puis jamais utilisé dans
         // l'ancienne version (la requête réelle appelait un ->select()
-        // différent, plus simple, sans les sous-requêtes) — la vue détail
+        // différent, plus simple, sans les sous-requêtes) - la vue détail
         // n'affichait donc jamais les commentaires/horodatages par rôle.
         // Corrigé : $select est maintenant bien celui utilisé ci-dessous.
         $select = array_merge(

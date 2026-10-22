@@ -64,7 +64,7 @@ class StudentService
                 DB::raw(DatabaseAdapter::jsonExtract('personal_information.contacts', '$.phone') . ' as telephone'),
                 DB::raw("(SELECT student_id_number FROM students WHERE students.id = student_pending_student.student_id) as matricule"),
                 // FUSION develop/main : 'groupe' (main, sous-requête sans doublons)
-                // + 'classGroupName' (develop, verrouillage côté frontend) — même valeur,
+                // + 'classGroupName' (develop, verrouillage côté frontend) - même valeur,
                 // la jointure class_groups ayant été remplacée sur main par groupNameSql().
                 DB::raw('(' . self::groupNameSql() . ') as groupe'),
                 DB::raw('(' . self::groupNameSql() . ') as classGroupName'),

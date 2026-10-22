@@ -72,7 +72,7 @@ jobs:
 
             # Symlink public/storage → shared storage/app/public
             # (php artisan storage:link ne fonctionne pas quand storage/ est
-            # déjà un symlink externe — on crée le lien manuellement)
+            # déjà un symlink externe - on crée le lien manuellement)
             echo "🔗 Creating public/storage symlink..."
             rm -rf $RELEASE_DIR/public/storage
             ln -nfs $SHARED_DIR/storage/app/public $RELEASE_DIR/public/storage

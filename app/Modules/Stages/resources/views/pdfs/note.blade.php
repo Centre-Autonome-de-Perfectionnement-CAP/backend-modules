@@ -1,5 +1,5 @@
 {{--
-    Note de service (initiale ou rectificative) — style des documents du
+    Note de service (initiale ou rectificative) - style des documents du
     CAP (en-tête et pied de page officiels), adapté du modèle de note
     d'admission en stage. Tout en texte ; signature et cachet à la main.
     Les horaires et l'usage de l'espace stagiaire figurent au règlement intérieur.

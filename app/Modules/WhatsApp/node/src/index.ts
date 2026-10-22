@@ -1,12 +1,12 @@
 /**
- * WhatsApp Bridge — Serveur Express (interne, jamais exposé à un navigateur)
+ * WhatsApp Bridge - Serveur Express (interne, jamais exposé à un navigateur)
  *
  * Expose :
  *   POST /send-message  → envoyer un message WhatsApp (protégé par clé API)
  *   GET  /status        → état de la connexion (protégé par clé API)
  *   DELETE /logout      → déconnecter et réinitialiser la session (protégé par clé API)
  *
- * MODIFIÉ (15/08/2026) — changements structurels majeurs :
+ * MODIFIÉ (15/08/2026) - changements structurels majeurs :
  *
  *   1. PLUS DE VUE : le dashboard HTML (public/) est supprimé. Le QR code
  *      passe exclusivement par Laravel (voir webhook ci-dessous), affiché
@@ -15,9 +15,9 @@
  *
  *   2. PLUS DE CORS NI DE SOCKET.IO : ce service n'est appelé QUE par
  *      Laravel, côté serveur, jamais par un navigateur. CORS n'a de sens
- *      que pour des requêtes cross-origin depuis un navigateur — supprimé.
+ *      que pour des requêtes cross-origin depuis un navigateur - supprimé.
  *      Socket.io n'a plus de consommateur (le frontend admin communique
- *      avec Laravel, qui poll ce service, pas l'inverse) — supprimé.
+ *      avec Laravel, qui poll ce service, pas l'inverse) - supprimé.
  *      Conséquence : moins de dépendances, moins de surface d'attaque,
  *      config plus simple.
  *
@@ -29,16 +29,16 @@
  *
  *   4. JOURNALISATION : chaque appel à /send-message ou /send-file crée
  *      une ligne dans wa_message_log (queued→sending→sent|failed), avec
- *      le module d'origine détecté automatiquement côté Laravel — lue
+ *      le module d'origine détecté automatiquement côté Laravel - lue
  *      ensuite par Laravel pour les onglets Messages/Statistiques/Retry,
  *      filtrable module par module.
  *
- *   5. ENVOI DE FICHIERS : POST /send-file (NOUVEAU, endpoint séparé —
+ *   5. ENVOI DE FICHIERS : POST /send-file (NOUVEAU, endpoint séparé -
  *      /send-message garde sa signature strictement inchangée). Reçoit une
- *      URL interne Laravel (fileUrl) que Baileys télécharge lui-même —
+ *      URL interne Laravel (fileUrl) que Baileys télécharge lui-même -
  *      pas de base64 volumineux à faire transiter.
  *
- * Signature de /send-message, /status, /logout INCHANGÉE — aucune
+ * Signature de /send-message, /status, /logout INCHANGÉE - aucune
  * régression pour WhatsAppBridgeClient.php côté Laravel.
  */
 
@@ -105,7 +105,7 @@ const RATE_LIMIT_WINDOW = 60_000
 // confondues. Au-delà (soumissions simultanées, transitions vers plusieurs
 // acteurs, pièces jointes…), le bridge répondait 429 et les messages étaient
 // perdus. Les appels authentifiés par la clé API (Laravel) ne sont donc plus
-// limités ici — le débit est déjà régulé par la queue Laravel. La limite reste
+// limités ici - le débit est déjà régulé par la queue Laravel. La limite reste
 // active si aucune clé API n'est configurée (mode dev).
 const rateLimit: express.RequestHandler = (req, res, next) => {
     if (config.apiKey) {
@@ -127,7 +127,7 @@ const rateLimit: express.RequestHandler = (req, res, next) => {
     }
 
     if (entry.count >= RATE_LIMIT_MAX) {
-        res.status(429).json({ success: false, error: 'Trop de requêtes — réessayez dans un moment' })
+        res.status(429).json({ success: false, error: 'Trop de requêtes - réessayez dans un moment' })
         return
     }
 
@@ -146,7 +146,7 @@ setInterval(() => {
 
 /**
  * Notifie Laravel d'un changement d'état (qr, ready, logged_out, status_update).
- * Ne lève JAMAIS d'exception — un Laravel temporairement indisponible ne doit
+ * Ne lève JAMAIS d'exception - un Laravel temporairement indisponible ne doit
  * jamais faire planter ce process. Utilise fetch natif (Node 18+).
  */
 async function notifyLaravel(event: string, payload: Record<string, unknown>): Promise<void> {
@@ -264,7 +264,7 @@ app.post('/send-message', requireApiKey, rateLimit, async (req, res) => {
 
     const cleanTo = toTrimmed.replace(/[+\s\-]/g, '')
 
-    // Journalisation systématique — créée AVANT la tentative d'envoi
+    // Journalisation systématique - créée AVANT la tentative d'envoi
     // pour que même un crash inattendu laisse une trace "sending" en base
     // plutôt qu'aucune trace du tout.
     let logId: number | null = null
@@ -272,7 +272,7 @@ app.post('/send-message', requireApiKey, rateLimit, async (req, res) => {
         logId = await createMessageLog({ recipient: cleanTo, message: textTrimmed, context: contextStr, module: moduleStr })
     } catch (err) {
         // Un échec de journalisation ne doit pas empêcher l'envoi réel
-        console.error('[MessageStore] Échec création du log — envoi tenté quand même :', err)
+        console.error('[MessageStore] Échec création du log - envoi tenté quand même :', err)
     }
 
     try {
@@ -347,7 +347,7 @@ app.post('/send-file', requireApiKey, rateLimit, async (req, res) => {
             filePath: typeof filePath === 'string' ? filePath : null,
         })
     } catch (err) {
-        console.error('[MessageStore] Échec création du log (fichier) — envoi tenté quand même :', err)
+        console.error('[MessageStore] Échec création du log (fichier) - envoi tenté quand même :', err)
     }
 
     try {
@@ -391,7 +391,7 @@ app.get('/status', requireApiKey, (_req, res) => {
 app.delete('/logout', requireApiKey, async (_req, res) => {
     try {
         await waManager.logout()
-        res.json({ success: true, message: 'Session supprimée — QR code requis au prochain démarrage' })
+        res.json({ success: true, message: 'Session supprimée - QR code requis au prochain démarrage' })
     } catch (error: unknown) {
         console.error('[Bridge] Erreur logout :', error)
         res.status(500).json({ success: false, error: 'Erreur lors de la déconnexion' })
@@ -584,7 +584,7 @@ app.post('/groups/leave', requireApiKey, rateLimit, async (req, res) => {
     }
 })
 
-// ─── Route fallback — 404 propre ──────────────────────────────────────────────
+// ─── Route fallback - 404 propre ──────────────────────────────────────────────
 
 app.use((_req, res) => {
     res.status(404).json({ success: false, error: 'Route introuvable' })

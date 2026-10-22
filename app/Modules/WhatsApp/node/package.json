@@ -2,7 +2,7 @@
   "name": "whatsapp-node",
   "version": "1.0.0",
   "private": true,
-  "description": "Service Node/Baileys embarqué dans app/Modules/WhatsApp/ de backend-modules. Ne vit jamais en dehors de ce module. Baileys est VENDORISÉ dans vendor/baileys/ (voir vendor/baileys/VENDOR-NOTES.md) — aucune dépendance npm ou dossier externe vers Baileys.",
+  "description": "Service Node/Baileys embarqué dans app/Modules/WhatsApp/ de backend-modules. Ne vit jamais en dehors de ce module. Baileys est VENDORISÉ dans vendor/baileys/ (voir vendor/baileys/VENDOR-NOTES.md) - aucune dépendance npm ou dossier externe vers Baileys.",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

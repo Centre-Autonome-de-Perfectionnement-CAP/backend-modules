@@ -7,7 +7,7 @@ use Carbon\CarbonImmutable;
 /**
  * Calendrier des rapports d'un stagiaire.
  *
- *  - périodiques (journalier, hebdomadaire — par défaut —, mensuel), du
+ *  - périodiques (journalier, hebdomadaire - par défaut —, mensuel), du
  *    début réel du stage jusqu'à l'ouverture du rapport final ;
  *  - dépôt ouvert le dernier jour ouvré de la période, fermé N jours ouvrés
  *    après la fin de la période (au-delà : accepté, marqué « en retard ») ;

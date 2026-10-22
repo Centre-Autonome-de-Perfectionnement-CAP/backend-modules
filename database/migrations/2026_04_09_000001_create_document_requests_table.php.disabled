@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Migration CONSOLIDÉE — table document_requests
+ * Migration CONSOLIDÉE - table document_requests
  *
  * Regroupe l'intégralité des migrations suivantes (dans l'ordre d'exécution) :
  *   1. 2026_04_09_173412_create_document_requests_table.php
@@ -83,9 +83,9 @@ return new class extends Migration
             $table->string('correction_origin_role', 60)->nullable()
                   ->comment('Slug du rôle qui a déclenché le circuit de correction');
             $table->string('correction_origin_status', 60)->nullable()
-                  ->comment('Statut BD au moment du déclenchement du circuit de correction — permet de restituer le dossier exactement là où le workflow s\'était arrêté');
+                  ->comment('Statut BD au moment du déclenchement du circuit de correction - permet de restituer le dossier exactement là où le workflow s\'était arrêté');
 
-            // ── Acteurs étendus — IDs (FK vers users) ────────────────────
+            // ── Acteurs étendus - IDs (FK vers users) ────────────────────
             $table->unsignedBigInteger('processed_by_secretaire_da_id')->nullable();
             $table->unsignedBigInteger('processed_by_directrice_adjointe_id')->nullable();
             $table->unsignedBigInteger('processed_by_secretaire_directeur_id')->nullable();

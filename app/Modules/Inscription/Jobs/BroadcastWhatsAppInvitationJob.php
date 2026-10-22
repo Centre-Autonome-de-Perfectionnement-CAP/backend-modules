@@ -141,7 +141,7 @@ class BroadcastWhatsAppInvitationJob implements ShouldQueue
         $emailsFailed = $currentStatus['emails_failed'] + $failedCount;
         $skipped      = ($currentStatus['skipped'] ?? 0) + $skippedCount;
         // CORRECTIF : "completed" (et suppression du PDF) seulement quand tous
-        // les lots sont passés — avant, le 1er lot supprimait le PDF des suivants.
+        // les lots sont passés - avant, le 1er lot supprimait le PDF des suivants.
         $done = $emailsSent + $emailsFailed + $skipped >= (int) ($currentStatus['total_students'] ?? 0);
 
         \Cache::put($cacheKey, array_merge($currentStatus, [

@@ -37,7 +37,7 @@ final class WorkflowConstants
     // roleSlugVariants(), car on ne maîtrise pas quelle graphie est réellement
     // stockée en base.
     //
-    // Pour ajouter un futur alias, il suffit d'ajouter une ligne ici —
+    // Pour ajouter un futur alias, il suffit d'ajouter une ligne ici -
     // aucune autre partie du code n'a besoin d'être modifiée.
 
     public const ROLE_SLUG_ALIASES = [
@@ -88,7 +88,7 @@ final class WorkflowConstants
      *
      * Pour ce type précis, l'année académique du dossier est ajoutée au
      * libellé (ex: "Bulletin Annuel 2024-2025") car "Bulletin Annuel" seul
-     * est ambigu — contrairement aux attestations où l'année n'a pas
+     * est ambigu - contrairement aux attestations où l'année n'a pas
      * cette importance dans le message.
      */
     public static function typeLabel(string $type, ?string $academicYear = null): string
@@ -115,8 +115,8 @@ final class WorkflowConstants
         'responsable_division_validate'         => 'Validation',
         'responsable_division_validate_flagged' => 'Validation avec réserve',
         'responsable_division_reject'           => 'Rejet',
-        'chef_cap_validate'              => 'Validation — Transmission Direction',
-        'chef_cap_validate_flagged'      => 'Validation avec réserve — Transmission Direction',
+        'chef_cap_validate'              => 'Validation - Transmission Direction',
+        'chef_cap_validate_flagged'      => 'Validation avec réserve - Transmission Direction',
         'chef_cap_reject'                => 'Rejet',
         // Anciens slugs conservés pour compatibilité historique (ne déclenchent plus de nouvelle transition)
         'chef_cap_sign'                  => 'Signature / Paraphe (obsolète)',
@@ -142,7 +142,7 @@ final class WorkflowConstants
     // à chaque nouvelle soumission de demande ou de complément de dossier.
     //
     // NOUVEAU WORKFLOW : après signature du Directeur, le dossier passe en
-    // 'secretary_final_review' — la secrétaire est notifiée et doit finaliser
+    // 'secretary_final_review' - la secrétaire est notifiée et doit finaliser
     // (marquer le document prêt via secretaire_mark_ready → ready_for_pickup).
 
     public const STATUS_TO_ROLE = [
@@ -223,7 +223,7 @@ final class WorkflowConstants
     // RÈGLE DU CIRCUIT DE CORRECTION :
     //   Un dossier en 'secretaire_correction' n'appartient QU'à la secrétaire.
     //   Les acteurs (comptable, chef-division, etc.) ne voient 'secretaire_correction'
-    //   JAMAIS dans leur liste — quand la secrétaire leur renvoie un dossier pour
+    //   JAMAIS dans leur liste - quand la secrétaire leur renvoie un dossier pour
     //   correction, elle change le statut vers leur statut normal (ex: chef_division_review)
     //   avec is_in_correction_circuit = true. C'est ce flag qui change leur interface,
     //   pas le statut.

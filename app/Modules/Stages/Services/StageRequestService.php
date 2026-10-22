@@ -557,7 +557,7 @@ class StageRequestService
 
         $this->notifier->toDemandeur(
             $req,
-            'Stage accepté — note de service',
+            'Stage accepté - note de service',
             [
                 'Félicitations, votre stage au CAP-EPAC est confirmé. Voici les conditions retenues dans votre note de service.',
                 'Le jour de votre arrivée, vous recevrez un lien pour confirmer votre présence et activer votre espace stagiaire.',

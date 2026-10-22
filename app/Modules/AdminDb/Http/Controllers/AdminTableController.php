@@ -8,7 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\{DB, Schema};
 
 /**
- * Outil d'administration brute des tables — RÉSERVÉ AUX RÔLES LISTÉS DANS
+ * Outil d'administration brute des tables - RÉSERVÉ AUX RÔLES LISTÉS DANS
  * self::ALLOWED_ROLES.
  *
  * Objectif : donner un accès CRUD minimal sur une liste BLANCHE de tables,
@@ -25,12 +25,12 @@ use Illuminate\Support\Facades\{DB, Schema};
  *   - assertAdmin() bloque tout utilisateur dont le rôle n'est pas dans
  *     self::ALLOWED_ROLES.
  *
- * MISE À JOUR : 'responsable-division' ajouté à ALLOWED_ROLES — aucun
+ * MISE À JOUR : 'responsable-division' ajouté à ALLOWED_ROLES - aucun
  * compte 'admin' n'était réellement utilisé en pratique, ce rôle porte
  * désormais aussi cette responsabilité. Cette constante DOIT rester
  * synchronisée avec ALLOWED_ROLES dans AdminDbGuard.tsx (frontend).
  *
- * SUPPRESSION FACILE : pour retirer cet outil —
+ * SUPPRESSION FACILE : pour retirer cet outil -
  *   1. Supprimer le dossier App/Modules/AdminDb au complet.
  *   2. Retirer AdminDbServiceProvider de bootstrap/providers.php.
  *   Aucune autre partie du code n'y fait référence.

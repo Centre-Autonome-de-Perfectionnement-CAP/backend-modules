@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Worker de file Laravel auto-relancé — utilisé par le déploiement quand
+# Worker de file Laravel auto-relancé - utilisé par le déploiement quand
 # Supervisor n'est pas configuré (voir supervisor/laravel-worker.conf).
 #
 #  - --queue=default,emails : le transactionnel (default) passe toujours

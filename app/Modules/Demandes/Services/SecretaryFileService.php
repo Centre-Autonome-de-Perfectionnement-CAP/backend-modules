@@ -7,13 +7,13 @@ use App\Exceptions\BusinessException;
 use Illuminate\Http\Request;
 
 /**
- * CORRECTIF (v2) — Service extrait du DocumentRequestController réel
+ * CORRECTIF (v2) - Service extrait du DocumentRequestController réel
  *
  * Logique reprise à l'identique (statuts autorisés, génération d'ID,
  * strip_tags sur les champs texte, structure du tableau secretary_files).
  * Seule différence avec le contrôleur original : la vérification de rôle
  * ('secretaire' uniquement) est extraite vers DocumentRequestPolicy (B1.3),
- * appelée par le contrôleur via $this->authorize() — ce service ne fait
+ * appelée par le contrôleur via $this->authorize() - ce service ne fait
  * plus que la vérification de STATUT (qui est une règle métier, pas une
  * règle d'autorisation).
  */

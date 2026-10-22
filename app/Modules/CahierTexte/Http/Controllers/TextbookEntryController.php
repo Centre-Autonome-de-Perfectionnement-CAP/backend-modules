@@ -804,7 +804,7 @@ class TextbookEntryController extends Controller{
 
             /*
             |--------------------------------------------------------------------------
-            | 5. Programmes (déjà chargés via $programsByCep — juste réindexer)
+            | 5. Programmes (déjà chargés via $programsByCep - juste réindexer)
             |--------------------------------------------------------------------------
             */
             $programs = $programsByCep->flatten()->keyBy('id');
@@ -847,7 +847,7 @@ class TextbookEntryController extends Controller{
                     'last_name',
                     'bank',
                     'rib_number',
-                    // hourly_rate n'est pas une colonne en base — on utilise
+                    // hourly_rate n'est pas une colonne en base - on utilise
                     // le fallback 6000 FCFA défini dans la boucle ci-dessous.
                 ])
                 ->keyBy('id');
@@ -869,7 +869,7 @@ class TextbookEntryController extends Controller{
 
             /*
             |--------------------------------------------------------------------------
-            | 9. Filières — résolution via Program → ClassGroup → Department
+            | 9. Filières - résolution via Program → ClassGroup → Department
             |--------------------------------------------------------------------------
             | CORRECTIF v2 : CEP.class_group_id est nullable sur beaucoup de lignes.
             | La source fiable est Program.class_group_id (toujours renseigné car
@@ -1318,7 +1318,7 @@ class TextbookEntryController extends Controller{
             $sheet->getPageMargins()->setTop(0.5)->setBottom(0.5)->setLeft(0.5)->setRight(0.5);
 
             // ─────────────────────────────────────────────────────────────────
-            // FIN DE SECTION — le code original reprend ici avec DB::commit();
+            // FIN DE SECTION - le code original reprend ici avec DB::commit();
             // ─────────────────────────────────────────────────────────────────
 
 

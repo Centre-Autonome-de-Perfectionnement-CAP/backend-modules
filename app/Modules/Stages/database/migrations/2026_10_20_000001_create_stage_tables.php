@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Module Stages — Lot 1 : demandes de stage, discussion des dates avec le
+ * Module Stages - Lot 1 : demandes de stage, discussion des dates avec le
  * demandeur, notes de service (initiale + rectificatives), historique,
  * réglages.
  *

@@ -885,7 +885,7 @@ class DossierSubmissionService
                 );
             }
 
-            // Vérification du jeton OTP — OBLIGATOIRE (avant : vérifié seulement
+            // Vérification du jeton OTP - OBLIGATOIRE (avant : vérifié seulement
             // s'il était fourni ; email + code de suivi suffisaient à modifier).
             $verificationToken = (string) $request->input('verification_token', $request->input('_verificationToken'));
             if (!app(\App\Modules\Core\Services\OtpService::class)->validateToken($verificationToken, $email)) {

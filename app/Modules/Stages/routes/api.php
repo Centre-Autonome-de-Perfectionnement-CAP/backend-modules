@@ -13,7 +13,7 @@ use App\Modules\Stages\Http\Controllers\StageAdminController;
 use Illuminate\Support\Facades\Route;
 
 /*
- * Module Stages — Lot 1.
+ * Module Stages - Lot 1.
  * Limiteurs nommés définis dans StagesServiceProvider::boot().
  */
 

@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
  * Interface publique IDENTIQUE à l'ancien Core\Services\WhatsAppBridgeClient :
  * send(), normalizePhone(), isConnected(). Aucun appelant existant
  * (Demandes\WhatsAppService, Attestation\WhatsAppNotificationService,
- * SendGroupedReminders) n'a besoin d'être modifié — voir la classe de
+ * SendGroupedReminders) n'a besoin d'être modifié - voir la classe de
  * compatibilité App\Modules\Core\Services\WhatsAppBridgeClient qui étend
  * celle-ci.
  *
@@ -23,11 +23,11 @@ use Illuminate\Support\Str;
  * isConnected() (façade Http). Cela ne posait aucun problème tant que
  * BRIDGE_API_KEY était vide côté Node (mode dev). Mais dès que
  * WHATSAPP_BRIDGE_API_KEY est activée (ce que la migration prévoit),
- * TOUTES les requêtes se seraient vu répondre 401 par le Node — en silence,
+ * TOUTES les requêtes se seraient vu répondre 401 par le Node - en silence,
  * car send() catch tout et loggue un warning sans lever d'exception.
  * Le header est maintenant systématiquement injecté quand la clé est définie.
  *
- * Formats de numéros acceptés (normalisation béninoise) — inchangé :
+ * Formats de numéros acceptés (normalisation béninoise) - inchangé :
  *   XXXXXXXX           → +22901XXXXXXXX  (8 chiffres)
  *   01XXXXXXXX         → +22901XXXXXXXX  (10 chiffres)
  *   229XXXXXXXX        → +229XXXXXXXX    (ancien format, 11 chiffres)
@@ -36,7 +36,7 @@ use Illuminate\Support\Str;
  *   +229XXXXXXXX / +22901XXXXXXXX → inchangé
  * ZÉRO CONFIGURATION POUR LES AUTRES MODULES (15/08/2026) : le module
  * d'origine (ex: "Demandes", "RH", "Finance") est détecté AUTOMATIQUEMENT
- * via debug_backtrace() — le namespace de la classe appelante
+ * via debug_backtrace() - le namespace de la classe appelante
  * (App\Modules\{X}\...) devient le tag "module" journalisé dans
  * wa_message_log. Aucun module n'a besoin de rien déclarer ni configurer :
  * il suffit d'injecter WhatsAppBridgeClient (ou son alias
@@ -61,7 +61,7 @@ class WhatsAppBridgeClient
 
     /**
      * Remonte la pile d'appel pour trouver la première classe sous
-     * App\Modules\{X}\... — c'est CETTE convention de nommage déjà
+     * App\Modules\{X}\... - c'est CETTE convention de nommage déjà
      * utilisée par tout le projet qui rend la détection fiable sans
      * qu'aucun module n'ait à se déclarer explicitement.
      *
@@ -144,7 +144,7 @@ class WhatsAppBridgeClient
      * Envoie un fichier WhatsApp (PDF, image, etc.) depuis n'importe quel
      * disque Laravel (local, s3...). Le Node ne reçoit jamais le fichier en
      * base64 : on lui donne une URL signée temporaire (10 min, usage
-     * interne loopback) qu'il télécharge lui-même via Baileys — efficace
+     * interne loopback) qu'il télécharge lui-même via Baileys - efficace
      * même pour des fichiers volumineux.
      *
      * @param  string  $phone     Numéro destinataire
@@ -153,7 +153,7 @@ class WhatsAppBridgeClient
      * @param  string  $fileName  Nom affiché côté destinataire (ex: "Attestation.pdf")
      * @param  string  $caption   Légende optionnelle (affichée avec le fichier)
      * @param  string  $context   Identifiant de contexte pour les logs
-     * @param  ?string $module    Override manuel — sinon auto-détecté comme send()
+     * @param  ?string $module    Override manuel - sinon auto-détecté comme send()
      */
     public function sendFile(
         string $phone,
@@ -275,7 +275,7 @@ class WhatsAppBridgeClient
             }
 
             if ($httpCode === 401) {
-                Log::error('[WhatsApp] Rejeté par le bridge (401) — clé API invalide ou manquante côté Laravel/Node', [
+                Log::error('[WhatsApp] Rejeté par le bridge (401) - clé API invalide ou manquante côté Laravel/Node', [
                     'to'      => $cleanTo,
                     'context' => $context,
                 ]);
@@ -316,7 +316,7 @@ class WhatsAppBridgeClient
     /**
      * Génère une URL interne temporaire (10 min) que le Node peut appeler
      * en loopback pour télécharger le fichier, quel que soit le disque
-     * Laravel réel (local, s3...) — le Node n'a jamais besoin de connaître
+     * Laravel réel (local, s3...) - le Node n'a jamais besoin de connaître
      * la config de stockage, seulement cette URL opaque.
      */
     private function makeInternalFileUrl(string $disk, string $path): string
@@ -371,7 +371,7 @@ class WhatsAppBridgeClient
      * et par le module admin pour l'onglet "Connexion".
      *
      * NOTE : le docblock de l'ancienne version de WhatsAppService affirmait
-     * un cache de 10s sur ce résultat — ce cache n'a jamais existé dans le
+     * un cache de 10s sur ce résultat - ce cache n'a jamais existé dans le
      * code réel. On ne l'ajoute pas ici non plus pour rester fidèle au
      * comportement observé (l'appel /status est bon marché côté Node).
      */

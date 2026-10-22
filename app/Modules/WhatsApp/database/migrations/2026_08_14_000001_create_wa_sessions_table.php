@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Table wa_sessions — stockage des credentials Baileys en base de données.
+ * Table wa_sessions - stockage des credentials Baileys en base de données.
  *
  * Remplace le stockage filesystem (auth/<session-id>/*.json).
  * Single-tenant : une seule ligne exploitée en pratique (session_id fixe
@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Schema;
  * verrou "1 seule ligne" imposé en DB) pour rester simple à faire évoluer.
  *
  * Chiffrement : AES-256-GCM. On stocke séparément l'IV, le tag
- * d'authentification et les données chiffrées — nécessaire pour pouvoir
+ * d'authentification et les données chiffrées - nécessaire pour pouvoir
  * déchiffrer (GCM exige le tag pour vérifier l'intégrité avant déchiffrement).
  * Clé de chiffrement : WA_SESSION_ENCRYPTION_KEY (backend-modules/.env),
  * jamais stockée en base.

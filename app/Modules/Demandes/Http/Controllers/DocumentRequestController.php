@@ -16,9 +16,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{Auth, Storage};
 
 /**
- * CORRECTIF (v2) — B3.1 + B3.2, basé sur le DocumentRequestController réel
+ * CORRECTIF (v2) - B3.1 + B3.2, basé sur le DocumentRequestController réel
  *
- * - index() : INCHANGÉ — retourne toujours la collection brute (pas de
+ * - index() : INCHANGÉ - retourne toujours la collection brute (pas de
  *   Resource), pour ne rien casser côté frontend qui consomme déjà ce
  *   format exact.
  * - indexPaginated() : NOUVEAU endpoint additif (B3.2), qui lui utilise
@@ -48,7 +48,7 @@ class DocumentRequestController extends Controller
         protected \App\Modules\Demandes\Services\ContactDemandeurService $contactDemandeurService,
     ) {}
 
-    // ── Listing (INCHANGÉ — format brut conservé) ─────────────────────────────
+    // ── Listing (INCHANGÉ - format brut conservé) ─────────────────────────────
 
     public function index(Request $request): JsonResponse
     {
@@ -65,7 +65,7 @@ class DocumentRequestController extends Controller
         ]);
     }
 
-    // ── AJOUT (B3.2) — Listing paginé ──────────────────────────────────────────
+    // ── AJOUT (B3.2) - Listing paginé ──────────────────────────────────────────
 
     public function indexPaginated(Request $request): JsonResponse
     {
@@ -161,7 +161,7 @@ class DocumentRequestController extends Controller
         return Storage::disk('public')->response($path, $displayName, [], $disposition);
     }
 
-    // ── Fichiers secrétaire (extraits vers SecretaryFileService — B1.1) ───────
+    // ── Fichiers secrétaire (extraits vers SecretaryFileService - B1.1) ───────
 
     public function uploadSecretaryFiles(Request $request, int $id): JsonResponse
     {
@@ -265,7 +265,7 @@ class DocumentRequestController extends Controller
             'message'        => 'required|string|max:3000',
             'attachments'    => 'nullable|array|max:5',
             // 10 Mo par pièce jointe, formats bureautiques uniquement (même liste
-            // que les fichiers secrétaire) — jamais d'exécutable/HTML vers l'étudiant.
+            // que les fichiers secrétaire) - jamais d'exécutable/HTML vers l'étudiant.
             'attachments.*'  => 'file|max:10240|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx',
         ]);
 

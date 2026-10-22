@@ -22,7 +22,7 @@ final class StageStatus
         self::SUBMITTED        => 'Nouvelle demande',
         self::PROPOSAL_SENT    => 'Proposition envoyée',
         self::COUNTER_PROPOSED => 'Contre-proposition reçue',
-        self::ACCEPTED         => 'Acceptée — note de service émise',
+        self::ACCEPTED         => 'Acceptée - note de service émise',
         self::REJECTED         => 'Non retenue',
         self::EXPIRED          => 'Expirée (sans réponse)',
         self::WITHDRAWN        => 'Désistement (jamais présenté)',

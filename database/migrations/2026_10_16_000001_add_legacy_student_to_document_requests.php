@@ -40,7 +40,7 @@ return new class extends Migration
         if (!Schema::hasColumn('document_requests', 'bulletin_year')) {
             Schema::table('document_requests', function (Blueprint $table) {
                 $table->string('bulletin_year', 9)->nullable()->after('academic_year_id')
-                    ->comment('Année du bulletin (AAAA-AAAA) — anciens étudiants');
+                    ->comment('Année du bulletin (AAAA-AAAA) - anciens étudiants');
             });
         }
     }

@@ -55,7 +55,7 @@ class StageNotifier
 
         $this->notifier->email(
             $req->email,
-            "{$title} — {$req->reference}",
+            "{$title} - {$req->reference}",
             'stages::emails.message',
             [
                 'title'          => $title,
@@ -116,7 +116,7 @@ class StageNotifier
         $managers = $recipients->unique(fn ($m) => $m->email ?? $m->phone);
         $url ??= rtrim((string) config('app.url'), '/') . '/services/stages';
         $slot = BusinessHours::nextStaffSlot();
-        $subject = $reference ? "{$title} — {$reference}" : $title;
+        $subject = $reference ? "{$title} - {$reference}" : $title;
 
         foreach ($managers as $m) {
             $greeting = 'Bonjour ' . trim(($m->first_name ?? '') . ' ' . ($m->last_name ?? '')) . ',';

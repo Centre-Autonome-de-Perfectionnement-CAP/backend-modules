@@ -44,7 +44,7 @@ class AttendanceExport implements FromArray, WithStyles, WithColumnWidths, WithT
         $rows[] = ['EPAC - ECOLE POLYTECHNIQUE D\'ABOMEY-CALAVI - CENTRE AUTONOME DE PERFECTIONNEMENT'];
 
         // Ligne 2 : adresse
-        $rows[] = ['Université d\'Abomey-Calavi — 01 BP 2009 COTONOU - TÉL. 21 36 14 32/21 36 09 93'];
+        $rows[] = ['Université d\'Abomey-Calavi - 01 BP 2009 COTONOU - TÉL. 21 36 14 32/21 36 09 93'];
 
         // Ligne 3 : vide
         $rows[] = [''];

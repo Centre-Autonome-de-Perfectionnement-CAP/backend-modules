@@ -3,7 +3,7 @@
 namespace App\Modules\Attestation\DTOs;
 
 /**
- * B1.4 — DTO résultat d'une vérification d'éligibilité
+ * B1.4 - DTO résultat d'une vérification d'éligibilité
  *
  * Remplace les réponses JSON inline construites dans checkAvailability().
  * Valeur-objet immutable : pas de setters.

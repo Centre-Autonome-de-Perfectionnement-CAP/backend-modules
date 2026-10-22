@@ -14,7 +14,7 @@ class ImportantInformationController extends Controller
     use ApiResponse, RestrictsToRoles;
 
     /**
-     * AJOUT (audit sécurité) — indexAdmin/store/update/destroy/broadcast/
+     * AJOUT (audit sécurité) - indexAdmin/store/update/destroy/broadcast/
      * getBroadcastStatus n'avaient AUCUNE protection : n'importe quel
      * compte connecté pouvait créer/modifier/supprimer une annonce ou
      * déclencher un broadcast WhatsApp. `index()` (lecture publique des

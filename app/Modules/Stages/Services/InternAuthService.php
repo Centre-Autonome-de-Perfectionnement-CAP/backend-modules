@@ -112,7 +112,7 @@ class InternAuthService
             "*{$code}*",
             '_Valable ' . self::RESET_TTL_MIN . ' minutes. Ne le communiquez à personne._',
         ]), "stage-reset:{$req->reference}", 'Stages');
-        $this->notifier->email($req->email, 'Code de vérification — espace stagiaire', 'core::emails.otp-verification', [
+        $this->notifier->email($req->email, 'Code de vérification - espace stagiaire', 'core::emails.otp-verification', [
             'code' => $code, 'email' => $req->email, 'ttlMinutes' => self::RESET_TTL_MIN,
         ]);
     }

@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Module Stages — Lot 5 : attestations de stage.
+ * Module Stages - Lot 5 : attestations de stage.
  *
  * Circuit : pré-remplie (J-7) → validée par le responsable → imprimée par le
  * secrétariat (numéro proposé, modifiable) → remise au stagiaire (datée),

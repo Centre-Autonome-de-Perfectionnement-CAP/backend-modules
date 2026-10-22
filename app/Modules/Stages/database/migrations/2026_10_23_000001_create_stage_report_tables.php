@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Module Stages — Lot 4 : rapports (périodiques + final).
+ * Module Stages - Lot 4 : rapports (périodiques + final).
  *
  * Chaque dépôt crée une version : rien n'est jamais écrasé. Commentaires et
  * décisions (superviseur, responsable) sont conservés dans l'historique.

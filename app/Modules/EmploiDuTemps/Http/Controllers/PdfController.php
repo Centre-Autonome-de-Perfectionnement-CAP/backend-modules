@@ -16,7 +16,7 @@ use Carbon\Carbon;
  * PdfController
  *
  * Génère un PDF d'emploi du temps pour une semaine (lundi→dimanche).
- * Utilise DomPDF — zéro dépendance externe (Python/reportlab supprimé).
+ * Utilise DomPDF - zéro dépendance externe (Python/reportlab supprimé).
  *
  * Route : POST /api/emploi-du-temps/pdf/download
  * Body  : {

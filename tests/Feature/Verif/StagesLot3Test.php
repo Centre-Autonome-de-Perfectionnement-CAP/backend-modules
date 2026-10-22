@@ -20,7 +20,7 @@ use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
- * Module Stages — Lot 3 : activation le premier jour, espace stagiaire,
+ * Module Stages - Lot 3 : activation le premier jour, espace stagiaire,
  * empreinte (WebAuthn, vraie cryptographie), pointage géolocalisé,
  * assiduité, demandes du stagiaire.
  */

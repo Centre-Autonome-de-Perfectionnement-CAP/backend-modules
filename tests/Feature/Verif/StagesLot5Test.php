@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
-/** Module Stages — Lot 5 : attestations. */
+/** Module Stages - Lot 5 : attestations. */
 class StagesLot5Test extends TestCase
 {
     use DatabaseTransactions;

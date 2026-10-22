@@ -5,12 +5,12 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * B2.7 — Vérification des clés étrangères
+ * B2.7 - Vérification des clés étrangères
  *
  * ⚠️ AVERTISSEMENT IMPORTANT (transparence) :
  * Le zip fourni ne contenait PAS les fichiers de migration originaux
  * (database/migrations/*.php) pour document_requests et
- * document_request_histories — uniquement les Models et Services.
+ * document_request_histories - uniquement les Models et Services.
  * Je ne peux donc pas confirmer avec certitude si ces FK existent déjà
  * ou non en base réelle.
  *

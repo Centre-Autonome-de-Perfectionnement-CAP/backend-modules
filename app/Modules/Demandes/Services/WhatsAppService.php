@@ -23,7 +23,7 @@ use App\Modules\Core\Services\WhatsAppBridgeClient;
  *     l'expéditeur n'est plus affiché, seul son rôle l'est (libellé
  *     WorkflowConstants::ROLE_LABELS, déjà résolu par l'appelant).
  *
- * AJOUT (v2) : isConnected() — exposé pour SendNotificationJob.
+ * AJOUT (v2) : isConnected() - exposé pour SendNotificationJob.
  *         Délègue à WhatsAppBridgeClient::isConnected() qui existe déjà.
  *         Le Job l'appelle avant d'envoyer pour éviter de brûler une tentative
  *         si le bridge est temporairement déconnecté.
@@ -34,7 +34,7 @@ class WhatsAppService
     // CORRECTIF : les URLs étaient codées en dur sur un domaine de dev
     // ("cap.the-haute-societyy.com") qui ne correspond ni à la prod ni au
     // local. On utilise désormais FRONTEND_URL (config('app.frontend_url')),
-    // déjà défini dans config/app.php avec fallback localhost:5173 — un seul
+    // déjà défini dans config/app.php avec fallback localhost:5173 - un seul
     // endroit à changer (le .env) pour prod/local/staging.
     private function urlSuivi(): string
     {
@@ -60,7 +60,7 @@ class WhatsAppService
     }
 
     /**
-     * Envoie un fichier WhatsApp (pièce jointe) — passthrough vers le bridge.
+     * Envoie un fichier WhatsApp (pièce jointe) - passthrough vers le bridge.
      * Utilisé par ContactDemandeurService (message libre secrétaire → demandeur).
      */
     public function sendFile(
@@ -75,7 +75,7 @@ class WhatsAppService
     }
 
     /**
-     * Envoi qualifié (succès / échec transitoire / échec définitif) —
+     * Envoi qualifié (succès / échec transitoire / échec définitif) -
      * utilisé par SendNotificationJob pour décider d'un retry.
      *
      * @return array{ok: bool, retryable: bool, http: int, error: ?string}
@@ -171,7 +171,7 @@ class WhatsAppService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // TEMPLATES — ÉTUDIANT
+    // TEMPLATES - ÉTUDIANT
     // ══════════════════════════════════════════════════════════════════════════
 
     public function templateSoumission(string $reference, string $typeLabel, string $nomEtudiant): string
@@ -253,7 +253,7 @@ class WhatsAppService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // TEMPLATES — PERSONNEL (STAFF)
+    // TEMPLATES - PERSONNEL (STAFF)
     // ══════════════════════════════════════════════════════════════════════════
 
     public function templateNouvelleDemandeSecretaire(
@@ -293,7 +293,7 @@ class WhatsAppService
     /**
      * Transmission d'un dossier à un acteur du circuit.
      * Le rôle affiché ({$expediteurRole}) est déjà le libellé résolu via
-     * WorkflowConstants::ROLE_LABELS par l'appelant (NotificationService) —
+     * WorkflowConstants::ROLE_LABELS par l'appelant (NotificationService) -
      * aucun nom d'expéditeur n'apparaît dans le message.
      */
     public function templateActeurDossier(

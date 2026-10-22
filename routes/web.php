@@ -4,13 +4,13 @@ use Illuminate\Support\Facades\Route;
 
 // ========== FICHIERS DE STOCKAGE (avant les catch-all) ==========
 //
-// AJOUT (Benoite) — sert les fichiers de storage/app/public/ directement.
+// AJOUT (Benoite) - sert les fichiers de storage/app/public/ directement.
 // N'entre jamais en collision avec le symlink standard public/storage
 // (segment d'URL différent : "stockage", pas "storage").
 //
 // À VÉRIFIER : confirmer qu'un lien symbolique public/storage existe déjà
 // (php artisan storage:link) ou non. Si non, cette route est le seul accès
-// aux fichiers stockés et doit rester. Si oui, elle fait doublon — inoffensif
+// aux fichiers stockés et doit rester. Si oui, elle fait doublon - inoffensif
 // mais à nettoyer plus tard si confirmé inutile.
 //
 // CORRECTIF SÉCURITÉ (audit 13/10/2026) :

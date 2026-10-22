@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 /**
  * Qui gère les stages :
  *  - « responsables » : l'administrateur et le Responsable de division qui
- *    ne s'occupe pas des licences (type « formation_continue ») — tout, y
+ *    ne s'occupe pas des licences (type « formation_continue ») - tout, y
  *    compris réglages, invitations et groupe WhatsApp ;
  *  - superviseurs (rôle `superviseur`) : presque tout le reste ; le
  *    responsable est informé de chacune de leurs actions.

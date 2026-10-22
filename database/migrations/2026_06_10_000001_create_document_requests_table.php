@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Migration unique et finale — document_requests
+ * Migration unique et finale - document_requests
  *
  * Workflow (13 statuts) :
  *   submitted → accounting_review → division_manager_review →

@@ -15,10 +15,10 @@ class SignataireController extends Controller
     use RestrictsToRoles;
 
     /**
-     * AJOUT (audit sécurité) — ce contrôleur n'avait AUCUNE protection :
+     * AJOUT (audit sécurité) - ce contrôleur n'avait AUCUNE protection :
      * n'importe quel compte connecté pouvait lister/créer/modifier/supprimer
      * un signataire de documents officiels. Restriction appliquée à TOUTES
-     * les actions (comme AdminUserController) — à confirmer si la lecture
+     * les actions (comme AdminUserController) - à confirmer si la lecture
      * (index) doit rester plus largement accessible.
      */
     private const ALLOWED_ROLES = ['admin', 'chef-cap', 'rh'];

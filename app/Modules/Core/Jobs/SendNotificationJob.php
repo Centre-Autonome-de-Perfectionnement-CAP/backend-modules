@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * SendNotificationJob — job unique d'envoi asynchrone (tous modules).
+ * SendNotificationJob - job unique d'envoi asynchrone (tous modules).
  *
  * UN job = UN canal = UN destinataire : un échec email n'a aucun effet sur
  * le WhatsApp correspondant (et inversement), et un destinataire en échec
@@ -37,7 +37,7 @@ use Illuminate\Support\Facades\Storage;
  * Envoi immédiat (send()) : depuis une requête HTTP, le message part
  * juste APRÈS la réponse (l'utilisateur n'attend pas) sans dépendre d'un
  * worker. Seuls les nouveaux essais (bridge déconnecté, SMTP indisponible)
- * passent par la file — traitée par les workers ou, à défaut, par le
+ * passent par la file - traitée par les workers ou, à défaut, par le
  * scheduler chaque minute.
  *
  * Historique : ce job vivait dans App\Modules\Demandes\Jobs. La classe
@@ -99,7 +99,7 @@ class SendNotificationJob implements ShouldQueue
         try {
             app(\Illuminate\Contracts\Bus\Dispatcher::class)->dispatchNow(new static($channel, $payload));
         } catch (\Throwable $e) {
-            Log::warning('[SendNotificationJob] Envoi immédiat en échec — remis en file', [
+            Log::warning('[SendNotificationJob] Envoi immédiat en échec - remis en file', [
                 'channel' => $channel,
                 'to'      => $payload['phone'] ?? ($payload['to'] ?? null),
                 'error'   => $e->getMessage(),
@@ -130,7 +130,7 @@ class SendNotificationJob implements ShouldQueue
             // Nouvel essai : indépendant de toute transaction en cours.
             static::dispatch($channel, $payload)->beforeCommit()->delay(now()->addSeconds($delaySeconds));
         } catch (\Throwable $e) {
-            Log::error('[SendNotificationJob] Mise en file impossible — notification perdue', [
+            Log::error('[SendNotificationJob] Mise en file impossible - notification perdue', [
                 'channel' => $channel,
                 'to'      => $payload['phone'] ?? ($payload['to'] ?? null),
                 'error'   => $e->getMessage(),
@@ -186,7 +186,7 @@ class SendNotificationJob implements ShouldQueue
                 if (!empty($att['path']) && Storage::disk($disk)->exists($att['path'])) {
                     $m->attachFromStorageDisk($disk, $att['path'], $att['name'] ?? basename($att['path']));
                 } else {
-                    Log::warning('[SendNotificationJob] Pièce jointe email introuvable — ignorée', [
+                    Log::warning('[SendNotificationJob] Pièce jointe email introuvable - ignorée', [
                         'to' => $p['to'], 'path' => $att['path'] ?? null,
                     ]);
                 }
@@ -310,7 +310,7 @@ class SendNotificationJob implements ShouldQueue
             return;
         }
 
-        Log::warning("[SendNotificationJob] {$label} non envoyé — échec définitif", [
+        Log::warning("[SendNotificationJob] {$label} non envoyé - échec définitif", [
             'to' => $p['phone'] ?? null, 'ctx' => $p['context'] ?? '',
             'http' => $res['http'], 'error' => $res['error'],
         ]);
@@ -323,7 +323,7 @@ class SendNotificationJob implements ShouldQueue
 
         // Envoi immédiat (hors file) : le nouvel essai passe par la file.
         if ($this->isImmediate()) {
-            Log::warning("[SendNotificationJob] {$reason} — remis en file (nouvel essai dans {$delay}s)", [
+            Log::warning("[SendNotificationJob] {$reason} - remis en file (nouvel essai dans {$delay}s)", [
                 'to'  => $this->payload['phone'] ?? ($this->payload['to'] ?? null),
                 'ctx' => $this->payload['context'] ?? '',
             ]);
@@ -331,7 +331,7 @@ class SendNotificationJob implements ShouldQueue
             return;
         }
 
-        Log::warning("[SendNotificationJob] {$reason} — nouvelle tentative dans {$delay}s", [
+        Log::warning("[SendNotificationJob] {$reason} - nouvelle tentative dans {$delay}s", [
             'to' => $this->payload['phone'] ?? ($this->payload['to'] ?? null),
             'ctx' => $this->payload['context'] ?? '',
             'attempt' => $attempt,

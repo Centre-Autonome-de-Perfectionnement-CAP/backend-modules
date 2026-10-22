@@ -36,7 +36,7 @@ class ReportService
     public const MAX_KB = 10240;
 
     public const STATUS_LABELS = [
-        'submitted'           => 'Déposé — en attente de lecture',
+        'submitted'           => 'Déposé - en attente de lecture',
         'supervisor_approved' => 'Validé par le superviseur',
         'supervisor_rejected' => 'À corriger (superviseur)',
         'approved'            => 'Validé',
@@ -154,7 +154,7 @@ class ReportService
                     'size' => (int) $file->getSize(), 'note' => $note, 'late' => $late,
                 ]);
                 $report->fill(['current_version' => $version, 'status' => 'submitted', 'submitted_at' => now()])->save();
-                $this->history($req, 'report_submitted', null, $this->labelFor($report) . " — version {$version}" . ($late ? ' (en retard)' : ''));
+                $this->history($req, 'report_submitted', null, $this->labelFor($report) . " - version {$version}" . ($late ? ' (en retard)' : ''));
 
                 return $report;
             });

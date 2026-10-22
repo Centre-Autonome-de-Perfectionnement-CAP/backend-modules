@@ -26,9 +26,9 @@ Route::prefix('rh')->group(function () {
     Route::get('cycles',                 [CycleController::class, 'index']);
 
     // ─── Programmes d'un professeur ───────────────────────────────────────────
-    // Route dans le groupe auth:sanctum — voir bloc ci-dessous
+    // Route dans le groupe auth:sanctum - voir bloc ci-dessous
 
-    // ─── Accès par token (liens email — PUBLIC, sans authentification) ─────────
+    // ─── Accès par token (liens email - PUBLIC, sans authentification) ─────────
     // IMPORTANT : ces routes doivent être déclarées AVANT contrats/{id}
     // sinon Laravel capture "by-token" comme valeur de {id}
     Route::get('contrats/by-token/{token}',           [ContratController::class, 'showByToken']);
@@ -36,12 +36,12 @@ Route::prefix('rh')->group(function () {
     Route::post('contrats/by-token/{token}/reject',   [ContratController::class, 'rejectByToken']);
     Route::get('contrats/by-token/{token}/download',  [ContratController::class, 'downloadByToken']);
 
-    // ─── Contrats (CRUD complet — admin) ──────────────────────────────────────
+    // ─── Contrats (CRUD complet - admin) ──────────────────────────────────────
     //
     // CORRECTIF SÉCURITÉ (16/08/2026) : ces routes (CRUD contrats, upload PDF,
     // autorisation, email de transfert, gestion admin-users avec attribution
     // de rôles, signataires, documents, informations importantes) étaient
-    // ENTIÈREMENT accessibles SANS authentification — le commentaire
+    // ENTIÈREMENT accessibles SANS authentification - le commentaire
     // "Routes protégées" au-dessus d'apiResource('documents', ...) était
     // trompeur, aucun middleware n'était réellement appliqué.
     //
@@ -52,7 +52,7 @@ Route::prefix('rh')->group(function () {
     // Concrètement, N'IMPORTE QUEL compte connecté (y compris un professeur)
     // peut aujourd'hui créer/supprimer des contrats et attribuer le rôle
     // admin à n'importe qui. À corriger en ajoutant un assertAdmin() dans
-    // ces contrôleurs (même pattern que WhatsAppAdminController) — décision
+    // ces contrôleurs (même pattern que WhatsAppAdminController) - décision
     // du rôle exact à autoriser laissée à l'équipe, pas prise seul ici.
     Route::middleware('auth:sanctum')->group(function () {
 
@@ -135,7 +135,7 @@ Route::prefix('rh')->group(function () {
     });
 
     // ─── Contrats du professeur connecté ─────────────────────────────────────
-    // Protégé par Sanctum — accepte tout utilisateur authentifié (User ou Professor)
+    // Protégé par Sanctum - accepte tout utilisateur authentifié (User ou Professor)
     Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('professor/my-contrats', [ContratController::class, 'myContrats']);
         Route::get('professor/my-factures', [ContratController::class, 'myFactures']);

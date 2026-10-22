@@ -37,8 +37,8 @@ class ContactService
     }
 
     /**
-     * Email au CAP (contenu complet), puis — UNIQUEMENT si l'email a été
-     * accepté par le serveur SMTP — un WhatsApp au(x) responsable(s) de la
+     * Email au CAP (contenu complet), puis - UNIQUEMENT si l'email a été
+     * accepté par le serveur SMTP - un WhatsApp au(x) responsable(s) de la
      * Formation Continue l'invitant à consulter la boîte mail. Le WhatsApp
      * ne contient JAMAIS le contenu du message (données du visiteur).
      */
@@ -69,7 +69,7 @@ class ContactService
         );
 
         if (empty($alerts)) {
-            Log::warning('Contact : aucun responsable Formation Continue avec numéro WhatsApp — alerte non envoyée', [
+            Log::warning('Contact : aucun responsable Formation Continue avec numéro WhatsApp - alerte non envoyée', [
                 'contact_id' => $contact->id,
             ]);
         }

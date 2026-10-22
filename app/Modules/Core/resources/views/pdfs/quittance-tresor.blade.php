@@ -385,9 +385,9 @@
 
   {{-- ══ TITRE ══ --}}
   <div class="doc-title-block">
-    <div class="doc-label">Document officiel — Paiement en ligne</div>
+    <div class="doc-label">Document officiel - Paiement en ligne</div>
     <h1>Quittance de Paiement</h1>
-    <div class="doc-subtitle">CAP-EPAC — Université d'Abomey-Calavi | Trésor Public du Bénin</div>
+    <div class="doc-subtitle">CAP-EPAC - Université d'Abomey-Calavi | Trésor Public du Bénin</div>
   </div>
 
   <hr class="hr-thin">
@@ -437,11 +437,11 @@
     </tr>
     <tr>
       <td class="key">Organisme bénéficiaire</td>
-      <td class="val">CAP-EPAC — Université d'Abomey-Calavi</td>
+      <td class="val">CAP-EPAC - Université d'Abomey-Calavi</td>
     </tr>
     <tr>
       <td class="key">Compte bénéficiaire</td>
-      <td class="val" style="font-family: monospace;">Trésor Public du Bénin — Paiement dématérialisé</td>
+      <td class="val" style="font-family: monospace;">Trésor Public du Bénin - Paiement dématérialisé</td>
     </tr>
     <tr>
       <td class="key">Référence demande</td>
@@ -449,7 +449,7 @@
     </tr>
     <tr>
       <td class="key">Mode de règlement</td>
-      <td class="val">Paiement en ligne — Plateforme sécurisée Trésor Public</td>
+      <td class="val">Paiement en ligne - Plateforme sécurisée Trésor Public</td>
     </tr>
     <tr>
       <td class="key">Date d'impression</td>
@@ -474,7 +474,7 @@
     {{-- Badge de validation ══ --}}
     <div class="bottom-center">
       <div class="validation-badge">
-        <strong>&#10003; Document authentique — Paiement validé</strong>
+        <strong>&#10003; Document authentique - Paiement validé</strong>
         Ce document constitue une preuve officielle de paiement.<br>
         Conservez-le soigneusement. Il vous sera demandé lors du retrait de votre document.
       </div>

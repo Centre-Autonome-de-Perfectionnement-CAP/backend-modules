@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * FIX (unification emploi du temps) — le cahier de texte référençait
+ * FIX (unification emploi du temps) - le cahier de texte référençait
  * uniquement `scheduled_courses` (ancien système), alors que le module
  * "Gestion emploi du temps" (utilisé en pratique) écrit dans
  * `emploi_du_temps` (nouveau système). Les deux tables ne communiquaient

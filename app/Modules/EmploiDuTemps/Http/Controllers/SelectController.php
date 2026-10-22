@@ -14,7 +14,7 @@ use Illuminate\Http\Request;
 use App\Modules\RH\Models\Contrat;
 
 /**
- * SelectController — données de référence pour les selects
+ * SelectController - données de référence pour les selects
  * Toutes les routes : /api/emploi-temps/selects/*
  */
 class SelectController extends Controller

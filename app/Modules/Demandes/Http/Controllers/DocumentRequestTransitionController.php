@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Cache;
  * 1. Protection double-clic (idempotence)
  *    Si le même utilisateur soumet la même action sur le même dossier
  *    en moins de 5s, la deuxième requête reçoit un 200 avec le résultat
- *    de la première (pas un 409, pas une erreur — c'est transparent).
+ *    de la première (pas un 409, pas une erreur - c'est transparent).
  *    Clé de cache : "transition_lock:{user_id}:{demande_id}:{action}"
  *    TTL : 5 secondes.
  *

@@ -158,7 +158,7 @@ class QuittanceController extends Controller
     {
         $this->notifier->email(
             $request->email,
-            "Votre quittance de paiement — {$request->quittanceNumber}",
+            "Votre quittance de paiement - {$request->quittanceNumber}",
             'core::emails.attestation-confirmation',
             [
                 'reference'     => $request->referenceDemande,

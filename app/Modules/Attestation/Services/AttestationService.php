@@ -802,7 +802,7 @@ class AttestationService
     }
 
     // =========================================================================
-    // HELPERS INTERNES — ajoutés depuis proj1
+    // HELPERS INTERNES - ajoutés depuis proj1
     // =========================================================================
 
     private function normalizeLevel($studyLevel): int
@@ -977,7 +977,7 @@ class AttestationService
     }
 
     // =========================================================================
-    // ÉLIGIBILITÉ — PASSAGE (depuis proj1)
+    // ÉLIGIBILITÉ - PASSAGE (depuis proj1)
     // =========================================================================
 
     public function getEligibleForPassage(
@@ -1026,7 +1026,7 @@ class AttestationService
     }
 
     // =========================================================================
-    // ÉLIGIBILITÉ — DÉFINITIVE (depuis proj1)
+    // ÉLIGIBILITÉ - DÉFINITIVE (depuis proj1)
     // =========================================================================
 
     public function getEligibleForDefinitive(
@@ -1074,7 +1074,7 @@ class AttestationService
     }
 
     // =========================================================================
-    // ÉLIGIBILITÉ — INSCRIPTION (depuis proj1)
+    // ÉLIGIBILITÉ - INSCRIPTION (depuis proj1)
     // =========================================================================
 
     public function getEligibleForInscription(
@@ -1119,7 +1119,7 @@ class AttestationService
     }
 
     // =========================================================================
-    // GÉNÉRATION — ATTESTATION DE PASSAGE (depuis proj1)
+    // GÉNÉRATION - ATTESTATION DE PASSAGE (depuis proj1)
     // =========================================================================
 
     public function generateAttestationPassage(int $studentPendingStudentId)
@@ -1153,7 +1153,7 @@ class AttestationService
     }
 
     // =========================================================================
-    // GÉNÉRATION — ATTESTATION DÉFINITIVE (depuis proj1)
+    // GÉNÉRATION - ATTESTATION DÉFINITIVE (depuis proj1)
     // =========================================================================
 
     public function generateAttestationDefinitive(int $studentPendingStudentId)
@@ -1224,7 +1224,7 @@ class AttestationService
     }
 
     // =========================================================================
-    // GÉNÉRATION — ATTESTATION D'INSCRIPTION (depuis proj1)
+    // GÉNÉRATION - ATTESTATION D'INSCRIPTION (depuis proj1)
     // =========================================================================
 
     public function generateAttestationInscription(int $studentPendingStudentId)

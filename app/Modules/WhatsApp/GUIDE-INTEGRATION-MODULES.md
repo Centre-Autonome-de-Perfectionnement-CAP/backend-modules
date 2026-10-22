@@ -2,7 +2,7 @@
 
 **Zéro configuration.** Pas de fichier à éditer, pas de module à déclarer
 quelque part, pas de clé à ajouter. Le module d'origine est détecté
-automatiquement d'après le namespace de la classe qui appelle — parce que
+automatiquement d'après le namespace de la classe qui appelle - parce que
 ce projet respecte déjà la convention `App\Modules\{NomDuModule}\...`
 partout.
 
@@ -43,7 +43,7 @@ $this->whatsapp->sendFile(
 );
 ```
 
-Le fichier n'est jamais chargé en base64 en mémoire côté Laravel — le
+Le fichier n'est jamais chargé en base64 en mémoire côté Laravel - le
 service Node télécharge lui-même le fichier via une URL interne temporaire
 (10 minutes, usage loopback uniquement). Fonctionne avec n'importe quel
 disque (`local`, `s3`, etc.), tant que le fichier existe dessus au moment
@@ -61,13 +61,13 @@ de l'appel.
 - **Passer par une queue** pour ne jamais bloquer une requête HTTP sur
   l'envoi (voir `Demandes\Jobs\SendNotificationJob` comme modèle à copier).
 - **`context`** reste un texte libre pour VOTRE usage (référence métier,
-  débogage) — ce n'est pas ce qui identifie le module, cette partie-là est
+  débogage) - ce n'est pas ce qui identifie le module, cette partie-là est
   automatique.
 
 ## Si l'auto-détection ne convient pas à un cas particulier
 
 Rare, mais possible (ex: un Trait partagé entre plusieurs modules, ou un
-appel depuis une classe hors `App\Modules\*`) — un 5ᵉ paramètre optionnel
+appel depuis une classe hors `App\Modules\*`) - un 5ᵉ paramètre optionnel
 permet de forcer le nom du module :
 
 ```php

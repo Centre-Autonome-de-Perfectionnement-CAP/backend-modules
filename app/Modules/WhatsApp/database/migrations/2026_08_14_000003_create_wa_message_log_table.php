@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Table wa_message_log — historique de tous les envois WhatsApp.
+ * Table wa_message_log - historique de tous les envois WhatsApp.
  *
  * Alimentée par le Node à chaque appel POST /send-message (succès ou échec).
  * Consultée par Laravel (WhatsAppAdminController) pour les onglets

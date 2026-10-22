@@ -228,14 +228,14 @@
 
         <p style="font-size:13px;color:#1a2e1f;line-height:1.7;margin-top:8px;">
           Cordialement,<br />
-          <strong>Service des Ressources Humaines — CAP-EPAC</strong>
+          <strong>Service des Ressources Humaines - CAP-EPAC</strong>
         </p>
 
       </div>
 
       <!-- ── Footer ─────────────────────────────────────────────────────── -->
       <div class="email-footer">
-        <div class="footer-institution">CAP — École Polytechnique d'Abomey-Calavi</div>
+        <div class="footer-institution">CAP - École Polytechnique d'Abomey-Calavi</div>
         <div class="footer-address">Abomey-Calavi, Bénin • Service des Ressources Humaines</div>
         <div class="footer-legal">
           Cet email a été envoyé automatiquement par le système de gestion RH du CAP.

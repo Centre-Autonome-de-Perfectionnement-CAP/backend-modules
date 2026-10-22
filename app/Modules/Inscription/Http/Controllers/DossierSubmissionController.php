@@ -305,7 +305,7 @@ class DossierSubmissionController extends Controller
         }
 
         // SÉCURITÉ : sans preuve que le demandeur possède l'email (code OTP),
-        // seule l'existence du dossier et son cycle sont renvoyés — jamais le
+        // seule l'existence du dossier et son cycle sont renvoyés - jamais le
         // code de suivi ni les données personnelles (qui permettaient, avec le
         // seul email d'un tiers, de consulter puis modifier son dossier).
         $verified = $this->hasValidEmailToken($request, $email);

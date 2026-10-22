@@ -1,12 +1,12 @@
 {{-- resources/views/emails/secretaire-message.blade.php --}}
 {{-- Variables : $reference, $typeLabel, $nomDemandeur, $messageBody, $secretaireName --}}
-{{-- NB : ne jamais utiliser $message ici — Laravel y injecte l'objet Illuminate\Mail\Message. --}}
+{{-- NB : ne jamais utiliser $message ici - Laravel y injecte l'objet Illuminate\Mail\Message. --}}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Message du secrétariat — CAP-EPAC</title>
+  <title>Message du secrétariat - CAP-EPAC</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -51,12 +51,12 @@
 
       <div class="message-box">{{ $messageBody }}</div>
 
-      <p class="signature">— {{ $secretaireName }}, Secrétariat CAP-EPAC</p>
+      <p class="signature">- {{ $secretaireName }}, Secrétariat CAP-EPAC</p>
     </div>
 
     <div class="footer">
       <p>Ce message vous a été envoyé également par WhatsApp si votre numéro est renseigné.</p>
-      <p>CAP-EPAC — Ne pas répondre directement à cet email.</p>
+      <p>CAP-EPAC - Ne pas répondre directement à cet email.</p>
     </div>
   </div>
 </body>

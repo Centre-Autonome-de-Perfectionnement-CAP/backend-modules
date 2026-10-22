@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Index de performance — idempotente (vérifie avant de créer, jamais d'erreur si déjà là).
+ * Index de performance - idempotente (vérifie avant de créer, jamais d'erreur si déjà là).
  *
  * Gains ciblés par index :
  *
@@ -60,7 +60,7 @@ return new class extends Migration
             $this->idx($table, 'document_requests', ['updated_at'],                         'idx_dr_updated_at');
         });
 
-        // ── document_request_histories — LE PLUS IMPORTANT ───────────────────
+        // ── document_request_histories - LE PLUS IMPORTANT ───────────────────
         Schema::table('document_request_histories', function (Blueprint $table) {
             // Couvre les 9 sous-requêtes corrélées de historySubqueries() :
             // WHERE document_request_id = ? AND actor_role = ? ORDER BY created_at DESC LIMIT 1
@@ -84,7 +84,7 @@ return new class extends Migration
             $this->idx($table, 'pending_students', ['status'],                  'idx_ps_status');
         });
 
-        // ── role_user — findUsersWithRole() à chaque transition ───────────────
+        // ── role_user - findUsersWithRole() à chaque transition ───────────────
         Schema::table('role_user', function (Blueprint $table) {
             $this->idx($table, 'role_user', ['role_id'], 'idx_ru_role_id');
             $this->idx($table, 'role_user', ['user_id'], 'idx_ru_user_id');

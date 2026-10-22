@@ -9,7 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * CORRECTIF (v2) — Thin Controller fidèle au DemandeController réel
+ * CORRECTIF (v2) - Thin Controller fidèle au DemandeController réel
  *
  * Toute la logique (validation métier, stockage, quittance PDF,
  * insertion, notification) est déplacée vers DemandeSubmissionService.
@@ -122,7 +122,7 @@ class DemandeController extends Controller
         $request->validate(['reference' => 'required|string|max:50']);
 
         // FUSION develop/main : références REF-xxxxxx créées par l'ancien système
-        // provisoire de main (table legacy_student_service_requests) — restent
+        // provisoire de main (table legacy_student_service_requests) - restent
         // consultables, en lecture seule, via le contrôleur d'origine.
         if (self::isLegacyServiceReference($request->reference)) {
             return app(\App\Modules\LegacyStudent\Http\Controllers\StudentServiceController::class)

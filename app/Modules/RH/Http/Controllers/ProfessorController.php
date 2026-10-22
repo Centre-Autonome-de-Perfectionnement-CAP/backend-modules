@@ -22,12 +22,12 @@ class ProfessorController extends Controller
     use ApiResponse, HasPagination, RestrictsToRoles;
 
     /**
-     * AJOUT (audit sécurité) — store/update/destroy/updateAddress
+     * AJOUT (audit sécurité) - store/update/destroy/updateAddress
      * n'avaient AUCUNE protection : n'importe quel compte connecté
      * (y compris un autre professeur) pouvait créer/modifier/supprimer
      * la fiche de N'IMPORTE QUEL professeur. `index()` reste public sans
      * authentification (déjà le cas avant ce correctif, via `->except`
-     * ci-dessous) — à confirmer si c'est voulu.
+     * ci-dessous) - à confirmer si c'est voulu.
      */
     private const ALLOWED_ROLES = ['admin', 'chef-cap', 'rh'];
 
@@ -49,7 +49,7 @@ class ProfessorController extends Controller
             $query = Professor::query()
                 ->select('id', 'first_name', 'last_name', 'email', 'status')
                 // Seuls les profs ayant au moins un ECUE assigné dans le module Cours
-                // sont retournés ici — garantit que le select de création de contrat
+                // sont retournés ici - garantit que le select de création de contrat
                 // n'affiche que des profs pour lesquels on pourra choisir des programmes.
                 ->whereHas('courseElementProfessors');
 

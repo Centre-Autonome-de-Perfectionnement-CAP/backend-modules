@@ -1,10 +1,10 @@
 /**
- * WhatsAppManager — Gestionnaire de connexion Baileys
+ * WhatsAppManager - Gestionnaire de connexion Baileys
  *
  * MODIFIÉ (15/08/2026) : useMultiFileAuthState (fichiers sur disque, dossier
  * auth/) remplacé par useDbAuthState (creds + clés Signal chiffrés
  * AES-256-GCM dans wa_sessions / wa_session_keys). Plus AUCUN accès
- * filesystem pour les sessions — conforme à la demande d'origine.
+ * filesystem pour les sessions - conforme à la demande d'origine.
  *
  * Comportements conservés à l'identique :
  *  - Backoff exponentiel sur les reconnexions (1s, 2s, 4s, 8s, 16s, 30s)
@@ -18,7 +18,7 @@ import makeWASocket, {
     fetchLatestBaileysVersion,
     type WASocket,
 } from '../vendor/baileys/lib/index.js'
-// Baileys VENDORISÉ localement (voir vendor/baileys/VENDOR-NOTES.md) —
+// Baileys VENDORISÉ localement (voir vendor/baileys/VENDOR-NOTES.md) -
 // plus aucune dépendance npm/externe vers un Baileys en ligne ou local
 // hors du module WhatsApp.
 import { Boom }         from '@hapi/boom'
@@ -46,7 +46,7 @@ export class WhatsAppManager extends EventEmitter {
         this.setMaxListeners(50)
 
         this.sessionId = sessionId
-        // Plus de dossier auth/ à créer — tout vit en base de données.
+        // Plus de dossier auth/ à créer - tout vit en base de données.
     }
 
     // ─── Initialisation ───────────────────────────────────────────────────────
@@ -54,7 +54,7 @@ export class WhatsAppManager extends EventEmitter {
     async init(): Promise<void> {
         // Guard : si une initialisation est déjà en cours, ne pas en lancer une deuxième
         if (this.isInitializing) {
-            console.log('[Baileys] Initialisation déjà en cours — ignoré')
+            console.log('[Baileys] Initialisation déjà en cours - ignoré')
             return
         }
 
@@ -93,7 +93,7 @@ export class WhatsAppManager extends EventEmitter {
                     const shouldReconnect = statusCode !== DisconnectReason.loggedOut
 
                     console.log(
-                        `[Baileys] Connexion fermée — code: ${statusCode ?? 'inconnu'}` +
+                        `[Baileys] Connexion fermée - code: ${statusCode ?? 'inconnu'}` +
                         ` | reconnexion: ${shouldReconnect}`
                     )
 
@@ -109,7 +109,7 @@ export class WhatsAppManager extends EventEmitter {
                         setTimeout(() => this.init(), delay)
                     } else {
                         // Session révoquée côté WhatsApp → reset complet en DB
-                        console.log('[Baileys] Session révoquée — nettoyage DB et nouveau QR')
+                        console.log('[Baileys] Session révoquée - nettoyage DB et nouveau QR')
                         this.sock = null
                         await deleteSessionData(this.sessionId)
                         this.emit('logged_out')
@@ -119,7 +119,7 @@ export class WhatsAppManager extends EventEmitter {
                 } else if (connection === 'open') {
                     this.isConnected      = true
                     this.reconnectAttempt = 0
-                    console.log('[Baileys] Connexion ouverte — WhatsApp connecté ✅')
+                    console.log('[Baileys] Connexion ouverte - WhatsApp connecté ✅')
 
                     await updateSessionMeta(this.sessionId, {
                         phone:       this.sock?.user?.id?.split(':')[0] ?? null,
@@ -162,7 +162,7 @@ export class WhatsAppManager extends EventEmitter {
             try {
                 await this.sock.logout()
             } catch {
-                // Session déjà invalide ou réseau coupé — on nettoie quand même
+                // Session déjà invalide ou réseau coupé - on nettoie quand même
             }
             this._closeSocket(this.sock)
             this.sock = null
@@ -185,7 +185,7 @@ export class WhatsAppManager extends EventEmitter {
             throw new Error('WhatsApp socket non initialisé')
         }
         if (!this.isConnected) {
-            throw new Error('WhatsApp non connecté — scannez le QR code')
+            throw new Error('WhatsApp non connecté - scannez le QR code')
         }
 
         const send = this.sock.sendMessage(remoteJid, { text })
@@ -203,7 +203,7 @@ export class WhatsAppManager extends EventEmitter {
     // ─── Envoi de fichier (document ou image) ─────────────────────────────────
 
     /**
-     * Envoie un fichier via une URL (Baileys télécharge lui-même —
+     * Envoie un fichier via une URL (Baileys télécharge lui-même -
      * pas besoin de charger le fichier entier en mémoire ici).
      * type 'image' → aperçu inline WhatsApp ; sinon 'document' générique.
      */
@@ -216,7 +216,7 @@ export class WhatsAppManager extends EventEmitter {
             throw new Error('WhatsApp socket non initialisé')
         }
         if (!this.isConnected) {
-            throw new Error('WhatsApp non connecté — scannez le QR code')
+            throw new Error('WhatsApp non connecté - scannez le QR code')
         }
 
         const isImage = opts.mimetype.startsWith('image/')

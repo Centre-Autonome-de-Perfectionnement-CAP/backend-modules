@@ -36,7 +36,7 @@ Route::prefix('api')->group(function () {
     // silencieusement le circuit officiel. Les anciennes références REF-xxxxxx
     // restent consultables : le module Attestation délègue à ce contrôleur.
 
-    // Rétrocompatibilité — ancien endpoint bulletins (conservé)
+    // Rétrocompatibilité - ancien endpoint bulletins (conservé)
     Route::get('/bulletins/status', [StudentServiceController::class, 'bulletinStatus']);
 
     // ── Routes admin (gestion scolarité) ───────────────────────────────────

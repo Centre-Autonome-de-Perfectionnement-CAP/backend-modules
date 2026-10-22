@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
- * Service centralisé de stockage documentaire — Contrats CAP-EPAC
+ * Service centralisé de stockage documentaire - Contrats CAP-EPAC
  *
  * Structure normalisée (disk : public) :
  *
@@ -103,7 +103,7 @@ class ContratStorageService
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // STOCKAGE — PDF CONTRAT
+    // STOCKAGE - PDF CONTRAT
     // ════════════════════════════════════════════════════════════════════════════
 
     /**
@@ -139,7 +139,7 @@ class ContratStorageService
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // STOCKAGE — SIGNATURE
+    // STOCKAGE - SIGNATURE
     // ════════════════════════════════════════════════════════════════════════════
 
     /**
@@ -164,7 +164,7 @@ class ContratStorageService
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // STOCKAGE — SUPPORTS DE COURS
+    // STOCKAGE - SUPPORTS DE COURS
     // ════════════════════════════════════════════════════════════════════════════
 
     /**
@@ -190,7 +190,7 @@ class ContratStorageService
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // STOCKAGE — FACTURES NORMALISÉES
+    // STOCKAGE - FACTURES NORMALISÉES
     // ════════════════════════════════════════════════════════════════════════════
 
     /**
@@ -269,7 +269,7 @@ class ContratStorageService
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // TRAITEMENT IMAGE — SUPPRESSION FOND BLANC
+    // TRAITEMENT IMAGE - SUPPRESSION FOND BLANC
     // ════════════════════════════════════════════════════════════════════════════
 
     /**

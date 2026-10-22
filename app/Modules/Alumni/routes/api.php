@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->middleware('api')->group(function () {
 
-    // ── Route publique — soumettre une fiche alumni ─────────────────────────
+    // ── Route publique - soumettre une fiche alumni ─────────────────────────
     Route::post('/alumni', [AlumniController::class, 'store'])->name('alumni.store');
 
     // ── Routes admin (protégées par auth:sanctum) ───────────────────────────

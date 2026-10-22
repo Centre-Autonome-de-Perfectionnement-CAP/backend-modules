@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Notifier — point d'entrée unique des notifications email + WhatsApp.
+ * Notifier - point d'entrée unique des notifications email + WhatsApp.
  *
  * Règles (identiques au module Demandes) :
  *   - tout part en file (queue) : la requête HTTP ne fait que publier des
@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Log;
  *     marchent jamais dessus, un échec n'en bloque aucun autre ;
  *   - un dispatch qui échoue (table jobs indisponible…) est journalisé et
  *     n'interrompt jamais le traitement métier appelant ;
- *   - transactionnel (bulk = false) : file `default`, sans délai — perçu
+ *   - transactionnel (bulk = false) : file `default`, sans délai - perçu
  *     instantané par le destinataire ;
  *   - diffusion de masse (bulk = true) : file `emails` (traitée après
  *     `default`, ne retarde jamais le transactionnel) et envois cadencés
@@ -178,7 +178,7 @@ class Notifier
      * workers) et renvoie le délai en millisecondes.
      *
      *   - WhatsApp : un message toutes les ~4 s (+ 0 à 2 s aléatoires), soit
-     *     au plus ~900 messages/heure — rythme « humain » qui évite la
+     *     au plus ~900 messages/heure - rythme « humain » qui évite la
      *     suspension du numéro ;
      *   - email    : un message par seconde (évite le refus du serveur SMTP).
      *

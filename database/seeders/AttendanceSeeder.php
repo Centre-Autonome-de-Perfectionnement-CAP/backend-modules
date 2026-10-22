@@ -13,7 +13,7 @@ class AttendanceSeeder extends Seeder
 {
     public function run(): void
     {
-        $this->command->info('Amorçage EPAC — données complètes avec emploi du temps...');
+        $this->command->info('Amorçage EPAC - données complètes avec emploi du temps...');
 
         // ── NETTOYAGE ─────────────────────────────────────────────────────────
         DB::statement('SET FOREIGN_KEY_CHECKS=0;');

@@ -384,7 +384,7 @@ class AttendanceExportService
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    //  BUILD WORD — gère management, course ET fingerprint
+    //  BUILD WORD - gère management, course ET fingerprint
     // ─────────────────────────────────────────────────────────────────────────
 
     private function buildWord(array $students, array $filters, string $type): mixed

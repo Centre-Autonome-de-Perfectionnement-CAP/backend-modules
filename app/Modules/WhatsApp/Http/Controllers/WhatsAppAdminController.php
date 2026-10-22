@@ -16,7 +16,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 /**
  * Endpoints admin du module WhatsApp.
  *
- * Accès : rôle 'admin' STRICT uniquement (décision utilisateur du 15/08/2026 —
+ * Accès : rôle 'admin' STRICT uniquement (décision utilisateur du 15/08/2026 -
  * pas de 'responsable-division' ici, contrairement à AdminDb).
  *
  * Pattern d'autorisation aligné sur le reste du projet (voir AdminTableController) :
@@ -35,7 +35,7 @@ class WhatsAppAdminController extends Controller
 
     private const CACHE_QR       = 'wa:qr';
     private const CACHE_STATUS   = 'wa:status';
-    private const CACHE_QR_TTL   = 120; // secondes — un QR Baileys expire vite de toute façon
+    private const CACHE_QR_TTL   = 120; // secondes - un QR Baileys expire vite de toute façon
     private const CACHE_STATUS_TTL = 300;
 
     public function __construct(
@@ -111,7 +111,7 @@ class WhatsAppAdminController extends Controller
     // ─── Onglets Messages envoyés / échoués ───────────────────────────────────
 
     /**
-     * Filtrable par statut ET par module (gestion "module par module" —
+     * Filtrable par statut ET par module (gestion "module par module" -
      * ex: ne voir que les échecs venant de Finance, ou tout Demandes).
      */
     public function messages(Request $request): JsonResponse
@@ -137,7 +137,7 @@ class WhatsAppAdminController extends Controller
 
     /**
      * Liste des modules distincts déjà présents dans le journal, avec
-     * compteur — alimente le filtre déroulant du frontend admin. Se
+     * compteur - alimente le filtre déroulant du frontend admin. Se
      * remplit automatiquement au fil des envois, aucune config à faire
      * quand un nouveau module commence à envoyer des WhatsApp.
      */
@@ -241,7 +241,7 @@ class WhatsAppAdminController extends Controller
         $provided = (string) $request->header('X-Api-Key', '');
 
         if ($expected !== '' && !hash_equals($expected, $provided)) {
-            Log::warning('[WhatsApp] Webhook interne rejeté — clé API invalide');
+            Log::warning('[WhatsApp] Webhook interne rejeté - clé API invalide');
             abort(401);
         }
 
@@ -274,7 +274,7 @@ class WhatsAppAdminController extends Controller
     /**
      * Le Node appelle cette route en loopback pour télécharger un fichier
      * avant de l'envoyer à WhatsApp. Protégée par un token opaque à usage
-     * temporaire (10 min) généré par WhatsAppBridgeClient::sendFile() —
+     * temporaire (10 min) généré par WhatsAppBridgeClient::sendFile() -
      * pas de auth:sanctum (le Node n'est pas un utilisateur), pas de
      * config supplémentaire nécessaire côté disque (fonctionne avec
      * n'importe quel disque Laravel : local, s3...).

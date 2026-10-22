@@ -15,7 +15,7 @@ use App\Modules\Demandes\Services\WhatsAppService;
 use App\Modules\Demandes\Services\SecretaryFileService;
 
 /**
- * CORRECTIF (v2) — basé sur le DemandesServiceProvider réel.
+ * CORRECTIF (v2) - basé sur le DemandesServiceProvider réel.
  *
  * Conservé à l'identique : tous les singletons existants (WhatsAppService,
  * NotificationService, DocumentRequestQueryService, DocumentRequestHistoryService,
@@ -30,7 +30,7 @@ use App\Modules\Demandes\Services\SecretaryFileService;
  * Sur Linux (filesystem case-sensitive), __DIR__ . '/../Routes/api.php'
  * pointait dans le vide et aucune route n'était jamais enregistrée
  * ("Aucune demande" côté secrétaire). Déjà corrigé ci-dessous
- * (loadRoutesFrom pointe vers routes/ en minuscule) — gardé en note pour
+ * (loadRoutesFrom pointe vers routes/ en minuscule) - gardé en note pour
  * éviter de reproduire l'erreur.
  */
 class DemandesServiceProvider extends ServiceProvider
@@ -40,7 +40,7 @@ class DemandesServiceProvider extends ServiceProvider
 
     public function register(): void
     {
-        // Singletons explicites — lisibilité + perf (pas de re-instanciation)
+        // Singletons explicites - lisibilité + perf (pas de re-instanciation)
         $this->app->singleton(DocumentRequestQueryService::class);
         $this->app->singleton(DocumentRequestHistoryService::class);
         $this->app->singleton(NotificationService::class);

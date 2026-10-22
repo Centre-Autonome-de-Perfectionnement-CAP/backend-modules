@@ -15,7 +15,7 @@ class ProcessStageActivations extends Command
     public function handle(InternActivationService $service): int
     {
         $s = $service->tick();
-        $this->info("Liens : {$s['sent']} — rappels : {$s['reminded']} — désistements : {$s['withdrawn']}");
+        $this->info("Liens : {$s['sent']} - rappels : {$s['reminded']} - désistements : {$s['withdrawn']}");
 
         return self::SUCCESS;
     }

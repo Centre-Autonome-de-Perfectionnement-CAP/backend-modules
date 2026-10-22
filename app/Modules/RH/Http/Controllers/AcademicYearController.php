@@ -12,11 +12,11 @@ class AcademicYearController extends Controller{
     use RestrictsToRoles;
 
     /**
-     * AJOUT (audit sécurité) — aucun middleware n'existait ici. index()
+     * AJOUT (audit sécurité) - aucun middleware n'existait ici. index()
      * est le SEUL routé aujourd'hui (routes/api.php), volontairement public
      * en lecture seule. store/update/destroy/getCurrent/setCurrent ne sont
      * PAS routés actuellement (pas de faille active), mais restent sans
-     * protection dans le code — corrigé par précaution pour le jour où
+     * protection dans le code - corrigé par précaution pour le jour où
      * quelqu'un ajoutera ces routes sans y repenser.
      */
     private const ALLOWED_ROLES = ['admin', 'chef-cap', 'rh'];

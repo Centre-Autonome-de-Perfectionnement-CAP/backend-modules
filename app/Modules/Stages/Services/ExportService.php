@@ -75,7 +75,7 @@ class ExportService
 
         $scopes = ['current' => 'En cours', 'upcoming' => 'À venir', 'finished' => 'Terminés', 'all' => 'Tous', 'mine' => 'Mes stagiaires', 'unsupervised' => 'Sans superviseur'];
 
-        return $this->file('Suivi des stagiaires', 'Suivi des stagiaires', ($scopes[$scope] ?? $scope) . ($q ? " — recherche « {$q} »" : ''), [
+        return $this->file('Suivi des stagiaires', 'Suivi des stagiaires', ($scopes[$scope] ?? $scope) . ($q ? " - recherche « {$q} »" : ''), [
             'Référence', 'Stagiaire', 'Établissement', 'Formation', 'Service', 'Début', 'Fin', 'Phase',
             'Superviseur(s)', 'Binôme / groupe', 'Espace activé',
             'Assiduité (%)', 'Jours ouvrés', 'Absences', 'Retards', 'Justifiés',
@@ -98,7 +98,7 @@ class ExportService
         ])->values()->all();
         $s = $report['summary'];
 
-        return $this->file('Présences', 'Présences — ' . trim($req->civilite . ' ' . $req->fullName()) . " ({$req->reference})",
+        return $this->file('Présences', 'Présences - ' . trim($req->civilite . ' ' . $req->fullName()) . " ({$req->reference})",
             'Assiduité : ' . ($s['taux'] !== null ? "{$s['taux']} %" : '—') . " · {$s['jours_ouvres']} jour(s) ouvré(s), {$s['absences']} absence(s), {$s['retards']} retard(s), {$s['justifies']} justifié(s)",
             ['Jour', 'État', 'Arrivée', 'Départ en pause', 'Retour de pause', 'Sortie', 'Retard (min)', 'Justification'],
             $rows, 'presences-' . $req->reference);
@@ -135,7 +135,7 @@ class ExportService
     private function file(string $sheet, string $title, string $subtitle, array $headings, array $rows, string $slug): array
     {
         $now = CarbonImmutable::now(BusinessHours::TZ);
-        $content = Excel::raw(new StageSheet($sheet, "CAP-EPAC — {$title}",
+        $content = Excel::raw(new StageSheet($sheet, "CAP-EPAC - {$title}",
             $subtitle . ' · ' . count($rows) . ' ligne(s) · extrait le ' . $now->format('d/m/Y à H:i'), $headings, $rows), ExcelFormat::XLSX);
 
         return [

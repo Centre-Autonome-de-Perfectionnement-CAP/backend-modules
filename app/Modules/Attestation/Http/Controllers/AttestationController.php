@@ -28,7 +28,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * CORRECTIF (v2) — Thin Controller, basé sur le AttestationController réel
+ * CORRECTIF (v2) - Thin Controller, basé sur le AttestationController réel
  *
  * Différences avec la v1 livrée précédemment :
  *   - Les méthodes publiques (getStatus, getBulletinStatus, identify,
@@ -37,7 +37,7 @@ use Illuminate\Http\Request;
  *     pour ne rien casser côté frontend.
  *   - checkAvailability() utilise désormais available()/unavailable()
  *     internes (toujours 200 OK avec {available: bool}), comme l'original
- *     — PAS de StudentEligibilityDTO->toArray() direct qui aurait pu
+ *     - PAS de StudentEligibilityDTO->toArray() direct qui aurait pu
  *     changer le code HTTP.
  *   - Toutes les routes protégées (éligibilité + génération) sont
  *     identiques à la version précédente : aucune divergence trouvée
@@ -53,7 +53,7 @@ class AttestationController extends Controller
     ) {}
 
     // ══════════════════════════════════════════════════════════════════════════
-    // ROUTES PUBLIQUES — Site vitrine
+    // ROUTES PUBLIQUES - Site vitrine
     // ══════════════════════════════════════════════════════════════════════════
 
     public function getAcademicYears(): JsonResponse
@@ -117,7 +117,7 @@ class AttestationController extends Controller
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // ROUTES PROTÉGÉES — Éligibilité + Génération (progiciel interne)
+    // ROUTES PROTÉGÉES - Éligibilité + Génération (progiciel interne)
     // Inchangées : aucune divergence trouvée dans le code source réel.
     // ══════════════════════════════════════════════════════════════════════════
 
@@ -125,7 +125,7 @@ class AttestationController extends Controller
     { $s = $this->attestationService->getEligibleForPassage($request->academic_year_id, $request->department_id, $request->cohort, $request->search); return $this->successResponse(['students' => $s, 'total' => $s->count()], 'OK'); }
 
     /**
-     * Étudiants pour lesquels un bulletin peut être généré (ajouté sur main —
+     * Étudiants pour lesquels un bulletin peut être généré (ajouté sur main -
      * route GET eligible/bulletins, utilisée par le progiciel).
      */
     public function getStudentsForBulletins(GetEligibleStudentsRequest $request): JsonResponse
@@ -219,7 +219,7 @@ class AttestationController extends Controller
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // HELPER PRIVÉ — B1.5 DRY : élimine 13 blocs try/catch identiques
+    // HELPER PRIVÉ - B1.5 DRY : élimine 13 blocs try/catch identiques
     // ══════════════════════════════════════════════════════════════════════════
 
     private function tryGenerate(callable $fn)

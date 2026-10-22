@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Migration CONSOLIDÉE — table document_request_histories
+ * Migration CONSOLIDÉE - table document_request_histories
  *
  * Regroupe l'intégralité des migrations suivantes (dans l'ordre d'exécution) :
  *   1. 2026_04_13_000001_create_document_request_histories_table.php
@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Schema;
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * RÈGLES IMMUABILITÉ :
- *   • Pas d'updated_at — aucune ligne ne doit jamais être modifiée après insertion.
+ *   • Pas d'updated_at - aucune ligne ne doit jamais être modifiée après insertion.
  *   • actor_id nullable pour permettre les actions système (null = système).
  *   • actor_name et actor_role sont des snapshots : ils résistent à la suppression
  *     d'un utilisateur.
@@ -66,7 +66,7 @@ return new class extends Migration
                   ->nullOnDelete();
 
             $table->string('actor_name')
-                  ->comment('Snapshot du nom complet — résiste à la suppression de l\'utilisateur');
+                  ->comment('Snapshot du nom complet - résiste à la suppression de l\'utilisateur');
             $table->string('actor_role', 60)
                   ->comment('Snapshot du slug de rôle : secretaire | comptable | chef_division | chef_cap | sec_da | da | sec_dir | directeur');
 
@@ -87,7 +87,7 @@ return new class extends Migration
             $table->text('comment')->nullable();
 
             // ── Horodatage immuable ───────────────────────────────────────
-            // Pas d'updated_at — l'historique est en lecture seule après insertion
+            // Pas d'updated_at - l'historique est en lecture seule après insertion
             $table->timestamp('created_at')->useCurrent();
 
             // ── Index ─────────────────────────────────────────────────────

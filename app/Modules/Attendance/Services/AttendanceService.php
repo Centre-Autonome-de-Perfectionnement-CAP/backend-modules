@@ -95,7 +95,7 @@ class AttendanceService
     }
 
     // =========================================================
-    //  DASHBOARD — stats globales + retard
+    //  DASHBOARD - stats globales + retard
     // =========================================================
 
     public function getDashboardStats(array $filters): array
@@ -252,16 +252,16 @@ class AttendanceService
                 'on_time'           => $isOnTime,
                 'grace_minutes'     => 5,
                 'message'           => $isOnTime
-                    ? "Cours en cours — scans enregistrés à l'heure"
-                    : 'Cours en cours — scans enregistrés avec retard',
+                    ? "Cours en cours - scans enregistrés à l'heure"
+                    : 'Cours en cours - scans enregistrés avec retard',
             ];
         }
 
-        return ['active' => false, 'message' => 'Aucun cours actif — capteur inactif'];
+        return ['active' => false, 'message' => 'Aucun cours actif - capteur inactif'];
     }
 
     // =========================================================
-    //  FINGERPRINT — liste étudiants
+    //  FINGERPRINT - liste étudiants
     // =========================================================
 
     public function getFingerprintList(array $filters): array
@@ -386,7 +386,7 @@ class AttendanceService
             $onTime      = $now->lte($startCarbon->copy()->addMinutes(5));
         }
 
-        // 4. Vérifier doublon — éviter d'enregistrer 2 fois le même jour pour le même cours
+        // 4. Vérifier doublon - éviter d'enregistrer 2 fois le même jour pour le même cours
         $alreadyExists = DB::table('attendances')
             ->where('student_id',        $student->id)
             ->where('course_element_id', $courseElement?->id)
