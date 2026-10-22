@@ -1,0 +1,1 @@
+import{r as p,al as l,R as d,am as m,an as r}from"./index-YE0_GqLr.js";const s=p.forwardRef((a,e)=>{var{children:c,className:t}=a,o=l(a,["children","className"]);return d.createElement("div",Object.assign({className:m("card-group",t)},o,{ref:e}),c)});s.propTypes={children:r.node,className:r.string};s.displayName="CCardGroup";export{s as C};
