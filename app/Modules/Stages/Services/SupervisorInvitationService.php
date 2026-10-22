@@ -148,6 +148,13 @@ class SupervisorInvitationService
         return ($inv && !$inv->accepted_at && !$inv->revoked_at && now()->lessThan($inv->expires_at)) ? $inv : null;
     }
 
+    /** Le lien a déjà servi à créer le compte (page rouverte après l'inscription). */
+    public function wasAccepted(string $token): bool
+    {
+        return DB::table('stage_supervisor_invitations')
+            ->where('token_hash', hash('sha256', $token))->whereNotNull('accepted_at')->exists();
+    }
+
     /** Crée le compte superviseur ; le lien ne sert qu'une fois. */
     public function accept(string $token, array $data): User
     {

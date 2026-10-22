@@ -24,6 +24,9 @@ class SupervisorInvitationController extends Controller
         $data = $request->validate(['token' => self::TOKEN_RULE]);
         $inv  = $this->service->findValid($data['token']);
         if (!$inv) {
+            if ($this->service->wasAccepted($data['token'])) {
+                return $this->errorResponse('Votre compte superviseur est déjà créé avec ce lien. Connectez-vous avec votre email et votre mot de passe.', 409, 'STAGE_INVITE_USED');
+            }
             return $this->errorResponse("Ce lien d'invitation n'est plus valable. Demandez-en un nouveau au responsable de division.", 410, 'STAGE_INVITE_INVALID');
         }
 

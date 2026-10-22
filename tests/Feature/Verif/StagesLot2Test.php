@@ -129,7 +129,8 @@ class StagesLot2Test extends TestCase
         $this->assertSame('DOSSOU', $user->last_name);
 
         // Lien à usage unique ; numéro déjà inscrit ignoré
-        $this->getJson("/api/stages/invitation?token={$token}")->assertStatus(410);
+        $this->getJson("/api/stages/invitation?token={$token}")->assertStatus(409)
+            ->assertJsonPath('error_code', 'STAGE_INVITE_USED');
         $this->actingAs($lead, 'sanctum')->postJson('/api/stages/admin/invitations', ['numeros' => '0197554433'])
             ->assertOk()->assertJsonPath('data.already_supervisor', ['+2290197554433']);
     }
