@@ -121,7 +121,12 @@ class StagePdfService
                 'isFontSubsettingEnabled' => true,
                 'isHtml5ParserEnabled'    => true,
                 'dpi'                     => 96,
+                // Polices et logos dans le module (jamais dans storage/, qui est
+                // un lien vers le dossier partagé en production, hors chroot) ;
+                // cache des polices dans storage/fonts, accessible en écriture.
                 'chroot'                  => base_path(),
+                'fontDir'                 => storage_path('fonts'),
+                'fontCache'               => storage_path('fonts'),
             ])
             ->output();
     }

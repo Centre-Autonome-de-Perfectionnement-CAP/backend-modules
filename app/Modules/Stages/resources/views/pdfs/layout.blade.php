@@ -10,13 +10,13 @@
 <meta charset="UTF-8">
 <title>@yield('title')</title>
 <style>
-    @font-face { font-family: 'Algerian'; font-weight: normal; src: url("{{ storage_path('fonts/ALGERIA.ttf') }}") format('truetype'); }
-    @font-face { font-family: 'Pristina'; font-weight: normal; src: url("{{ storage_path('fonts/PRISTINA.ttf') }}") format('truetype'); }
-    @font-face { font-family: 'Pristina'; font-weight: bold; src: url("{{ storage_path('fonts/PRISTINA.ttf') }}") format('truetype'); }
-    @font-face { font-family: 'Albertus'; font-weight: normal; src: url("{{ storage_path('fonts/albr55w.ttf') }}") format('truetype'); }
-    @font-face { font-family: 'Albertus'; font-weight: bold; src: url("{{ storage_path('fonts/albr55w.ttf') }}") format('truetype'); }
-    @font-face { font-family: 'Albertus'; font-weight: normal; font-style: italic; src: url("{{ storage_path('fonts/albr55w.ttf') }}") format('truetype'); }
-    @font-face { font-family: 'Albertus'; font-weight: bold; font-style: italic; src: url("{{ storage_path('fonts/albr55w.ttf') }}") format('truetype'); }
+    @font-face { font-family: 'Algerian'; font-weight: normal; src: url("{{ base_path('app/Modules/Stages/resources/pdf/fonts/ALGERIA.ttf') }}") format('truetype'); }
+    @font-face { font-family: 'Pristina'; font-weight: normal; src: url("{{ base_path('app/Modules/Stages/resources/pdf/fonts/PRISTINA.ttf') }}") format('truetype'); }
+    @font-face { font-family: 'Pristina'; font-weight: bold; src: url("{{ base_path('app/Modules/Stages/resources/pdf/fonts/PRISTINA.ttf') }}") format('truetype'); }
+    @font-face { font-family: 'Albertus'; font-weight: normal; src: url("{{ base_path('app/Modules/Stages/resources/pdf/fonts/albr55w.ttf') }}") format('truetype'); }
+    @font-face { font-family: 'Albertus'; font-weight: bold; src: url("{{ base_path('app/Modules/Stages/resources/pdf/fonts/albr55w.ttf') }}") format('truetype'); }
+    @font-face { font-family: 'Albertus'; font-weight: normal; font-style: italic; src: url("{{ base_path('app/Modules/Stages/resources/pdf/fonts/albr55w.ttf') }}") format('truetype'); }
+    @font-face { font-family: 'Albertus'; font-weight: bold; font-style: italic; src: url("{{ base_path('app/Modules/Stages/resources/pdf/fonts/albr55w.ttf') }}") format('truetype'); }
 
     @page { margin: 0; size: A4 portrait; }
     * { margin: 0; padding: 0; }

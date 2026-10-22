@@ -93,3 +93,8 @@ app/Modules_backup/
 /.marscode
 # Rapports ponctuels de scripts de migration
 payment_migration_errors_*.csv
+
+# Cache des polices généré par dompdf (PDF du module Stages)
+storage/fonts/*_normal_*
+storage/fonts/*_bold_*
+storage/fonts/*_italic_*
