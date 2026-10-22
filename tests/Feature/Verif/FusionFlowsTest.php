@@ -233,7 +233,13 @@ class FusionFlowsTest extends TestCase
         ]);
         \Illuminate\Support\Facades\Storage::fake('public');
         $pieces = ['pieces' => ['demande_manuscrite' => \Illuminate\Http\UploadedFile::fake()->create('a.pdf', 50, 'application/pdf')]];
-        $base = ['reference' => 'ATT-TESTC1', 'email' => 'x@example.org', 'whatsapp' => '0197000009'];
+        // Plus d'email ni de WhatsApp à saisir : seules les coordonnées enregistrées servent.
+        $base = ['reference' => 'ATT-TESTC1'];
+        $found = $this->getJson('/api/attestations/demandes/complement/find?reference=ATT-TESTC1')->assertOk()->json('data');
+        $this->assertSame('c•@example.org', $found['contact']['email_hint']);
+        $this->assertStringEndsWith('0009', $found['contact']['whatsapp_hint']);
+        $this->assertStringNotContainsString('c1@example.org', json_encode($found));
+        $this->assertStringNotContainsString('0197000009', json_encode($found));
 
         $this->post('/api/attestations/demandes/complement', $base + $pieces, ['Accept' => 'application/json'])->assertStatus(422);
         $this->post('/api/attestations/demandes/complement', $base + $pieces + ['complement_token' => 'faux'], ['Accept' => 'application/json'])->assertStatus(403);
@@ -247,7 +253,12 @@ class FusionFlowsTest extends TestCase
         $tok = $this->postJson('/api/attestations/demandes/complement/otp/verify', ['reference' => 'ATT-TESTC1', 'code' => $m[1]])->assertOk()->json('data.complement_token');
 
         $pieces2 = ['pieces' => ['demande_manuscrite' => \Illuminate\Http\UploadedFile::fake()->create('a.pdf', 50, 'application/pdf')]];
-        $this->post('/api/attestations/demandes/complement', $base + $pieces2 + ['complement_token' => $tok], ['Accept' => 'application/json'])->assertStatus(201);
+        // Un email / WhatsApp envoyé par le client est ignoré : l'accusé part aux coordonnées enregistrées.
+        $this->post('/api/attestations/demandes/complement', $base + $pieces2 + ['complement_token' => $tok, 'email' => 'pirate@example.org', 'whatsapp' => '0196000000'], ['Accept' => 'application/json'])->assertStatus(201);
+        $this->assertSame('+2290197000009', DB::table('document_requests')->where('id', $id)->value('demandeur_whatsapp'));
+        $sentTo = $this->jobs('whatsapp')->pluck('payload.phone')->all();
+        $this->assertNotContains('0196000000', $sentTo);
+        $this->assertNotContains('+2290196000000', $sentTo);
         // jeton à usage unique
         $pieces3 = ['pieces' => ['demande_manuscrite' => \Illuminate\Http\UploadedFile::fake()->create('a.pdf', 50, 'application/pdf')]];
         $this->post('/api/attestations/demandes/complement', $base + $pieces3 + ['complement_token' => $tok], ['Accept' => 'application/json'])->assertStatus(403);

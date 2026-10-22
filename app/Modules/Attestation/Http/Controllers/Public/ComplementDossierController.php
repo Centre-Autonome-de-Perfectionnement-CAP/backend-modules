@@ -228,9 +228,10 @@ class ComplementDossierController extends Controller
     public function store(Request $request): JsonResponse
     {
         $request->validate([
+            // Pas d'email ni de WhatsApp : le complément utilise uniquement les
+            // coordonnées ENREGISTRÉES lors de la demande (celles qui ont reçu
+            // le code). D'éventuels champs envoyés par le client sont ignorés.
             'reference'      => 'required|string|max:50',
-            'email'          => 'required|email|max:255',
-            'whatsapp'       => 'required|string|max:30',
             'pieces'         => 'required|array|min:1',
             'pieces.*'       => 'file|max:5120|mimes:pdf,jpg,jpeg,png,webp,heic,heif',
             // Jeton obtenu après validation du code reçu par WhatsApp / email
@@ -238,14 +239,6 @@ class ComplementDossierController extends Controller
             'piece_labels'   => 'nullable|array',
             'piece_labels.*' => 'nullable|string|max:200',
         ]);
-
-        $whatsappNormalized = $this->whatsAppService->normalizePhone($request->whatsapp);
-        if (!$whatsappNormalized) {
-            return response()->json([
-                'message' => 'Numéro WhatsApp invalide. Formats acceptés : 97123456, 0197123456, +22997123456.',
-                'errors'  => ['whatsapp' => ['Numéro WhatsApp invalide.']],
-            ], 422);
-        }
 
         $reference = strtoupper(trim($request->reference));
 
@@ -356,10 +349,6 @@ class ComplementDossierController extends Controller
             'updated_at'       => now(),
         ];
 
-        if (empty($demande->demandeur_whatsapp)) {
-            $updateData['demandeur_whatsapp'] = $whatsappNormalized;
-        }
-
         DB::table('document_requests')
             ->where('reference', $reference)
             ->update($updateData);
@@ -377,11 +366,11 @@ class ComplementDossierController extends Controller
         // Ne doit jamais faire échouer la réponse : les pièces sont déjà enregistrées.
         try {
             // Accusé de réception aux coordonnées ENREGISTRÉES de la demande
-            // (celles qui ont reçu le code), à défaut celles saisies.
+            // (celles qui ont reçu le code), jamais à d'autres.
             $this->notificationService->sendComplementSecretaire(
-                etudiantEmail:    $demande->email ?: $request->email,
+                etudiantEmail:    $demande->email ?: null,
                 vars:             compact('nomComplet', 'matricule', 'reference', 'dateComplement', 'piecesList'),
-                whatsappEtudiant: $demande->demandeur_whatsapp ?: $whatsappNormalized,
+                whatsappEtudiant: $demande->demandeur_whatsapp ?: null,
             );
         } catch (\Throwable $e) {
             Log::error('[ComplementDossier] Erreur mise en file des notifications', [
@@ -393,7 +382,7 @@ class ComplementDossierController extends Controller
         return response()->json([
             'success' => true,
             'data'    => [
-                'message'       => 'Complément de dossier enregistré. Un email de confirmation vous a été envoyé.',
+                'message'       => 'Complément de dossier enregistré. Une confirmation vous a été envoyée.',
                 'reference'     => $reference,
                 'complement_at' => $dateComplement,
                 'pieces_saved'  => count($newEntries),
@@ -417,6 +406,8 @@ class ComplementDossierController extends Controller
                 ? Carbon::parse($demande->submitted_at)->format('d/m/Y à H:i')
                 : '—',
             'student' => $this->requesterInfo($demande),
+            // Coordonnées enregistrées, masquées : la confirmation y sera envoyée.
+            'contact' => $this->complementOtp->hints($demande),
         ];
     }
 

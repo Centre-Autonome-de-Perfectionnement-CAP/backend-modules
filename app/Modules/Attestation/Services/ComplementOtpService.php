@@ -161,10 +161,23 @@ class ComplementOtpService
         return 'complement-otp-token:' . hash('sha256', $token);
     }
 
+    /**
+     * Coordonnées enregistrées dans la demande, MASQUÉES (jamais en entier) :
+     * l'étudiant sait où regarder sans que ses coordonnées soient exposées.
+     * @return array{whatsapp_hint: ?string, email_hint: ?string}
+     */
+    public function hints(object $demande): array
+    {
+        return [
+            'whatsapp_hint' => $this->maskPhone($demande->demandeur_whatsapp ?? null),
+            'email_hint'    => $this->maskEmail($demande->email ?? null),
+        ];
+    }
+
     private function maskPhone(?string $phone): ?string
     {
         $digits = preg_replace('/\D/', '', (string) $phone);
-        return strlen($digits) >= 4 ? str_repeat('•', max(0, strlen($digits) - 4)) . substr($digits, -4) : null;
+        return strlen($digits) >= 4 ? '••••••' . substr($digits, -4) : null;
     }
 
     private function maskEmail(?string $email): ?string
@@ -173,6 +186,8 @@ class ComplementOtpService
             return null;
         }
         [$user, $domain] = explode('@', $email, 2);
-        return mb_substr($user, 0, 2) . str_repeat('•', max(1, mb_strlen($user) - 2)) . '@' . $domain;
+        // Adresse courte : on ne montre que la 1re lettre (jamais l'adresse entière).
+        $keep = mb_strlen($user) <= 3 ? 1 : 2;
+        return mb_substr($user, 0, $keep) . str_repeat('•', min(5, max(1, mb_strlen($user) - $keep))) . '@' . $domain;
     }
 }

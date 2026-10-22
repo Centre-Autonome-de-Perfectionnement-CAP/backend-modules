@@ -306,7 +306,7 @@ class NotificationService
      * Notifie : étudiant (email + WhatsApp) + secrétaire(s) (email + WhatsApp).
      */
     public function sendComplementSecretaire(
-        string  $etudiantEmail,
+        ?string $etudiantEmail,
         array   $vars,
         ?string $whatsappEtudiant = null,
     ): void {
@@ -314,15 +314,17 @@ class NotificationService
         $nomComplet = $vars['nomComplet'] ?? "L'étudiant(e)";
         $piecesList = $vars['piecesList'] ?? [];
 
-        // ── Email étudiant ────────────────────────────────────────────────────
-        $this->email(
-            to:      $etudiantEmail,
-            toName:  $nomComplet,
-            subject: "Complément de dossier reçu — Réf : {$reference}",
-            view:    'core::emails.complement-confirmation',
-            vars:    $vars,
-            context: "complement-etudiant:{$reference}",
-        );
+        // ── Email étudiant (s'il en a un enregistré) ─────────────────────────
+        if (!empty($etudiantEmail)) {
+            $this->email(
+                to:      $etudiantEmail,
+                toName:  $nomComplet,
+                subject: "Complément de dossier reçu — Réf : {$reference}",
+                view:    'core::emails.complement-confirmation',
+                vars:    $vars,
+                context: "complement-etudiant:{$reference}",
+            );
+        }
 
         // ── WhatsApp étudiant ─────────────────────────────────────────────────
         if (!empty($whatsappEtudiant)) {
