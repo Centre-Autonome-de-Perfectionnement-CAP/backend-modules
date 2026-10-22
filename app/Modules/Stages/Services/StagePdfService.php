@@ -117,7 +117,28 @@ class StagePdfService
     /** Adresse publique de vérification d'un cachet numérique. */
     public function verifyUrl(string $code): string
     {
-        return rtrim((string) config('app.frontend_url'), '/') . '/verifier?code=' . rawurlencode($code);
+        return $this->siteUrl() . '/verifier?code=' . rawurlencode($code);
+    }
+
+    /**
+     * Adresse du site qui émet le document. Le site et l'API partagent le même
+     * domaine : on prend celui de la requête en cours (test.cap-epac.bj sur le
+     * site de test, cap-epac.bj en production), ce qui garantit un QR code
+     * toujours juste quel que soit le serveur. Hors requête (tâche planifiée,
+     * file d'attente) : l'adresse configurée.
+     */
+    public function siteUrl(): string
+    {
+        // Seuls les domaines du CAP sont acceptés (un en-tête Host forgé ne
+        // peut pas détourner le QR code vers un autre site).
+        $host = strtolower((string) request()->getHost());
+        foreach ((array) config('app.site_domains', ['cap-epac.bj']) as $domain) {
+            if ($host === $domain || str_ends_with($host, '.' . $domain)) {
+                return 'https://' . $host;
+            }
+        }
+
+        return rtrim((string) config('app.frontend_url'), '/');
     }
 
     // ── Interne ──────────────────────────────────────────────────────────
