@@ -400,7 +400,7 @@ class DecisionService
                         $moyenneSem1 += $avg;
                         $countSem1++;
                     }
-                    if ($gradeData && $avg === 0.0 && count($gradeData['grades'] ?? []) > 0) {
+                    if (!$gradeData || $avg <= 0) {
                         $hasZeroSem1 = true;
                     }
                 }
@@ -420,7 +420,7 @@ class DecisionService
                         $moyenneSem2 += $avg;
                         $countSem2++;
                     }
-                    if ($gradeData && $avg === 0.0 && count($gradeData['grades'] ?? []) > 0) {
+                    if (!$gradeData || $avg <= 0) {
                         $hasZeroSem2 = true;
                     }
                 }
@@ -993,8 +993,10 @@ class DecisionService
             $hasZero = $studentInfo->hasZero ?? false;
             \Log::info('Moyenne et zéro', ['moyenne' => $moyenne, 'hasZero' => $hasZero, 'validationAverage' => $validationAverage]);
 
-            if ($hasZero || $moyenne < $validationAverage) {
-                $decision = $moyenne < $validationAverage ? 'fail' : 'repeat';
+            if ($hasZero) {
+                $decision = 'repeat';
+            } elseif ($moyenne < $validationAverage) {
+                $decision = 'fail';
             } else {
                 $decision = 'pass';
             }
