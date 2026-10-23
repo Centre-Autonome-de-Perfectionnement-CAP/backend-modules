@@ -3,6 +3,7 @@
 namespace Tests\Feature\Verif;
 
 use App\Models\User;
+use App\Modules\Core\Jobs\SendNotificationJob;
 use App\Modules\Core\Services\Notifier;
 use App\Modules\Stages\Models\StageAttendance;
 use App\Modules\Stages\Models\StageRequest;
@@ -360,6 +361,9 @@ class StagesLot3Test extends TestCase
         $this->at('2026-11-03 13:00'); $this->punch($h, 'pause_debut', 3)->assertStatus(201);
         // mercredi : absent, justifié par une permission ; jeudi : absent
         $this->at('2026-11-06 09:00');
+        $sup  = $this->user('superviseur');
+        $lead = $this->user('responsable-division', 'formation_continue');
+        DB::table('stage_supervisions')->insert(['stage_request_id' => $req->id, 'user_id' => $sup->id]);
         $this->postJson('/api/stagiaire/demandes', ['kind' => 'permission', 'type' => 'maladie', 'date_from' => '2026-10-26', 'motif' => 'Fièvre'], $h)
             ->assertStatus(422)->assertJsonPath('error_code', 'STAGE_PERM_TOO_LATE');
         $permId = $this->post('/api/stagiaire/demandes', [
@@ -367,7 +371,12 @@ class StagesLot3Test extends TestCase
             'piece' => UploadedFile::fake()->create('certificat.pdf', 50, 'application/pdf'),
         ], $h + ['Accept' => 'application/json'])->assertStatus(201)->json('data.id');
 
-        $sup = $this->user('superviseur');
+        // Superviseur du stagiaire et responsable prévenus de la demande
+        foreach ([$sup->phone, $lead->phone] as $phone) {
+            Queue::assertPushed(SendNotificationJob::class, fn ($j) => $j->channel === 'whatsapp'
+                && $j->payload['phone'] === $phone && str_contains($j->payload['message'], 'Demande de permission'));
+        }
+
         $this->actingAs($sup, 'sanctum');
         $this->getJson('/api/stages/admin/demandes-stagiaires')->assertOk()->assertJsonPath('pending', 1);
         $this->postJson("/api/stages/admin/demandes-stagiaires/{$permId}/decision", ['decision' => 'rejected'])->assertStatus(422);

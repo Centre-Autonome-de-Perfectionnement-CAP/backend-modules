@@ -135,12 +135,12 @@ class InternActivationService
         if ($real !== $planned) {
             $newEnd = $this->shiftedEnd($req);
             $fields += ['Début prévu' => $this->requests->frDate($planned), 'Fin proposée' => $this->requests->frDate($newEnd)];
-            $this->notifier->toManagers($req, 'Prise de service décalée', [
+            $this->notifier->toFollowers($req, 'Prise de service décalée', [
                 "Le stagiaire a pris service avec un décalage. Pour garder la même durée, la fin du stage passerait au {$this->requests->frDate($newEnd)}.",
                 'Ouvrez le dossier pour confirmer la nouvelle date de fin (une note rectificative sera émise) ou l\'ajuster.',
             ], $fields, 'stage-decalage');
         } else {
-            $this->notifier->toManagers($req, 'Stagiaire arrivé', ['Le stagiaire a confirmé sa présence et activé son espace.'], $fields, 'stage-arrivee');
+            $this->notifier->toFollowers($req, 'Stagiaire arrivé', ['Le stagiaire a confirmé sa présence et activé son espace.'], $fields, 'stage-arrivee');
         }
 
         $this->notifier->toDemandeur(
@@ -225,7 +225,7 @@ class InternActivationService
             "Vous n'avez pas confirmé votre présence dans le délai prévu : votre stage a été annulé et la place libérée.",
             'Si c\'est une erreur, contactez rapidement le CAP-EPAC.',
         ], ['Référence' => $req->reference], context: 'stage-desistement');
-        $this->notifier->toManagers($req, 'Désistement d\'un stagiaire', [
+        $this->notifier->toFollowers($req, 'Désistement d\'un stagiaire', [
             'Le stagiaire n\'a jamais confirmé sa présence : le stage a été annulé automatiquement et la place est libérée.',
         ], ['Référence' => $req->reference, 'Stagiaire' => $req->fullName(), 'Début prévu' => $this->requests->frDate($req->date_debut)], 'stage-desistement');
     }

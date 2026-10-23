@@ -683,10 +683,10 @@ class AttestationService
             + ['Assiduité' => $elig['taux'] !== null ? "{$elig['taux']} %" : '—', 'Rapport final' => $elig['final_validated'] ? 'validé' : 'pas encore validé'];
 
         if ($a->kind === 'demande') {
-            $this->notifier->toManagersGeneric('Demande d\'attestation de stage', [
+            $this->notifier->toFollowers($req, 'Demande d\'attestation de stage', [
                 'Un ancien stagiaire demande une attestation de stage.',
             ], $staffFields + ['Motif' => (self::MOTIF_TYPES[$a->motif_type] ?? '') . ($a->motif ? " - {$a->motif}" : '')],
-                "stage-attestation-demande:{$req->reference}", $this->staffUrl($a), $req->reference);
+                'stage-attestation-demande', $this->staffUrl($a));
 
             return;
         }

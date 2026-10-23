@@ -8,6 +8,7 @@ use App\Modules\Core\Support\WhatsAppText;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Support\BusinessHours;
 use App\Modules\Stages\Support\StageAccess;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -91,6 +92,31 @@ class StageNotifier
     public function toManagers(StageRequest $req, string $title, array $paragraphs, array $fields = [], string $context = 'stage-staff'): void
     {
         $this->toManagersGeneric($title, $paragraphs, $fields, "{$context}:{$req->reference}", $this->staffUrl($req), $req->reference);
+    }
+
+    /**
+     * Action d'un stagiaire (demande, rapport, arrivée…) : ses superviseurs et
+     * les responsables de division sont prévenus, heures ouvrées respectées.
+     *
+     * @param string[]            $paragraphs
+     * @param array<string,mixed> $fields
+     */
+    public function toFollowers(
+        StageRequest $req, string $title, array $paragraphs, array $fields = [],
+        string $context = 'stage-staff', ?string $url = null,
+    ): void {
+        $this->toStaff(
+            $this->supervisorsOf($req)->concat(StageAccess::managers()),
+            $title, $paragraphs, $fields, "{$context}:{$req->reference}", $url ?? $this->staffUrl($req), $req->reference,
+        );
+    }
+
+    /** Superviseurs attribués au stagiaire (comptes actifs). */
+    public function supervisorsOf(StageRequest $req): \Illuminate\Support\Collection
+    {
+        return DB::table('stage_supervisions as s')->join('users as u', 'u.id', '=', 's.user_id')
+            ->where('s.stage_request_id', $req->id)->whereNull('u.deleted_at')
+            ->get(['u.id', 'u.email', 'u.phone', 'u.first_name', 'u.last_name']);
     }
 
     /**

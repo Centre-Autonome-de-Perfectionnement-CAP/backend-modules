@@ -187,16 +187,15 @@ class ReportService
 
         // Rapports journaliers : récapitulatif quotidien au personnel (pas un message par dépôt).
         if ($report->kind === 'final' || $report->frequency !== 'journalier') {
-            $this->notifier->toStaff(
-                $this->staffFor($req),
+            $this->notifier->toFollowers(
+                $req,
                 $postDefense ? 'Rapport final corrigé après soutenance' : ($report->kind === 'final' ? 'Rapport final déposé' : 'Rapport déposé'),
                 [$postDefense
                     ? 'Le stagiaire a déposé la version corrigée de son rapport final, après la soutenance. Sa validation précédente reste acquise.'
                     : ($report->current_version > 1 ? 'Le stagiaire a déposé une nouvelle version de son rapport.' : 'Le stagiaire a déposé son rapport.')],
                 ['Stagiaire' => $req->fullName(), 'Rapport' => $this->labelFor($report), 'Version' => (string) $report->current_version, 'Dépôt' => $late ? 'En retard' : null],
-                "stage-rapport:{$req->reference}",
+                'stage-rapport',
                 $this->staffUrl($report),
-                $req->reference,
             );
         }
 
@@ -225,10 +224,10 @@ class ReportService
             ], ['Rapport' => $this->labelFor($report)], highlight: $body, highlightTitle: 'Commentaire',
                 ctaLabel: 'Ouvrir mes rapports', ctaUrl: $this->internUrl(), context: 'stage-rapport-commentaire');
         } else {
-            $this->notifier->toStaff($this->staffFor($req), 'Réponse du stagiaire', [
+            $this->notifier->toFollowers($req, 'Réponse du stagiaire', [
                 'Le stagiaire a répondu sur son rapport.',
             ], ['Stagiaire' => $req->fullName(), 'Rapport' => $this->labelFor($report), 'Message' => $body],
-                "stage-rapport:{$req->reference}", $this->staffUrl($report), $req->reference);
+                'stage-rapport', $this->staffUrl($report));
         }
     }
 
@@ -410,10 +409,22 @@ class ReportService
         $daily = StageReport::with('stage')->where('frequency', 'journalier')
             ->where('submitted_at', '>=', $today->utc())->get();
         if ($daily->isNotEmpty()) {
-            $this->notifier->toManagersGeneric('Rapports journaliers du jour', [
-                $daily->count() . ' rapport(s) journalier(s) déposé(s) aujourd\'hui.',
-            ], $daily->groupBy('stage_request_id')->mapWithKeys(fn ($g) => [$g->first()->stage->fullName() => $g->count() . ' rapport(s)'])->all(),
-                'stage-rapports-journaliers', rtrim((string) config('app.url'), '/') . '/services/stages/rapports');
+            $url  = rtrim((string) config('app.url'), '/') . '/services/stages/rapports';
+            $text = fn (Collection $reports) => [$reports->count() . ' rapport(s) journalier(s) déposé(s) aujourd\'hui.'];
+            $list = fn (Collection $reports) => $reports->groupBy('stage_request_id')
+                ->mapWithKeys(fn ($g) => [$g->first()->stage->fullName() => $g->count() . ' rapport(s)'])->all();
+
+            // Responsables : tous les stagiaires ; chaque superviseur : les siens.
+            $this->notifier->toManagersGeneric('Rapports journaliers du jour', $text($daily), $list($daily), 'stage-rapports-journaliers', $url);
+            $managerIds = StageAccess::managers()->pluck('id');
+            $links = DB::table('stage_supervisions as s')->join('users as u', 'u.id', '=', 's.user_id')
+                ->whereIn('s.stage_request_id', $daily->pluck('stage_request_id')->unique())
+                ->whereNull('u.deleted_at')->whereNotIn('u.id', $managerIds)
+                ->get(['s.stage_request_id', 'u.id', 'u.email', 'u.phone', 'u.first_name', 'u.last_name']);
+            foreach ($links->groupBy('id') as $own) {
+                $mine = $daily->whereIn('stage_request_id', $own->pluck('stage_request_id'));
+                $this->notifier->toStaff(collect([$own->first()]), 'Rapports journaliers du jour', $text($mine), $list($mine), 'stage-rapports-journaliers', $url);
+            }
             $stats['digest'] = $daily->count();
         }
 
@@ -569,15 +580,6 @@ class ReportService
     }
 
     /** Superviseurs du stagiaire + responsables. */
-    private function staffFor(StageRequest $req): Collection
-    {
-        $sup = DB::table('stage_supervisions as s')->join('users as u', 'u.id', '=', 's.user_id')
-            ->where('s.stage_request_id', $req->id)->whereNull('u.deleted_at')
-            ->get(['u.id', 'u.email', 'u.phone', 'u.first_name', 'u.last_name']);
-
-        return $sup->concat(StageAccess::managers());
-    }
-
     private function staffUrl(StageReport $r): string
     {
         return rtrim((string) config('app.url'), '/') . '/services/stages/rapports?rapport=' . $r->id;

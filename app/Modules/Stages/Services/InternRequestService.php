@@ -104,14 +104,13 @@ class InternRequestService
         $item = StageInternRequest::create($row);
         $this->log($req, 'intern_request', null, self::KIND_LABELS[$kind] . ($kind === 'permission' ? ' - ' . self::TYPES[$row['type']] : ''));
 
-        $this->notifier->toStaff(
-            $this->recipients($req),
+        $this->notifier->toFollowers(
+            $req,
             $kind === 'permission' ? 'Demande de permission' : 'Demande de ' . mb_strtolower(self::KIND_LABELS[$kind]),
             ['Un stagiaire vous adresse une demande à traiter.'],
             ['Stagiaire' => $req->fullName()] + $this->fields($item) + ['Motif' => $item->motif],
-            "stage-demande-stagiaire:{$req->reference}",
+            'stage-demande-stagiaire',
             rtrim((string) config('app.url'), '/') . '/services/stages/demandes-stagiaires',
-            $req->reference,
         );
 
         return $item;
@@ -224,16 +223,6 @@ class InternRequestService
             'Date'   => $period,
             'Heure'  => $i->time_from ? str_replace(':', 'h', $i->time_from) . ($i->time_to ? ' - ' . str_replace(':', 'h', $i->time_to) : '') : null,
         ];
-    }
-
-    /** Superviseurs du stagiaire + responsables de division. */
-    private function recipients(StageRequest $req)
-    {
-        $sup = DB::table('stage_supervisions as s')->join('users as u', 'u.id', '=', 's.user_id')
-            ->where('s.stage_request_id', $req->id)->whereNull('u.deleted_at')
-            ->get(['u.id', 'u.email', 'u.phone', 'u.first_name', 'u.last_name']);
-
-        return $sup->concat(\App\Modules\Stages\Support\StageAccess::managers());
     }
 
     private function workingDaysBefore(CarbonImmutable $from, int $n): CarbonImmutable
