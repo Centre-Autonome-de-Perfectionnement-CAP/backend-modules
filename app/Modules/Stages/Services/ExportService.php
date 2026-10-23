@@ -70,17 +70,21 @@ class ExportService
             $r['rapports']['deposited'], $r['rapports']['validated'], $r['rapports']['missing'],
             $r['rapports']['final_validated'] ? 'Validé' : 'Non validé',
             $r['attestation']['label'] ?? '', $r['attestation']['numero'] ?? '',
+            collect($r['codes'])->pluck('detail')->implode(' '),
             $r['whatsapp'], $r['email'],
         ])->all();
 
-        $scopes = ['current' => 'En cours', 'upcoming' => 'À venir', 'finished' => 'Terminés', 'all' => 'Tous', 'mine' => 'Mes stagiaires', 'unsupervised' => 'Sans superviseur'];
+        $scopes = [
+            'active' => 'En cours et à venir', 'current' => 'En cours', 'upcoming' => 'À venir', 'finished' => 'Terminés',
+            'all' => 'Tous', 'mine' => 'Mes stagiaires', 'unsupervised' => 'Sans superviseur (en cours et à venir)',
+        ];
 
         return $this->file('Suivi des stagiaires', 'Suivi des stagiaires', ($scopes[$scope] ?? $scope) . ($q ? " - recherche « {$q} »" : ''), [
             'Référence', 'Stagiaire', 'Établissement', 'Formation', 'Service', 'Début', 'Fin', 'Phase',
             'Superviseur(s)', 'Binôme / groupe', 'Espace activé',
             'Assiduité (%)', 'Jours ouvrés', 'Absences', 'Retards', 'Justifiés',
             'Rapports déposés', 'Rapports validés', 'Rapports manquants', 'Rapport final',
-            'Attestation', 'N° attestation', 'WhatsApp', 'Email',
+            'Attestation', 'N° attestation', 'À surveiller', 'WhatsApp', 'Email',
         ], $rows, 'suivi-stagiaires');
     }
 

@@ -34,7 +34,7 @@ class SupervisionController extends Controller
     public function interns(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'scope' => ['nullable', Rule::in(['current', 'upcoming', 'finished', 'all', 'mine', 'unsupervised'])],
+            'scope' => ['nullable', Rule::in(DashboardController::SCOPES)],
             'q'     => ['nullable', 'string', 'max:100'],
         ]);
         $user = $request->user();
@@ -43,7 +43,7 @@ class SupervisionController extends Controller
             'success' => true,
             'data'    => $this->supervision->interns($data['scope'] ?? 'current', $data['q'] ?? null, $user),
             'counts'  => $this->supervision->counts($user),
-            'me'      => ['id' => $user->id, 'is_lead' => StageAccess::isLead($user), 'is_supervisor' => StageAccess::isSupervisor($user)],
+            'me'      => self::me($user),
         ]);
     }
 
@@ -210,5 +210,11 @@ class SupervisionController extends Controller
         } catch (BusinessException $e) {
             return $this->errorResponse($e->getMessage(), $e->getStatusCode(), $e->getErrorCode());
         }
+    }
+
+    /** Qui consulte (actions proposées dans les listes). */
+    public static function me(\App\Models\User $user): array
+    {
+        return ['id' => $user->id, 'is_lead' => StageAccess::isLead($user), 'is_supervisor' => StageAccess::isSupervisor($user)];
     }
 }

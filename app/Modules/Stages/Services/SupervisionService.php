@@ -30,7 +30,9 @@ class SupervisionService
     // ════════════════════════════════════════════════════════════════════
 
     /**
-     * @param 'current'|'upcoming'|'finished'|'all'|'mine'|'unsupervised' $scope
+     * « active » = en cours + à venir ; « unsupervised » = actifs sans superviseur.
+     *
+     * @param 'active'|'current'|'upcoming'|'finished'|'all'|'mine'|'unsupervised' $scope
      */
     public function interns(string $scope, ?string $q, User $viewer): Collection
     {
@@ -38,11 +40,12 @@ class SupervisionService
         $query = StageRequest::query()->where('status', StageStatus::ACCEPTED);
 
         match ($scope) {
+            'active'       => $query->where('date_fin', '>=', $today),
             'current'      => $query->where('date_debut', '<=', $today)->where('date_fin', '>=', $today),
             'upcoming'     => $query->where('date_debut', '>', $today),
             'finished'     => $query->where('date_fin', '<', $today),
             'mine'         => $query->whereIn('id', DB::table('stage_supervisions')->where('user_id', $viewer->id)->select('stage_request_id')),
-            'unsupervised' => $query->whereNotIn('id', DB::table('stage_supervisions')->select('stage_request_id')),
+            'unsupervised' => $query->where('date_fin', '>=', $today)->whereNotIn('id', DB::table('stage_supervisions')->select('stage_request_id')),
             default        => null,
         };
 
@@ -63,10 +66,11 @@ class SupervisionService
         $base  = fn () => StageRequest::query()->where('status', StageStatus::ACCEPTED);
 
         return [
+            'active'       => $base()->where('date_fin', '>=', $today)->count(),
             'current'      => $base()->where('date_debut', '<=', $today)->where('date_fin', '>=', $today)->count(),
             'upcoming'     => $base()->where('date_debut', '>', $today)->count(),
             'finished'     => $base()->where('date_fin', '<', $today)->count(),
-            'unsupervised' => $base()->whereNotIn('id', DB::table('stage_supervisions')->select('stage_request_id'))->count(),
+            'unsupervised' => $base()->where('date_fin', '>=', $today)->whereNotIn('id', DB::table('stage_supervisions')->select('stage_request_id'))->count(),
             'mine'         => $base()->whereIn('id', DB::table('stage_supervisions')->where('user_id', $viewer->id)->select('stage_request_id'))->count(),
             'all'          => $base()->count(),
         ];

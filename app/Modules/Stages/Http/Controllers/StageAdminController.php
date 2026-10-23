@@ -425,6 +425,11 @@ class StageAdminController extends Controller
                 'actor' => $h->actor, 'user_name' => $h->user_id ? ($names[$h->user_id] ?? null) : null,
                 'comment' => $h->comment, 'meta' => $h->meta, 'at' => $h->created_at?->toIso8601String(),
             ])->values(),
+            // Stagiaire : superviseurs, binôme, assiduité, rapports et codes d'attention.
+            'suivi'           => $r->status === StageStatus::ACCEPTED
+                ? app(\App\Modules\Stages\Services\DashboardService::class)->rows(collect([$r]), request()->user())->first()
+                : null,
+            'me'              => SupervisionController::me(request()->user()),
             'suggested_terms' => $open ? $this->service->suggestedTerms($r) : null,
             'default_rejection_reason' => $this->settings->get('default_rejection_reason'),
             'can' => [

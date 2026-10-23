@@ -172,10 +172,9 @@ class StagesLot6Test extends TestCase
         $this->assertSame(2, $d['stagiaires']['en_cours']);
         $this->assertSame(1, $d['stagiaires']['fin_proche']);
         $this->assertSame(1, $d['assiduite']['sous_seuil']);
-        $types = collect($d['alertes'])->groupBy('type')->map->pluck('stage_id');
-        $this->assertSame([$bad->id], $types['assiduite']->all());
-        $this->assertSame([$good->id], $types['sans_superviseur']->all());
-        $this->assertSame([$good->id], $types['fin_proche']->all());
+        // Une ligne par stagiaire, avec ses codes (le plus urgent d'abord)
+        $codes = collect($d['alertes'])->mapWithKeys(fn ($a) => [$a['stage_id'] => array_column($a['codes'], 'code')]);
+        $this->assertSame([$bad->id => ['assiduite', 'rapports'], $good->id => ['fin_proche', 'rapports', 'sans_superviseur']], $codes->all());
         $this->assertCount(12, $d['mensuel']);
 
         // Superviseur : seulement ses stagiaires, pas de chiffres réservés
@@ -186,8 +185,11 @@ class StagesLot6Test extends TestCase
         $this->assertSame([], $s['mensuel']);
         $this->assertTrue(collect($s['alertes'])->every(fn ($a) => $a['stage_id'] === $bad->id));
 
-        $rows = $this->getJson('/api/stages/admin/suivi?scope=mine')->assertOk()->json('data');
+        $res = $this->getJson('/api/stages/admin/suivi?scope=mine')->assertOk();
+        $rows = $res->json('data');
         $this->assertSame([$bad->id], array_column($rows, 'id'));
+        $this->assertSame(['active' => 2, 'unsupervised' => 1, 'mine' => 1], array_intersect_key($res->json('counts'), array_flip(['active', 'unsupervised', 'mine'])));
+        $this->assertSame('assiduite', $rows[0]['codes'][0]['code']);
         $this->assertSame(64.3, $rows[0]['taux']); // 9 jours sur 14
 
         // Secrétariat : pas d'accès
@@ -210,7 +212,7 @@ class StagesLot6Test extends TestCase
         $line = collect($sheet)->first(fn ($r) => $r[0] === $req->reference);
         $this->assertNotNull($line);
         $this->assertStringContainsString('=HYPERLINK', $line[1], 'texte conservé tel quel, pas une formule');
-        $this->assertSame($req->whatsapp, $line[22], 'le « + » du numéro est conservé');
+        $this->assertSame($req->whatsapp, $line[23], 'le « + » du numéro est conservé');
         $this->assertSame(0, $line[14], 'un zéro reste un zéro (retards)');
 
         $pres = $this->xlsx($this->getJson("/api/stages/admin/exports/stagiaires/{$req->id}/presences")->assertOk()->json());

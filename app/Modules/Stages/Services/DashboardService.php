@@ -26,6 +26,9 @@ class DashboardService
     private const MIN_DAYS_FOR_RATE = 5;
     private const ENDING_SOON_DAYS = 14;
 
+    /** Codes d'attention d'un stagiaire, du plus urgent au moins urgent. */
+    public const CODES = ['non_active', 'assiduite', 'fin_proche', 'rapports', 'sans_superviseur'];
+
     public function __construct(
         private readonly SupervisionService $supervision,
         private readonly AttendanceService $attendance,
@@ -47,27 +50,11 @@ class DashboardService
         // Stagiaires en cours (périmètre du lecteur), avec leur suivi.
         $current = $this->rows($scoped()->where('date_debut', '<=', $t)->where('date_fin', '>=', $t)->orderBy('date_fin')->get(), $viewer);
 
-        $alerts = [];
-        foreach ($current as $r) {
-            if (!$r['activated']) {
-                $alerts[] = $this->alert('non_active', $r, 'Présence jamais confirmée (espace non activé).');
-                continue;
-            }
-            if ($r['taux'] !== null && $r['jours_ouvres'] >= self::MIN_DAYS_FOR_RATE && $r['taux'] < $seuil) {
-                $alerts[] = $this->alert('assiduite', $r, "Assiduité de {$r['taux']} % (minimum {$seuil} %).");
-            }
-            if ($r['rapports']['missing'] > 0) {
-                $alerts[] = $this->alert('rapports', $r, $r['rapports']['missing'] . ' rapport(s) non déposé(s).');
-            }
-            if ($r['fin_proche'] && !$r['rapports']['final_validated']) {
-                $alerts[] = $this->alert('fin_proche', $r, 'Fin le ' . $this->fr($r['date_fin']) . ' : rapport final pas encore validé.');
-            }
-            if ($lead && count($r['supervisors']) === 0) {
-                $alerts[] = $this->alert('sans_superviseur', $r, 'Aucun superviseur.');
-            }
-        }
-        $order = ['non_active' => 0, 'assiduite' => 1, 'fin_proche' => 2, 'rapports' => 3, 'sans_superviseur' => 4];
-        usort($alerts, fn ($a, $b) => [$order[$a['type']], $a['nom']] <=> [$order[$b['type']], $b['nom']]);
+        // Une ligne par stagiaire, avec ses codes d'attention (du plus urgent au moins urgent).
+        $alerts = $current->filter(fn ($r) => $r['codes'] !== [])
+            ->sortBy(fn ($r) => [array_search($r['codes'][0]['code'], self::CODES, true), $r['nom_complet']])
+            ->map(fn ($r) => ['stage_id' => $r['id'], 'reference' => $r['reference'], 'nom' => $r['nom_complet'], 'codes' => $r['codes']])
+            ->values()->all();
 
         $rated = $current->filter(fn ($r) => $r['taux'] !== null && $r['jours_ouvres'] >= self::MIN_DAYS_FOR_RATE);
         $statusCounts = StageRequest::select('status', DB::raw('count(*) as n'))->groupBy('status')->pluck('n', 'status');
@@ -135,15 +122,16 @@ class DashboardService
         $base = $this->supervision->decorate($stages, $viewer)->keyBy('id');
         $att = StageAttestation::whereIn('stage_request_id', $stages->pluck('id'))->where('status', '!=', 'annulee')
             ->orderByDesc('id')->get()->unique('stage_request_id')->keyBy('stage_request_id');
-        $soon = BusinessHours::today()->addDays(self::ENDING_SOON_DAYS)->toDateString();
-        $t = BusinessHours::today()->toDateString();
+        $soon  = BusinessHours::today()->addDays(self::ENDING_SOON_DAYS)->toDateString();
+        $t     = BusinessHours::today()->toDateString();
+        $seuil = (int) $this->settings->get('seuil_assiduite');
 
-        return $stages->map(function (StageRequest $req) use ($base, $att, $soon, $t) {
+        return $stages->map(function (StageRequest $req) use ($base, $att, $soon, $t, $seuil) {
             $summary = $req->activated_at ? $this->attendance->report($req)['summary'] : null;
             $reports = $req->activated_at ? $this->reports->overview($req)['stats'] : null;
             $a = $att[$req->id] ?? null;
 
-            return $base[$req->id] + [
+            $row = $base[$req->id] + [
                 'activated'    => (bool) $req->activated_at,
                 'date_debut_reelle' => $req->date_debut_reelle?->toDateString(),
                 'fin_proche'   => $req->date_fin && $req->date_fin->toDateString() >= $t && $req->date_fin->toDateString() <= $soon,
@@ -163,7 +151,41 @@ class DashboardService
                     'label' => AttestationService::STATUS_LABELS[$a->status] ?? $a->status, 'numero' => $a->numero,
                 ] : null,
             ];
+
+            return $row + ['codes' => $this->codes($row, $seuil)];
         })->values();
+    }
+
+    /**
+     * Ce qui demande l'attention sur un stagiaire (liste, tableau de bord) :
+     * une seule règle pour tout le module.
+     *
+     * @return list<array{code: string, detail: string}>
+     */
+    private function codes(array $r, int $seuil): array
+    {
+        $found = [];
+        if ($r['phase'] === 'current') {
+            if (!$r['activated']) {
+                $found['non_active'] = 'Présence jamais confirmée (espace non activé).';
+            } else {
+                if ($r['taux'] !== null && $r['jours_ouvres'] >= self::MIN_DAYS_FOR_RATE && $r['taux'] < $seuil) {
+                    $found['assiduite'] = "Assiduité de {$r['taux']} % (minimum {$seuil} %).";
+                }
+                if ($r['fin_proche'] && !$r['rapports']['final_validated']) {
+                    $found['fin_proche'] = 'Fin le ' . $this->fr($r['date_fin']) . ' : rapport final pas encore validé.';
+                }
+                if ($r['rapports']['missing'] > 0) {
+                    $found['rapports'] = $r['rapports']['missing'] . ' rapport(s) non déposé(s).';
+                }
+            }
+        }
+        if ($r['phase'] !== 'finished' && count($r['supervisors']) === 0) {
+            $found['sans_superviseur'] = 'Aucun superviseur.';
+        }
+
+        return array_map(fn ($code) => ['code' => $code, 'detail' => $found[$code]],
+            array_values(array_filter(self::CODES, fn ($c) => isset($found[$c]))));
     }
 
     /** Demandes reçues et acceptées, 12 derniers mois. */
@@ -185,11 +207,6 @@ class DashboardService
         }
 
         return array_values($out);
-    }
-
-    private function alert(string $type, array $r, string $detail): array
-    {
-        return ['type' => $type, 'stage_id' => $r['id'], 'reference' => $r['reference'], 'nom' => $r['nom_complet'], 'detail' => $detail];
     }
 
     private function fr(?string $date): string

@@ -173,7 +173,9 @@ class StagesLot3Test extends TestCase
         $opts = $this->postJson('/api/stagiaire/empreinte/options', [], $h)->assertOk()->json('data.publicKey');
         $this->assertSame('test.cap-epac.bj', $opts['rp']['id']);
         $d = openssl_pkey_get_details($this->key)['ec'];
-        $cose = $this->cbor([1 => 2, 3 => -7, -1 => 1, -2 => ['__bytes' => $d['x']], -3 => ['__bytes' => $d['y']]]);
+        // Coordonnées sur 32 octets (OpenSSL omet les zéros de tête : échec aléatoire sinon)
+        $pad = fn (string $c) => str_pad($c, 32, "\0", STR_PAD_LEFT);
+        $cose = $this->cbor([1 => 2, 3 => -7, -1 => 1, -2 => ['__bytes' => $pad($d['x'])], -3 => ['__bytes' => $pad($d['y'])]]);
         $authData = hash('sha256', 'test.cap-epac.bj', true) . chr(0x45) . pack('N', 0)
             . str_repeat("\0", 16) . pack('n', strlen($this->credId)) . $this->credId . $cose;
         $att = $this->cbor(['fmt' => 'none', 'attStmt' => [], 'authData' => ['__bytes' => $authData]]);

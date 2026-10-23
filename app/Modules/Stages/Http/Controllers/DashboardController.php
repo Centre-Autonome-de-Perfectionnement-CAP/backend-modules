@@ -18,7 +18,7 @@ class DashboardController extends Controller
 {
     use ApiResponse;
 
-    private const SCOPES = ['current', 'upcoming', 'finished', 'all', 'mine', 'unsupervised'];
+    public const SCOPES = ['active', 'current', 'upcoming', 'finished', 'all', 'mine', 'unsupervised'];
 
     public function __construct(
         private readonly DashboardService $dashboard,
@@ -34,9 +34,13 @@ class DashboardController extends Controller
     {
         $data = $this->followFilters($request);
 
+        $user = $request->user();
+
         return response()->json([
             'success' => true,
-            'data'    => $this->dashboard->follow($data['scope'], $data['q'], $request->user()),
+            'data'    => $this->dashboard->follow($data['scope'], $data['q'], $user),
+            'counts'  => app(\App\Modules\Stages\Services\SupervisionService::class)->counts($user),
+            'me'      => SupervisionController::me($user),
             'seuil'   => (int) app(\App\Modules\Stages\Services\StageSettingsService::class)->get('seuil_assiduite'),
         ]);
     }
@@ -80,7 +84,7 @@ class DashboardController extends Controller
             'q'     => ['nullable', 'string', 'max:100'],
         ]);
 
-        return ['scope' => $data['scope'] ?? 'current', 'q' => isset($data['q']) ? (trim($data['q']) ?: null) : null];
+        return ['scope' => $data['scope'] ?? 'active', 'q' => isset($data['q']) ? (trim($data['q']) ?: null) : null];
     }
 
     private function file(array $f): JsonResponse
