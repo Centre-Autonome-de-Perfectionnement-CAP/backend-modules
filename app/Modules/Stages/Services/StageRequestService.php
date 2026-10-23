@@ -47,6 +47,7 @@ class StageRequestService
     public function __construct(
         private readonly StageNotifier $notifier,
         private readonly StageSettingsService $settings,
+        private readonly BinomeService $binomes,
     ) {}
 
     // ════════════════════════════════════════════════════════════════════
@@ -74,6 +75,8 @@ class StageRequestService
                 409,
             );
         }
+        // Demande en binôme : la demande du binôme est vérifiée avant tout enregistrement.
+        $binome = !empty($data['binome_reference']) ? $this->binomes->target($data['binome_reference'], BinomeService::DEMANDE) : null;
 
         $reference = $this->newReference();
         $stored    = [];
@@ -143,6 +146,10 @@ class StageRequestService
             'Durée'         => $this->dureeLabel($req->duree_souhaitee),
         ], 'stage-nouvelle');
 
+        if ($binome) {
+            $this->binomes->invite($req, $binome->reference);
+        }
+
         return $req;
     }
 
@@ -187,7 +194,25 @@ class StageRequestService
         ];
     }
 
+    /**
+     * Demande en binôme : la même proposition part aux deux (mêmes service et
+     * dates) ; si l'un a déjà accepté, seules ses conditions peuvent être proposées.
+     */
     public function propose(StageRequest $req, array $terms, ?string $message, User $by): StageRequest
+    {
+        $partner = $this->binomes->requestPartner($req);
+        if ($partner?->status === StageStatus::ACCEPTED && !$this->sameTerms($terms, $this->currentTerms($partner))) {
+            throw new BusinessException("Le binôme ({$partner->fullName()}) a déjà accepté d'autres conditions : proposez les mêmes, ou séparez d'abord le binôme.", 'STAGE_PAIR_TERMS', 409);
+        }
+        $req = $this->proposeOne($req, $terms, $message, $by);
+        if ($partner && in_array($partner->status, StageStatus::OPEN_FOR_DECISION, true)) {
+            $this->proposeOne($partner, $terms, $message, $by);
+        }
+
+        return $req;
+    }
+
+    private function proposeOne(StageRequest $req, array $terms, ?string $message, User $by): StageRequest
     {
         $this->assertStatus($req, StageStatus::OPEN_FOR_DECISION);
         $this->assertDates($terms);
@@ -245,6 +270,7 @@ class StageRequestService
     public function acceptCounter(StageRequest $req, User $by): StageRequest
     {
         $this->assertStatus($req, [StageStatus::COUNTER_PROPOSED]);
+        $this->assertNotPaired($req);
         $terms = $this->suggestedTerms($req);
         $this->assertDates($terms);
 
@@ -261,7 +287,21 @@ class StageRequestService
         return $req;
     }
 
+    /** Demande en binôme : la décision vaut pour les deux. */
     public function reject(StageRequest $req, string $motif, User $by): StageRequest
+    {
+        $partner = $this->binomes->requestPartner($req);
+        $req = $this->rejectOne($req, $motif, $by);
+        $both = $partner && in_array($partner->status, StageStatus::OPEN_FOR_DECISION, true);
+        if ($both) {
+            $this->rejectOne($partner, $motif, $by);
+        }
+        $this->binomes->release($req, 'Demande non retenue', notify: !$both);
+
+        return $req;
+    }
+
+    private function rejectOne(StageRequest $req, string $motif, User $by): StageRequest
     {
         $this->assertStatus($req, StageStatus::OPEN_FOR_DECISION);
 
@@ -287,8 +327,22 @@ class StageRequestService
         return $req->refresh();
     }
 
-    /** Modification après la note de service → note rectificative. */
+    /**
+     * Modification après la note de service → note rectificative. Binôme
+     * formé dès la demande : les deux gardent les mêmes conditions.
+     */
     public function rectify(StageRequest $req, array $terms, string $motif, User $by): StageRequest
+    {
+        $partner = $this->binomes->requestPartner($req);
+        $req = $this->rectifyOne($req, $terms, $motif, $by);
+        if ($partner?->status === StageStatus::ACCEPTED && !$this->sameTerms($this->currentTerms($partner), $terms)) {
+            $this->rectifyOne($partner, $terms, $motif, $by);
+        }
+
+        return $req;
+    }
+
+    private function rectifyOne(StageRequest $req, array $terms, string $motif, User $by): StageRequest
     {
         $this->assertStatus($req, [StageStatus::ACCEPTED]);
         $this->assertDates($terms, allowPastStart: true);
@@ -363,6 +417,7 @@ class StageRequestService
     public function respondCounter(StageRequest $req, string $dateDebut, string $dateFin, ?string $message): StageRequest
     {
         $this->assertStatus($req, [StageStatus::PROPOSAL_SENT]);
+        $this->assertNotPaired($req);
         $base  = $this->proposalTerms($this->lastStaffProposal($req));
         $terms = array_merge($base, ['date_debut' => $dateDebut, 'date_fin' => $dateFin]);
         $this->assertDates($terms);
@@ -486,16 +541,13 @@ class StageRequestService
         $this->notifier->toManagers($req, 'Proposition expirée', [
             'Le demandeur n\'a pas répondu à la proposition dans le délai : la demande a été close automatiquement.',
         ], ['Référence' => $req->reference, 'Demandeur' => $req->fullName()], 'stage-expiree');
+        $this->binomes->release($req, 'Proposition restée sans réponse');
     }
 
     // ════════════════════════════════════════════════════════════════════
     // NOTE DE SERVICE
     // ════════════════════════════════════════════════════════════════════
 
-    /**
-     * Enregistre la note (contenu figé). Le PDF sera produit à partir de ce
-     * contenu lorsque le modèle sera intégré.
-     */
     /**
      * Stagiaire arrivé avant le système : note de service initiale portant la
      * date déclarée, envoyée au stagiaire avec son PDF. La date
@@ -685,6 +737,14 @@ class StageRequestService
         $path = $req->files[$key] ?? null;
 
         return $path && Storage::disk(self::DISK)->exists($path) ? $path : null;
+    }
+
+    /** Binôme décidé ensemble : pas de dates différentes pour l'un des deux. */
+    private function assertNotPaired(StageRequest $req): void
+    {
+        if ($this->binomes->requestPartner($req)) {
+            throw new BusinessException('Demande en binôme : les dates sont les mêmes pour les deux. Faites une nouvelle proposition aux deux, ou séparez d\'abord le binôme.', 'STAGE_PAIR_NO_COUNTER', 409);
+        }
     }
 
     private function assertStatus(StageRequest $req, array $allowed): void

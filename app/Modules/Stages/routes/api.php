@@ -29,6 +29,9 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         Route::post('code/verifier', [StagePublicController::class, 'verifyCode'])->middleware('throttle:stages-public-code');
         Route::get('/', [StagePublicController::class, 'show'])->middleware('throttle:stages-public-read');
         Route::post('reponse', [StagePublicController::class, 'respond'])->middleware('throttle:stages-public-code');
+        Route::post('binome', [StagePublicController::class, 'binomeInvite'])->middleware('throttle:stages-public-code');
+        Route::delete('binome', [StagePublicController::class, 'binomeCancel'])->middleware('throttle:stages-public-code');
+        Route::post('binome/{id}', [StagePublicController::class, 'binomeRespond'])->whereNumber('id')->middleware('throttle:stages-public-code');
     });
 
     // ── Invitation d'un superviseur (lien reçu sur WhatsApp) ─────────────

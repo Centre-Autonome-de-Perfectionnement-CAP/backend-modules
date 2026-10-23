@@ -118,9 +118,11 @@ class StageAdminController extends Controller
         $message = $this->cleanText($request->validate(['message' => ['nullable', 'string', 'max:1000']])['message'] ?? null);
 
         return $this->act(fn () => $this->service->propose($this->findOrFail($id), $terms, $message, $request->user()), function (StageRequest $r) {
-            return $r->status === StageStatus::ACCEPTED
+            $both = $r->team_id ? ' Demande en binôme : la même décision vaut pour les deux.' : '';
+
+            return ($r->status === StageStatus::ACCEPTED
                 ? 'Les dates correspondent à la demande : la note de service a été émise et envoyée.'
-                : 'Proposition envoyée au demandeur par WhatsApp et email.';
+                : 'Proposition envoyée au demandeur par WhatsApp et email.') . $both;
         });
     }
 
@@ -141,7 +143,7 @@ class StageAdminController extends Controller
 
         return $this->act(
             fn () => $this->service->reject($this->findOrFail($id), $motif, $request->user()),
-            fn () => 'Demande non retenue. Le demandeur a été informé avec le motif.',
+            fn () => 'Demande non retenue. Le demandeur (et son binôme le cas échéant) a été informé avec le motif.',
         );
     }
 
@@ -430,12 +432,18 @@ class StageAdminController extends Controller
                 ? app(\App\Modules\Stages\Services\DashboardService::class)->rows(collect([$r]), request()->user())->first()
                 : null,
             'me'              => SupervisionController::me(request()->user()),
+            // Demande en binôme : décidée pour les deux à la fois.
+            'pair'            => ($partner = app(\App\Modules\Stages\Services\BinomeService::class)->requestPartner($r)) ? [
+                'team_id' => $r->team_id, 'reference' => $partner->reference,
+                'nom_complet' => trim($partner->civilite . ' ' . $partner->fullName()),
+                'status' => $partner->status, 'status_label' => StageStatus::LABELS[$partner->status] ?? $partner->status,
+            ] : null,
             'suggested_terms' => $open ? $this->service->suggestedTerms($r) : null,
             'default_rejection_reason' => $this->settings->get('default_rejection_reason'),
             'can' => [
                 'propose'        => $open,
                 'reject'         => $open,
-                'accept_counter' => $r->status === StageStatus::COUNTER_PROPOSED,
+                'accept_counter' => $r->status === StageStatus::COUNTER_PROPOSED && !$r->team_id,
                 'rectify'        => $r->status === StageStatus::ACCEPTED,
             ],
         ];

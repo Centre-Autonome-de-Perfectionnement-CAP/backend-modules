@@ -326,4 +326,102 @@ class StagesLot1Test extends TestCase
             ->assertOk()->assertHeader('Cache-Control', 'no-store, private')->assertJsonStructure(['name', 'mime', 'content']);
         $this->getJson("/api/stages/admin/demandes/{$req->id}/pieces/inconnue")->assertStatus(404);
     }
+
+    // ── Demande en binôme ───────────────────────────────────────────────
+
+    /** Deux demandes liées dès le dépôt, confirmées par le binôme depuis son suivi. */
+    private function pairedRequests(): array
+    {
+        $a = $this->submit(['telephone' => '01 97 11 22 31']);
+        $this->post('/api/stages/demandes', $this->payload(['binome_reference' => 'STG-ZZZZZZ']), ['Accept' => 'application/json'])
+            ->assertStatus(422)->assertJsonPath('error_code', 'STAGE_TEAM_REF_UNKNOWN');
+        $b = $this->submit(['telephone' => '01 97 11 22 32', 'nom' => 'HOUNSOU', 'binome_reference' => strtolower($a->reference)]);
+        $this->assertNull($b->team_id);
+
+        $token = $this->suiviToken($a);
+        $id = $this->getJson("/api/stages/suivi?reference={$a->reference}", ['X-Suivi-Token' => $token])->assertOk()
+            ->assertJsonPath('data.binome.received.0.from.reference', $b->reference)->json('data.binome.received.0.id');
+        $this->postJson("/api/stages/suivi/binome/{$id}", ['reference' => $a->reference, 'accept' => true], ['X-Suivi-Token' => $token])
+            ->assertOk()->assertJsonPath('data.binome.team.partner.reference', $b->reference);
+        $this->assertSame($a->fresh()->team_id, $b->fresh()->team_id);
+
+        return [$a->fresh(), $b->fresh(), $token];
+    }
+
+    public function test_paired_requests_are_decided_together_with_same_terms(): void
+    {
+        [$a, $b, $tokenA] = $this->pairedRequests();
+        $manager = $this->manager();
+        $start = BusinessHours::today()->addDays(14)->toDateString();
+        $end   = BusinessHours::today()->addDays(14)->addMonths(2)->toDateString();
+
+        // Une proposition pour l'un part aux deux
+        $this->actingAs($manager, 'sanctum')->getJson("/api/stages/admin/demandes/{$a->id}")->assertOk()
+            ->assertJsonPath('data.pair.reference', $b->reference)->assertJsonPath('data.can.accept_counter', false);
+        $this->postJson("/api/stages/admin/demandes/{$a->id}/proposition", $this->terms($start, $end))->assertOk();
+        $this->assertSame(['proposal_sent', 'proposal_sent'], [$a->fresh()->status, $b->fresh()->status]);
+
+        // Pas de contre-proposition en binôme
+        $this->getJson("/api/stages/suivi?reference={$a->reference}", ['X-Suivi-Token' => $tokenA])->assertJsonPath('data.can_counter', false);
+        $this->postJson('/api/stages/suivi/reponse', [
+            'reference' => $a->reference, 'action' => 'counter',
+            'date_debut' => BusinessHours::today()->addDays(30)->toDateString(), 'date_fin' => BusinessHours::today()->addDays(30)->addMonths(2)->toDateString(),
+        ], ['X-Suivi-Token' => $tokenA])->assertStatus(409)->assertJsonPath('error_code', 'STAGE_PAIR_NO_COUNTER');
+
+        // Chacun accepte : une note de service chacun, mêmes conditions
+        $this->postJson('/api/stages/suivi/reponse', ['reference' => $a->reference, 'action' => 'accept'], ['X-Suivi-Token' => $tokenA])->assertOk();
+        // Le binôme a accepté : seules ses conditions peuvent être proposées à l'autre
+        $this->actingAs($manager, 'sanctum')->postJson("/api/stages/admin/demandes/{$b->id}/proposition",
+            $this->terms($start, BusinessHours::today()->addDays(14)->addMonths(3)->toDateString()))->assertStatus(409);
+        $tokenB = $this->suiviToken($b);
+        $this->postJson('/api/stages/suivi/reponse', ['reference' => $b->reference, 'action' => 'accept'], ['X-Suivi-Token' => $tokenB])->assertOk();
+        [$a, $b] = [$a->fresh(), $b->fresh()];
+        $this->assertSame(['accepted', 'accepted'], [$a->status, $b->status]);
+        $this->assertSame([1, 1], [$a->notes()->count(), $b->notes()->count()]);
+        $this->assertSame(
+            app(\App\Modules\Stages\Services\StageRequestService::class)->currentTerms($a),
+            app(\App\Modules\Stages\Services\StageRequestService::class)->currentTerms($b),
+        );
+
+        // Rectification : les deux gardent les mêmes conditions
+        $rect = $this->terms($start, BusinessHours::today()->addDays(14)->addMonths(3)->toDateString());
+        $this->actingAs($manager, 'sanctum')->postJson("/api/stages/admin/demandes/{$a->id}/rectification", $rect + ['motif' => 'Prolongation'])->assertOk();
+        $this->assertSame($rect['date_fin'], $b->fresh()->date_fin->toDateString());
+        $this->assertSame('rectificative', $b->notes()->reorder('version', 'desc')->first()->kind);
+
+        // Accepté : le binôme apparaît dans les binômes de stagiaires
+        $teams = $this->getJson('/api/stages/admin/equipes')->assertOk()->json('data.teams');
+        $this->assertCount(2, collect($teams)->firstWhere('id', $a->team_id)['members']);
+    }
+
+    public function test_paired_request_rejected_together_or_continues_alone_after_expiry(): void
+    {
+        [$a, $b] = $this->pairedRequests();
+        $manager = $this->manager();
+
+        // Non retenue : la décision vaut pour les deux, le binôme disparaît
+        $this->actingAs($manager, 'sanctum')->postJson("/api/stages/admin/demandes/{$a->id}/rejet", ['motif' => 'Capacité atteinte'])->assertOk();
+        $this->assertSame(['rejected', 'rejected'], [$a->fresh()->status, $b->fresh()->status]);
+        $this->assertNull($a->fresh()->team_id);
+        $this->assertNull($b->fresh()->team_id);
+        $this->assertFalse(collect($this->sent)->contains(fn ($m) => str_contains($m['text'], 'ne poursuit pas')));
+    }
+
+    public function test_paired_request_expired_leaves_the_other_alone(): void
+    {
+        [$a, $b] = $this->pairedRequests();
+        $start = BusinessHours::today()->addDays(30)->toDateString();
+        $this->actingAs($this->manager(), 'sanctum')->postJson("/api/stages/admin/demandes/{$a->id}/proposition",
+            $this->terms($start, BusinessHours::today()->addDays(30)->addMonths(1)->toDateString()))->assertOk();
+        $tokenB = $this->suiviToken($b);
+        $this->postJson('/api/stages/suivi/reponse', ['reference' => $b->reference, 'action' => 'accept'], ['X-Suivi-Token' => $tokenB])->assertOk();
+
+        // A ne répond jamais : sa proposition expire, B continue seul (stage accepté) et en est informé
+        $this->sent = [];
+        $this->travel(8)->days();
+        $this->artisan('stages:process-deadlines')->assertSuccessful();
+        $this->assertSame(['expired', 'accepted'], [$a->fresh()->status, $b->fresh()->status]);
+        $this->assertNull($b->fresh()->team_id);
+        $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['to'] === $b->email && str_contains($m['text'], 'ne poursuit pas')));
+    }
 }

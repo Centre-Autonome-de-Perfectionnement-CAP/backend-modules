@@ -5,6 +5,7 @@ namespace App\Modules\Stages\Http\Controllers\Public;
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Modules\Stages\Models\StageRequest;
+use App\Modules\Stages\Services\BinomeService;
 use App\Modules\Stages\Services\StageRequestService;
 use App\Modules\Stages\Services\StageSettingsService;
 use App\Modules\Stages\Services\StageSuiviOtpService;
@@ -30,6 +31,7 @@ class StagePublicController extends Controller
         private readonly StageRequestService $service,
         private readonly StageSettingsService $settings,
         private readonly StageSuiviOtpService $otp,
+        private readonly BinomeService $binomes,
     ) {}
 
     /** Le formulaire est-il ouvert ? */
@@ -62,6 +64,7 @@ class StagePublicController extends Controller
             'telephone'             => ['required', 'string', 'max:20', 'regex:/^\+?[0-9\s\-.]{8,20}$/'],
             'duree_stage'           => $text(60),
             'consentement'          => ['accepted'],
+            'binome_reference'      => ['nullable', 'string', 'max:20', 'regex:/^STG-[A-Z0-9]{6}$/i'],
             'cv'                    => self::FILE_RULE,
             'lettre_motivation'     => self::FILE_RULE,
             'acte_naissance'        => self::FILE_RULE,
@@ -70,6 +73,7 @@ class StagePublicController extends Controller
             'date_naissance.before'    => 'Date de naissance invalide.',
             'date_debut_souhaitee.after_or_equal' => 'La date de début ne peut pas être passée.',
             'telephone.regex'          => 'Numéro de téléphone invalide.',
+            'binome_reference.regex'   => 'Référence du binôme invalide (exemple : STG-AB12CD).',
             '*.mimes'                  => 'Format accepté : PDF, JPG ou PNG.',
             '*.max'                    => 'Ce champ est trop long ou ce fichier dépasse 5 Mo.',
         ]);
@@ -92,7 +96,9 @@ class StagePublicController extends Controller
 
         return $this->successResponse(
             ['reference' => $req->reference, 'tracking_code' => $req->reference],
-            'Votre demande de stage a bien été envoyée. Vous recevrez la réponse par WhatsApp et par email.',
+            !empty($data['binome_reference'])
+                ? 'Votre demande de stage a bien été envoyée. Votre binôme est invité à la confirmer depuis le suivi de sa demande.'
+                : 'Votre demande de stage a bien été envoyée. Vous recevrez la réponse par WhatsApp et par email.',
             201,
         );
     }
@@ -170,7 +176,47 @@ class StagePublicController extends Controller
         );
     }
 
+    // ── Binôme (suivi de la demande, après code) ────────────────────────
+
+    public function binomeInvite(Request $request): JsonResponse
+    {
+        $data = $request->validate(['reference' => self::REF_RULE, 'binome_reference' => self::REF_RULE]);
+
+        return $this->binomeAction($request, fn (StageRequest $req) => $this->binomes->invite($req, $data['binome_reference']),
+            'Proposition envoyée. Votre binôme la confirme depuis le suivi de sa demande.');
+    }
+
+    public function binomeCancel(Request $request): JsonResponse
+    {
+        $request->validate(['reference' => self::REF_RULE]);
+
+        return $this->binomeAction($request, fn (StageRequest $req) => $this->binomes->cancel($req), 'Proposition annulée.');
+    }
+
+    public function binomeRespond(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate(['reference' => self::REF_RULE, 'accept' => ['required', 'boolean']]);
+
+        return $this->binomeAction($request, fn (StageRequest $req) => $this->binomes->respond($req, $id, (bool) $data['accept']),
+            $data['accept'] ? 'Demande en binôme confirmée : vos deux demandes seront étudiées ensemble.' : 'Proposition refusée.');
+    }
+
     // ── Interne ─────────────────────────────────────────────────────────
+
+    private function binomeAction(Request $request, callable $action, string $message): JsonResponse
+    {
+        $req = $this->authorized($request);
+        if ($req instanceof JsonResponse) {
+            return $req;
+        }
+        try {
+            $action($req);
+        } catch (BusinessException $e) {
+            return $this->errorResponse($e->getMessage(), $e->getStatusCode(), $e->getErrorCode());
+        }
+
+        return $this->successResponse($this->publicPayload($req->fresh()), $message);
+    }
 
     private function find(string $reference): ?StageRequest
     {
@@ -235,6 +281,9 @@ class StagePublicController extends Controller
                 'at'         => $p->created_at?->toIso8601String(),
             ])->values(),
             'can_respond'    => $req->status === StageStatus::PROPOSAL_SENT,
+            // En binôme, les dates valent pour les deux : pas de contre-proposition.
+            'can_counter'    => $req->status === StageStatus::PROPOSAL_SENT && !$this->binomes->requestPartner($req),
+            'binome'         => $this->binomes->overview($req),
         ];
     }
 }
