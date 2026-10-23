@@ -69,11 +69,31 @@ class StudentService
 
         // Filtres
         if (!empty($filters['year']) && $filters['year'] !== 'all') {
-            if (is_numeric($filters['year'])) {
-                $query->where('academic_years.id', $filters['year']);
-            } else {
-                $query->where('academic_years.academic_year', $filters['year']);
-            }
+            // Inclut les étudiants dont le dossier courant est de cette année,
+            // OU qui possèdent un parcours académique (ex. historique Prépa
+            // rattaché) pour cette année. Ainsi un étudiant rattaché à une année
+            // antérieure (ex. Prépa 2022) apparaît aussi en filtrant sur 2022,
+            // en plus de son année courante.
+            $query->where(function ($q) use ($filters) {
+                if (is_numeric($filters['year'])) {
+                    $q->where('academic_years.id', $filters['year']);
+                } else {
+                    $q->where('academic_years.academic_year', $filters['year']);
+                }
+
+                $q->orWhereExists(function ($sub) use ($filters) {
+                    $sub->select(DB::raw(1))
+                        ->from('academic_paths')
+                        ->join('academic_years as path_year', 'path_year.id', '=', 'academic_paths.academic_year_id')
+                        ->whereColumn('academic_paths.student_pending_student_id', 'student_pending_student.id');
+
+                    if (is_numeric($filters['year'])) {
+                        $sub->where('path_year.id', $filters['year']);
+                    } else {
+                        $sub->where('path_year.academic_year', $filters['year']);
+                    }
+                });
+            });
         }
 
         if (!empty($filters['filiere']) && $filters['filiere'] !== 'all') {
@@ -150,12 +170,18 @@ class StudentService
                 'personal_information.email',
                 DB::raw(DatabaseAdapter::jsonExtract('personal_information.contacts', '$.phone') . ' as telephone'),
                 DB::raw("(SELECT student_id_number FROM students WHERE students.id = student_pending_student.student_id) as matricule"),
-                DB::raw('(' . self::groupNameSql() . ') as groupe')
+                DB::raw('(' . self::groupNameSql() . ') as groupe'),
+                // Année de l'historique Prépa rattaché (academic_paths), si présente :
+                // elle doit primer sur l'année du dossier courant pour l'affichage.
+                DB::raw("(SELECT ay.academic_year FROM academic_paths ap JOIN academic_years ay ON ay.id = ap.academic_year_id WHERE ap.student_pending_student_id = student_pending_student.id AND (ap.study_level LIKE '%prepa%' OR ap.study_level LIKE '%prépa%') ORDER BY ap.academic_year_id ASC LIMIT 1) as annee_prepa")
             )
             ->where('pending_students.id', $id)
             ->first();
 
         if ($student) {
+            if (!empty($student->annee_prepa)) {
+                $student->annee = $student->annee_prepa;
+            }
             $student->redoublant = ($student->niveau && $this->isRepeatingStudent($student->student_pending_student_id, $student->niveau)) ? 'Oui' : 'Non';
         }
 

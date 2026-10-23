@@ -244,8 +244,8 @@ class LegacyPrepaLinkService
                 ->where('academic_year_id', $historicalYear->id)
                 ->where(function ($q) use ($studyLevel) {
                     $q->where('study_level', $studyLevel)
-                        ->orWhere('study_level', 'Prépa')
-                        ->orWhere('study_level', 'PREPA');
+                        ->orWhere('study_level', 'like', '%prepa%')
+                        ->orWhere('study_level', 'like', '%prépa%');
                 })
                 ->first();
 
@@ -256,23 +256,50 @@ class LegacyPrepaLinkService
                 );
             }
 
-            $academicPath = AcademicPath::create([
-                'student_pending_student_id' => $sps->id,
+            // L'attestation par l'administrateur de cet historique Prépa validé vaut
+            // validation du dossier : on le passe en "approved", condition requise
+            // pour l'éligibilité à l'inscription en Spécialité Ingénieur.
+            // Cette étape crée le parcours académique de l'année courante du dossier.
+            if ($pendingStudent->status !== 'approved') {
+                app(PendingStudentService::class)->changeStatus($pendingStudent, 'approved');
+                $pendingStudent->refresh();
+            }
+
+            // A1 — "déplacer" l'année au lieu d'ajouter une ligne au cursus :
+            // on récupère le parcours du dossier (année courante) et on le repositionne
+            // sur l'année historique de la Prépa. À défaut (déjà déplacé lors d'un
+            // rattachement antérieur), on repart d'un parcours Prépa existant.
+            $academicPath = AcademicPath::where('student_pending_student_id', $sps->id)
+                ->where('academic_year_id', $pendingStudent->academic_year_id)
+                ->first();
+
+            if (! $academicPath) {
+                $academicPath = AcademicPath::where('student_pending_student_id', $sps->id)
+                    ->where(function ($q) {
+                        $q->where('study_level', 'like', '%prepa%')
+                            ->orWhere('study_level', 'like', '%prépa%');
+                    })
+                    ->orderByDesc('id')
+                    ->first();
+            }
+
+            $pathAttributes = [
                 'academic_year_id' => $historicalYear->id,
                 'study_level' => $studyLevel,
                 'year_decision' => $data['year_decision'] ?? 'pass',
                 'deliberation_date' => $data['deliberation_date'] ?? null,
-                'role_id' => $data['role_id'] ?? null,
-                'financial_status' => $data['financial_status'] ?? 'Non exonéré',
-                'cohort' => $data['cohort'] ?? null,
-            ]);
+                'role_id' => $data['role_id'] ?? $academicPath?->role_id,
+                'financial_status' => $data['financial_status'] ?? $academicPath?->financial_status ?? 'Non exonéré',
+                'cohort' => $data['cohort'] ?? $academicPath?->cohort,
+            ];
 
-            // L'attestation par l'administrateur de cet historique Prépa validé vaut
-            // validation du dossier : on le passe en "approved", condition requise
-            // pour l'éligibilité à l'inscription en Spécialité Ingénieur.
-            if ($pendingStudent->status !== 'approved') {
-                app(PendingStudentService::class)->changeStatus($pendingStudent, 'approved');
-                $pendingStudent->refresh();
+            if ($academicPath) {
+                $academicPath->update($pathAttributes);
+                $academicPath = $academicPath->fresh();
+            } else {
+                $academicPath = AcademicPath::create(array_merge($pathAttributes, [
+                    'student_pending_student_id' => $sps->id,
+                ]));
             }
 
             return [
