@@ -4,6 +4,8 @@ namespace App\Modules\Stages\Http\Controllers;
 
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
+use App\Modules\Stages\Models\StageRequest;
+use App\Modules\Stages\Services\BinomeService;
 use App\Modules\Stages\Services\StageWhatsAppGroupService;
 use App\Modules\Stages\Services\SupervisionService;
 use App\Modules\Stages\Services\SupervisorInvitationService;
@@ -121,32 +123,36 @@ class SupervisionController extends Controller
         });
     }
 
-    // ── Binômes / groupes ───────────────────────────────────────────────
+    // ── Binômes (toujours deux stagiaires) ──────────────────────────────
 
-    public function teams(): JsonResponse
+    public function teams(BinomeService $binomes): JsonResponse
     {
-        return $this->successResponse($this->supervision->teams());
+        return $this->successResponse(['teams' => $binomes->teams(), 'candidates' => $binomes->candidates()]);
     }
 
-    public function saveTeam(Request $request, ?int $id = null): JsonResponse
+    public function saveTeam(Request $request, BinomeService $binomes): JsonResponse
     {
         $data = $request->validate([
-            'nom'         => ['required', 'string', 'max:80'],
-            'stage_ids'   => ['required', 'array', 'min:2', 'max:20'],
-            'stage_ids.*' => ['integer', 'min:1'],
-        ]);
+            'nom'         => ['nullable', 'string', 'max:80'],
+            'stage_ids'   => ['required', 'array', 'size:2'],
+            'stage_ids.*' => ['integer', 'min:1', 'distinct'],
+        ], ['stage_ids.size' => 'Un binôme compte exactement deux stagiaires.']);
+        $pair = StageRequest::whereIn('id', $data['stage_ids'])->get();
+        if ($pair->count() !== 2) {
+            return $this->errorResponse('Stagiaire introuvable.', 404, 'STAGE_NOT_FOUND');
+        }
 
-        return $this->guard(function () use ($id, $data, $request) {
-            $teamId = $this->supervision->saveTeam($id, $data['nom'], $data['stage_ids'], $request->user());
-            return $this->successResponse(['id' => $teamId], 'Binôme / groupe enregistré.', $id ? 200 : 201);
+        return $this->guard(function () use ($pair, $data, $request, $binomes) {
+            $teamId = $binomes->form($pair[0], $pair[1], $request->user(), $data['nom'] ?? null);
+            return $this->successResponse(['id' => $teamId], 'Binôme formé. Les deux stagiaires sont prévenus.', 201);
         });
     }
 
-    public function deleteTeam(Request $request, int $id): JsonResponse
+    public function deleteTeam(Request $request, int $id, BinomeService $binomes): JsonResponse
     {
-        return $this->guard(function () use ($id, $request) {
-            $this->supervision->deleteTeam($id, $request->user());
-            return $this->successResponse(null, 'Binôme / groupe supprimé.');
+        return $this->guard(function () use ($id, $request, $binomes) {
+            $binomes->dissolve($id, $request->user());
+            return $this->successResponse(null, 'Binôme défait. Les deux stagiaires sont prévenus.');
         });
     }
 

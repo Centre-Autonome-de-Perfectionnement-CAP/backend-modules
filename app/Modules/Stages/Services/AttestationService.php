@@ -706,7 +706,7 @@ class AttestationService
                 ],
                 ['Assiduité actuelle' => $elig['taux'] !== null ? "{$elig['taux']} %" : '—', 'Rapport final' => $elig['final_validated'] ? 'validé' : 'à déposer / en attente de validation'],
                 ctaLabel: 'Mon espace stagiaire',
-                ctaUrl: rtrim((string) config('app.frontend_url', config('app.url')), '/') . '/espace-stagiaire/stage',
+                ctaUrl: $this->notifier->spaceUrl('/stage'),
                 context: 'stage-attestation-preparation',
             );
         }

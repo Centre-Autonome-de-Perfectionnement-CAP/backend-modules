@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
-/** Module Stages - Lot 7 : stagiaires arrivés avant le système (invitation par numéro), signature des notes. */
+/** Module Stages - Lot 7 : stagiaires arrivés avant le système (invitation par numéro), signature des notes, binôme depuis l'espace. */
 class StagesLot7Test extends TestCase
 {
     use DatabaseTransactions;
@@ -256,5 +256,66 @@ class StagesLot7Test extends TestCase
         $this->actingAs($lead, 'sanctum')->deleteJson('/api/stages/admin/reglages/signature')->assertOk()->assertJsonPath('data.note_signature', null);
         $this->assertCount(0, Storage::disk('local')->files('stages/signature'));
         $this->assertSame($before, $pdfImages());
+    }
+
+    /** Stagiaire inscrit et règlement accepté : en-têtes de son espace. */
+    private function space(string $phone, string $email): array
+    {
+        $r = $this->postJson('/api/stages/rejoindre', $this->form($this->invite($phone), '2026-09-01', '2026-12-18', ['email' => $email]))->assertStatus(201);
+        $h = ['X-Stagiaire-Token' => $r->json('data.token'), 'Accept' => 'application/json'];
+        $this->postJson('/api/stagiaire/reglement', ['version' => app(StageSettingsService::class)->get('reglement_version')], $h)->assertOk();
+
+        return [StageRequest::where('reference', $r->json('data.reference'))->first(), $h];
+    }
+
+    public function test_binome_proposed_and_accepted_from_intern_space(): void
+    {
+        $this->at('2026-10-22 10:00');
+        [$a, $ha] = $this->space('0191000001', 'a@example.org');
+        [$b, $hb] = $this->space('0191000002', 'b@example.org');
+        [$c, $hc] = $this->space('0191000003', 'c@example.org');
+
+        $this->postJson('/api/stagiaire/binome/proposition', ['reference' => $a->reference], $ha)->assertStatus(422);
+        $this->postJson('/api/stagiaire/binome/proposition', ['reference' => 'STG-NOPE00'], $ha)->assertStatus(422);
+        $this->postJson('/api/stagiaire/binome/proposition', ['reference' => strtolower($b->reference)], $ha)->assertStatus(201)
+            ->assertJsonPath('data.sent.to.reference', $b->reference)->assertJsonPath('data.team', null);
+        $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['to'] === '+2290191000002' && str_contains($m['text'], 'Proposition de binôme')));
+        $this->postJson('/api/stagiaire/binome/proposition', ['reference' => $c->reference], $ha)->assertStatus(409); // une seule à la fois
+
+        // B voit la proposition, sans les coordonnées de A ; C ne peut pas répondre à sa place
+        $inv = $this->getJson('/api/stagiaire/binome', $hb)->assertOk()->json('data.received.0');
+        $this->assertSame(['reference', 'nom_complet'], array_keys($inv['from']));
+        $this->postJson("/api/stagiaire/binome/propositions/{$inv['id']}/reponse", ['accept' => true], $hc)->assertStatus(410);
+        $this->postJson("/api/stagiaire/binome/propositions/{$inv['id']}/reponse", ['accept' => true], $hb)->assertOk()
+            ->assertJsonPath('data.team.partner.reference', $a->reference)->assertJsonPath('data.can_invite', false);
+        $this->assertNotNull($a->fresh()->team_id);
+        $this->assertSame($a->fresh()->team_id, $b->fresh()->team_id);
+
+        // Déjà en binôme : on ne peut plus les proposer
+        $this->postJson('/api/stagiaire/binome/proposition', ['reference' => $a->reference], $hc)->assertStatus(409);
+        $this->assertTrue(\App\Modules\Stages\Models\StageHistory::where('stage_request_id', $a->id)->where('action', 'team_joined')->exists());
+    }
+
+    public function test_crossed_binome_proposals_form_the_pair_and_refusal_informs(): void
+    {
+        $this->at('2026-10-22 10:00');
+        [$a, $ha] = $this->space('0191000011', 'a1@example.org');
+        [$b, $hb] = $this->space('0191000012', 'b1@example.org');
+        [$c, $hc] = $this->space('0191000013', 'c1@example.org');
+
+        // Refus : le demandeur est prévenu, la proposition disparaît
+        $this->postJson('/api/stagiaire/binome/proposition', ['reference' => $c->reference], $ha)->assertStatus(201);
+        $id = $this->getJson('/api/stagiaire/binome', $hc)->json('data.received.0.id');
+        $this->postJson("/api/stagiaire/binome/propositions/{$id}/reponse", ['accept' => false], $hc)->assertOk();
+        $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['to'] === '+2290191000011' && str_contains($m['text'], 'refusée')));
+        $this->assertNull($this->getJson('/api/stagiaire/binome', $ha)->json('data.sent'));
+
+        // Propositions croisées : le binôme se forme directement
+        $this->postJson('/api/stagiaire/binome/proposition', ['reference' => $b->reference], $ha)->assertStatus(201);
+        $this->postJson('/api/stagiaire/binome/proposition', ['reference' => $a->reference], $hb)->assertStatus(201)
+            ->assertJsonPath('data.team.partner.reference', $a->reference);
+
+        // A est désormais en binôme : C ne peut plus le lui proposer
+        $this->postJson('/api/stagiaire/binome/proposition', ['reference' => $a->reference], $hc)->assertStatus(409);
     }
 }

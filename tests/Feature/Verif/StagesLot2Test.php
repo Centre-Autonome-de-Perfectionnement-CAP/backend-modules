@@ -213,25 +213,39 @@ class StagesLot2Test extends TestCase
 
     // ── Binômes ─────────────────────────────────────────────────────────
 
-    public function test_teams_need_two_accepted_interns(): void
+    public function test_binome_is_exactly_two_free_interns(): void
     {
         $lead = $this->lead();
         $t = BusinessHours::today();
         $a = $this->intern($t->toDateString(), $t->addMonth()->toDateString(), '0196000021');
         $b = $this->intern($t->toDateString(), $t->addMonth()->toDateString(), '0196000022');
         $c = $this->intern($t->toDateString(), $t->addMonth()->toDateString(), '0196000023', 'submitted');
+        $d = $this->intern($t->toDateString(), $t->addMonth()->toDateString(), '0196000024');
+        $old = $this->intern($t->subMonths(3)->toDateString(), $t->subMonth()->toDateString(), '0196000025');
 
         $this->actingAs($lead, 'sanctum');
-        $this->postJson('/api/stages/admin/equipes', ['nom' => 'Binôme A', 'stage_ids' => [$a->id]])->assertStatus(422);
-        $this->postJson('/api/stages/admin/equipes', ['nom' => 'Binôme A', 'stage_ids' => [$a->id, $c->id]])->assertStatus(422);
-        $id = $this->postJson('/api/stages/admin/equipes', ['nom' => 'Binôme A', 'stage_ids' => [$a->id, $b->id]])
-            ->assertStatus(201)->json('data.id');
+        $this->postJson('/api/stages/admin/equipes', ['stage_ids' => [$a->id]])->assertStatus(422);
+        $this->postJson('/api/stages/admin/equipes', ['stage_ids' => [$a->id, $b->id, $d->id]])->assertStatus(422);
+        $this->postJson('/api/stages/admin/equipes', ['stage_ids' => [$a->id, $c->id]])->assertStatus(422);
+        $this->postJson('/api/stages/admin/equipes', ['stage_ids' => [$a->id, $old->id]])->assertStatus(422);
+        $id = $this->postJson('/api/stages/admin/equipes', ['stage_ids' => [$a->id, $b->id]])->assertStatus(201)->json('data.id');
 
-        $teams = $this->getJson('/api/stages/admin/equipes')->assertOk()->json('data');
-        $this->assertCount(2, collect($teams)->firstWhere('id', $id)['members']);
+        // Nom automatique ; les deux stagiaires sont prévenus
+        $data = $this->getJson('/api/stages/admin/equipes')->assertOk()->json('data');
+        $team = collect($data['teams'])->firstWhere('id', $id);
+        $this->assertCount(2, $team['members']);
+        $this->assertStringStartsWith('Binôme ', $team['name']);
+        foreach (['+2290196000021', '+2290196000022'] as $phone) {
+            $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['to'] === $phone && str_contains($m['text'], 'Vous êtes en binôme')));
+        }
+
+        // Déjà en binôme : plus proposé, et impossible à reprendre
+        $this->assertSame([$d->id], collect($data['candidates'])->pluck('id')->intersect([$a->id, $b->id, $d->id, $old->id])->values()->all());
+        $this->postJson('/api/stages/admin/equipes', ['stage_ids' => [$a->id, $d->id]])->assertStatus(409);
 
         $this->deleteJson("/api/stages/admin/equipes/{$id}")->assertOk();
         $this->assertNull($a->fresh()->team_id);
+        $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['to'] === '+2290196000022' && str_contains($m['text'], 'Binôme défait')));
     }
 
     // ── Groupe WhatsApp annuel ──────────────────────────────────────────

@@ -99,7 +99,7 @@ class InternFollowController extends Controller
 
         $this->notifier->toDemandeur($req, 'Empreinte réinitialisée', [
             'Votre empreinte a été réinitialisée. À votre prochaine connexion à l\'espace stagiaire, enregistrez-la de nouveau depuis votre téléphone.',
-        ], [], ctaLabel: 'Ouvrir mon espace', ctaUrl: $this->activation->spaceUrl(), context: 'stage-appareil');
+        ], [], ctaLabel: 'Ouvrir mon espace', ctaUrl: $this->notifier->spaceUrl(), context: 'stage-appareil');
 
         if (!StageAccess::isLead($request->user())) {
             $who = trim($request->user()->first_name . ' ' . $request->user()->last_name);

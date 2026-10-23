@@ -98,16 +98,19 @@ class StageNotifier
      * Action d'un stagiaire (demande, rapport, arrivée…) : ses superviseurs et
      * les responsables de division sont prévenus, heures ouvrées respectées.
      *
-     * @param string[]            $paragraphs
-     * @param array<string,mixed> $fields
+     * @param StageRequest|StageRequest[] $reqs   un stagiaire, ou les deux d'un binôme
+     * @param string[]                    $paragraphs
+     * @param array<string,mixed>         $fields
      */
     public function toFollowers(
-        StageRequest $req, string $title, array $paragraphs, array $fields = [],
+        StageRequest|array $reqs, string $title, array $paragraphs, array $fields = [],
         string $context = 'stage-staff', ?string $url = null,
     ): void {
+        $reqs  = is_array($reqs) ? array_values($reqs) : [$reqs];
+        $first = $reqs[0];
         $this->toStaff(
-            $this->supervisorsOf($req)->concat(StageAccess::managers()),
-            $title, $paragraphs, $fields, "{$context}:{$req->reference}", $url ?? $this->staffUrl($req), $req->reference,
+            collect($reqs)->flatMap(fn (StageRequest $r) => $this->supervisorsOf($r))->concat(StageAccess::managers()),
+            $title, $paragraphs, $fields, "{$context}:{$first->reference}", $url ?? $this->staffUrl($first), $first->reference,
         );
     }
 
@@ -191,6 +194,12 @@ class StageNotifier
     {
         return rtrim((string) config('app.frontend_url', config('app.url')), '/')
             . '/stage/suivi?ref=' . urlencode($req->reference);
+    }
+
+    /** Adresse d'une page de l'espace stagiaire (« /rapports », « /stage »…). */
+    public function spaceUrl(string $path = ''): string
+    {
+        return rtrim((string) config('app.frontend_url', config('app.url')), '/') . '/espace-stagiaire' . $path;
     }
 
     public function staffUrl(StageRequest $req): string

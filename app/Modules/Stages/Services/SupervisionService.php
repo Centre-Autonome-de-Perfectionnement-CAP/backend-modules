@@ -13,7 +13,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Suivi des stagiaires (demandes acceptées) : superviseurs et binômes.
+ * Suivi des stagiaires (demandes acceptées) : superviseurs (binômes : BinomeService).
  *
  *  - un stagiaire commence sans superviseur ; on lui en attribue ensuite
  *    (plusieurs possibles) parmi les superviseurs inscrits ;
@@ -125,86 +125,6 @@ class SupervisionService
         }
 
         return $changed;
-    }
-
-    // ════════════════════════════════════════════════════════════════════
-    // BINÔMES / GROUPES DE TRAVAIL
-    // ════════════════════════════════════════════════════════════════════
-
-    public function teams(): Collection
-    {
-        $teams   = DB::table('stage_teams')->orderBy('name')->get();
-        $members = StageRequest::whereIn('team_id', $teams->pluck('id'))->where('status', StageStatus::ACCEPTED)->get()->groupBy('team_id');
-
-        return $teams->map(fn ($t) => [
-            'id'      => $t->id,
-            'name'    => $t->name,
-            'members' => ($members[$t->id] ?? collect())->map(fn ($r) => [
-                'id' => $r->id, 'reference' => $r->reference, 'nom_complet' => trim($r->civilite . ' ' . $r->fullName()),
-            ])->values(),
-        ]);
-    }
-
-    public function saveTeam(?int $id, string $name, array $stageIds, User $by): int
-    {
-        $name = trim(strip_tags($name));
-        if ($name === '') {
-            throw new BusinessException('Donnez un nom au binôme ou au groupe.', 'STAGE_TEAM_NAME', 422);
-        }
-        $stageIds = array_values(array_unique(array_map('intval', $stageIds)));
-        if (count($stageIds) < 2) {
-            throw new BusinessException('Un binôme ou un groupe compte au moins deux stagiaires.', 'STAGE_TEAM_SIZE', 422);
-        }
-        if (StageRequest::whereIn('id', $stageIds)->where('status', StageStatus::ACCEPTED)->count() !== count($stageIds)) {
-            throw new BusinessException('Seuls les stagiaires acceptés peuvent former un binôme.', 'STAGE_NOT_INTERN', 422);
-        }
-
-        $teamId = DB::transaction(function () use ($id, $name, $stageIds, $by) {
-            if ($id) {
-                if (!DB::table('stage_teams')->where('id', $id)->exists()) {
-                    throw new BusinessException('Binôme introuvable.', 'STAGE_TEAM_NOT_FOUND', 404);
-                }
-                DB::table('stage_teams')->where('id', $id)->update(['name' => $name, 'updated_at' => now()]);
-                StageRequest::where('team_id', $id)->whereNotIn('id', $stageIds)->update(['team_id' => null]);
-            } else {
-                $id = DB::table('stage_teams')->insertGetId(['name' => $name, 'created_by' => $by->id, 'created_at' => now(), 'updated_at' => now()]);
-            }
-            foreach (StageRequest::whereIn('id', $stageIds)->get() as $req) {
-                if ((int) $req->team_id !== $id) {
-                    $req->team_id = $id;
-                    $req->save();
-                    $this->log($req, 'team_joined', $by, $name);
-                }
-            }
-
-            return $id;
-        });
-
-        if (!StageAccess::isLead($by)) {
-            $this->notifier->toManagersGeneric('Action d\'un superviseur', [
-                $this->who($by) . " a enregistré le binôme / groupe « {$name} ».",
-            ], [], 'stage-superviseur');
-        }
-
-        return $teamId;
-    }
-
-    public function deleteTeam(int $id, User $by): void
-    {
-        $name = DB::table('stage_teams')->where('id', $id)->value('name');
-        if ($name === null) {
-            throw new BusinessException('Binôme introuvable.', 'STAGE_TEAM_NOT_FOUND', 404);
-        }
-        DB::transaction(function () use ($id) {
-            StageRequest::where('team_id', $id)->update(['team_id' => null]);
-            DB::table('stage_teams')->where('id', $id)->delete();
-        });
-
-        if (!StageAccess::isLead($by)) {
-            $this->notifier->toManagersGeneric('Action d\'un superviseur', [
-                $this->who($by) . " a supprimé le binôme / groupe « {$name} ».",
-            ], [], 'stage-superviseur');
-        }
     }
 
     // ════════════════════════════════════════════════════════════════════

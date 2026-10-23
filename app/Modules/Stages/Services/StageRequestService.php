@@ -511,7 +511,7 @@ class StageRequestService
             ['Votre stage est enregistré dans le système du CAP-EPAC. Voici votre note de service.'],
             ['Note n°' => $note->number] + $this->termsFields($this->currentTerms($req)),
             ctaLabel: 'Ouvrir mon espace stagiaire',
-            ctaUrl: rtrim((string) config('app.frontend_url'), '/') . '/espace-stagiaire',
+            ctaUrl: $this->notifier->spaceUrl(),
             context: 'stage-note',
             file: $this->notePdfFile($note),
         );

@@ -122,7 +122,6 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         Route::get('equipes', [SupervisionController::class, 'teams']);
         Route::middleware('throttle:30,1')->group(function () {
             Route::post('equipes', [SupervisionController::class, 'saveTeam']);
-            Route::put('equipes/{id}', [SupervisionController::class, 'saveTeam'])->whereNumber('id');
             Route::delete('equipes/{id}', [SupervisionController::class, 'deleteTeam'])->whereNumber('id');
         });
 
@@ -154,25 +153,31 @@ Route::prefix('api/stagiaire')->middleware('api')->group(function () {
         Route::post('mot-de-passe', [InternSpaceController::class, 'resetPassword']);
     });
 
-    Route::middleware([AuthenticateIntern::class, 'throttle:120,1'])->group(function () {
+    Route::middleware([AuthenticateIntern::class, 'throttle:stages-intern'])->group(function () {
         Route::post('deconnexion', [InternSpaceController::class, 'logout']);
         Route::get('moi', [InternSpaceController::class, 'me']);
         Route::post('reglement', [InternSpaceController::class, 'acceptReglement']);
         Route::post('empreinte/options', [InternSpaceController::class, 'webauthnRegisterOptions']);
         Route::post('empreinte', [InternSpaceController::class, 'webauthnRegister']);
-        Route::post('pointage/options', [InternSpaceController::class, 'punchOptions'])->middleware('throttle:20,1');
-        Route::post('pointage', [InternSpaceController::class, 'punch'])->middleware('throttle:20,1');
+        Route::post('pointage/options', [InternSpaceController::class, 'punchOptions'])->middleware('throttle:stages-intern-medium');
+        Route::post('pointage', [InternSpaceController::class, 'punch'])->middleware('throttle:stages-intern-medium');
         Route::get('presences', [InternSpaceController::class, 'attendance']);
         Route::get('demandes', [InternSpaceController::class, 'requestsIndex']);
-        Route::post('demandes', [InternSpaceController::class, 'requestsStore'])->middleware('throttle:10,1');
+        Route::post('demandes', [InternSpaceController::class, 'requestsStore'])->middleware('throttle:stages-intern-write');
         Route::delete('demandes/{id}', [InternSpaceController::class, 'requestsCancel'])->whereNumber('id');
         Route::get('rapports', [InternSpaceController::class, 'reportsIndex']);
-        Route::post('rapports', [InternSpaceController::class, 'reportsStore'])->middleware('throttle:10,1');
+        Route::post('rapports', [InternSpaceController::class, 'reportsStore'])->middleware('throttle:stages-intern-write');
         Route::get('rapports/{id}', [InternSpaceController::class, 'reportShow'])->whereNumber('id');
-        Route::post('rapports/{id}/commentaires', [InternSpaceController::class, 'reportComment'])->whereNumber('id')->middleware('throttle:20,1');
+        Route::post('rapports/{id}/commentaires', [InternSpaceController::class, 'reportComment'])->whereNumber('id')->middleware('throttle:stages-intern-medium');
         Route::get('rapports/{id}/versions/{version}', [InternSpaceController::class, 'reportFile'])->whereNumber(['id', 'version']);
-        Route::get('notes/{id}/pdf', [InternSpaceController::class, 'notePdf'])->whereNumber('id')->middleware('throttle:20,1');
+        Route::get('notes/{id}/pdf', [InternSpaceController::class, 'notePdf'])->whereNumber('id')->middleware('throttle:stages-intern-medium');
         Route::get('attestation', [InternSpaceController::class, 'attestation']);
-        Route::post('attestation', [InternSpaceController::class, 'attestationRequest'])->middleware('throttle:10,1');
+        Route::post('attestation', [InternSpaceController::class, 'attestationRequest'])->middleware('throttle:stages-intern-write');
+        Route::get('binome', [InternSpaceController::class, 'binome']);
+        Route::middleware('throttle:stages-intern-write')->group(function () {
+            Route::post('binome/proposition', [InternSpaceController::class, 'binomeInvite']);
+            Route::delete('binome/proposition', [InternSpaceController::class, 'binomeCancel']);
+            Route::post('binome/propositions/{id}/reponse', [InternSpaceController::class, 'binomeRespond'])->whereNumber('id');
+        });
     });
 });

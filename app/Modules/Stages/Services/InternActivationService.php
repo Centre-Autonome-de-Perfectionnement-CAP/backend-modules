@@ -151,7 +151,7 @@ class InternActivationService
             ],
             ['Identifiant' => $req->reference],
             ctaLabel: 'Ouvrir mon espace stagiaire',
-            ctaUrl: $this->spaceUrl(),
+            ctaUrl: $this->notifier->spaceUrl(),
             context: 'stage-bienvenue',
         );
 
@@ -167,11 +167,6 @@ class InternActivationService
         $shift = CarbonImmutable::parse($req->date_debut->toDateString())->diffInDays(CarbonImmutable::parse($req->date_debut_reelle->toDateString()), false);
 
         return CarbonImmutable::parse($req->date_fin->toDateString())->addDays((int) $shift)->toDateString();
-    }
-
-    public function spaceUrl(string $path = ''): string
-    {
-        return rtrim((string) config('app.frontend_url', config('app.url')), '/') . '/espace-stagiaire' . $path;
     }
 
     // ── Interne ──────────────────────────────────────────────────────────
@@ -198,7 +193,7 @@ class InternActivationService
             ],
             ['Référence' => $req->reference],
             ctaLabel: 'Confirmer ma présence',
-            ctaUrl: $this->spaceUrl('/activer?token=' . $token),
+            ctaUrl: $this->notifier->spaceUrl('/activer?token=' . $token),
             context: $reminder ? 'stage-activation-rappel' : 'stage-activation',
         );
         StageHistory::create([

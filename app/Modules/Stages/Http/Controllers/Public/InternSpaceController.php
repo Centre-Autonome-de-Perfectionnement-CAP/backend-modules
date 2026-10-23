@@ -6,6 +6,7 @@ use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Modules\Stages\Models\StageInternAccount;
 use App\Modules\Stages\Models\StageInternRequest;
+use App\Modules\Stages\Services\BinomeService;
 use App\Modules\Stages\Services\AttendanceService;
 use App\Modules\Stages\Services\InternActivationService;
 use App\Modules\Stages\Services\InternAuthService;
@@ -50,6 +51,7 @@ class InternSpaceController extends Controller
         private readonly StageSettingsService $settings,
         private readonly ReportService $reports,
         private readonly AttestationService $attestations,
+        private readonly BinomeService $binomes,
     ) {}
 
     // ── Activation (lien du premier jour) ───────────────────────────────
@@ -317,6 +319,50 @@ class InternSpaceController extends Controller
 
             return $this->successResponse($this->attestations->forIntern($req->fresh()),
                 'Demande envoyée. Vous serez prévenu(e) dès que votre attestation sera prête.', 201);
+        });
+    }
+
+    // ── Binôme ──────────────────────────────────────────────────────────
+
+    public function binome(Request $request): JsonResponse
+    {
+        return $this->successResponse($this->binomes->overview($this->ready($request)->stage));
+    }
+
+    /** Proposer un binôme à un autre stagiaire, avec sa référence de stage. */
+    public function binomeInvite(Request $request): JsonResponse
+    {
+        $data = $request->validate(['reference' => ['required', 'string', 'max:30']]);
+
+        return $this->guard(function () use ($request, $data) {
+            $req = $this->ready($request)->stage;
+            $this->binomes->invite($req, $data['reference']);
+            $now = $this->binomes->overview($req->fresh());
+
+            return $this->successResponse($now, $now['team']
+                ? 'Binôme formé : vous étiez tous les deux d\'accord.'
+                : 'Proposition envoyée. Le stagiaire est prévenu et peut accepter depuis son espace.', 201);
+        });
+    }
+
+    public function binomeCancel(Request $request): JsonResponse
+    {
+        $req = $this->ready($request)->stage;
+        $this->binomes->cancel($req);
+
+        return $this->successResponse($this->binomes->overview($req), 'Proposition annulée.');
+    }
+
+    public function binomeRespond(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate(['accept' => ['required', 'boolean']]);
+
+        return $this->guard(function () use ($request, $id, $data) {
+            $req = $this->ready($request)->stage;
+            $this->binomes->respond($req, $id, (bool) $data['accept']);
+
+            return $this->successResponse($this->binomes->overview($req->fresh()),
+                $data['accept'] ? 'Binôme formé. Vos superviseurs et le responsable sont prévenus.' : 'Proposition refusée.');
         });
     }
 

@@ -222,7 +222,7 @@ class ReportService
             $this->notifier->toDemandeur($req, 'Commentaire sur votre rapport', [
                 trim($staff->first_name . ' ' . $staff->last_name) . ' a commenté votre rapport.',
             ], ['Rapport' => $this->labelFor($report)], highlight: $body, highlightTitle: 'Commentaire',
-                ctaLabel: 'Ouvrir mes rapports', ctaUrl: $this->internUrl(), context: 'stage-rapport-commentaire');
+                ctaLabel: 'Ouvrir mes rapports', ctaUrl: $this->notifier->spaceUrl('/rapports'), context: 'stage-rapport-commentaire');
         } else {
             $this->notifier->toFollowers($req, 'Réponse du stagiaire', [
                 'Le stagiaire a répondu sur son rapport.',
@@ -274,7 +274,7 @@ class ReportService
                 : "{$who} vous demande de corriger votre rapport et d'en déposer une nouvelle version."],
             ['Rapport' => $this->labelFor($report)],
             highlight: $comment, highlightTitle: 'Commentaire',
-            ctaLabel: 'Ouvrir mes rapports', ctaUrl: $this->internUrl(), context: 'stage-rapport-decision',
+            ctaLabel: 'Ouvrir mes rapports', ctaUrl: $this->notifier->spaceUrl('/rapports'), context: 'stage-rapport-decision',
         );
         if (!$lead) {
             $this->notifier->toManagers($req, 'Action d\'un superviseur', [
@@ -510,7 +510,7 @@ class ReportService
                     : "{$who} n'a pas retenu la version corrigée de votre rapport final. Votre version validée précédente reste valable ; vous pouvez en déposer une autre."],
                 ['Rapport' => $this->labelFor($report)],
                 highlight: $comment, highlightTitle: 'Commentaire',
-                ctaLabel: 'Ouvrir mes rapports', ctaUrl: $this->internUrl(), context: 'stage-rapport-correction',
+                ctaLabel: 'Ouvrir mes rapports', ctaUrl: $this->notifier->spaceUrl('/rapports'), context: 'stage-rapport-correction',
             );
         } else {
             $this->notifier->toManagers($req, 'Avis d\'un superviseur', [
@@ -568,7 +568,7 @@ class ReportService
                 ? 'Vous n\'avez pas encore déposé ce rapport : aujourd\'hui est le dernier jour du délai.'
                 : 'Le dépôt de votre rapport est ouvert. Déposez-le en PDF depuis votre espace stagiaire.'],
             ['Rapport' => $p['label'], 'À déposer avant le' => $this->requests->frDate($p['closes'])],
-            ctaLabel: 'Déposer mon rapport', ctaUrl: $this->internUrl(), context: 'stage-rapport-rappel',
+            ctaLabel: 'Déposer mon rapport', ctaUrl: $this->notifier->spaceUrl('/rapports'), context: 'stage-rapport-rappel',
         );
     }
 
@@ -585,10 +585,6 @@ class ReportService
         return rtrim((string) config('app.url'), '/') . '/services/stages/rapports?rapport=' . $r->id;
     }
 
-    private function internUrl(): string
-    {
-        return rtrim((string) config('app.frontend_url', config('app.url')), '/') . '/espace-stagiaire/rapports';
-    }
 
     private function history(StageRequest $req, string $action, ?User $by, ?string $comment): void
     {

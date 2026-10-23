@@ -86,6 +86,12 @@ class StagesServiceProvider extends ServiceProvider
             Limit::perMinute(10)->by($r->ip()),
             Limit::perMinute(6)->by('ref:' . strtoupper((string) $r->input('reference'))),
         ]);
+        // Espace stagiaire : limites par stagiaire connecté, pas par adresse IP
+        // (sur le Wi-Fi du CAP, tous les stagiaires partagent la même adresse).
+        $intern = fn (Request $r) => 'stagiaire:' . ($r->attributes->get('intern')?->id ?? $r->ip());
+        RateLimiter::for('stages-intern', fn (Request $r) => Limit::perMinute(120)->by($intern($r)));
+        RateLimiter::for('stages-intern-medium', fn (Request $r) => Limit::perMinute(20)->by($intern($r)));
+        RateLimiter::for('stages-intern-write', fn (Request $r) => Limit::perMinute(10)->by($intern($r)));
 
         if ($this->app->runningInConsole()) {
             $this->commands([ProcessStageDeadlines::class, SyncStageWhatsAppGroup::class, ProcessStageActivations::class, ProcessStageReports::class, ProcessStageAttestations::class]);
