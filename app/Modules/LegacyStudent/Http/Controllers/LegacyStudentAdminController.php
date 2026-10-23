@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use App\Support\UploadLimit;
 
 class LegacyStudentAdminController extends Controller
 {
@@ -547,7 +548,7 @@ class LegacyStudentAdminController extends Controller
     public function import(Request $request): JsonResponse
     {
         $request->validate([
-            'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+            'file' => ['required', 'file', 'mimes:xlsx,xls,csv', UploadLimit::rule()],
         ]);
 
         $import = new \App\Modules\LegacyStudent\Imports\LegacyStudentsImport();

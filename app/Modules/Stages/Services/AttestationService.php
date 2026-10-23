@@ -69,7 +69,6 @@ class AttestationService
 
     /** Corrections possibles avant validation (longueur maximale). */
     public const EDITABLE = ['pays_naissance' => 60, 'type_stage' => 40, 'structure' => 200];
-    public const SCAN_MAX_KB = 10240;
 
     public function __construct(
         private readonly StageNotifier $notifier,

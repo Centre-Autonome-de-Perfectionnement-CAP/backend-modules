@@ -3,6 +3,7 @@
 namespace App\Modules\Cours\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Support\UploadLimit;
 
 class CreateCourseElementResourceRequest extends FormRequest
 {
@@ -15,7 +16,7 @@ class CreateCourseElementResourceRequest extends FormRequest
     {
         return [
             'course_element_id' => 'required|exists:course_elements,id',
-            'file' => 'required|file|mimes:pdf,pptx,ppt,docx,doc,xlsx,xls,mp4,mp3|max:51200',
+            'file' => 'required|file|mimes:pdf,pptx,ppt,docx,doc,xlsx,xls,mp4,mp3|' . UploadLimit::rule(UploadLimit::COURSE_KB),
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
             'pedagogical_type' => 'required|in:syllabus,cours,td,tp,examen', // nouveau
@@ -30,7 +31,7 @@ class CreateCourseElementResourceRequest extends FormRequest
             'course_element_id.exists' => 'L\'élément de cours n\'existe pas.',
             'file.required' => 'Le fichier est obligatoire.',
             'file.mimes' => 'Le fichier doit être de type: pdf, pptx, docx, xlsx, mp4, mp3.',
-            'file.max' => 'Le fichier ne peut pas dépasser 50 Mo.',
+            'file.max' => UploadLimit::message(UploadLimit::COURSE_KB),
             'title.required' => 'Le titre est obligatoire.',
             'resource_type.required' => 'Le type de ressource est obligatoire.',
         ];

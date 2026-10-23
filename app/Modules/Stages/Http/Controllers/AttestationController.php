@@ -9,6 +9,7 @@ use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Services\AttestationService;
 use App\Modules\Stages\Services\StageRequestService;
 use App\Modules\Stages\Support\StageAccess;
+use App\Support\UploadLimit;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -137,7 +138,7 @@ class AttestationController extends Controller
     public function scan(Request $request, int $id): JsonResponse
     {
         $request->validate([
-            'file' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:' . AttestationService::SCAN_MAX_KB],
+            'file' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', UploadLimit::rule()],
         ]);
         $a = $this->find($request, $id);
 

@@ -15,6 +15,7 @@ use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use App\Support\UploadLimit;
 
 /**
  * Site vitrine : dépôt d'une demande de stage, suivi par référence + code,
@@ -25,7 +26,7 @@ class StagePublicController extends Controller
     use ApiResponse;
 
     private const REF_RULE = ['required', 'string', 'max:20', 'regex:/^STG-[A-Za-z0-9]{6}$/'];
-    private const FILE_RULE = ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'];
+    private const FILE_RULE = ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:' . UploadLimit::DEFAULT_KB];
 
     public function __construct(
         private readonly StageRequestService $service,
@@ -75,7 +76,7 @@ class StagePublicController extends Controller
             'telephone.regex'          => 'Numéro de téléphone invalide.',
             'binome_reference.regex'   => 'Référence du binôme invalide (exemple : STG-AB12CD).',
             '*.mimes'                  => 'Format accepté : PDF, JPG ou PNG.',
-            '*.max'                    => 'Ce champ est trop long ou ce fichier dépasse 5 Mo.',
+            '*.max'                    => 'Ce champ est trop long, ou ce fichier dépasse ' . UploadLimit::label() . '.',
         ]);
 
         foreach (['nom', 'prenoms', 'lieu_naissance', 'nationalite', 'etablissement_origine', 'filiere_niveau', 'theme_souhaite', 'duree_stage'] as $k) {

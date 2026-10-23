@@ -33,6 +33,8 @@ class CoreServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        \App\Support\UploadLimit::registerMessages();
+
         // FUSION develop/main : routes du module Core (OTP, ajoutées sur main).
         // Sur main elles étaient chargées par bootstrap/app.php (then:) ; selon la
         // convention develop, chaque module charge ses routes dans son provider.

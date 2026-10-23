@@ -3,6 +3,7 @@
 namespace App\Modules\Stockage\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Support\UploadLimit;
 
 class UploadFileRequest extends FormRequest
 {
@@ -20,7 +21,7 @@ class UploadFileRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'file' => 'required|file|max:51200', // 50MB max
+            'file' => 'required|file|' . UploadLimit::rule(UploadLimit::COURSE_KB),
             'visibility' => 'nullable|in:public,private',
             'collection' => 'nullable|string|max:255',
             'module_name' => 'nullable|string|max:255',
@@ -38,7 +39,7 @@ class UploadFileRequest extends FormRequest
         return [
             'file.required' => 'Le fichier est requis.',
             'file.file' => 'Le fichier doit être un fichier valide.',
-            'file.max' => 'Le fichier ne doit pas dépasser 50MB.',
+            'file.max' => UploadLimit::message(UploadLimit::COURSE_KB),
             'visibility.in' => 'La visibilité doit être "public" ou "private".',
         ];
     }

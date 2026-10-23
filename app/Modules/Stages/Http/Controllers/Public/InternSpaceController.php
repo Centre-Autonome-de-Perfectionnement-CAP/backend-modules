@@ -25,6 +25,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
+use App\Support\UploadLimit;
 
 /**
  * Espace stagiaire (site vitrine) : activation, connexion, règlement,
@@ -262,7 +263,7 @@ class InternSpaceController extends Controller
             'time_to'      => ['nullable', 'date_format:H:i'],
             'new_date_fin' => ['required_unless:kind,permission', 'nullable', 'date_format:Y-m-d'],
             'motif'        => ['required', 'string', 'min:3', 'max:1000'],
-            'piece'        => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'piece'        => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', UploadLimit::rule()],
         ]);
         $data['motif'] = trim(strip_tags($data['motif']));
 
@@ -376,9 +377,9 @@ class InternSpaceController extends Controller
     {
         $data = $request->validate([
             'period_key' => ['required', 'string', 'max:20', 'regex:/^(FINAL|J\d{4}-\d{2}-\d{2}|S\d{4}-W\d{2}|M\d{4}-\d{2})$/'],
-            'fichier'    => ['required', 'file', 'mimes:pdf', 'max:' . ReportService::MAX_KB],
+            'fichier'    => ['required', 'file', 'mimes:pdf', UploadLimit::rule(UploadLimit::REPORT_KB)],
             'note'       => ['nullable', 'string', 'max:1000'],
-        ], ['fichier.mimes' => 'Le rapport doit être un fichier PDF.', 'fichier.max' => 'Le rapport ne doit pas dépasser 10 Mo.']);
+        ], ['fichier.mimes' => 'Le rapport doit être un fichier PDF.', 'fichier.max' => UploadLimit::message(UploadLimit::REPORT_KB)]);
         $note = isset($data['note']) ? (trim(strip_tags($data['note'])) ?: null) : null;
 
         return $this->guard(function () use ($data, $note, $request) {

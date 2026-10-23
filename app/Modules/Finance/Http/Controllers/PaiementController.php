@@ -146,7 +146,7 @@ class PaiementController extends Controller
      *                 @OA\Property(property="reference", type="string", maxLength=255, example="REF-2023-001", description="Référence unique du paiement"),
      *                 @OA\Property(property="numero_compte", type="string", maxLength=255, example="123456789", description="Numéro de compte"),
      *                 @OA\Property(property="date_versement", type="string", format="date", example="2023-10-26", description="Date du versement"),
-     *                 @OA\Property(property="quittance", type="string", format="binary", description="Fichier de quittance (PDF, JPG, PNG, max 5MB)"),
+     *                 @OA\Property(property="quittance", type="string", format="binary", description="Fichier de quittance (PDF, JPG, PNG, max 2 Mo)"),
      *                 @OA\Property(property="motif", type="string", description="Motif du paiement"),
      *                 @OA\Property(property="email", type="string", format="email", maxLength=255, example="student@example.com", description="Email de contact"),
      *                 @OA\Property(property="contact", type="string", maxLength=255, example="+221 77 123 45 67", description="Numéro de contact")

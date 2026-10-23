@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Traits\ApiResponse;
 use App\Traits\RestrictsToRoles;
+use App\Support\UploadLimit;
 
 class ImportantInformationController extends Controller
 {
@@ -98,9 +99,9 @@ class ImportantInformationController extends Controller
             'color' => 'required|in:primary,success,info,warning,danger',
             'link' => 'nullable|string',
             'file_id' => 'nullable|exists:files,id',
-            'file' => 'nullable|file|mimes:pdf|max:51200', // 50 MB
+            'file' => 'nullable|file|mimes:pdf|' . UploadLimit::rule(),
             'files' => 'nullable|array',
-            'files.*' => 'file|mimes:pdf|max:51200', // 50 MB
+            'files.*' => 'file|mimes:pdf|' . UploadLimit::rule(),
             'is_active' => 'boolean',
             'order' => 'integer',
         ]);
@@ -179,9 +180,9 @@ class ImportantInformationController extends Controller
             'color' => 'sometimes|in:primary,success,info,warning,danger',
             'link' => 'nullable|string',
             'file_id' => 'nullable|exists:files,id',
-            'file' => 'nullable|file|mimes:pdf|max:51200', // 50 MB
+            'file' => 'nullable|file|mimes:pdf|' . UploadLimit::rule(),
             'files' => 'nullable|array',
-            'files.*' => 'file|mimes:pdf|max:51200', // 50 MB
+            'files.*' => 'file|mimes:pdf|' . UploadLimit::rule(),
             'is_active' => 'boolean',
             'order' => 'integer',
         ]);

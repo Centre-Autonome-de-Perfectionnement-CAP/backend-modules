@@ -13,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
+use App\Support\UploadLimit;
 
 /**
  * Stagiaires arrivés avant le système : invitations (responsable de
@@ -107,7 +108,7 @@ class InternInvitationController extends Controller
             'date_debut'            => ['required', 'date_format:Y-m-d'],
             'date_fin'              => ['required', 'date_format:Y-m-d', 'after_or_equal:date_debut'],
             'password'              => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
-            'note_papier'           => ['nullable', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png'],
+            'note_papier'           => ['nullable', 'file', UploadLimit::rule(), 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png'],
             'consentement'          => ['accepted'],
         ], [
             'password.confirmed'      => 'Les deux mots de passe ne correspondent pas.',

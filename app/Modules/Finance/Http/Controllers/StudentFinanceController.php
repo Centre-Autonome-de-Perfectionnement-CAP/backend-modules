@@ -8,6 +8,7 @@ use App\Modules\Finance\Services\TransactionService;
 use App\Modules\Finance\Models\Paiement;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
+use App\Support\UploadLimit;
 
 class StudentFinanceController extends Controller
 {
@@ -66,7 +67,7 @@ class StudentFinanceController extends Controller
             'motif' => 'nullable|string',
             'email' => 'nullable|email',
             'contact' => 'nullable|string',
-            'quittance' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120'
+            'quittance' => 'required|file|mimes:pdf,jpg,jpeg,png|' . UploadLimit::rule()
         ]);
 
         $paiementService = app(\App\Modules\Finance\Services\PaiementService::class);

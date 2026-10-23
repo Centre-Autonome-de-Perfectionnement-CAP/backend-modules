@@ -33,8 +33,6 @@ use Illuminate\Support\Facades\Storage;
  */
 class ReportService
 {
-    public const MAX_KB = 10240;
-
     public const STATUS_LABELS = [
         'submitted'           => 'Déposé - en attente de lecture',
         'supervisor_approved' => 'Validé par le superviseur',

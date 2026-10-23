@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use App\Support\UploadLimit;
 
 /**
  * Progiciel : gestion des demandes de stage par le Responsable de division
@@ -170,9 +171,8 @@ class StageAdminController extends Controller
     public function uploadSignature(Request $request, NoteSignatureService $signature): JsonResponse
     {
         $request->validate([
-            'image' => ['required', 'file', 'mimes:png,jpg,jpeg,webp', 'max:2048', 'dimensions:min_width=80,min_height=30,max_width=8000,max_height=8000'],
+            'image' => ['required', 'file', 'mimes:png,jpg,jpeg,webp', UploadLimit::rule(), 'dimensions:min_width=80,min_height=30,max_width=8000,max_height=8000'],
         ], [
-            'image.max'        => "L'image ne doit pas dépasser 2 Mo.",
             'image.mimes'      => 'Envoyez une image PNG, JPG ou WEBP.',
             'image.dimensions' => "L'image est trop petite pour une signature lisible.",
         ]);

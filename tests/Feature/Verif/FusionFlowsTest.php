@@ -537,7 +537,22 @@ class FusionFlowsTest extends TestCase
         $errors = $r->json('errors');
         $this->assertArrayHasKey('cv', $errors);
         $this->assertStringContainsString('Format', $errors['cv'][0]);
-        $this->assertStringContainsString('5 Mo', $errors['demande_da'][0]);
+        $this->assertStringContainsString('2 Mo', $errors['demande_da'][0]);
+    }
+
+    public function test_upload_limits_are_two_mo_except_reports_and_courses(): void
+    {
+        $this->assertSame('max:2048', \App\Support\UploadLimit::rule());
+        $this->assertSame('10 Mo', \App\Support\UploadLimit::label(\App\Support\UploadLimit::REPORT_KB));
+        $this->assertSame('20 Mo', \App\Support\UploadLimit::label(\App\Support\UploadLimit::COURSE_KB));
+
+        // Message global, en Mo, pour toute règle « max » sur un fichier.
+        $v = \Illuminate\Support\Facades\Validator::make(
+            ['f' => \Illuminate\Http\UploadedFile::fake()->create('a.pdf', 3000, 'application/pdf')],
+            ['f' => ['file', \App\Support\UploadLimit::rule()]]
+        );
+        $this->assertTrue($v->fails());
+        $this->assertStringContainsString('2 Mo', $v->errors()->first('f'));
     }
 }
 }

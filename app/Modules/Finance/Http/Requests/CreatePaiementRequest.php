@@ -6,6 +6,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Contracts\Validation\Validator;
 use App\Modules\Inscription\Models\Student;
+use App\Support\UploadLimit;
 
 class CreatePaiementRequest extends FormRequest
 {
@@ -68,7 +69,7 @@ class CreatePaiementRequest extends FormRequest
                 },
             ],
             'date_versement' => 'nullable|date|before_or_equal:today',
-            'quittance' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120', // Max 5MB
+            'quittance' => 'required|file|mimes:pdf,jpg,jpeg,png|' . UploadLimit::rule(),
             'motif' => 'required|string',
             'email' => ['nullable', 'string', 'max:255', new \App\Rules\ValidRealEmail()],
             'contact' => 'nullable|string|max:255',
@@ -105,7 +106,7 @@ class CreatePaiementRequest extends FormRequest
             'quittance.required' => 'La quittance est obligatoire.',
             'quittance.file' => 'La quittance doit être un fichier.',
             'quittance.mimes' => 'La quittance doit être un fichier de type: pdf, jpg, jpeg ou png.',
-            'quittance.max' => 'La quittance ne peut pas dépasser 5 Mo.',
+            'quittance.max' => UploadLimit::message(),
 
             'motif.required' => 'Le motif est obligatoire.',
             'motif.string' => 'Le motif doit être une chaîne de caractères.',

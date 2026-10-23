@@ -3,6 +3,7 @@
 namespace App\Modules\RH\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Support\UploadLimit;
 
 class CreateProfessorRequest extends FormRequest
 {
@@ -21,9 +22,9 @@ class CreateProfessorRequest extends FormRequest
             'password' => 'nullable|string|min:8',
             'role_id' => 'nullable|exists:roles,id',
             'rib_number' => 'required|string|min:22|max:27',
-            'rib' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'rib' => 'nullable|file|mimes:pdf,jpg,jpeg,png|' . UploadLimit::rule(),
             'ifu_number' => 'required|string|digits:13',
-            'ifu' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'ifu' => 'nullable|file|mimes:pdf,jpg,jpeg,png|' . UploadLimit::rule(),
             'bank' => 'nullable|string|max:255',
             'status' => 'nullable|in:active,inactive,suspended',
             'grade_id' => 'nullable|exists:grades,id',

@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{DB, Log};
+use App\Support\UploadLimit;
 
 /**
  * Complément de dossier - site vitrine CAP-EPAC
@@ -40,7 +41,6 @@ class ComplementDossierController extends Controller
         'image/heif',
     ];
 
-    private const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 Mo
 
     /**
      * Statuts terminaux : plus aucun complément accepté (dossier clos).
@@ -233,7 +233,7 @@ class ComplementDossierController extends Controller
             // le code). D'éventuels champs envoyés par le client sont ignorés.
             'reference'      => 'required|string|max:50',
             'pieces'         => 'required|array|min:1',
-            'pieces.*'       => 'file|max:5120|mimes:pdf,jpg,jpeg,png,webp,heic,heif',
+            'pieces.*'       => 'file|' . UploadLimit::rule() . '|mimes:pdf,jpg,jpeg,png,webp,heic,heif',
             // Jeton obtenu après validation du code reçu par WhatsApp / email
             'complement_token' => 'required|string|max:100',
             'piece_labels'   => 'nullable|array',
@@ -294,8 +294,8 @@ class ComplementDossierController extends Controller
             if (!$file || !$file->isValid()) {
                 continue;
             }
-            if ($file->getSize() > self::MAX_FILE_SIZE) {
-                return response()->json(['message' => "Le fichier « {$key} » dépasse 5 Mo. Réduisez sa taille ou envoyez un PDF."], 422);
+            if ($file->getSize() > \App\Support\UploadLimit::DEFAULT_KB * 1024) {
+                return response()->json(['message' => "Le fichier « {$key} » dépasse " . \App\Support\UploadLimit::label() . '. Réduisez sa taille ou envoyez un PDF.'], 422);
             }
             if (!in_array($file->getMimeType(), self::ALLOWED_MIMES)) {
                 return response()->json(['message' => "Format non accepté pour « {$key} » (PDF, JPG, PNG, WEBP, HEIC)."], 422);

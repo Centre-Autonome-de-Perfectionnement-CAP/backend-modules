@@ -12,7 +12,7 @@ return [
     */
 
     // Taille maximale des fichiers (en KB)
-    'max_file_size' => env('STOCKAGE_MAX_FILE_SIZE', 51200), // 50MB par défaut
+    'max_file_size' => \App\Support\UploadLimit::COURSE_KB, // la plus grande limite du système (supports de cours)
 
     // Types MIME autorisés (null = tous autorisés)
     'allowed_mime_types' => env('STOCKAGE_ALLOWED_MIME_TYPES', null),

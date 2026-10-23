@@ -3,6 +3,7 @@
 namespace App\Modules\Soutenance\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Support\UploadLimit;
 
 class CreateDefenseSubmissionRequest extends FormRequest
 {
@@ -32,9 +33,9 @@ class CreateDefenseSubmissionRequest extends FormRequest
             'thesis_title' => 'required|string',
             'professor_id' => 'required',
             'defense_type' => 'required|string|in:licence,master',
-            'thesis_file' => 'required|file|mimes:pdf|max:10240',
+            'thesis_file' => 'required|file|mimes:pdf|' . UploadLimit::rule(UploadLimit::REPORT_KB),
             'additional_files' => 'sometimes|array',
-            'additional_files.*' => 'file|mimes:pdf,doc,docx|max:5120',
+            'additional_files.*' => 'file|mimes:pdf,doc,docx|' . UploadLimit::rule(),
         ];
     }
 
@@ -57,9 +58,9 @@ class CreateDefenseSubmissionRequest extends FormRequest
             'defense_type.required' => 'Le type de soutenance est requis',
             'defense_type.in' => 'Le type de soutenance doit être: licence ou master',
             'thesis_file.mimes' => 'Le fichier de thèse doit être au format PDF',
-            'thesis_file.max' => 'Le fichier de thèse ne doit pas dépasser 10 Mo',
+            'thesis_file.max' => UploadLimit::message(UploadLimit::REPORT_KB),
             'additional_files.*.mimes' => 'Les fichiers supplémentaires doivent être au format PDF, DOC ou DOCX',
-            'additional_files.*.max' => 'Chaque fichier supplémentaire ne peut pas dépasser 5 Mo',
+            'additional_files.*.max' => UploadLimit::message(),
         ];
     }
 

@@ -17,6 +17,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Modules\RH\Services\ContratStorageService;
+use App\Support\UploadLimit;
 
 class ContratController extends Controller
 {
@@ -778,7 +779,7 @@ class ContratController extends Controller
         $request->validate([
             'signature_type' => 'required|in:drawn,uploaded,manual',
             'signature_data' => 'nullable|string',   // base64 pour 'drawn'
-            'signature_file' => 'nullable|file|image|max:2048', // fichier pour 'uploaded'
+            'signature_file' => 'nullable|file|image|' . UploadLimit::rule(),
         ]);
 
         $signaturePath = null;
@@ -1076,7 +1077,7 @@ class ContratController extends Controller
         $contrat = Contrat::findOrFail($id);
 
         $request->validate([
-            'pdf_file' => 'required|file|mimes:pdf|max:10240', // max 10 Mo
+            'pdf_file' => 'required|file|mimes:pdf|' . UploadLimit::rule(),
         ]);
 
         // Supprimer l'ancien PDF s'il existe (quel que soit son chemin legacy)
@@ -1350,7 +1351,7 @@ class ContratController extends Controller
 
         $request->validate([
             'title'    => 'required|string|max:255',
-            'pdf_file' => 'required|file|mimes:pdf|max:20480', // max 20 Mo
+            'pdf_file' => 'required|file|mimes:pdf|' . UploadLimit::rule(),
         ]);
 
         // Récupérer la ligne pivot
@@ -1564,7 +1565,7 @@ class ContratController extends Controller
 
         $request->validate([
             'factures_normalisees'   => 'required|array|min:1',
-            'factures_normalisees.*' => 'file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'factures_normalisees.*' => 'file|mimes:pdf,jpg,jpeg,png|' . UploadLimit::rule(),
             'replace'                => 'nullable|string',
         ]);
 

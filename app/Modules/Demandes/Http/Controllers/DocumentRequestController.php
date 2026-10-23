@@ -14,6 +14,7 @@ use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{Auth, Storage};
+use App\Support\UploadLimit;
 
 /**
  * CORRECTIF (v2) - B3.1 + B3.2, basé sur le DocumentRequestController réel
@@ -170,7 +171,7 @@ class DocumentRequestController extends Controller
 
         $request->validate([
             'files'           => 'required|array|min:1',
-            'files.*.file'    => 'required|file|max:10240|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx',
+            'files.*.file'    => 'required|file|' . UploadLimit::rule() . '|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx',
             'files.*.name'    => 'required|string|max:200',
             'files.*.comment' => 'nullable|string|max:1000',
         ]);
@@ -235,7 +236,7 @@ class DocumentRequestController extends Controller
         $this->authorize('manageSecretaryFiles', $demande);
 
         $request->validate([
-            'file'    => 'required|file|max:10240|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx',
+            'file'    => 'required|file|' . UploadLimit::rule() . '|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx',
             'name'    => 'nullable|string|max:255',
             'comment' => 'nullable|string|max:1000',
         ]);
@@ -264,9 +265,9 @@ class DocumentRequestController extends Controller
         $request->validate([
             'message'        => 'required|string|max:3000',
             'attachments'    => 'nullable|array|max:5',
-            // 10 Mo par pièce jointe, formats bureautiques uniquement (même liste
+            // 2 Mo par pièce jointe (UploadLimit), formats bureautiques uniquement (même liste
             // que les fichiers secrétaire) - jamais d'exécutable/HTML vers l'étudiant.
-            'attachments.*'  => 'file|max:10240|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx',
+            'attachments.*'  => 'file|' . UploadLimit::rule() . '|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx',
         ]);
 
         try {
