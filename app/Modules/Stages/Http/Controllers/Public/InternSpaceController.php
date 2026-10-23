@@ -149,7 +149,6 @@ class InternSpaceController extends Controller
             ],
             'notes'       => $req->notes()->get()->map(fn ($n) => ['id' => $n->id, 'number' => $n->number, 'kind' => $n->kind, 'issued_at' => $n->issued_at?->toIso8601String()]),
             'supervisors' => $sup->map(fn ($u) => ['name' => trim($u->first_name . ' ' . $u->last_name), 'phone' => $u->phone]),
-            'team'        => $req->team_id ? DB::table('stage_teams')->where('id', $req->team_id)->value('name') : null,
             'reglement'   => [
                 'version'  => $version,
                 'text'     => $this->settings->reglementFor($req),
