@@ -381,57 +381,55 @@ class DecisionService
             $personalInfo = $pendingStudent?->personalInformation;
             $student = $studentPending?->student;
 
-            $spsIds = array_filter([$academicPath->student_pending_student_id]);
-            if ($student?->id) {
-                $extra = \App\Modules\Inscription\Models\StudentPendingStudent::where('student_id', $student->id)->pluck('id')->toArray();
-                $spsIds = array_unique(array_merge($spsIds, $extra));
-            }
-
             $moyennesSem1 = [];
             $moyenneSem1 = 0;
-            $countSem1 = 0;
             $hasZeroSem1 = false;
+            $totalAnnualAverage = 0;
+            $totalProgramCount = 0;
             if ($hasSem1) {
                 foreach ($programsSem1 as $program) {
-                    $gradeData = $this->getStudentGradeData($spsIds, $program);
-                    $avg = $gradeData ? $gradeData['average'] : 0;
-                    $moyennesSem1[] = $avg > 0 ? $avg : '-';
-                    if ($avg > 0) {
-                        $moyenneSem1 += $avg;
-                        $countSem1++;
-                    }
-                    if (!$gradeData || $avg <= 0) {
+                    $avg = $this->getBulletinGradeAverage(
+                        (int) $academicPath->student_pending_student_id,
+                        (int) $program->id
+                    );
+                    $moyennesSem1[] = $avg;
+                    $moyenneSem1 += $avg;
+                    $totalAnnualAverage += $avg;
+                    $totalProgramCount++;
+                    if ($avg <= 0) {
                         $hasZeroSem1 = true;
                     }
                 }
-                $moyenneSem1 = $countSem1 > 0 ? round($moyenneSem1 / $countSem1, 2) : 0;
+                $moyenneSem1 = $programsSem1->isNotEmpty()
+                    ? round($moyenneSem1 / $programsSem1->count(), 2)
+                    : 0;
             }
 
             $moyennesSem2 = [];
             $moyenneSem2 = 0;
-            $countSem2 = 0;
             $hasZeroSem2 = false;
             if ($hasSem2) {
                 foreach ($programsSem2 as $program) {
-                    $gradeData = $this->getStudentGradeData($spsIds, $program);
-                    $avg = $gradeData ? $gradeData['average'] : 0;
-                    $moyennesSem2[] = $avg > 0 ? $avg : '-';
-                    if ($avg > 0) {
-                        $moyenneSem2 += $avg;
-                        $countSem2++;
-                    }
-                    if (!$gradeData || $avg <= 0) {
+                    $avg = $this->getBulletinGradeAverage(
+                        (int) $academicPath->student_pending_student_id,
+                        (int) $program->id
+                    );
+                    $moyennesSem2[] = $avg;
+                    $moyenneSem2 += $avg;
+                    $totalAnnualAverage += $avg;
+                    $totalProgramCount++;
+                    if ($avg <= 0) {
                         $hasZeroSem2 = true;
                     }
                 }
-                $moyenneSem2 = $countSem2 > 0 ? round($moyenneSem2 / $countSem2, 2) : 0;
+                $moyenneSem2 = $programsSem2->isNotEmpty()
+                    ? round($moyenneSem2 / $programsSem2->count(), 2)
+                    : 0;
             }
 
-            $moyenneAnnuelle = 0;
-            $countTotal = 0;
-            if ($moyenneSem1 > 0) { $moyenneAnnuelle += $moyenneSem1; $countTotal++; }
-            if ($moyenneSem2 > 0) { $moyenneAnnuelle += $moyenneSem2; $countTotal++; }
-            $moyenneAnnuelle = $countTotal > 0 ? round($moyenneAnnuelle / $countTotal, 2) : 0;
+            $moyenneAnnuelle = $totalProgramCount > 0
+                ? round($totalAnnualAverage / $totalProgramCount, 2)
+                : 0;
 
             return (object)[
                 'id' => $student?->id ?? $academicPath->id,
@@ -449,6 +447,15 @@ class DecisionService
         })->filter(function ($item) {
             return $item->nom !== 'N/A' && $item->prenoms !== 'N/A';
         })->sortBy('nom')->values()->toArray();
+    }
+
+    private function getBulletinGradeAverage(int $studentPendingStudentId, int $programId): float
+    {
+        $grade = OldSystemGrade::where('student_pending_student_id', $studentPendingStudentId)
+            ->where('program_id', $programId)
+            ->first(['average']);
+
+        return (float) ($grade?->average ?? 0);
     }
 
     /**
