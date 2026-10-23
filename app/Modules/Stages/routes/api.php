@@ -98,7 +98,6 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
 
     // ── Progiciel : responsables + superviseurs ───────────────────────────
     Route::prefix('admin')->middleware(['auth:sanctum', 'can:stages.manage'])->group(function () {
-        Route::get('stagiaires', [SupervisionController::class, 'interns']);
         Route::post('stagiaires/superviseur', [SupervisionController::class, 'setSupervisor'])->middleware('throttle:30,1');
         Route::get('superviseurs', [SupervisionController::class, 'supervisors']);
         Route::get('stagiaires/{id}/presence', [InternFollowController::class, 'presence'])->whereNumber('id');

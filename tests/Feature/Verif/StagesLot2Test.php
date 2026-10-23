@@ -160,7 +160,7 @@ class StagesLot2Test extends TestCase
         $token = $sup->createToken('t')->plainTextToken;
         $h = ['Authorization' => "Bearer {$token}"];
 
-        $this->getJson('/api/stages/admin/stagiaires', $h)->assertOk();
+        $this->getJson('/api/stages/admin/suivi', $h)->assertOk();
         $this->getJson('/api/stages/admin/demandes', $h)->assertOk();
         $this->getJson('/api/stages/admin/reglages', $h)->assertStatus(403);
         $this->postJson('/api/stages/admin/invitations', ['numeros' => '0197000000'], $h)->assertStatus(403);
@@ -188,7 +188,7 @@ class StagesLot2Test extends TestCase
             ->assertOk()->assertJsonPath('data.changed', 1);
         Queue::assertPushed(SendNotificationJob::class, fn ($job) => str_contains(json_encode($job->payload), 'superviseur'));
 
-        $list = $this->getJson('/api/stages/admin/stagiaires?scope=mine')->assertOk()->json();
+        $list = $this->getJson('/api/stages/admin/suivi?scope=mine')->assertOk()->json();
         $this->assertSame([$a->id], array_column($list['data'], 'id'));
         $this->assertSame(1, $list['counts']['mine']);
 
@@ -197,7 +197,7 @@ class StagesLot2Test extends TestCase
             'stage_ids' => [$a->id], 'supervisor_id' => $other->id, 'action' => 'add',
         ])->assertOk();
         $this->assertSame(2, DB::table('stage_supervisions')->where('stage_request_id', $a->id)->count());
-        $this->assertSame(0, $this->getJson('/api/stages/admin/stagiaires?scope=unsupervised')->json('counts.unsupervised'));
+        $this->assertSame(0, $this->getJson('/api/stages/admin/suivi?scope=unsupervised')->json('counts.unsupervised'));
     }
 
     public function test_supervisor_action_on_request_notifies_lead(): void

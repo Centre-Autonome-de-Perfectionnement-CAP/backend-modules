@@ -33,22 +33,6 @@ class SupervisionController extends Controller
 
     // ── Stagiaires ──────────────────────────────────────────────────────
 
-    public function interns(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'scope' => ['nullable', Rule::in(DashboardController::SCOPES)],
-            'q'     => ['nullable', 'string', 'max:100'],
-        ]);
-        $user = $request->user();
-
-        return response()->json([
-            'success' => true,
-            'data'    => $this->supervision->interns($data['scope'] ?? 'current', $data['q'] ?? null, $user),
-            'counts'  => $this->supervision->counts($user),
-            'me'      => self::me($user),
-        ]);
-    }
-
     public function setSupervisor(Request $request): JsonResponse
     {
         $data = $request->validate([

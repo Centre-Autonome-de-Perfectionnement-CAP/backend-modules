@@ -305,7 +305,7 @@ class StagesLot3Test extends TestCase
         $this->assertFalse($this->getJson('/api/stagiaire/moi', $h)->json('data.reglement.accepted'));
 
         // Isolation : jeton stagiaire refusé côté progiciel, et inversement
-        $this->getJson('/api/stages/admin/stagiaires', ['Authorization' => "Bearer {$token}"])->assertStatus(401);
+        $this->getJson('/api/stages/admin/suivi', ['Authorization' => "Bearer {$token}"])->assertStatus(401);
         $staff = $this->user('admin')->createToken('t')->plainTextToken;
         $this->getJson('/api/stagiaire/moi', ['X-Stagiaire-Token' => $staff])->assertStatus(401);
 
