@@ -95,9 +95,9 @@ class SupervisionService
         }
 
         $name    = trim($supervisor->first_name . ' ' . $supervisor->last_name);
-        $changed = 0;
+        $changed = collect();
 
-        DB::transaction(function () use ($interns, $supervisorId, $action, $by, $name, &$changed) {
+        DB::transaction(function () use ($interns, $supervisorId, $action, $by, $name, $changed) {
             foreach ($interns as $req) {
                 if ($action === 'add') {
                     $done = DB::table('stage_supervisions')->insertOrIgnore([
@@ -109,22 +109,26 @@ class SupervisionService
                         ->where('stage_request_id', $req->id)->where('user_id', $supervisorId)->delete();
                 }
                 if ($done) {
-                    $changed++;
+                    $changed->push($req);
                     $this->log($req, $action === 'add' ? 'supervisor_added' : 'supervisor_removed', $by, $name);
                 }
             }
         });
 
-        if ($changed && !StageAccess::isLead($by)) {
+        if ($changed->isEmpty()) {
+            return 0;
+        }
+        $this->notifyLink($changed, $supervisor, $name, $action === 'add', $by);
+        if (!StageAccess::isLead($by)) {
             $this->notifier->toManagersGeneric(
                 'Action d\'un superviseur',
-                [$this->who($by) . ($action === 'add' ? ' s\'est attribué ' : ' s\'est retiré de ') . $changed . ' stagiaire(s).'],
-                ['Stagiaires' => $interns->map->fullName()->implode(', ')],
+                [$this->who($by) . ($action === 'add' ? ' s\'est attribué ' : ' s\'est retiré de ') . $changed->count() . ' stagiaire(s).'],
+                ['Stagiaires' => $changed->map->fullName()->implode(', ')],
                 'stage-superviseur',
             );
         }
 
-        return $changed;
+        return $changed->count();
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -164,6 +168,44 @@ class SupervisionService
             'supervised_by_me' => $viewer ? ($sup[$r->id] ?? collect())->contains('id', $viewer->id) : false,
             'whatsapp_group' => $r->wa_removed_at ? 'removed' : ($r->wa_added_at ? 'added' : ($r->wa_invite_sent_at ? 'invited' : null)),
         ])->values();
+    }
+
+    /**
+     * Liaison faite ou défaite : chaque stagiaire concerné est prévenu (nom et
+     * contact de son superviseur), et le superviseur reçoit la liste (sauf
+     * s'il a fait l'action lui-même).
+     */
+    private function notifyLink(Collection $interns, object $supervisor, string $name, bool $added, User $by): void
+    {
+        foreach ($interns as $req) {
+            $this->notifier->toDemandeur(
+                $req,
+                $added ? 'Votre superviseur de stage' : 'Changement de superviseur',
+                $added
+                    ? ["{$name} suit désormais votre stage. Adressez-vous à lui pour toute question sur votre travail, vos rapports ou vos présences."]
+                    : ["{$name} ne suit plus votre stage. Vos autres superviseurs, ou le responsable de division, restent vos interlocuteurs."],
+                $added ? array_filter(['Superviseur' => $name, 'Téléphone' => $supervisor->phone, 'Email' => $supervisor->email]) : ['Superviseur' => $name],
+                ctaLabel: 'Votre espace stagiaire',
+                ctaUrl: $this->notifier->spaceUrl('/stage'),
+                context: 'stage-superviseur',
+            );
+        }
+
+        if ((int) $supervisor->id === (int) $by->id) {
+            return;
+        }
+        $list = $interns->map(fn (StageRequest $r) => "{$r->reference} - {$r->fullName()}")->implode("\n");
+        $this->notifier->toStaff(
+            collect([$supervisor]),
+            $added ? 'Stagiaires à suivre' : 'Stagiaires retirés de votre suivi',
+            [$added
+                ? ($interns->count() > 1 ? 'Ces stagiaires vous sont confiés :' : 'Ce stagiaire vous est confié :') . "\n{$list}"
+                : ($interns->count() > 1 ? 'Ces stagiaires ne sont plus suivis par vous :' : 'Ce stagiaire n\'est plus suivi par vous :') . "\n{$list}"],
+            [],
+            'stage-superviseur:' . $interns->first()->reference,
+            $interns->count() === 1 ? $this->notifier->staffUrl($interns->first()) : null,
+            $interns->count() === 1 ? $interns->first()->reference : null,
+        );
     }
 
     private function who(User $u): string

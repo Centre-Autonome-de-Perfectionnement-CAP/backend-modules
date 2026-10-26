@@ -198,6 +198,16 @@ class StagesLot2Test extends TestCase
         ])->assertOk();
         $this->assertSame(2, DB::table('stage_supervisions')->where('stage_request_id', $a->id)->count());
         $this->assertSame(0, $this->getJson('/api/stages/admin/suivi?scope=unsupervised')->json('counts.unsupervised'));
+
+        // Liaison : le stagiaire reçoit le nom et le contact, le superviseur la liste
+        $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['to'] === $a->whatsapp
+            && str_contains($m['text'], 'Votre superviseur') && str_contains($m['text'], $other->phone)));
+        Queue::assertPushed(SendNotificationJob::class, fn ($job) => ($job->payload['phone'] ?? null) === $other->phone
+            && str_contains($job->payload['message'] ?? '', 'Stagiaires à suivre') && str_contains($job->payload['message'], $a->reference));
+
+        // Retrait : le stagiaire est prévenu
+        $this->postJson('/api/stages/admin/stagiaires/superviseur', ['stage_ids' => [$a->id], 'supervisor_id' => $other->id, 'action' => 'remove'])->assertOk();
+        $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['to'] === $a->whatsapp && str_contains($m['text'], 'Changement de superviseur')));
     }
 
     public function test_supervisor_action_on_request_notifies_lead(): void
