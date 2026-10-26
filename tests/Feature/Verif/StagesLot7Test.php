@@ -283,6 +283,9 @@ class StagesLot7Test extends TestCase
             ->assertJsonPath('data.sent.to.reference', $b->reference)->assertJsonPath('data.team', null);
         $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['to'] === '+2290191000002' && str_contains($m['text'], 'Proposition de binôme')));
         $this->postJson('/api/stagiaire/binome/proposition', ['reference' => $c->reference], $ha)->assertStatus(409); // une seule à la fois
+        // Le responsable voit la proposition en attente
+        $invites = $this->actingAs($this->lead(), 'sanctum')->getJson('/api/stages/admin/equipes')->assertOk()->json('data.invites');
+        $this->assertSame([$a->reference, $b->reference, 'stage'], [$invites[0]['from']['reference'], $invites[0]['to']['reference'], $invites[0]['phase']]);
 
         // B voit la proposition, sans les coordonnées de A ; C ne peut pas répondre à sa place
         $inv = $this->getJson('/api/stagiaire/binome', $hb)->assertOk()->json('data.received.0');

@@ -245,6 +245,7 @@ class StagesLot2Test extends TestCase
         $team = collect($data['teams'])->firstWhere('id', $id);
         $this->assertCount(2, $team['members']);
         $this->assertStringStartsWith('Binôme ', $team['name']);
+        $this->assertSame('responsable', $team['origin']);
         foreach (['+2290196000021', '+2290196000022'] as $phone) {
             $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['to'] === $phone && str_contains($m['text'], 'Vous êtes en binôme')));
         }

@@ -393,8 +393,10 @@ class StagesLot1Test extends TestCase
         $this->assertSame('rectificative', $b->notes()->reorder('version', 'desc')->first()->kind);
 
         // Accepté : le binôme apparaît dans les binômes de stagiaires
-        $teams = $this->getJson('/api/stages/admin/equipes')->assertOk()->json('data.teams');
-        $this->assertCount(2, collect($teams)->firstWhere('id', $a->team_id)['members']);
+        $board = $this->getJson('/api/stages/admin/equipes')->assertOk()->json('data');
+        $team = collect($board['teams'])->firstWhere('id', $a->team_id);
+        $this->assertSame([2, 'demande'], [count($team['members']), $team['origin']]);
+        $this->assertNull(collect($board['requests'])->firstWhere('id', $a->team_id));
     }
 
     public function test_paired_request_rejected_together_or_continues_alone_after_expiry(): void

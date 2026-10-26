@@ -38,17 +38,43 @@ class BinomeService
     // PROGICIEL
     // ════════════════════════════════════════════════════════════════════
 
-    public function teams(): Collection
+    /**
+     * Vue du responsable : binômes formés, demandes en binôme en cours
+     * d'étude, propositions entre stagiaires en attente, stagiaires libres.
+     */
+    public function board(): array
     {
-        $teams   = DB::table('stage_teams')->orderBy('name')->get();
+        [$teams, $requests] = $this->teamRows()->partition(fn ($t) => $t['accepted'])
+            ->map(fn ($part) => $part->map(fn ($t) => array_diff_key($t, ['accepted' => 0]))->values());
+        $invites = DB::table('stage_team_invites')->where('status', 'pending')->where('expires_at', '>', now())->orderByDesc('id')->get();
+        $people  = StageRequest::whereIn('id', $invites->pluck('from_stage_id')->concat($invites->pluck('to_stage_id'))->unique())->get()->keyBy('id');
+
+        return [
+            'teams'      => $teams,
+            'requests'   => $requests,
+            'invites'    => $invites->filter(fn ($i) => isset($people[$i->from_stage_id], $people[$i->to_stage_id]))->map(fn ($i) => [
+                'id' => $i->id, 'from' => $this->card($people[$i->from_stage_id]), 'to' => $this->card($people[$i->to_stage_id]),
+                'phase' => $people[$i->from_stage_id]->status === StageStatus::ACCEPTED ? self::STAGE : self::DEMANDE,
+                'created_at' => $this->iso($i->created_at), 'expires_at' => $this->iso($i->expires_at),
+            ])->values(),
+            'candidates' => $this->candidates(),
+        ];
+    }
+
+    /** Binômes avec leurs membres ; « accepted » : tous en stage (sinon demande en cours d'étude). */
+    private function teamRows(): Collection
+    {
+        $teams   = DB::table('stage_teams')->orderByDesc('id')->get();
         $members = StageRequest::whereIn('team_id', $teams->pluck('id'))->get()->groupBy('team_id');
 
-        // Binômes de stagiaires (une demande en binôme y entre une fois acceptée).
-        return $teams->filter(fn ($t) => ($members[$t->id] ?? collect())->every(fn ($r) => $r->status === StageStatus::ACCEPTED))->map(fn ($t) => [
-            'id'      => $t->id,
-            'name'    => $t->name,
-            'members' => ($members[$t->id] ?? collect())->map(fn (StageRequest $r) => $this->card($r))->values(),
-        ])->values();
+        return $teams->map(fn ($t) => [
+            'id'         => $t->id,
+            'name'       => $t->name,
+            'origin'     => $t->from_request ? 'demande' : ($t->created_by ? 'responsable' : 'stagiaires'),
+            'created_at' => $this->iso($t->created_at),
+            'accepted'   => ($members[$t->id] ?? collect())->every(fn ($r) => $r->status === StageStatus::ACCEPTED),
+            'members'    => ($members[$t->id] ?? collect())->map(fn (StageRequest $r) => $this->card($r))->values(),
+        ])->filter(fn ($t) => count($t['members']) > 0)->values();
     }
 
     /** Stagiaires en cours ou à venir, pas encore en binôme. */

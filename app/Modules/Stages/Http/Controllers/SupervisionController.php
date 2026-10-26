@@ -111,7 +111,7 @@ class SupervisionController extends Controller
 
     public function teams(BinomeService $binomes): JsonResponse
     {
-        return $this->successResponse(['teams' => $binomes->teams(), 'candidates' => $binomes->candidates()]);
+        return $this->successResponse($binomes->board());
     }
 
     public function saveTeam(Request $request, BinomeService $binomes): JsonResponse
