@@ -179,7 +179,7 @@ class InternSpaceController extends Controller
                 'accepted' => (int) $account->reglement_version === $version,
             ],
             'webauthn'    => ['enrolled' => (bool) $device, 'rp_id' => $this->webauthn->rpId()],
-            'device'      => $device ? ['label' => $device->device_label, 'since' => $device->created_at] : null,
+            'device'      => $device ? ['label' => $device->device_label, 'since' => \Carbon\Carbon::parse($device->created_at)->toIso8601String()] : null,
             'today'       => $this->attendance->today($req),
             'summary'     => $this->attendance->report($req)['summary'],
             'position_checked' => (bool) $this->settings->get('lieu_position'),
