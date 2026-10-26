@@ -30,6 +30,7 @@ class InternActivationService
         private readonly StageSettingsService $settings,
         private readonly AttendanceService $attendance,
         private readonly StageRequestService $requests,
+        private readonly InternWebAuthnService $devices,
     ) {}
 
     /** @return array{sent: int, reminded: int, withdrawn: int} */
@@ -90,19 +91,32 @@ class InternActivationService
      *
      * @param array{lat: float, lng: float, accuracy: float} $position
      */
-    public function activate(string $token, array $position, string $password): StageInternAccount
+    /** Défi d'enregistrement du téléphone de stage, avant la confirmation de présence. */
+    public function deviceOptions(string $token, string $deviceHash): array
     {
-        $req = $this->findByToken($token);
-        if (!$req) {
-            throw new BusinessException("Ce lien n'est plus valable. Si votre compte est déjà activé, connectez-vous ; sinon contactez le responsable de division.", 'STAGE_ACTIVATION_INVALID', 410);
-        }
-        $now   = CarbonImmutable::now(BusinessHours::TZ);
-        $today = $now->startOfDay();
-        if ($today->isWeekend()) {
-            throw new BusinessException('La confirmation de présence se fait un jour ouvré, sur votre lieu de stage.', 'STAGE_ACTIVATION_WEEKEND', 422);
-        }
+        return $this->devices->activationOptions($this->openableRequest($token), $token, $deviceHash);
+    }
 
-        $account = DB::transaction(function () use ($req, $position, $password, $today) {
+    /**
+     * Premier jour, sur le lieu de stage et sur SON téléphone : règlement
+     * accepté, téléphone de stage enregistré (empreinte), mot de passe choisi
+     * et présence confirmée, en une seule fois. Rien n'est créé si une étape
+     * échoue (hors zone, empreinte refusée, téléphone déjà pris…).
+     *
+     * @param array{clientDataJSON: string, attestationObject: string} $webauthn
+     */
+    public function activate(
+        string $token, array $position, string $password, int $reglementVersion,
+        array $webauthn, ?string $deviceLabel, string $deviceHash,
+    ): StageInternAccount {
+        $req = $this->openableRequest($token);
+        if ($reglementVersion !== (int) $this->settings->get('reglement_version')) {
+            throw new BusinessException('Le règlement a été mis à jour. Relisez-le puis recommencez.', 'STAGE_REGLEMENT_OUTDATED', 409);
+        }
+        $credential = $this->devices->verifyActivation($token, $webauthn, $deviceHash);
+        $today = CarbonImmutable::now(BusinessHours::TZ)->startOfDay();
+
+        $account = DB::transaction(function () use ($req, $position, $password, $today, $reglementVersion, $credential, $deviceLabel, $deviceHash) {
             $locked = StageRequest::whereKey($req->id)->lockForUpdate()->first();
             if ($locked->activated_at) {
                 throw new BusinessException('Votre compte est déjà activé. Connectez-vous.', 'STAGE_ACTIVATION_DONE', 409);
@@ -118,11 +132,14 @@ class InternActivationService
             $this->attendance->punch($locked, 'arrivee', $position, 'activation');
 
             $account = StageInternAccount::create(['stage_request_id' => $locked->id, 'password' => $password]);
+            $account->forceFill(['reglement_version' => $reglementVersion, 'reglement_accepted_at' => now()])->save();
+            $this->devices->store($account->id, $credential, $deviceLabel, $deviceHash);
 
             StageHistory::create([
                 'stage_request_id' => $locked->id, 'action' => 'activated',
                 'from_status' => $locked->status, 'to_status' => $locked->status, 'actor' => 'demandeur',
-                'comment' => 'Présence confirmée - prise de service le ' . $today->locale('fr')->isoFormat('dddd D MMMM YYYY'),
+                'comment' => 'Présence confirmée - prise de service le ' . $today->locale('fr')->isoFormat('dddd D MMMM YYYY')
+                    . " ; règlement (version {$reglementVersion}) accepté et téléphone de stage enregistré",
             ]);
 
             return $account;
@@ -148,7 +165,7 @@ class InternActivationService
             $req, 'Bienvenue au CAP-EPAC',
             [
                 'Votre présence est confirmée et votre espace stagiaire est activé.',
-                'À votre première connexion, lisez et acceptez le règlement, puis enregistrez votre empreinte : elle vous servira à pointer chaque jour.',
+                'Le téléphone utilisé aujourd\'hui est votre téléphone de stage : c\'est le seul qui ouvre votre espace et qui pointe, avec votre empreinte. Pour en changer, adressez-vous à votre superviseur.',
             ],
             ['Identifiant' => $req->reference],
             ctaLabel: 'Ouvrir mon espace stagiaire',
@@ -157,6 +174,20 @@ class InternActivationService
         );
 
         return $account;
+    }
+
+    /** Lien valable, compte pas encore activé, jour ouvré. */
+    private function openableRequest(string $token): StageRequest
+    {
+        $req = $this->findByToken($token);
+        if (!$req) {
+            throw new BusinessException("Ce lien n'est plus valable. Si votre compte est déjà activé, connectez-vous ; sinon contactez le responsable de division.", 'STAGE_ACTIVATION_INVALID', 410);
+        }
+        if (CarbonImmutable::now(BusinessHours::TZ)->isWeekend()) {
+            throw new BusinessException('La confirmation de présence se fait un jour ouvré, sur votre lieu de stage.', 'STAGE_ACTIVATION_WEEKEND', 422);
+        }
+
+        return $req;
     }
 
     /** Fin décalée d'autant de jours que la prise de service (même durée). */
@@ -189,7 +220,8 @@ class InternActivationService
                 $reminder
                     ? 'Vous n\'avez pas encore confirmé votre présence au CAP-EPAC.'
                     : 'Votre stage commence aujourd\'hui. Confirmez votre présence depuis votre lieu de stage : votre espace stagiaire sera activé.',
-                'Ouvrez le lien sur votre téléphone, autorisez la localisation et choisissez votre mot de passe. '
+                '*Ouvrez le lien sur VOTRE propre téléphone* : il deviendra votre téléphone de stage, le seul qui ouvrira votre espace et pointera. '
+                . 'Lisez le règlement, autorisez la localisation, enregistrez votre empreinte et choisissez votre mot de passe. '
                 . "Sans confirmation dans les {$limit} jours suivant la date de début, votre stage sera annulé.",
             ],
             ['Référence' => $req->reference],

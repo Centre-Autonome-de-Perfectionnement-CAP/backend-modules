@@ -147,8 +147,9 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
 // Sessions propres (en-tête X-Stagiaire-Token), sans lien avec les comptes
 // du personnel.
 Route::prefix('api/stagiaire')->middleware('api')->group(function () {
-    Route::middleware('throttle:stages-public-code')->group(function () {
+    Route::middleware('throttle:stages-intern-auth')->group(function () {
         Route::get('activation', [InternSpaceController::class, 'activationInfo']);
+        Route::post('activation/appareil', [InternSpaceController::class, 'activationDevice']);
         Route::post('activation', [InternSpaceController::class, 'activate']);
         Route::post('connexion', [InternSpaceController::class, 'login']);
         Route::post('mot-de-passe/code', [InternSpaceController::class, 'resetCode']);

@@ -14,7 +14,7 @@ class AuthenticateIntern
 
     public function handle(Request $request, Closure $next): Response
     {
-        $account = $this->auth->resolve($request->header(InternAuthService::HEADER));
+        $account = $this->auth->resolve($request->header(InternAuthService::HEADER), $request->header(InternAuthService::DEVICE_HEADER));
         if (!$account) {
             return response()->json([
                 'success' => false,

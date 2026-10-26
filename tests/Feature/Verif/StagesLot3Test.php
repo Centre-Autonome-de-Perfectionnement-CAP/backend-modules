@@ -27,6 +27,7 @@ use Tests\TestCase;
  */
 class StagesLot3Test extends TestCase
 {
+    use InternDevice;
     use DatabaseTransactions;
 
     private const ORIGIN = 'https://test.cap-epac.bj';
@@ -40,6 +41,7 @@ class StagesLot3Test extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->useInternDevice();
         Queue::fake();
         Storage::fake('local');
         Cache::flush();
@@ -135,15 +137,9 @@ class StagesLot3Test extends TestCase
         $req = $this->intern($mondayLocal, CarbonImmutable::parse($mondayLocal)->addMonths(2)->toDateString());
         $this->at("{$mondayLocal} 10:05");
         $this->artisan('stages:process-activations')->assertSuccessful();
-        $token = $this->postJson('/api/stagiaire/activation', [
-            'token' => $this->linkToken(), 'position' => $this->pos(), 'password' => 'Stage2026', 'password_confirmation' => 'Stage2026',
-        ])->assertStatus(201)->json('data.token');
-        $h = ['X-Stagiaire-Token' => $token];
-        $v = $this->getJson('/api/stagiaire/moi', $h)->json('data.reglement.version');
-        $this->postJson('/api/stagiaire/reglement', ['version' => $v], $h)->assertOk();
-        $this->enroll($h);
+        $token = $this->activate($this->linkToken())->assertStatus(201)->json('data.token');
 
-        return [$req->fresh(), $h];
+        return [$req->fresh(), ['X-Stagiaire-Token' => $token]];
     }
 
     // ── Mini authentificateur WebAuthn (ES256, attestation « none ») ────
@@ -168,9 +164,34 @@ class StagesLot3Test extends TestCase
         return rtrim(strtr(base64_encode($bin), '+/', '-_'), '=');
     }
 
+    /**
+     * Activation complète sur le téléphone de stage : règlement accepté,
+     * téléphone enregistré (empreinte), mot de passe, présence.
+     */
+    private function activate(string $token, ?array $pos = null, array $headers = []): \Illuminate\Testing\TestResponse
+    {
+        $info = $this->getJson("/api/stagiaire/activation?token={$token}", $headers);
+        $options = $this->postJson('/api/stagiaire/activation/appareil', ['token' => $token], $headers);
+        if ($info->status() !== 200 || $options->status() !== 200) {
+            return $options;
+        }
+
+        return $this->postJson('/api/stagiaire/activation', [
+            'token' => $token, 'position' => $pos ?? $this->pos(), 'password' => 'Stage2026', 'password_confirmation' => 'Stage2026',
+            'reglement_version' => $info->json('data.reglement.version'),
+            'webauthn' => $this->attestation($options->json('data.publicKey')), 'label' => 'Téléphone de test',
+        ], $headers);
+    }
+
     private function enroll(array $h): void
     {
         $opts = $this->postJson('/api/stagiaire/empreinte/options', [], $h)->assertOk()->json('data.publicKey');
+        $this->postJson('/api/stagiaire/empreinte', $this->attestation($opts) + ['label' => 'Téléphone de test'], $h)->assertOk();
+    }
+
+    /** Réponse d'un téléphone qui crée sa clé (ES256, attestation « none »). */
+    private function attestation(array $opts): array
+    {
         $this->assertSame('test.cap-epac.bj', $opts['rp']['id']);
         $d = openssl_pkey_get_details($this->key)['ec'];
         // Coordonnées sur 32 octets (OpenSSL omet les zéros de tête : échec aléatoire sinon)
@@ -180,9 +201,8 @@ class StagesLot3Test extends TestCase
             . str_repeat("\0", 16) . pack('n', strlen($this->credId)) . $this->credId . $cose;
         $att = $this->cbor(['fmt' => 'none', 'attStmt' => [], 'authData' => ['__bytes' => $authData]]);
         $client = json_encode(['type' => 'webauthn.create', 'challenge' => $opts['challenge'], 'origin' => self::ORIGIN]);
-        $this->postJson('/api/stagiaire/empreinte', [
-            'clientDataJSON' => $this->b64u($client), 'attestationObject' => $this->b64u($att), 'label' => 'Téléphone de test',
-        ], $h)->assertOk();
+
+        return ['clientDataJSON' => $this->b64u($client), 'attestationObject' => $this->b64u($att)];
     }
 
     private function assertion(array $h, int $counter): array
@@ -241,9 +261,8 @@ class StagesLot3Test extends TestCase
         $this->artisan('stages:process-activations')->assertSuccessful();
         $token = $this->linkToken();
         $this->getJson("/api/stagiaire/activation?token={$token}")->assertOk()->assertJsonPath('data.checks_position', false);
-        $this->postJson('/api/stagiaire/activation', [
-            'token' => $token, 'position' => $this->pos(0.3), 'password' => 'Stage2026', 'password_confirmation' => 'Stage2026',
-        ])->assertStatus(422)->assertJsonPath('error_code', 'STAGE_PUNCH_POSITION');
+        $this->activate($token, $this->pos(0.3))->assertStatus(422)->assertJsonPath('error_code', 'STAGE_PUNCH_POSITION');
+        $this->assertFalse(DB::table('stage_intern_accounts')->where('stage_request_id', $req->id)->exists());
         $this->assertNull($req->fresh()->activated_at);
         $this->assertSame(0, StageAttendance::where('stage_request_id', $req->id)->count());
     }
@@ -257,22 +276,22 @@ class StagesLot3Test extends TestCase
         $token = $this->linkToken();
 
         $this->getJson("/api/stagiaire/activation?token={$token}")->assertOk()->assertJsonPath('data.checks_position', true);
-        $this->postJson('/api/stagiaire/activation', [
-            'token' => $token, 'position' => $this->pos(0.01), 'password' => 'Stage2026', 'password_confirmation' => 'Stage2026',
-        ])->assertStatus(422)->assertJsonPath('error_code', 'STAGE_PUNCH_POSITION');
+        $this->activate($token, $this->pos(0.01))->assertStatus(422)->assertJsonPath('error_code', 'STAGE_PUNCH_POSITION');
         $this->assertNull($req->fresh()->activated_at);
         $this->assertSame(0, StageAttendance::where('stage_request_id', $req->id)->count());
 
+        // Sans téléphone enregistré : refusé
         $this->postJson('/api/stagiaire/activation', [
             'token' => $token, 'position' => $this->pos(0.0002), 'password' => 'Stage2026', 'password_confirmation' => 'Stage2026',
-        ])->assertStatus(201)->assertJsonStructure(['data' => ['token']]);
+            'reglement_version' => 3,
+        ])->assertStatus(422)->assertJsonValidationErrors('webauthn');
+        $this->activate($token, $this->pos(0.0002))->assertStatus(201)->assertJsonStructure(['data' => ['token']]);
 
         $req->refresh();
         $this->assertSame('2026-11-04', $req->date_debut_reelle->toDateString());
         $arr = StageAttendance::where('stage_request_id', $req->id)->first();
         $this->assertSame(['arrivee', 'activation', 0], [$arr->kind, $arr->source, $arr->late_minutes]);
-        $this->postJson('/api/stagiaire/activation', ['token' => $token, 'position' => $this->pos(), 'password' => 'Stage2026', 'password_confirmation' => 'Stage2026'])
-            ->assertStatus(410);
+        $this->activate($token)->assertStatus(410);
 
         // Le responsable voit le décalage et la fin proposée (+2 jours)
         $this->actingAs($this->user('responsable-division', 'formation_continue'), 'sanctum');
@@ -287,22 +306,25 @@ class StagesLot3Test extends TestCase
         $req = $this->intern('2026-11-02', '2027-01-31');
         $this->at('2026-11-02 10:05');
         $this->artisan('stages:process-activations');
-        $this->postJson('/api/stagiaire/activation', ['token' => $this->linkToken(), 'position' => $this->pos(), 'password' => 'Stage2026', 'password_confirmation' => 'Stage2026'])->assertStatus(201);
+        $this->activate($this->linkToken())->assertStatus(201);
 
         $this->postJson('/api/stagiaire/connexion', ['identifiant' => $req->reference, 'password' => 'mauvais'])->assertStatus(422);
         $token = $this->postJson('/api/stagiaire/connexion', ['identifiant' => strtolower($req->reference), 'password' => 'Stage2026'])->assertOk()->json('data.token');
         $this->postJson('/api/stagiaire/connexion', ['identifiant' => $req->email, 'password' => 'Stage2026'])->assertOk();
         $h = ['X-Stagiaire-Token' => $token];
 
+        // Règlement accepté et téléphone enregistré dès l'activation
         $me = $this->getJson('/api/stagiaire/moi', $h)->assertOk()->json('data');
-        $this->assertFalse($me['reglement']['accepted']);
-        $this->postJson('/api/stagiaire/empreinte/options', [], $h)->assertStatus(403)->assertJsonPath('error_code', 'STAGE_REGLEMENT_REQUIRED');
-        $this->postJson('/api/stagiaire/reglement', ['version' => 99], $h)->assertStatus(409);
-        $this->postJson('/api/stagiaire/reglement', ['version' => $me['reglement']['version']], $h)->assertOk();
+        $this->assertTrue($me['reglement']['accepted']);
+        $this->assertTrue($me['webauthn']['enrolled']);
 
         // Règlement modifié → nouvelle acceptation exigée
         app(StageSettingsService::class)->update(['reglement_text' => str_repeat('Nouveau règlement intérieur du CAP. ', 4)], null);
-        $this->assertFalse($this->getJson('/api/stagiaire/moi', $h)->json('data.reglement.accepted'));
+        $me = $this->getJson('/api/stagiaire/moi', $h)->json('data');
+        $this->assertFalse($me['reglement']['accepted']);
+        $this->postJson('/api/stagiaire/pointage/options', [], $h)->assertStatus(403)->assertJsonPath('error_code', 'STAGE_REGLEMENT_REQUIRED');
+        $this->postJson('/api/stagiaire/reglement', ['version' => 99], $h)->assertStatus(409);
+        $this->postJson('/api/stagiaire/reglement', ['version' => $me['reglement']['version']], $h)->assertOk();
 
         // Isolation : jeton stagiaire refusé côté progiciel, et inversement
         $this->getJson('/api/stages/admin/suivi', ['Authorization' => "Bearer {$token}"])->assertStatus(401);
@@ -413,17 +435,60 @@ class StagesLot3Test extends TestCase
         $this->assertSame('rectificative', $req->notes()->reorder('version', 'desc')->first()->kind);
     }
 
+    public function test_space_opens_only_on_the_stage_phone(): void
+    {
+        [$req, $h] = $this->readyIntern('2026-11-02');
+        $other = ['X-Stagiaire-Appareil' => 'telephone-d-un-camarade-0123456789abcd'];
+        $login = ['identifiant' => $req->reference, 'password' => 'Stage2026'];
+
+        // Connexion depuis un autre téléphone : refusée, tracée, stagiaire prévenu
+        $this->postJson('/api/stagiaire/connexion', $login, $other)->assertStatus(403)->assertJsonPath('error_code', 'STAGE_DEVICE_OTHER');
+        $this->assertTrue(DB::table('stage_request_history')->where('stage_request_id', $req->id)->where('action', 'device_refused')->exists());
+        $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['to'] === $req->whatsapp && str_contains($m['text'], 'Connexion refusée')));
+        // Mot de passe oublié depuis cet autre téléphone : refusé aussi
+        $this->postJson('/api/stagiaire/mot-de-passe/code', ['identifiant' => $req->reference])->assertOk();
+        // Session copiée sur un autre téléphone : inutilisable
+        $this->getJson('/api/stagiaire/moi', $h + $other)->assertStatus(401);
+        // Sans identifiant d'appareil : demande de mise à jour
+        $this->postJson('/api/stagiaire/connexion', $login, ['X-Stagiaire-Appareil' => ''])->assertStatus(422)->assertJsonPath('error_code', 'STAGE_DEVICE_MISSING');
+        // Sur le téléphone de stage : ouvert
+        $this->postJson('/api/stagiaire/connexion', $login)->assertOk();
+        $this->getJson('/api/stagiaire/moi', $h)->assertOk();
+    }
+
+    public function test_one_phone_serves_one_intern_only(): void
+    {
+        $this->readyIntern('2026-11-02');
+        // Un camarade active son compte sur le même téléphone : refusé
+        $second = $this->intern('2026-11-02', '2027-01-31');
+        $this->artisan('stages:process-activations')->assertSuccessful();
+        $token = collect($this->sent)->last(fn ($m) => $m['to'] === $second->whatsapp && str_contains($m['text'], '/activer?token='));
+        preg_match('/token=([A-Za-z0-9]{48})/', $token['text'], $m);
+        $this->activate($m[1])->assertStatus(409)->assertJsonPath('error_code', 'STAGE_DEVICE_TAKEN');
+        $this->assertNull($second->fresh()->activated_at);
+        // Sur son propre téléphone : accepté
+        $this->credId = random_bytes(32);
+        $this->activate($m[1], null, ['X-Stagiaire-Appareil' => 'telephone-du-second-stagiaire-0123456789'])->assertStatus(201);
+    }
+
     public function test_device_reset_requires_new_enrolment(): void
     {
         [$req, $h] = $this->readyIntern('2026-11-02');
         $this->actingAs($this->user('superviseur'), 'sanctum')
             ->postJson("/api/stages/admin/stagiaires/{$req->id}/appareil/reinitialiser")->assertOk();
         $this->at('2026-11-03 08:00');
+        // Sessions fermées ; connexion depuis le nouveau téléphone, à enregistrer avant de pointer
+        $this->getJson('/api/stagiaire/moi', $h)->assertStatus(401);
+        $new = ['X-Stagiaire-Appareil' => 'nouveau-telephone-de-stage-0123456789'];
+        $h = $new + ['X-Stagiaire-Token' => $this->postJson('/api/stagiaire/connexion', ['identifiant' => $req->reference, 'password' => 'Stage2026'], $new)
+            ->assertOk()->json('data.token')];
         $this->postJson('/api/stagiaire/pointage/options', [], $h)->assertStatus(409)->assertJsonPath('error_code', 'STAGE_WEBAUTHN_MISSING');
         $this->assertFalse($this->getJson('/api/stagiaire/moi', $h)->json('data.webauthn.enrolled'));
         $this->key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
         $this->credId = random_bytes(32); // nouveau téléphone
         $this->enroll($h);
         $this->punch($h, 'arrivee', 1)->assertStatus(201);
+        // L'ancien téléphone n'ouvre plus l'espace
+        $this->postJson('/api/stagiaire/connexion', ['identifiant' => $req->reference, 'password' => 'Stage2026'])->assertStatus(403);
     }
 }

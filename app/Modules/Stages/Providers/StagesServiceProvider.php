@@ -86,6 +86,13 @@ class StagesServiceProvider extends ServiceProvider
             Limit::perMinute(10)->by($r->ip()),
             Limit::perMinute(6)->by('ref:' . strtoupper((string) $r->input('reference'))),
         ]);
+        // Activation, connexion, mot de passe oublié : limite par lien ou par
+        // identifiant (plusieurs essais par personne), et une limite large par
+        // adresse : le premier jour, tous les stagiaires partagent le Wi-Fi du CAP.
+        RateLimiter::for('stages-intern-auth', fn (Request $r) => [
+            Limit::perMinute(60)->by('ip:' . $r->ip()),
+            Limit::perMinute(10)->by('id:' . hash('sha256', mb_strtolower(trim((string) ($r->input('token') ?: $r->input('identifiant') ?: $r->ip()))))),
+        ]);
         // Espace stagiaire : limites par stagiaire connecté, pas par adresse IP
         // (sur le Wi-Fi du CAP, tous les stagiaires partagent la même adresse).
         $intern = fn (Request $r) => 'stagiaire:' . ($r->attributes->get('intern')?->id ?? $r->ip());

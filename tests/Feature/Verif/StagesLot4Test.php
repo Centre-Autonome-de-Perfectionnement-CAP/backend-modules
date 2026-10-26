@@ -27,6 +27,7 @@ use Tests\TestCase;
 /** Module Stages - Lot 4 : rapports périodiques et final. */
 class StagesLot4Test extends TestCase
 {
+    use InternDevice;
     use DatabaseTransactions;
 
     /** @var array<int, array{channel: string, to: ?string, text: string}> */
@@ -35,6 +36,7 @@ class StagesLot4Test extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->useInternDevice();
         Queue::fake();
         Storage::fake('local');
         Cache::flush();
@@ -104,7 +106,7 @@ class StagesLot4Test extends TestCase
         ]);
         $token = 'stg_' . Str::random(60);
         DB::table('stage_intern_sessions')->insert([
-            'account_id' => $account->id, 'token_hash' => hash('sha256', $token), 'expires_at' => now()->addYear(), 'created_at' => now(),
+            'account_id' => $account->id, 'token_hash' => hash('sha256', $token), 'device_hash' => $this->deviceHash(), 'expires_at' => now()->addYear(), 'created_at' => now(),
         ]);
 
         return [$req, ['X-Stagiaire-Token' => $token, 'Accept' => 'application/json']];
@@ -244,7 +246,7 @@ class StagesLot4Test extends TestCase
         $token = 'stg_' . Str::random(60); // le stagiaire se reconnecte
         DB::table('stage_intern_sessions')->insert([
             'account_id' => StageInternAccount::where('stage_request_id', $req->id)->value('id'),
-            'token_hash' => hash('sha256', $token), 'expires_at' => now()->addYear(), 'created_at' => now(),
+            'token_hash' => hash('sha256', $token), 'device_hash' => $this->deviceHash(), 'expires_at' => now()->addYear(), 'created_at' => now(),
         ]);
         $h['X-Stagiaire-Token'] = $token;
         $this->post('/api/stagiaire/rapports', ['period_key' => 'FINAL', 'fichier' => $this->pdf(), 'note' => 'Corrections du jury'], $h)

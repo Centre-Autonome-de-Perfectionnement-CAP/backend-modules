@@ -70,7 +70,18 @@ class InternSpaceController extends Controller
             'nom_complet' => trim($req->civilite . ' ' . $req->fullName()),
             'lieu'        => $req->lieu,
             'checks_position' => (bool) $this->settings->get('lieu_position'),
+            'reglement'   => ['version' => (int) $this->settings->get('reglement_version'), 'text' => $this->settings->reglementFor($req)],
         ]);
+    }
+
+    /** Défi d'enregistrement du téléphone de stage (avant de confirmer sa présence). */
+    public function activationDevice(Request $request): JsonResponse
+    {
+        $data = $request->validate(['token' => ['required', 'string', 'size:48', 'alpha_num']]);
+
+        return $this->guard(fn () => $this->successResponse(
+            $this->activation->deviceOptions($data['token'], InternAuthService::deviceHash($request)),
+        ));
     }
 
     public function activate(Request $request): JsonResponse
@@ -78,10 +89,21 @@ class InternSpaceController extends Controller
         $data = $request->validate([
             'token'    => ['required', 'string', 'size:48', 'alpha_num'],
             'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
-        ] + self::POSITION_RULES, ['password.confirmed' => 'Les deux mots de passe ne correspondent pas.']);
+            'reglement_version'          => ['required', 'integer'],
+            'webauthn'                   => ['required', 'array'],
+            'webauthn.clientDataJSON'    => ['required', 'string', 'max:20000'],
+            'webauthn.attestationObject' => ['required', 'string', 'max:20000'],
+            'label'                      => ['nullable', 'string', 'max:120'],
+        ] + self::POSITION_RULES, [
+            'password.confirmed' => 'Les deux mots de passe ne correspondent pas.',
+            'webauthn.required'  => 'Enregistrez votre téléphone de stage (empreinte) pour confirmer votre présence.',
+        ]);
 
         return $this->guard(function () use ($data, $request) {
-            $account = $this->activation->activate($data['token'], $data['position'], $data['password']);
+            $account = $this->activation->activate(
+                $data['token'], $data['position'], $data['password'], (int) $data['reglement_version'],
+                $data['webauthn'], $data['label'] ?? null, InternAuthService::deviceHash($request),
+            );
 
             return $this->successResponse(['token' => $this->auth->open($account, $request)], 'Présence confirmée. Bienvenue !', 201);
         });
@@ -124,7 +146,7 @@ class InternSpaceController extends Controller
         ], ['password.confirmed' => 'Les deux mots de passe ne correspondent pas.']);
 
         return $this->guard(function () use ($data, $request) {
-            $account = $this->auth->resetPassword($data['identifiant'], $data['code'], $data['password']);
+            $account = $this->auth->resetPassword($data['identifiant'], $data['code'], $data['password'], InternAuthService::deviceHash($request));
 
             return $this->successResponse(['token' => $this->auth->open($account, $request)], 'Mot de passe modifié.');
         });
@@ -137,6 +159,7 @@ class InternSpaceController extends Controller
         $account = $this->account($request);
         $req     = $account->stage;
         $version = (int) $this->settings->get('reglement_version');
+        $device  = $this->webauthn->device($account->id);
         $sup = DB::table('stage_supervisions as s')->join('users as u', 'u.id', '=', 's.user_id')
             ->where('s.stage_request_id', $req->id)->get(['u.first_name', 'u.last_name', 'u.phone']);
 
@@ -155,7 +178,8 @@ class InternSpaceController extends Controller
                 'text'     => $this->settings->reglementFor($req),
                 'accepted' => (int) $account->reglement_version === $version,
             ],
-            'webauthn'    => ['enrolled' => $this->webauthn->hasCredential($account), 'rp_id' => $this->webauthn->rpId()],
+            'webauthn'    => ['enrolled' => (bool) $device, 'rp_id' => $this->webauthn->rpId()],
+            'device'      => $device ? ['label' => $device->device_label, 'since' => $device->created_at] : null,
             'today'       => $this->attendance->today($req),
             'summary'     => $this->attendance->report($req)['summary'],
             'position_checked' => (bool) $this->settings->get('lieu_position'),
@@ -182,7 +206,9 @@ class InternSpaceController extends Controller
 
     public function webauthnRegisterOptions(Request $request): JsonResponse
     {
-        return $this->guard(fn () => $this->successResponse($this->webauthn->registrationOptions($this->ready($request))));
+        return $this->guard(fn () => $this->successResponse(
+            $this->webauthn->registrationOptions($this->ready($request), InternAuthService::deviceHash($request)),
+        ));
     }
 
     public function webauthnRegister(Request $request): JsonResponse
@@ -194,9 +220,9 @@ class InternSpaceController extends Controller
         ]);
 
         return $this->guard(function () use ($data, $request) {
-            $this->webauthn->register($this->ready($request), $data, $data['label'] ?? null);
+            $this->webauthn->register($this->ready($request), $data, $data['label'] ?? null, InternAuthService::deviceHash($request));
 
-            return $this->successResponse(null, 'Empreinte enregistrée. Vous pouvez maintenant pointer.');
+            return $this->successResponse(null, 'Téléphone de stage enregistré. Vous pouvez maintenant pointer.');
         });
     }
 
@@ -221,7 +247,7 @@ class InternSpaceController extends Controller
         return $this->guard(function () use ($data, $request) {
             $account = $this->ready($request);
             try {
-                $this->webauthn->verify($account, $this->sessionKey($request), $data['webauthn']);
+                $this->webauthn->verify($account, $this->sessionKey($request), $data['webauthn'], InternAuthService::deviceHash($request));
             } catch (BusinessException $e) {
                 $this->attendance->fail($account->stage, 'webauthn');
                 throw $e;

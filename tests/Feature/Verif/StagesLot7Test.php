@@ -27,6 +27,7 @@ use Tests\TestCase;
 /** Module Stages - Lot 7 : stagiaires arrivés avant le système (invitation par numéro), signature des notes, binôme depuis l'espace. */
 class StagesLot7Test extends TestCase
 {
+    use InternDevice;
     use DatabaseTransactions;
 
     /** @var array<int, array{channel: string, to: ?string, text: string}> */
@@ -35,6 +36,7 @@ class StagesLot7Test extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->useInternDevice();
         Queue::fake();
         Storage::fake('local');
         Cache::flush();

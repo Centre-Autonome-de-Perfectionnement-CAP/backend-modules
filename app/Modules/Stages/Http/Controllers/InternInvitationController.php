@@ -122,6 +122,7 @@ class InternInvitationController extends Controller
         }
 
         return $this->guard(function () use ($data, $request) {
+            InternAuthService::deviceHash($request); // téléphone identifiable avant de créer quoi que ce soit
             $r = $this->service->register($data['token'], $data, $request->file('note_papier'));
 
             return $this->successResponse([

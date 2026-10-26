@@ -47,7 +47,7 @@ class StageSettingsService
         'note_numero_suffixe'      => 'STG/CAP/EPAC/UAC', // « N° 001-26/STG/CAP/EPAC/UAC » : série propre aux notes de stage
         'note_signature'           => null,   // image : voir NoteSignatureService
         'pdf_pied_de_page'         => '01 B.P. 2009 COTONOU - Tél. : +229 01 99 54 62 67 / 01 91 94 73 67 - www.cap-epac.bj',
-        'reglement_version'        => 2,
+        'reglement_version'        => 3,
         'reglement_text'           => self::REGLEMENT,
     ];
 
@@ -56,17 +56,27 @@ class StageSettingsService
      * l'affichage par les valeurs du stagiaire et des réglages : {horaires},
      * {tolerance}, {delai_permission}, {rapports}, {seuil}.
      */
+    /**
+     * Mise en forme : **texte** en gras, !!texte!! en gras rouge (à ne pas
+     * manquer). Le reste est du texte simple.
+     */
     private const REGLEMENT = "Bienvenue au CAP-EPAC. En acceptant ce règlement, vous vous engagez à :\n\n"
         . "1. Respecter les horaires de votre stage : du lundi au vendredi, {horaires}. Au-delà de {tolerance} minutes après l'heure prévue, vous êtes en retard.\n"
-        . "2. Pointer vous-même chaque jour ouvré depuis votre espace stagiaire : à l'arrivée, au départ en pause, au retour de pause et à la sortie.\n"
-        . "3. Pointer uniquement sur votre lieu de stage, avec votre propre téléphone. Le pointage pour une autre personne est interdit.\n"
+        . "2. Pointer **vous-même** chaque jour ouvré depuis votre espace stagiaire : à l'arrivée, au départ en pause, au retour de pause et à la sortie.\n"
+        . "3. Pointer **uniquement sur votre lieu de stage**, avec **votre téléphone de stage**.\n"
         . "4. Signaler toute absence ou tout retard par une demande de permission dans votre espace, au plus tard {delai_permission} jours ouvrés après.\n"
         . "5. Déposer dans votre espace les rapports demandés ({rapports}), dans les délais, puis votre rapport de stage final avant la fin du stage.\n"
         . "6. Respecter le personnel, le matériel et la confidentialité des informations auxquelles vous avez accès.\n"
         . "7. Adopter une tenue et un comportement corrects.\n\n"
+        . "!!VOTRE TÉLÉPHONE DE STAGE!!\n"
+        . "Le téléphone avec lequel vous confirmez votre présence le premier jour devient **votre téléphone de stage**. C'est **le seul** qui ouvre votre espace et qui pointe, avec votre empreinte.\n"
+        . "• Un téléphone ne sert qu'à **un seul stagiaire**.\n"
+        . "• !!Interdit!! : vous connecter au compte d'un autre stagiaire, pointer pour lui, ou prêter votre téléphone, votre mot de passe ou votre empreinte.\n"
+        . "• **Toute connexion depuis un autre téléphone est refusée et enregistrée dans votre dossier**, que voit votre superviseur.\n"
+        . "• Nouveau téléphone (perte, panne) ? Demandez à votre superviseur de réinitialiser votre téléphone de stage, puis enregistrez le nouveau.\n\n"
         . "Votre présence est vérifiée par votre empreinte (gérée par votre téléphone : aucune donnée biométrique n'est envoyée) et par votre position au moment du pointage (seule la distance au lieu de stage est conservée).\n\n"
-        . "L'attestation de stage est délivrée si votre assiduité atteint au moins {seuil} % et si votre rapport final est validé.\n\n"
-        . "Le non-respect de ce règlement peut entraîner la fin du stage et l'absence d'attestation.";
+        . "L'attestation de stage est délivrée si votre assiduité atteint **au moins {seuil} %** et si votre rapport final est validé.\n\n"
+        . "!!Toute fraude sur la présence entraîne la fin du stage et l'absence d'attestation.!! Le non-respect de ce règlement peut aussi y conduire.";
 
     /** Réglages modifiables depuis le progiciel. */
     public const EDITABLE = [

@@ -79,7 +79,10 @@ class InternFollowController extends Controller
         ]);
     }
 
-    /** Changement de téléphone : l'empreinte enregistrée est désactivée. */
+    /**
+     * Changement de téléphone : le téléphone de stage est désactivé et les
+     * sessions fermées ; le stagiaire enregistre le nouveau à sa connexion.
+     */
     public function resetDevice(Request $request, int $id): JsonResponse
     {
         $req     = StageRequest::findOrFail($id);
@@ -89,25 +92,26 @@ class InternFollowController extends Controller
         }
         $n = $this->webauthn->revokeAll($account->id, $request->user()->id);
         if ($n === 0) {
-            return $this->errorResponse('Aucune empreinte active à réinitialiser.', 409, 'STAGE_NO_DEVICE');
+            return $this->errorResponse('Aucun téléphone de stage à réinitialiser.', 409, 'STAGE_NO_DEVICE');
         }
+        $this->auth->closeAll($account);
         StageHistory::create([
             'stage_request_id' => $req->id, 'action' => 'device_reset', 'from_status' => $req->status,
             'to_status' => $req->status, 'actor' => 'staff', 'user_id' => $request->user()->id,
-            'comment' => 'Empreinte réinitialisée (changement de téléphone)',
+            'comment' => 'Téléphone de stage réinitialisé (changement de téléphone)',
         ]);
 
-        $this->notifier->toDemandeur($req, 'Empreinte réinitialisée', [
-            'Votre empreinte a été réinitialisée. À votre prochaine connexion à l\'espace stagiaire, enregistrez-la de nouveau depuis votre téléphone.',
+        $this->notifier->toDemandeur($req, 'Téléphone de stage réinitialisé', [
+            'Votre téléphone de stage a été réinitialisé. Connectez-vous depuis votre nouveau téléphone et enregistrez-le avec votre empreinte : il deviendra votre seul téléphone de stage.',
         ], [], ctaLabel: 'Ouvrir mon espace', ctaUrl: $this->notifier->spaceUrl(), context: 'stage-appareil');
 
         if (!StageAccess::isLead($request->user())) {
             $who = trim($request->user()->first_name . ' ' . $request->user()->last_name);
-            $this->notifier->toManagers($req, 'Action d\'un superviseur', ["{$who} (superviseur) a réinitialisé l'empreinte du stagiaire."],
+            $this->notifier->toManagers($req, 'Action d\'un superviseur', ["{$who} (superviseur) a réinitialisé le téléphone de stage du stagiaire."],
                 ['Stagiaire' => $req->fullName()], 'stage-superviseur');
         }
 
-        return $this->successResponse(null, 'Empreinte réinitialisée. Le stagiaire a été prévenu.');
+        return $this->successResponse(null, 'Téléphone de stage réinitialisé. Le stagiaire a été prévenu.');
     }
 
     public function requestsIndex(Request $request): JsonResponse
