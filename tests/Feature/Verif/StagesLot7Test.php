@@ -135,7 +135,7 @@ class StagesLot7Test extends TestCase
         $note = $req->notes()->first();
         $issued = CarbonImmutable::parse($note->issued_at)->setTimezone(BusinessHours::TZ);
         $this->assertSame('2026-03-02 08:30', $issued->format('Y-m-d H:i'));
-        $this->assertStringStartsWith('NS-STG-2026-', $note->number);
+        $this->assertMatchesRegularExpression('/^\d{3}-26$/', $note->number);
         $this->assertSame('2026-10-22', CarbonImmutable::parse($note->recorded_at)->setTimezone(BusinessHours::TZ)->toDateString());
         $this->assertTrue(collect($this->sent)->contains(fn ($s) => str_contains($s['text'], 'Stage enregistré')));
 

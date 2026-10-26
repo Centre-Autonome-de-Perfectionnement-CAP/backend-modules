@@ -615,7 +615,7 @@ class AttestationService
         return $a->scan_path && Storage::disk(StageRequestService::DISK)->exists($a->scan_path) ? $a->scan_path : null;
     }
 
-    /** Numéro proposé : « NN-AA » (séquence annuelle), imprimé « N° NN-AA/CAP/EPAC/UAC ». */
+    /** Numéro proposé : « 001-26 » (séquence annuelle), imprimé « N° 001-26/CAP/EPAC/UAC ». */
     public function nextNumber(): string
     {
         $yy  = BusinessHours::today()->format('y');
@@ -624,7 +624,7 @@ class AttestationService
             ->map(fn ($n) => preg_match('/^(\d+)-' . $yy . '$/', (string) $n, $m) ? (int) $m[1] : 0)
             ->max() ?? 0;
 
-        return str_pad((string) ($max + 1), 2, '0', STR_PAD_LEFT) . '-' . $yy;
+        return str_pad((string) ($max + 1), 3, '0', STR_PAD_LEFT) . '-' . $yy;
     }
 
     private function defaultCountry(?string $nationalite): ?string

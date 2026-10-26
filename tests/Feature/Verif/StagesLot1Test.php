@@ -201,7 +201,7 @@ class StagesLot1Test extends TestCase
         $this->assertSame($cStart, $detail['terms']['date_debut']);
         $this->assertSame('Service Informatique', $detail['terms']['service']);
         $this->assertCount(1, $detail['notes']);
-        $this->assertMatchesRegularExpression('/^NS-STG-\d{4}-\d{4}$/', $detail['notes'][0]['number']);
+        $this->assertMatchesRegularExpression('/^\d{3}-\d{2}$/', $detail['notes'][0]['number']);
 
         // Rectification → note rectificative numérotée
         $rect = $this->terms($cStart, BusinessHours::today()->addDays(21)->addMonths(3)->toDateString());
@@ -210,7 +210,10 @@ class StagesLot1Test extends TestCase
             ->assertOk();
         $notes = $req->fresh()->notes;
         $this->assertSame(['initiale', 'rectificative'], $notes->pluck('kind')->all());
-        $this->assertSame($notes[0]->number . '-R1', $notes[1]->number);
+        // La rectificative prend le numéro suivant de la série (« 002-26 » après « 001-26 »).
+        [$seq, $yy] = explode('-', $notes[0]->number);
+        $this->assertSame(sprintf('%03d-%s', (int) $seq + 1, $yy), $notes[1]->number);
+        $this->assertSame("N° {$notes[0]->number}/STG/CAP/EPAC/UAC", $notes[0]->reference('STG/CAP/EPAC/UAC', 'CAP/EPAC/UAC'));
         $this->assertSame('Prolongation', $notes[1]->motif);
 
         // Rien de changé → refusé ; plus de proposition possible

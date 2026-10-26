@@ -37,13 +37,14 @@ class StageSettingsService
         'seuil_assiduite'          => 80,             // % minimal de présence pour l'attestation
         'attestation_structure'    => 'de la Cellule Informatique de la Division Formation Continue et Perfectionnement du CAP',
         // ── Documents PDF (attestation, note de service) ─────────────────
-        'numero_suffixe'           => 'CAP/EPAC/UAC',   // « N° 22-26/CAP/EPAC/UAC »
+        'numero_suffixe'           => 'CAP/EPAC/UAC',   // attestations : « N° 001-26/CAP/EPAC/UAC »
         'pdf_ville'                => 'Abomey-Calavi',
         'signataire_titre'         => 'Le Chef CAP,',
         'signataire_nom'           => 'Professeur Fidèle Paul TCHOBO',
         // Notes de service (initiale et rectificative) : signature numérique du RD / FC-P
         'note_signataire_titre'    => 'Le Responsable Division Formation Continue et Perfectionnement (RD / FC-P)',
         'note_signataire_nom'      => '',
+        'note_numero_suffixe'      => 'STG/CAP/EPAC/UAC', // « N° 001-26/STG/CAP/EPAC/UAC » : série propre aux notes de stage
         'note_signature'           => null,   // image : voir NoteSignatureService
         'pdf_pied_de_page'         => '01 B.P. 2009 COTONOU - Tél. : +229 01 99 54 62 67 / 01 91 94 73 67 - www.cap-epac.bj',
         'reglement_version'        => 2,
@@ -75,7 +76,7 @@ class StageSettingsService
         'report_frequency', 'report_grace_days', 'final_report_open_days', 'final_correction_days',
         'seuil_assiduite', 'attestation_structure', 'numero_suffixe', 'pdf_ville',
         'signataire_titre', 'signataire_nom', 'pdf_pied_de_page',
-        'note_signataire_titre', 'note_signataire_nom',
+        'note_signataire_titre', 'note_signataire_nom', 'note_numero_suffixe',
     ];
 
     public function all(): array

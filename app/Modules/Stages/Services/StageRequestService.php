@@ -573,20 +573,13 @@ class StageRequestService
 
     private function issueNote(StageRequest $req, string $kind, ?string $motif, ?int $by, ?CarbonImmutable $declaredAt = null): StageNote
     {
-        $year     = (int) ($declaredAt ?? BusinessHours::today())->format('Y');
         $previous = StageNote::where('stage_request_id', $req->id)->orderByDesc('version')->lockForUpdate()->first();
+        $number   = StageNote::nextNumber(($declaredAt ?? BusinessHours::today())->format('y'));
 
         if ($kind === 'initiale' || !$previous) {
-            $prefix = "NS-STG-{$year}-";
-            $last   = StageNote::where('kind', 'initiale')->where('number', 'like', $prefix . '%')
-                ->lockForUpdate()->orderByDesc('number')->value('number');
-            $seq    = $last ? ((int) substr($last, strlen($prefix))) + 1 : 1;
-            $number = $prefix . str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
             $version = 1;
         } else {
-            $base    = StageNote::where('stage_request_id', $req->id)->where('kind', 'initiale')->value('number');
             $version = $previous->version + 1;
-            $number  = $base . '-R' . ($version - 1);
             $kind    = 'rectificative';
         }
 

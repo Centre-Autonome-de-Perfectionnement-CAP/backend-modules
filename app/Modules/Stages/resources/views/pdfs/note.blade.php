@@ -3,17 +3,20 @@
     CAP (en-tête et pied de page officiels), adapté du modèle de note
     d'admission en stage. Tout en texte ; seule la signature numérique du
     RD / FC-P est une image, tenue dans un cadre fixe sans déformation.
+    Numéro en haut à gauche et date à droite, comme sur l'attestation.
     Les horaires et l'usage de l'espace stagiaire figurent au règlement intérieur.
 --}}
 @extends('stages::pdfs.layout')
 
-@section('title', ($rectif ? 'Note de service rectificative ' : 'Note de service ') . $numero)
+@section('title', ($rectif ? 'Note de service rectificative ' : 'Note de service ') . $reference)
 
 @section('styles')
     .page { padding-top: 43mm; }
     body { font-size: 12pt; }
-    .date { text-align: right; margin-bottom: 9mm; }
-    .titre { text-align: center; font-weight: bold; font-size: 13pt; text-decoration: underline; line-height: 1.4; margin-bottom: 8mm; }
+    .ref { height: 7mm; margin-bottom: 9mm; }
+    .ref .num { float: left; font-weight: bold; }
+    .ref .date { float: right; }
+    .titre { text-align: center; font-weight: bold; font-size: 14pt; text-decoration: underline; margin-bottom: 8mm; }
     .objet { margin-bottom: 6mm; }
     .objet b { text-decoration: underline; }
     p.txt { text-align: justify; line-height: 1.6; margin-bottom: 4mm; }
@@ -30,9 +33,12 @@
 @endsection
 
 @section('content')
-<div class="date">{{ $ville }}, le {{ $date }}</div>
+<div class="ref">
+    <span class="num">{{ $reference }}</span>
+    <span class="date">{{ $ville }}, le {{ $date }}</span>
+</div>
 
-<div class="titre">NOTE DE SERVICE{{ $rectif ? ' RECTIFICATIVE' : '' }}<br>N° {{ $numero }}/{{ $suffixe }}</div>
+<div class="titre">NOTE DE SERVICE{{ $rectif ? ' RECTIFICATIVE' : '' }}</div>
 
 @if(!$rectif)
     <div class="objet"><b>OBJET</b> : Admission en stage académique</div>
@@ -41,15 +47,15 @@
         {{ $d['appel'] }} <b>{{ $d['nom'] }} {{ $d['prenoms'] }}</b>, {{ $d['masculin'] ? 'étudiant' : 'étudiante' }} en {{ $d['formation'] }}
         ({{ $d['etablissement'] }}), est {{ $d['masculin'] ? 'admis' : 'admise' }} en stage académique pour une période
         <b>{{ str_starts_with($d['duree'], 'un') ? "d'" : 'de ' }}{{ $d['duree'] }}</b> allant du <b>{{ $d['debut'] }} au {{ $d['fin'] }}</b>
-        au {{ $d['service'] ?: 'Centre' }} du Centre Autonome de Perfectionnement (CAP){{ $d['lieu'] && $d['lieu'] !== 'CAP-EPAC' ? ', à ' . $d['lieu'] : '' }}.
+        {{ $d['service'] ? $d['service'] . ' du' : 'au' }} Centre Autonome de Perfectionnement (CAP){{ $d['lieu'] && $d['lieu'] !== 'CAP-EPAC' ? ', à ' . $d['lieu'] : '' }}.
     </p>
 
     <p class="txt">À la fin du stage, {{ $d['masculin'] ? 'il' : 'elle' }} devra déposer un rapport de stage final.</p>
 @else
-    <div class="objet"><b>OBJET</b> : Rectification de la note de service N° {{ $initial['number'] ?? '' }}/{{ $suffixe }}{{ $initial ? ' du ' . $initial['date'] : '' }}</div>
+    <div class="objet"><b>OBJET</b> : Rectification de la note de service {{ $initial['reference'] ?? '' }}{{ $initial ? ' du ' . $initial['date'] : '' }}</div>
 
     <p class="txt">
-        Les dispositions de la note de service N° {{ $initial['number'] ?? '' }}/{{ $suffixe }} portant admission en stage académique de
+        Les dispositions de la note de service {{ $initial['reference'] ?? '' }} portant admission en stage académique de
         {{ $d['appel'] }} <b>{{ $d['nom'] }} {{ $d['prenoms'] }}</b> sont modifiées comme suit :
     </p>
 
@@ -70,7 +76,7 @@
 @endif
 
 <p class="txt">
-    Le Chef de la Division Formation Continue et Perfectionnement et le Secrétariat du CAP sont chargés,
+    Le Responsable de la Cellule informatique et le Secrétariat du CAP sont chargés,
     chacun en ce qui le concerne, de l'application de la présente note de service.
 </p>
 

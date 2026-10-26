@@ -240,6 +240,7 @@ class StageAdminController extends Controller
             'seuil_assiduite'          => ['sometimes', 'integer', 'min:50', 'max:100'],
             'attestation_structure'    => ['sometimes', 'string', 'min:5', 'max:200'],
             'numero_suffixe'           => ['sometimes', 'string', 'min:2', 'max:40', 'regex:/^[A-Za-z0-9\/\-_. ]+$/'],
+            'note_numero_suffixe'      => ['sometimes', 'string', 'min:2', 'max:40', 'regex:/^[A-Za-z0-9\/\-_. ]+$/'],
             'pdf_ville'                => ['sometimes', 'string', 'min:2', 'max:60'],
             'signataire_titre'         => ['sometimes', 'string', 'min:2', 'max:80'],
             'signataire_nom'           => ['sometimes', 'string', 'min:2', 'max:100'],
@@ -255,7 +256,7 @@ class StageAdminController extends Controller
         }
 
         foreach (['closed_message', 'default_rejection_reason', 'default_service', 'default_lieu',
-            'attestation_structure', 'numero_suffixe', 'pdf_ville', 'signataire_titre', 'signataire_nom', 'pdf_pied_de_page',
+            'attestation_structure', 'numero_suffixe', 'note_numero_suffixe', 'pdf_ville', 'signataire_titre', 'signataire_nom', 'pdf_pied_de_page',
             'note_signataire_titre'] as $k) {
             if (isset($data[$k])) {
                 $data[$k] = $this->cleanText($data[$k]);

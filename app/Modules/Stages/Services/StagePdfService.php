@@ -75,12 +75,13 @@ class StagePdfService
             ? StageNote::where('stage_request_id', $req->id)->where('version', '<', $note->version)->orderByDesc('version')->first()
             : null;
         $issued = CarbonImmutable::parse($note->issued_at)->setTimezone(BusinessHours::TZ);
+        $ref    = fn (StageNote $n) => $n->reference((string) $this->settings->get('note_numero_suffixe'), (string) $this->settings->get('numero_suffixe'));
         $h = $s['horaires'] ?? $req->horaires ?? [];
 
         $html = view('stages::pdfs.note', [
             'note'      => $note,
             'rectif'    => $note->kind === 'rectificative',
-            'initial'   => $initial ? ['number' => $initial->number, 'date' => CarbonImmutable::parse($initial->issued_at)->setTimezone(BusinessHours::TZ)->format('d/m/Y')] : null,
+            'initial'   => $initial ? ['reference' => $ref($initial), 'date' => CarbonImmutable::parse($initial->issued_at)->setTimezone(BusinessHours::TZ)->format('d/m/Y')] : null,
             'changes'   => $previous ? $this->changes($previous->snapshot ?? [], $s) : [],
             'd'         => [
                 'appel'      => $masculin ? 'Monsieur' : (($s['civilite'] ?? '') === 'Mme' ? 'Madame' : 'Mademoiselle'),
@@ -92,12 +93,11 @@ class StagePdfService
                 'duree'      => $this->durationWords($s['date_debut'] ?? null, $s['date_fin'] ?? null),
                 'debut'      => $this->longDate($s['date_debut'] ?? null, false),
                 'fin'        => $this->longDate($s['date_fin'] ?? null, false),
-                'service'    => $s['service'] ?? $req->service,
+                'service'    => $this->toService($s['service'] ?? $req->service),
                 'lieu'       => $s['lieu'] ?? $req->lieu,
                 'horaires'   => $this->hoursSentence($h),
             ],
-            'numero'    => $note->number,
-            'suffixe'   => trim((string) $this->settings->get('numero_suffixe'), '/'),
+            'reference' => $ref($note),
             'ville'     => $this->settings->get('pdf_ville'),
             'date'      => $issued->format('d/m/Y'),
             'signataire_titre' => $this->settings->get('note_signataire_titre'),
@@ -114,6 +114,22 @@ class StagePdfService
     }
 
     // ── Interne ──────────────────────────────────────────────────────────
+
+    /** « à la Cellule informatique », « au Secrétariat », « à l'Unité… » (null si aucun service). */
+    private function toService(?string $service): ?string
+    {
+        $service = trim((string) $service);
+        if ($service === '') {
+            return null;
+        }
+        $first = mb_strtolower(strtok($service, ' '));
+        if (preg_match('/^[aeiouyhéèêâîô]/u', $first)) {
+            return "à l'{$service}";
+        }
+        $feminine = ['cellule', 'division', 'direction', 'section', 'unité', 'bibliothèque', 'comptabilité', 'scolarité', 'salle'];
+
+        return (in_array($first, $feminine, true) ? 'à la ' : 'au ') . $service;
+    }
 
     private function render(string $html): string
     {
