@@ -12,16 +12,20 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Désactiver les contraintes pour éviter les erreurs lors du drop
-        Schema::disableForeignKeyConstraints();
-
-        // Vérifie si la table existe puis la supprime
+        // Une ancienne table emploi_du_temps est remplacée par la nouvelle
+        // structure, mais seulement si elle est vide : des données existantes
+        // ne sont jamais supprimées (la migration s'arrête et le signale).
         if (Schema::hasTable('emploi_du_temps')) {
+            if (DB::table('emploi_du_temps')->exists()) {
+                throw new RuntimeException(
+                    'La table emploi_du_temps existe déjà et contient des données : '
+                    . 'rien n\'a été modifié. Sauvegardez-la et décidez de sa reprise avant de relancer.'
+                );
+            }
+            Schema::disableForeignKeyConstraints();
             Schema::drop('emploi_du_temps');
+            Schema::enableForeignKeyConstraints();
         }
-
-        // Réactiver les contraintes
-        Schema::enableForeignKeyConstraints();
 
         // Création de la nouvelle table
         Schema::create('emploi_du_temps', function (Blueprint $table) {

@@ -139,10 +139,9 @@ jobs:
             # appliquées ne sont JAMAIS rejouées, même si listées ici.
             #
             # Nouvelles migrations introduites dans ce cycle (pour traçabilité) :
-            #   - 2026_08_14_000001_create_wa_sessions_table
-            #   - 2026_08_14_000002_create_wa_session_keys_table
-            #   - 2026_08_14_000003_create_wa_message_log_table
-            #   - 2026_08_15_000001_add_module_and_file_columns_to_wa_message_log_table
+            #   - 2026_08_14_000000_create_whatsapp_tables (module WhatsApp)
+            #   - 2026_10_20_000000_create_stages_module_tables (module Stages)
+            #   - 2026_10_30_000002_create_library_tables (module Bibliothèque)
             echo "🗄️  Vérification des migrations en attente..."
             php artisan migrate:status --no-ansi 2>&1 | grep "Pending\|No" || true
 

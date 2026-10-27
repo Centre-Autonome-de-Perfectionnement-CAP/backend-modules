@@ -13,7 +13,6 @@ return new class extends Migration
      * - Ajoute chef_division_type à users si absente
      * - Renomme le slug chef-division → responsable-division
      * - Insère les rôles manquants (admin, sec-da, sec-dir)
-     * - Assigne les bons rôles aux users existants
      * Idempotente : sans truncate, sans destruction de données existantes.
      */
     public function up(): void
@@ -27,14 +26,22 @@ return new class extends Migration
             });
         }
 
-        // 2. Renommer le slug chef-division → responsable-division (id 3)
-        DB::table('roles')
-            ->where('slug', 'chef-division')
-            ->update([
+        // 2. Le rôle chef-division devient responsable-division. Si les deux
+        //    existent déjà (slug unique), on ne renomme pas : les comptes du
+        //    premier reçoivent le second, sans rien supprimer.
+        $old = DB::table('roles')->where('slug', 'chef-division')->value('id');
+        $new = DB::table('roles')->where('slug', 'responsable-division')->value('id');
+        if ($old && !$new) {
+            DB::table('roles')->where('id', $old)->update([
                 'slug'       => 'responsable-division',
                 'name'       => 'Responsable Division',
                 'updated_at' => now(),
             ]);
+        } elseif ($old && $new) {
+            $already = DB::table('role_user')->where('role_id', $new)->pluck('user_id');
+            DB::table('role_user')->where('role_id', $old)->whereNotIn('user_id', $already)
+                ->update(['role_id' => $new]);
+        }
 
         // 3. Insérer les rôles manquants (admin, sec-da, sec-dir)
         $missingRoles = [
