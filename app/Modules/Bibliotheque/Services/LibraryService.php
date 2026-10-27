@@ -326,6 +326,44 @@ class LibraryService
         ];
     }
 
+    /** Carte d'un travail dans la liste publique. */
+    public function publicCard(LibraryWork $w): array
+    {
+        return [
+            'slug' => $w->slug, 'kind' => $w->kind, 'kind_label' => LibraryWork::KINDS[$w->kind] ?? $w->kind,
+            'title' => $w->title, 'year' => $w->year, 'formation' => $w->formation(),
+            'authors' => $w->people->where('role', 'auteur')->pluck('name')->values(),
+            'summary' => $w->summary ? Str::limit($w->summary, 240) : null,
+        ];
+    }
+
+    /**
+     * Fiche publique : jamais d'email ni de téléphone, seulement si la
+     * personne peut être contactée (le message est relayé).
+     */
+    public function publicDetail(LibraryWork $w): array
+    {
+        $w->loadMissing('people');
+        $authors = $w->people->where('role', 'auteur')->pluck('name');
+        $institution = trim(($w->etablissement ?? '') . ($w->universite ? ', ' . $w->universite : ''), ', ');
+        $kind = LibraryWork::KINDS[$w->kind] ?? $w->kind;
+        $key = $w->visibility === 'link' ? '?cle=' . $w->share_token : '';
+
+        return $this->publicCard($w) + [
+            'summary' => $w->summary, 'keywords' => $w->keywords ?? [], 'etablissement' => $w->etablissement,
+            'universite' => $w->universite, 'institution' => $institution, 'visibility' => $w->visibility,
+            'people' => $w->people->map(fn (LibraryPerson $p) => [
+                'id' => $p->id, 'role' => $p->role, 'role_label' => LibraryPerson::ROLES[$p->role] ?? $p->role,
+                'name' => $p->name, 'fonction' => $p->fonction, 'reachable' => $p->reachable(),
+            ])->values(),
+            'pdf_url' => $w->downloadable && $w->file_path ? $this->publicUrl($w) . '/pdf' . $key : null,
+            'license' => LibraryWork::LICENSES[$w->license] ?? null,
+            'url' => $this->publicUrl($w),
+            'citation' => $authors->implode(', ') . ($w->year ? " ({$w->year})" : '') . '. ' . $w->title . '. '
+                . $kind . ($institution ? ', ' . $institution : '') . '. ' . $this->publicUrl($w),
+        ];
+    }
+
     public function publicUrl(LibraryWork $work): string
     {
         return rtrim((string) config('app.url'), '/') . '/travaux/' . $work->slug;

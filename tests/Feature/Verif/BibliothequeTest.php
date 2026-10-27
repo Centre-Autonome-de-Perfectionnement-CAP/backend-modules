@@ -148,15 +148,20 @@ class BibliothequeTest extends TestCase
         // Repris par le responsable : le stagiaire ne modifie plus la fiche
         $this->assertFalse($this->getJson('/api/stagiaire/rapports', $h)->json('data.bibliotheque.editable'));
 
-        // Pages publiques : liste, fiche avec balises Google Scholar, plan du site, PDF
-        $this->get('/travaux?q=zabbix')->assertOk()->assertSee('Supervision du réseau du CAP avec Zabbix');
+        // Site : liste et fiche (sans aucun contact) ; page avec balises Google Scholar écrites par le serveur
+        $this->getJson('/api/travaux?q=zabbix')->assertOk()->assertJsonPath('data.items.0.title', 'Supervision du réseau du CAP avec Zabbix');
+        $fiche = $this->getJson("/api/travaux/{$work->slug}")->assertOk()
+            ->assertJsonPath('data.people.1.name', 'Dr Paul ADJOVI')->assertJsonPath('data.people.1.reachable', true);
+        foreach (['p.adjovi@example.org', '97 11 22 33', $req->email] as $private) {
+            $this->assertStringNotContainsString($private, $fiche->getContent());
+        }
         $this->get("/travaux/{$work->slug}")->assertOk()
             ->assertSee('<meta name="citation_title" content="Supervision du réseau du CAP avec Zabbix">', false)
-            ->assertSee('citation_pdf_url', false)->assertSee('Dr Paul ADJOVI')
-            ->assertDontSee('p.adjovi@example.org')->assertDontSee('97 11 22 33')->assertDontSee($req->email);
+            ->assertSee('citation_pdf_url', false)->assertSee('<div id="root"></div>', false)
+            ->assertDontSee('p.adjovi@example.org');
         $this->get('/sitemap.xml')->assertOk()->assertSee("/travaux/{$work->slug}", false);
         $this->get("/travaux/{$work->slug}/pdf")->assertOk()->assertHeader('Content-Type', 'application/pdf');
-        $this->assertSame([1, 1], [$work->fresh()->views, $work->fresh()->downloads]);
+        $this->assertSame([1, 1], [$work->fresh()->views, $work->fresh()->downloads]); // vue comptée par la fiche du site
     }
 
     public function test_link_only_work_is_hidden_and_contact_is_relayed(): void
@@ -172,17 +177,19 @@ class BibliothequeTest extends TestCase
 
         // Par lien : introuvable sans la clé, non référencé, PDF fermé
         $this->get("/travaux/{$work->slug}")->assertNotFound();
-        $this->get('/travaux')->assertDontSee($work->title);
+        $this->getJson("/api/travaux/{$work->slug}")->assertNotFound();
+        $this->getJson('/api/travaux')->assertOk()->assertJsonPath('data.total', 0);
         $this->get('/sitemap.xml')->assertDontSee($work->slug);
         $this->get("/travaux/{$work->slug}?cle={$work->share_token}")->assertOk()->assertSee('noindex, nofollow', false)->assertDontSee('citation_title', false);
+        $this->getJson("/api/travaux/{$work->slug}?cle={$work->share_token}")->assertOk()->assertJsonPath('data.pdf_url', null);
         $this->get("/travaux/{$work->slug}/pdf?cle={$work->share_token}")->assertNotFound();
 
         // Contacter le maître de mémoire : message relayé par email, robots écartés
         $maitre = $work->people()->where('role', 'maitre')->first();
-        $url = "/travaux/{$work->slug}/contact?cle={$work->share_token}";
+        $url = "/api/travaux/{$work->slug}/contact?cle={$work->share_token}";
         $form = ['person_id' => $maitre->id, 'nom' => 'Jean AGOSSA', 'email' => 'jean@example.org', 'message' => 'Bonjour, je travaille sur un sujet proche et souhaiterais échanger.'];
-        $this->post($url, $form + ['site' => 'spam'])->assertSessionHasErrors('site');
-        $this->post($url, $form)->assertRedirect()->assertSessionHas('sent');
+        $this->postJson($url, $form + ['site' => 'spam'])->assertStatus(422)->assertJsonValidationErrors('site');
+        $this->postJson($url, $form)->assertOk();
         $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['to'] === 'p.adjovi@example.org' && str_contains($m['text'], 'souhaiterais échanger')));
         $this->assertSame(1, DB::table('library_contact_messages')->where('work_id', $work->id)->count());
 
