@@ -244,10 +244,10 @@ class StagePdfService
                 . ' (' . $this->durationWords($after['date_debut'] ?? null, $after['date_fin'] ?? null) . ')'];
         }
         if (($before['service'] ?? null) !== ($after['service'] ?? null)) {
-            $out[] = ['Service', (string) ($before['service'] ?? '—'), (string) ($after['service'] ?? '—')];
+            $out[] = ['Service', (string) ($before['service'] ?? '-'), (string) ($after['service'] ?? '-')];
         }
         if (($before['lieu'] ?? null) !== ($after['lieu'] ?? null)) {
-            $out[] = ['Lieu', (string) ($before['lieu'] ?? '—'), (string) ($after['lieu'] ?? '—')];
+            $out[] = ['Lieu', (string) ($before['lieu'] ?? '-'), (string) ($after['lieu'] ?? '-')];
         }
         if (($before['horaires'] ?? null) != ($after['horaires'] ?? null)) {
             $out[] = ['Horaires', (string) $this->hoursSentence($before['horaires'] ?? []), (string) $this->hoursSentence($after['horaires'] ?? [])];

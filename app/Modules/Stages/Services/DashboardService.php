@@ -139,6 +139,7 @@ class DashboardService
                 'jours_ouvres' => $summary['jours_ouvres'] ?? 0,
                 'absences'     => $summary['absences'] ?? 0,
                 'retards'      => $summary['retards'] ?? 0,
+                'sorties_anticipees' => $summary['sorties_anticipees'] ?? 0,
                 'justifies'    => $summary['justifies'] ?? 0,
                 'rapports'     => [
                     'deposited' => $reports['deposited'] ?? 0,
@@ -211,6 +212,6 @@ class DashboardService
 
     private function fr(?string $date): string
     {
-        return $date ? CarbonImmutable::parse($date)->locale('fr')->isoFormat('D MMMM') : '—';
+        return $date ? CarbonImmutable::parse($date)->locale('fr')->isoFormat('D MMMM') : '-';
     }
 }

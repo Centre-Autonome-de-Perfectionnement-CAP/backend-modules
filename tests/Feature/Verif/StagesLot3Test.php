@@ -283,7 +283,7 @@ class StagesLot3Test extends TestCase
         // Sans téléphone enregistré : refusé
         $this->postJson('/api/stagiaire/activation', [
             'token' => $token, 'position' => $this->pos(0.0002), 'password' => 'Stage2026', 'password_confirmation' => 'Stage2026',
-            'reglement_version' => 3,
+            'reglement_version' => app(StageSettingsService::class)->get('reglement_version'),
         ])->assertStatus(422)->assertJsonValidationErrors('webauthn');
         $this->activate($token, $this->pos(0.0002))->assertStatus(201)->assertJsonStructure(['data' => ['token']]);
 
@@ -413,7 +413,47 @@ class StagesLot3Test extends TestCase
         // lun présent, mar demi, mer justifié, jeu absent, ven (aujourd'hui, sans pointage) absent
         $this->assertSame(['jours_ouvres' => 4, 'presents' => 1, 'demi_journees' => 1, 'absences' => 2, 'justifies' => 1],
             array_intersect_key($s, array_flip(['jours_ouvres', 'presents', 'demi_journees', 'absences', 'justifies'])));
-        $this->assertEquals(37.5, $s['taux']);
+        // Temps de présence / temps dû : lundi 8 h, mardi matinée 5 h, jeudi et vendredi 0, sur 4 × 8 h
+        $this->assertEquals(40.6, $s['taux']);
+    }
+
+    public function test_attendance_counts_lateness_and_early_exit_and_permissions_are_neutral(): void
+    {
+        [$req, $h] = $this->readyIntern('2026-11-02');
+        $permit = fn (string $type, string $day, string $time) => DB::table('stage_intern_requests')->insert([
+            'stage_request_id' => $req->id, 'kind' => 'permission', 'type' => $type, 'date_from' => $day, 'date_to' => $day,
+            'time_from' => $time, 'motif' => 'Rendez-vous administratif', 'status' => 'approved', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $permit('retard', '2026-11-05', '10:00');
+        $permit('sortie_anticipee', '2026-11-06', '16:00');
+        $n = 1;
+        $day = function (string $date, string $in, string $out) use ($h, &$n) {
+            if ($date !== '2026-11-02') {
+                $this->at("{$date} {$in}"); $this->punch($h, 'arrivee', ++$n)->assertStatus(201);
+            }
+            $this->at("{$date} {$out}"); $this->punch($h, 'sortie', ++$n)->assertStatus(201);
+        };
+        $day('2026-11-02', '', '18:00');      // lundi : activation (jamais en retard), journée complète
+        $day('2026-11-03', '08:40', '18:00'); // mardi : 40 min de retard
+        $day('2026-11-04', '08:00', '17:00'); // mercredi : sortie 1 h avant
+        $day('2026-11-05', '09:50', '18:00'); // jeudi : retard permis jusqu'à 10 h
+        $day('2026-11-06', '08:00', '15:55'); // vendredi : sortie permise à partir de 16 h (tolérance)
+
+        $this->at('2026-11-07 10:00');
+        $r = $this->getJson('/api/stagiaire/presences', $h)->assertOk()->json('data');
+        $s = $r['summary'];
+        $this->assertSame(['retards' => 1, 'minutes_retard' => 40, 'retards_justifies' => 1,
+            'sorties_anticipees' => 1, 'minutes_sortie_anticipee' => 60, 'sorties_justifiees' => 1],
+            array_intersect_key($s, array_flip(['retards', 'minutes_retard', 'retards_justifies', 'sorties_anticipees', 'minutes_sortie_anticipee', 'sorties_justifiees'])));
+        // Dû : 3 × 480 + 2 × 345 (périodes permises retirées) ; présence : 480 + 440 + 420 + 345 + 345
+        $this->assertEquals(35.5, $s['heures_dues']);
+        $this->assertEquals(95.3, $s['taux']);
+        $days = collect($r['days'])->keyBy('day');
+        $this->assertSame([['pointage' => 'arrivee', 'minutes' => 40, 'justified' => false]], $days['2026-11-03']['retards']);
+        $this->assertSame(['minutes' => 60, 'justified' => false], $days['2026-11-04']['sortie_anticipee']);
+        $this->assertTrue($days['2026-11-05']['retards'][0]['justified']);
+        $this->assertSame(['retard'], $days['2026-11-05']['permissions']);
+        $this->assertSame($days['2026-11-06']['minutes_dues'], $days['2026-11-06']['minutes_presence']);
     }
 
     public function test_prolongation_request_issues_rectificative_note(): void

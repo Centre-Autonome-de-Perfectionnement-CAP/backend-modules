@@ -679,7 +679,7 @@ class AttestationService
     {
         $elig = $this->eligibility($req);
         $staffFields = ['Stagiaire' => $req->fullName(), 'Fin du stage' => $this->requests->frDate($req->date_fin)]
-            + ['Assiduité' => $elig['taux'] !== null ? "{$elig['taux']} %" : '—', 'Rapport final' => $elig['final_validated'] ? 'validé' : 'pas encore validé'];
+            + ['Assiduité' => $elig['taux'] !== null ? "{$elig['taux']} %" : '-', 'Rapport final' => $elig['final_validated'] ? 'validé' : 'pas encore validé'];
 
         if ($a->kind === 'demande') {
             $this->notifier->toFollowers($req, 'Demande d\'attestation de stage', [
@@ -703,7 +703,7 @@ class AttestationService
                     'Votre stage se termine le ' . $this->requests->frDate($req->date_fin) . '. Votre attestation est en préparation.',
                     "Pour l'obtenir : une assiduité d'au moins {$elig['seuil']} % et un rapport final validé.",
                 ],
-                ['Assiduité actuelle' => $elig['taux'] !== null ? "{$elig['taux']} %" : '—', 'Rapport final' => $elig['final_validated'] ? 'validé' : 'à déposer / en attente de validation'],
+                ['Assiduité actuelle' => $elig['taux'] !== null ? "{$elig['taux']} %" : '-', 'Rapport final' => $elig['final_validated'] ? 'validé' : 'à déposer / en attente de validation'],
                 ctaLabel: 'Mon espace stagiaire',
                 ctaUrl: $this->notifier->spaceUrl('/stage'),
                 context: 'stage-attestation-preparation',
