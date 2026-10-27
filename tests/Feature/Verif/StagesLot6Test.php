@@ -214,8 +214,9 @@ class StagesLot6Test extends TestCase
         $line = collect($sheet)->first(fn ($r) => $r[0] === $req->reference);
         $this->assertNotNull($line);
         $this->assertStringContainsString('=HYPERLINK', $line[1], 'texte conservé tel quel, pas une formule');
-        $this->assertSame($req->whatsapp, $line[23], 'le « + » du numéro est conservé');
+        $this->assertSame($req->whatsapp, $line[24], 'le « + » du numéro est conservé');
         $this->assertSame(0, $line[14], 'un zéro reste un zéro (retards)');
+        $this->assertSame(0, $line[15], 'sorties anticipées');
 
         $pres = $this->xlsx($this->getJson("/api/stages/admin/exports/stagiaires/{$req->id}/presences")->assertOk()->json());
         $this->assertSame('02/11/2026', $pres[4][0]);

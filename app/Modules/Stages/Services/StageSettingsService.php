@@ -47,7 +47,7 @@ class StageSettingsService
         'note_numero_suffixe'      => 'STG/CAP/EPAC/UAC', // « N° 001-26/STG/CAP/EPAC/UAC » : série propre aux notes de stage
         'note_signature'           => null,   // image : voir NoteSignatureService
         'pdf_pied_de_page'         => '01 B.P. 2009 COTONOU - Tél. : +229 01 99 54 62 67 / 01 91 94 73 67 - www.cap-epac.bj',
-        'reglement_version'        => 3,
+        'reglement_version'        => 4,
         'reglement_text'           => self::REGLEMENT,
     ];
 
@@ -64,7 +64,7 @@ class StageSettingsService
         . "1. Respecter les horaires de votre stage : du lundi au vendredi, {horaires}. Au-delà de {tolerance} minutes après l'heure prévue, vous êtes en retard.\n"
         . "2. Pointer **vous-même** chaque jour ouvré depuis votre espace stagiaire : à l'arrivée, au départ en pause, au retour de pause et à la sortie.\n"
         . "3. Pointer **uniquement sur votre lieu de stage**, avec **votre téléphone de stage**.\n"
-        . "4. Signaler toute absence ou tout retard par une demande de permission dans votre espace, au plus tard {delai_permission} jours ouvrés après.\n"
+        . "4. Signaler toute absence, tout retard ou toute sortie anticipée par une demande de permission dans votre espace, au plus tard {delai_permission} jours ouvrés après.\n"
         . "5. Déposer dans votre espace les rapports demandés ({rapports}), dans les délais, puis votre rapport de stage final avant la fin du stage.\n"
         . "6. Respecter le personnel, le matériel et la confidentialité des informations auxquelles vous avez accès.\n"
         . "7. Adopter une tenue et un comportement corrects.\n\n"
@@ -75,6 +75,7 @@ class StageSettingsService
         . "• **Toute connexion depuis un autre téléphone est refusée et enregistrée dans votre dossier**, que voit votre superviseur.\n"
         . "• Nouveau téléphone (perte, panne) ? Demandez à votre superviseur de réinitialiser votre téléphone de stage, puis enregistrez le nouveau.\n\n"
         . "Votre présence est vérifiée par votre empreinte (gérée par votre téléphone : aucune donnée biométrique n'est envoyée) et par votre position au moment du pointage (seule la distance au lieu de stage est conservée).\n\n"
+        . "Votre assiduité est votre temps de présence sur le temps prévu : **les absences, les retards et les sorties anticipées la réduisent**, sauf la période couverte par une permission accordée.\n"
         . "L'attestation de stage est délivrée si votre assiduité atteint **au moins {seuil} %** et si votre rapport final est validé.\n\n"
         . "!!Toute fraude sur la présence entraîne la fin du stage et l'absence d'attestation.!! Le non-respect de ce règlement peut aussi y conduire.";
 

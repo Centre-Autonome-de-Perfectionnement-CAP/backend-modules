@@ -66,7 +66,7 @@ class ExportService
             $this->d($r['date_debut_reelle'] ?? $r['date_debut']), $this->d($r['date_fin']), self::PHASES[$r['phase']] ?? $r['phase'],
             collect($r['supervisors'])->pluck('name')->implode(', '), $r['team']['name'] ?? '',
             $r['activated'] ? 'Oui' : 'Non',
-            $r['taux'], $r['jours_ouvres'], $r['absences'], $r['retards'], $r['justifies'],
+            $r['taux'], $r['jours_ouvres'], $r['absences'], $r['retards'], $r['sorties_anticipees'], $r['justifies'],
             $r['rapports']['deposited'], $r['rapports']['validated'], $r['rapports']['missing'],
             $r['rapports']['final_validated'] ? 'Validé' : 'Non validé',
             $r['attestation']['label'] ?? '', $r['attestation']['numero'] ?? '',
@@ -82,7 +82,7 @@ class ExportService
         return $this->file('Suivi des stagiaires', 'Suivi des stagiaires', ($scopes[$scope] ?? $scope) . ($q ? " - recherche « {$q} »" : ''), [
             'Référence', 'Stagiaire', 'Établissement', 'Formation', 'Service', 'Début', 'Fin', 'Phase',
             'Superviseur(s)', 'Binôme / groupe', 'Espace activé',
-            'Assiduité (%)', 'Jours ouvrés', 'Absences', 'Retards', 'Justifiés',
+            'Assiduité (%)', 'Jours ouvrés', 'Absences', 'Retards', 'Sorties anticipées', 'Justifiés',
             'Rapports déposés', 'Rapports validés', 'Rapports manquants', 'Rapport final',
             'Attestation', 'N° attestation', 'À surveiller', 'WhatsApp', 'Email',
         ], $rows, 'suivi-stagiaires');
@@ -97,14 +97,18 @@ class ExportService
             $this->d($d['day']), self::DAY_STATUS[$d['status']] ?? $d['status'],
             $time($d['punches']['arrivee'] ?? null), $time($d['punches']['pause_debut'] ?? null),
             $time($d['punches']['pause_fin'] ?? null), $time($d['punches']['sortie'] ?? null),
-            collect($d['punches'])->filter()->sum('late_minutes') ?: '',
-            $d['justification'] ? (InternRequestService::TYPES[$d['justification']] ?? $d['justification']) : '',
+            collect($d['retards'])->map(fn ($l) => $l['minutes'] . ($l['justified'] ? ' (permis)' : ''))->implode(' + '),
+            $d['sortie_anticipee'] ? $d['sortie_anticipee']['minutes'] . ($d['sortie_anticipee']['justified'] ? ' (permise)' : '') : '',
+            $d['justification'] ? (InternRequestService::TYPES[$d['justification']] ?? $d['justification'])
+                : collect($d['permissions'])->map(fn ($t) => InternRequestService::TYPES[$t] ?? $t)->implode(', '),
         ])->values()->all();
         $s = $report['summary'];
 
         return $this->file('Présences', 'Présences - ' . trim($req->civilite . ' ' . $req->fullName()) . " ({$req->reference})",
-            'Assiduité : ' . ($s['taux'] !== null ? "{$s['taux']} %" : '—') . " · {$s['jours_ouvres']} jour(s) ouvré(s), {$s['absences']} absence(s), {$s['retards']} retard(s), {$s['justifies']} justifié(s)",
-            ['Jour', 'État', 'Arrivée', 'Départ en pause', 'Retour de pause', 'Sortie', 'Retard (min)', 'Justification'],
+            'Assiduité : ' . ($s['taux'] !== null ? "{$s['taux']} %" : '-') . " ({$s['heures_presence']} h sur {$s['heures_dues']} h)"
+            . " · {$s['jours_ouvres']} jour(s) ouvré(s), {$s['absences']} absence(s), {$s['retards']} retard(s) ({$s['minutes_retard']} min)"
+            . ", {$s['sorties_anticipees']} sortie(s) anticipée(s) ({$s['minutes_sortie_anticipee']} min), {$s['justifies']} jour(s) justifié(s)",
+            ['Jour', 'État', 'Arrivée', 'Départ en pause', 'Retour de pause', 'Sortie', 'Retard (min)', 'Sortie anticipée (min)', 'Permission'],
             $rows, 'presences-' . $req->reference);
     }
 
