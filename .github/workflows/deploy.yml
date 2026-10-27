@@ -54,6 +54,19 @@ jobs:
             # Install Composer dependencies
             echo "📚 Installing Composer dependencies..."
             composer install --no-dev --optimize-autoloader --no-interaction
+
+            # ── WhatsApp Node : dépendances ───────────────────────────────────
+            # dist/ et Baileys (vendor/baileys/lib) sont déjà compilés dans le
+            # dépôt : seules les dépendances sont installées. Un échec ici ne
+            # bloque pas le déploiement de Laravel.
+            NODE_DIR="$RELEASE_DIR/app/Modules/WhatsApp/node"
+            if [ -d "$NODE_DIR" ] && command -v npm &> /dev/null; then
+              echo "📦 Installing WhatsApp Node dependencies..."
+              (cd "$NODE_DIR" && npm ci --omit=dev --no-audit --no-fund) || echo "⚠️  npm ci (Node) en échec - non bloquant"
+              (cd "$NODE_DIR/vendor/baileys" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund) || echo "⚠️  npm ci (Baileys) en échec - non bloquant"
+            else
+              echo "⚠️  Node/npm introuvable : service WhatsApp non préparé"
+            fi
             
             # Sync persistent assets to shared storage before symlinking
             echo "📁 Syncing assets to shared storage..."
@@ -76,7 +89,6 @@ jobs:
             echo "🔗 Creating public/storage symlink..."
             rm -rf $RELEASE_DIR/public/storage
             ln -nfs $SHARED_DIR/storage/app/public $RELEASE_DIR/public/storage
-            echo "   public/storage → $SHARED_DIR/storage/app/public"
             
             # Set permissions
             echo "🔐 Setting permissions..."
@@ -114,25 +126,59 @@ jobs:
             echo "♻️  Restarting PHP-FPM..."
             sudo systemctl reload php8.4-fpm
             
-            # Restart queue workers if supervisor is configured
-            if command -v supervisorctl &> /dev/null; then
+            # Le serveur de test tourne sur la même machine : on ne touche
+            # qu'aux processus de CE déploiement (dossier sous $DEPLOY_PATH).
+            own_pids() {
+              for p in $(pgrep -f "$1" || true); do
+                case "$(readlink -f /proc/$p/cwd 2>/dev/null)" in "$DEPLOY_PATH"/*) echo "$p" ;; esac
+              done
+            }
+
+            # Restart queue workers (ils terminent leur job en cours)
+            php artisan queue:restart || true
+            if command -v supervisorctl &> /dev/null && sudo supervisorctl status "laravel-app-worker:*" &> /dev/null; then
               echo "👷 Restarting queue workers..."
-              sudo supervisorctl restart laravel-app-worker:* || true
+              sudo supervisorctl restart "laravel-app-worker:*" || true
+            else
+              echo "⚠️  Supervisor non configuré : 3 workers auto-relancés en arrière-plan..."
+              kill $(own_pids "queue-worker-loop.sh") 2>/dev/null || true
+              kill $(own_pids "artisan queue:work") 2>/dev/null || true
+              sleep 1
+              chmod +x "$RELEASE_DIR/scripts/queue-worker-loop.sh"
+              for i in 1 2 3; do
+                nohup setsid "$RELEASE_DIR/scripts/queue-worker-loop.sh" "$CURRENT_DIR" < /dev/null > /dev/null 2>&1 &
+              done
             fi
 
-            echo "🔄 Restarting WhatsApp Node via Artisan..."
-            # 1. Tuer l'ancien processus Node WhatsApp s'il tourne
-            pkill -f "node.*dist/index.js" || true
-            pkill -f "node.*whatsapp/node" || true
-            sleep 2
+            # Planificateur Laravel (relances, rappels, file d'attente) : ajouté une seule fois.
+            if command -v crontab &> /dev/null; then
+              if ! crontab -l 2>/dev/null | grep -Fq "$CURRENT_DIR && php artisan schedule:run"; then
+                ( crontab -l 2>/dev/null; echo "* * * * * cd $CURRENT_DIR && php artisan schedule:run >> /dev/null 2>&1" ) | crontab - \
+                  && echo "⏰ Cron du planificateur installé"
+              fi
+            fi
 
-            # 2. Démarrer le nouveau processus en mode détaché (ne bloque pas le déploiement en cas d'échec)
-            php artisan whatsapp:node:start || {
-              echo "⚠️  Erreur au démarrage de WhatsApp Node."
-              echo "--- LOG D'ERREUR ---"
-              cat storage/logs/whatsapp-node-error.log || echo "Le fichier de log est introuvable."
-              echo "--------------------"
-            }
+            # ── WhatsApp Node : redémarrage ───────────────────────────────────
+            if command -v supervisorctl &> /dev/null && sudo supervisorctl status whatsapp-node &> /dev/null; then
+              echo "🔄 Restarting WhatsApp Node (supervisor)..."
+              sudo supervisorctl restart whatsapp-node || true
+            else
+              echo "🔄 Restarting WhatsApp Node via Artisan..."
+              kill $(own_pids "node dist/index.js") 2>/dev/null || true
+              sleep 2
+              # env() relu (cache vidé), démarrage forcé, sortie coupée de la
+              # session SSH (sinon le déploiement reste bloqué), cache refait.
+              php artisan config:clear
+              WA_AUTO_START=true php artisan whatsapp:node:start > /dev/null 2>&1 || echo "⚠️  Erreur au démarrage de WhatsApp Node."
+              php artisan config:cache
+              sleep 4
+              if [ -n "$(own_pids 'node dist/index.js')" ]; then
+                echo "✅ WhatsApp Node en marche."
+              else
+                echo "❌ WhatsApp Node arrêté - dernières lignes du journal :"
+                tail -n 30 storage/logs/whatsapp-node-error.log 2>/dev/null || true
+              fi
+            fi
             
             # Keep only last 5 releases
             echo "🧹 Cleaning old releases..."
