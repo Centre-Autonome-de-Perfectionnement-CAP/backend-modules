@@ -148,7 +148,7 @@ class DashboardTest extends TestCase
                             'nombre',
                         ],
                     ],
-                    'dossiersParstatus' => [
+                    'dossiersParStatut' => [
                         '*' => [
                             'status',
                             'nombre',
@@ -166,7 +166,7 @@ class DashboardTest extends TestCase
             ]);
 
         // Vérifier la structure des données de status
-        $statusData = $response->json('data.dossiersParstatus');
+        $statusData = $response->json('data.dossiersParStatut');
         $this->assertIsArray($statusData);
 
         // Vérifier que les statuss sont bien traduits
@@ -220,7 +220,7 @@ class DashboardTest extends TestCase
         // Vérifier que les tableaux existent même sans données
         $this->assertIsArray($data['inscritsParFiliere']);
         $this->assertIsArray($data['inscritsParCycle']);
-        $this->assertIsArray($data['dossiersParstatus']);
+        $this->assertIsArray($data['dossiersParStatut']);
 
         // Sans filières, devrait retourner le message par défaut
         $firstFiliere = $data['inscritsParFiliere'][0] ?? null;
