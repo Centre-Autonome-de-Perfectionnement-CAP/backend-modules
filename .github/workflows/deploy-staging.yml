@@ -171,15 +171,22 @@ jobs:
             sudo systemctl reload php8.4-fpm
             
             # ── Restart workers + Node ─────────────────────────────────────────
+            # La prod tourne sur le même serveur : on ne touche qu'aux processus
+            # de CE déploiement (dossier de travail sous $DEPLOY_PATH), jamais
+            # à ceux de la prod (groupe Supervisor laravel-app-worker, Node).
+            own_pids() {
+              for p in $(pgrep -f "$1" || true); do
+                case "$(readlink -f /proc/$p/cwd 2>/dev/null)" in "$DEPLOY_PATH"/*) echo "$p" ;; esac
+              done
+            }
+
             # Les workers en cours terminent leur job puis s'arrêtent proprement.
             php artisan queue:restart || true
 
             WORKER_GROUP=""
-            for g in laravel-worker laravel-app-worker; do
-              if command -v supervisorctl &> /dev/null && sudo supervisorctl status "$g:*" &> /dev/null; then
-                WORKER_GROUP="$g"; break
-              fi
-            done
+            if command -v supervisorctl &> /dev/null && sudo supervisorctl status "laravel-staging-worker:*" &> /dev/null; then
+              WORKER_GROUP="laravel-staging-worker"
+            fi
 
             if [ -n "$WORKER_GROUP" ]; then
               echo "👷 Restarting queue workers via supervisor ($WORKER_GROUP)..."
@@ -188,8 +195,8 @@ jobs:
             else
               echo "⚠️  Supervisor non configuré : 3 workers auto-relancés en arrière-plan..."
               # Tuer les anciennes boucles PUIS les workers (sinon une boucle les relance)
-              pkill -f "queue-worker-loop.sh" || true
-              pkill -f "artisan queue:work" || true
+              kill $(own_pids "queue-worker-loop.sh") 2>/dev/null || true
+              kill $(own_pids "artisan queue:work") 2>/dev/null || true
               sleep 1
               chmod +x "$RELEASE_DIR/scripts/queue-worker-loop.sh"
               for i in 1 2 3; do
@@ -210,12 +217,11 @@ jobs:
             fi
 
             sleep 2
-            echo "👷 Workers actifs : $(pgrep -fc 'artisan queue:work' || true)"
+            echo "👷 Workers actifs : $(own_pids 'artisan queue:work' | wc -l)"
 
             echo "🔄 Restarting WhatsApp Node via Artisan..."
             # 1. Tuer l'ancien processus Node WhatsApp s'il tourne
-            pkill -f "node.*dist/index.js" || true
-            pkill -f "node.*whatsapp/node" || true
+            kill $(own_pids "node dist/index.js") 2>/dev/null || true
             sleep 2
 
             # Verifier que le build a bien produit dist/index.js
@@ -234,7 +240,7 @@ jobs:
             # 3. Vérification post-démarrage : le process est-il toujours vivant ?
             echo "⏳ Attente 4s pour vérifier que le Node reste en vie..."
             sleep 4
-            if pgrep -f "node.*dist/index.js" > /dev/null 2>&1; then
+            if [ -n "$(own_pids 'node dist/index.js')" ]; then
               echo "✅ Le process Node est toujours en vie après 4s."
             else
               echo "❌ Le process Node a crashé après le lancement !"
