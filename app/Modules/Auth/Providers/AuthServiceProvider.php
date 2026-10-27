@@ -3,6 +3,7 @@
 namespace App\Modules\Auth\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Route;
 
 class AuthServiceProvider extends ServiceProvider
 {
@@ -15,9 +16,9 @@ class AuthServiceProvider extends ServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'auth');
-        
-        $this->app->booted(function () {
-            $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
-        });
+
+        Route::prefix('api')
+            ->middleware('api')
+            ->group(__DIR__.'/../routes/api.php');
     }
 }

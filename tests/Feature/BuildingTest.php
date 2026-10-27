@@ -14,7 +14,7 @@ class BuildingTest extends TestCase
     {
         $response = $this->getJson('/api/emploi-temps/buildings');
 
-        $response->assertStatus(401);
+        $response->assertstatus(401);
     }
 
     /**
@@ -27,7 +27,7 @@ class BuildingTest extends TestCase
 
         $response = $this->getJson('/api/emploi-temps/buildings');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -71,7 +71,7 @@ class BuildingTest extends TestCase
 
         $response = $this->postJson('/api/emploi-temps/buildings', $data);
 
-        $response->assertStatus(201)
+        $response->assertstatus(201)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -134,7 +134,7 @@ class BuildingTest extends TestCase
 
         $response = $this->getJson("/api/emploi-temps/buildings/{$building->id}");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson([
                 'success' => true,
                 'data' => [
@@ -158,7 +158,7 @@ class BuildingTest extends TestCase
             'code' => $building->code,
         ]);
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson([
                 'success' => true,
                 'data' => [
@@ -182,7 +182,7 @@ class BuildingTest extends TestCase
 
         $response = $this->deleteJson("/api/emploi-temps/buildings/{$building->id}");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson(['success' => true]);
 
         $this->assertDatabaseMissing('buildings', [
@@ -201,12 +201,12 @@ class BuildingTest extends TestCase
 
         $response = $this->getJson('/api/emploi-temps/buildings?search=Sciences');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonPath('meta.total', 1);
     }
 
     /**
-     * Test: Filtrer les bâtiments par statut actif
+     * Test: Filtrer les bâtiments par status actif
      */
     public function test_can_filter_buildings_by_active_status(): void
     {
@@ -216,7 +216,7 @@ class BuildingTest extends TestCase
 
         $response = $this->getJson('/api/emploi-temps/buildings?is_active=1');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonPath('meta.total', 1);
     }
 }

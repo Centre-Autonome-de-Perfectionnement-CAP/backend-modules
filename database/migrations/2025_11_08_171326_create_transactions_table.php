@@ -11,6 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // FUSION develop/main :
+        //  - main seul (« créer si absente ») laissait sur une base neuve l'ANCIEN
+        //    schéma créé par 2025_11_03_161801 (transaction_id, payment_id…) ;
+        //  - develop seul (dropIfExists inconditionnel) pouvait détruire une table
+        //    déjà au nouveau format.
+        // On ne remplace donc la table que si elle est encore à l'ancien format.
+        if (Schema::hasTable('transactions') && !Schema::hasColumn('transactions', 'reference')) {
+            Schema::drop('transactions');
+        }
+
         if (!Schema::hasTable('transactions')) {
             Schema::create('transactions', function (Blueprint $table) {
                 $table->id();

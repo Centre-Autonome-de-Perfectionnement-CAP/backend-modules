@@ -15,5 +15,11 @@ return [
     App\Modules\Attestation\Providers\AttestationServiceProvider::class,
     App\Modules\CahierTexte\Providers\CahierTexteServiceProvider::class,
     App\Modules\Alumni\Providers\AlumniServiceProvider::class,
+    App\Modules\Demandes\Providers\DemandesServiceProvider::class,
+    App\Modules\Attendance\Providers\AttendanceServiceProvider::class,
+    App\Modules\WhatsApp\Providers\WhatsAppServiceProvider::class,
+    App\Modules\AdminDb\Providers\AdminDbServiceProvider::class,
     App\Modules\LegacyStudent\Providers\LegacyStudentServiceProvider::class,
+    App\Modules\Stages\Providers\StagesServiceProvider::class,
+    App\Modules\Bibliotheque\Providers\BibliothequeServiceProvider::class,
 ];

@@ -48,7 +48,7 @@ class StudentIdService
 
         // Rechercher le Student via les PendingStudents liés à ce PersonalInformation
         $pendingStudent = $pi->pendingStudents()->first();
-        
+
         if (!$pendingStudent) {
             throw new BusinessException(
                 message: 'Aucun dossier trouvé. Assurez-vous d\'avoir soumis au moins une candidature.',
@@ -59,7 +59,7 @@ class StudentIdService
 
         // Récupérer le Student via la table pivot student_pending_student
         $studentPendingStudent = $pendingStudent->studentPendingStudents()->first();
-        
+
         if (!$studentPendingStudent) {
             throw new BusinessException(
                 message: 'Votre matricule n\'a pas encore été attribué. Utilisez l\'onglet "Obtenir un matricule" pour en créer un.',
@@ -68,7 +68,7 @@ class StudentIdService
         }
 
         $student = $studentPendingStudent->student;
-        
+
         if (!$student) {
             throw new BusinessException(
                 message: 'Votre matricule n\'a pas encore été attribué. Utilisez l\'onglet "Obtenir un matricule" pour en créer un.',
@@ -108,7 +108,7 @@ class StudentIdService
 
             // Vérifier si un matricule existe déjà pour ce numéro de téléphone
             $existingStudent = Student::where('student_id_number', $data['phone'])->first();
-            
+
             if ($existingStudent) {
                 throw new BusinessException(
                     message: 'Ce numéro de téléphone est déjà utilisé comme matricule. Utilisez l\'onglet "Consulter mon matricule" pour le retrouver.',

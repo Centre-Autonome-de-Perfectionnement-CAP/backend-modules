@@ -18,7 +18,7 @@ class AdministrationService
     public function getAdminUsers(array $filters = []): \Illuminate\Support\Collection
     {
         $adminRoles = ['chef_cap', 'chef_division', 'chef_division_continue', 'chef_division_distance', 'comptable', 'secretaire'];
-        
+
         $query = User::whereHas('roles', function ($q) use ($adminRoles) {
             $q->whereIn('name', $adminRoles);
         })->with(['roles' => function ($query) {
@@ -81,12 +81,14 @@ class AdministrationService
                 'approved' => PendingStudent::where('status', 'approved')->count(),
                 'rejected' => PendingStudent::where('status', 'rejected')->count(),
             ],
+            // CORRECTIF (fusion) : colonnes/valeurs réelles de la table payments
+            // (status ∈ pending/approved/rejected, amount, student_id_number).
             'payments' => [
                 'total' => Paiement::count(),
-                'pending' => Paiement::where('statut', 'attente')->count(),
-                'accepted' => Paiement::where('statut', 'accepte')->count(),
-                'rejected' => Paiement::where('statut', 'rejete')->count(),
-                'total_amount' => Paiement::where('statut', 'accepte')->sum('montant'),
+                'pending' => Paiement::where('status', 'pending')->count(),
+                'accepted' => Paiement::where('status', 'approved')->count(),
+                'rejected' => Paiement::where('status', 'rejected')->count(),
+                'total_amount' => Paiement::where('status', 'approved')->sum('amount'),
             ],
         ];
     }
@@ -110,20 +112,21 @@ class AdministrationService
 
         $recentPending = PendingStudent::orderBy('created_at', 'desc')
             ->limit(5)
-            ->get(['id', 'first_name', 'last_name', 'email', 'status', 'created_at'])
+            ->with('personalInformation:id,first_names,last_name')
+            ->get(['id', 'personal_information_id', 'status', 'created_at'])
             ->map(fn($student) => [
                 'type' => 'pending_student_created',
-                'description' => "Nouvelle demande: {$student->first_name} {$student->last_name}",
+                'description' => 'Nouvelle demande: ' . trim(($student->personalInformation?->first_names ?? '') . ' ' . ($student->personalInformation?->last_name ?? '')),
                 'timestamp' => $student->created_at,
                 'data' => $student,
             ]);
 
         $recentPayments = Paiement::orderBy('created_at', 'desc')
             ->limit(5)
-            ->get(['id', 'matricule', 'montant', 'statut', 'created_at'])
+            ->get(['id', 'student_id_number', 'amount', 'status', 'created_at'])
             ->map(fn($payment) => [
                 'type' => 'payment_created',
-                'description' => "Nouveau paiement: {$payment->montant} FCFA ({$payment->matricule})",
+                'description' => "Nouveau paiement: {$payment->amount} FCFA ({$payment->student_id_number})",
                 'timestamp' => $payment->created_at,
                 'data' => $payment,
             ]);
@@ -200,7 +203,7 @@ class AdministrationService
                 DB::raw('COUNT(*) as count'),
                 DB::raw('SUM(montant) as total_amount')
             )
-                ->where('statut', 'accepte')
+                ->where('status', 'accepte')
                 ->groupBy('period')
                 ->orderBy('period', 'desc')
                 ->limit(12)

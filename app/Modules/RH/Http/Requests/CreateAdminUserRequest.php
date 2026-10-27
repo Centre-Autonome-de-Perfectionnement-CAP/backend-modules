@@ -4,6 +4,7 @@ namespace App\Modules\RH\Http\Requests;
 
 use App\Services\ValidationService;
 use Illuminate\Foundation\Http\FormRequest;
+use App\Support\UploadLimit;
 
 class CreateAdminUserRequest extends FormRequest
 {
@@ -25,15 +26,16 @@ class CreateAdminUserRequest extends FormRequest
                     $fail(ValidationService::getRIBErrorMessage());
                 }
             }],
-            'rib' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
-            'photo' => 'nullable|file|mimes:jpg,jpeg,png|max:2048',
+            'rib' => 'nullable|file|mimes:pdf,jpg,jpeg,png|' . UploadLimit::rule(),
+            'photo' => 'nullable|file|mimes:jpg,jpeg,png|' . UploadLimit::rule(),
             'ifu_number' => ['nullable', 'string', function ($attribute, $value, $fail) {
                 if ($value && !ValidationService::validateIFU($value)) {
                     $fail(ValidationService::getIFUErrorMessage());
                 }
             }],
-            'ifu' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'ifu' => 'nullable|file|mimes:pdf,jpg,jpeg,png|' . UploadLimit::rule(),
             'bank' => 'nullable|string|max:255',
+            'chef_division_type' => 'nullable|in:formation_distance,formation_continue',
         ];
     }
 

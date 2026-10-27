@@ -19,6 +19,7 @@ class UpdateCourseElementRequest extends FormRequest
             'name' => 'sometimes|required|string|max:255',
             'code' => 'sometimes|required|string|max:255|unique:course_elements,code,' . $courseElementId,
             'credits' => 'sometimes|required|integer|min:1',
+            'hours' => 'nullable|integer|min:0',
             'teaching_unit_id' => 'sometimes|required|exists:teaching_units,id',
         ];
     }

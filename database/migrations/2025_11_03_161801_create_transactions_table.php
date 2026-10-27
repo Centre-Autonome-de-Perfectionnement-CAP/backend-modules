@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // FUSION develop/main : version main retenue - la version develop créait
+        // une clé étrangère vers une table `paiements` qui n'existe dans aucune
+        // migration (échec sur base neuve). Le schéma final de `transactions`
+        // est de toute façon (re)construit par 2025_11_08_171326.
         if (!Schema::hasTable('transactions')) {
             Schema::create('transactions', function (Blueprint $table) {
                 $table->id();

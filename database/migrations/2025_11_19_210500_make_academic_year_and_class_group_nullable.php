@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (!Schema::hasColumn('course_element_professor', 'academic_year_id')) {
+            return;
+        }
+
         Schema::table('course_element_professor', function (Blueprint $table) {
             $table->foreignId('academic_year_id')->nullable()->change();
             $table->foreignId('class_group_id')->nullable()->change();

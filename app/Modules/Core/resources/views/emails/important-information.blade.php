@@ -62,7 +62,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>📢 Information Importante</h1>
+        <h1>Information Importante</h1>
         <p>CAP-EPAC</p>
     </div>
     
@@ -85,7 +85,7 @@
 
         @if(!empty($fileUrls))
         <p style="background: #e8f5f3; padding: 15px; border-radius: 5px; text-align: center;">
-            📎 {{ count($fileUrls) }} document(s) PDF joint(s) à cet email
+            {{ count($fileUrls) }} document(s) PDF joint(s) à cet email
         </p>
         @endif
     </div>

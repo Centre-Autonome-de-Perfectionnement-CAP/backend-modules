@@ -49,7 +49,7 @@
 
     @if(isset($documentsManquants) && count($documentsManquants) > 0)
         <div style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0;">
-            <p style="margin: 0 0 10px 0;"><strong>⚠️ Documents manquants :</strong></p>
+            <p style="margin: 0 0 10px 0;"><strong>Documents manquants :</strong></p>
             <ul style="margin: 0 0 0 20px; padding: 0;">
                 @foreach($documentsManquants as $document)
                     <li style="margin: 5px 0;">{{ $document }}</li>

@@ -4,7 +4,6 @@ namespace App\Modules\Core\Services;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class OtpService
@@ -40,22 +39,19 @@ class OtpService
             'created_at' => now()->timestamp,
         ], now()->addMinutes(self::OTP_TTL_MINUTES));
 
-        // Envoi par email
-        try {
-            Mail::raw("Votre code de vérification CAP (EPAC) est : {$code}\n\nCe code est valable pendant " . self::OTP_TTL_MINUTES . " minutes. Si vous n'avez pas demandé ce code, veuillez ignorer cet email.", function ($message) use ($normalizedEmail) {
-                $message->to($normalizedEmail)
-                    ->subject('Code de vérification - CAP EPAC');
-            });
-        } catch (\Throwable $e) {
-            Log::error('Erreur lors de l\'envoi de l\'email OTP : ' . $e->getMessage());
-        }
+        // Envoi par email, asynchrone (file "default", sans délai : le code
+        // arrive en quelques secondes sans bloquer la réponse HTTP).
+        app(Notifier::class)->email(
+            $normalizedEmail,
+            'Code de vérification - CAP EPAC',
+            'core::emails.otp-verification',
+            ['code' => $code, 'email' => $normalizedEmail, 'ttlMinutes' => self::OTP_TTL_MINUTES],
+        );
 
         return [
             'success' => true,
             'message' => 'Code de vérification envoyé avec succès.',
             'expires_in' => self::OTP_TTL_MINUTES * 60,
-            // Ne renvoyer debug_code que si APP_DEBUG est activé
-            'debug_code' => config('app.debug') ? $code : null,
         ];
     }
 

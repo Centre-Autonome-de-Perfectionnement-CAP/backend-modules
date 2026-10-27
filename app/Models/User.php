@@ -53,6 +53,7 @@ class User extends Authenticatable
         'ifu_number',
         'ifu',
         'bank',
+        'chef_division_type',
     ];
 
     /**

@@ -21,7 +21,7 @@ class AcademicPathProgressionService
             'new_year_id' => $newYear->id,
             'new_year_label' => $newYear->academic_year,
         ]);
-        
+
         DB::transaction(function () use ($newYear) {
             // Récupérer l'année précédente
             $previousYear = AcademicYear::where('year_start', '<', $newYear->year_start)
@@ -32,7 +32,7 @@ class AcademicPathProgressionService
                 Log::warning('Aucune année précédente trouvée, pas de progression automatique');
                 return;
             }
-            
+
             Log::info('Année précédente trouvée', [
                 'previous_year_id' => $previousYear->id,
                 'previous_year_label' => $previousYear->academic_year,
@@ -43,7 +43,7 @@ class AcademicPathProgressionService
                 ->where('academic_year_id', $previousYear->id)
                 ->whereNotNull('year_decision')
                 ->get();
-            
+
             Log::info('Academic paths de l\'année précédente récupérés', [
                 'total_paths' => $previousPaths->count(),
             ]);
@@ -59,7 +59,7 @@ class AcademicPathProgressionService
                 // Vérifier si c'est une filière prépa
                 $department = $path->studentPendingStudent?->pendingStudent?->department;
                 $isPrepa = $department && stripos($department->name, 'prepa') !== false;
-                
+
                 if ($isPrepa) {
                     Log::debug('Filière prépa ignorée', [
                         'student_pending_student_id' => $path->student_pending_student_id,
@@ -72,7 +72,7 @@ class AcademicPathProgressionService
                 // Déterminer si on crée une nouvelle ligne
                 if ($path->year_decision === 'pass') {
                     $passCount++;
-                    
+
                     // Étudiant passe à l'année suivante
                     $newStudyLevel = $path->study_level + 1;
                     $newCohort = ($path->cohort && $path->cohort != 1) ? 1 : $path->cohort;
@@ -87,7 +87,7 @@ class AcademicPathProgressionService
                         'year_decision' => null,
                         'deliberation_date' => null,
                     ]);
-                    
+
                     Log::debug('Cursus créé pour étudiant PASS', [
                         'new_path_id' => $newPath->id,
                         'student_pending_student_id' => $path->student_pending_student_id,
@@ -96,7 +96,7 @@ class AcademicPathProgressionService
                         'old_cohort' => $path->cohort,
                         'new_cohort' => $newCohort,
                     ]);
-                    
+
                     $created++;
                 } elseif ($path->year_decision === 'repeat') {
                     $repeatCount++;
@@ -111,13 +111,13 @@ class AcademicPathProgressionService
                         'year_decision' => null,
                         'deliberation_date' => null,
                     ]);
-                    
+
                     Log::debug('Cursus créé pour étudiant REPEAT', [
                         'new_path_id' => $newPath->id,
                         'student_pending_student_id' => $path->student_pending_student_id,
                         'level' => $path->study_level,
                     ]);
-                    
+
                     $created++;
                 } elseif ($path->year_decision === 'fail') {
                     $failCount++;

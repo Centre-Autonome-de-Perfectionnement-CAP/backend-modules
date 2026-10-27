@@ -24,7 +24,7 @@ class PendingStudentFactory extends Factory
     public function definition(): array
     {
         $status = fake()->randomElement(['pending', 'approved', 'rejected']);
-        
+
         return [
             'personal_information_id' => PersonalInformation::factory(),
             'tracking_code' => strtoupper(Str::random(10)),

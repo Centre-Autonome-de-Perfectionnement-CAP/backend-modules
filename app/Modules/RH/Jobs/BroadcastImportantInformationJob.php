@@ -15,7 +15,9 @@ class BroadcastImportantInformationJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $timeout = 300; // 5 minutes max par job
+    // < retry_after (90 s) de la file : sinon le job est relancé en double
+    // pendant qu'il tourne encore (emails envoyés deux fois). Lots de 20.
+    public $timeout = 85;
     public $tries = 3; // Réessayer 3 fois en cas d'échec
 
     protected $students;
@@ -42,6 +44,9 @@ class BroadcastImportantInformationJob implements ShouldQueue
         $sentCount = 0;
         $failedCount = 0;
         $failedEmails = [];
+        $skippedCount = 0;
+        $notifier = app(\App\Modules\Core\Services\Notifier::class);
+        $waMessage = $this->buildWhatsAppMessage();
 
         foreach ($this->students as $student) {
             // Debug: logger les données reçues
@@ -58,6 +63,19 @@ class BroadcastImportantInformationJob implements ShouldQueue
             if ($personalInfo && !empty($personalInfo)) {
                 // Si c'est un tableau, accéder comme un tableau
                 $email = is_array($personalInfo) ? ($personalInfo['email'] ?? null) : ($personalInfo->email ?? null);
+
+                // WhatsApp : job indépendant et cadencé (diffusion de masse),
+                // publié une seule fois même si ce job est retenté.
+                if ($this->attempts() <= 1) {
+                    $contacts = is_array($personalInfo) ? ($personalInfo['contacts'] ?? null) : ($personalInfo->contacts ?? null);
+                    $notifier->whatsapp(
+                        $notifier->phoneFromContacts($contacts),
+                        $waMessage,
+                        "info-importante:{$this->broadcastId}:" . ($student['id'] ?? ''),
+                        'RH',
+                        bulk: true,
+                    );
+                }
                 
                 if ($email) {
                     try {
@@ -83,12 +101,14 @@ class BroadcastImportantInformationJob implements ShouldQueue
                         ]);
                     }
                 } else {
+                    $skippedCount++;
                     Log::warning('Student sans email', [
                         'broadcast_id' => $this->broadcastId,
                         'student_id' => $student['id'] ?? 'unknown',
                     ]);
                 }
             } else {
+                $skippedCount++;
                 Log::warning('Student sans personal_information', [
                     'broadcast_id' => $this->broadcastId,
                     'student_id' => $student['id'] ?? 'unknown',
@@ -114,13 +134,37 @@ class BroadcastImportantInformationJob implements ShouldQueue
             'status' => 'processing',
         ]);
 
-        \Cache::put($cacheKey, [
-            'total_students' => $currentStatus['total_students'],
-            'emails_sent' => $currentStatus['emails_sent'] + $sentCount,
-            'emails_failed' => $currentStatus['emails_failed'] + $failedCount,
-            'status' => 'completed',
-            'completed_at' => now(),
-        ], now()->addHours(24));
+        $emailsSent   = $currentStatus['emails_sent'] + $sentCount;
+        $emailsFailed = $currentStatus['emails_failed'] + $failedCount;
+        $skipped      = ($currentStatus['skipped'] ?? 0) + $skippedCount;
+        // CORRECTIF : "completed" seulement quand tous les lots sont passés
+        // (avant, le premier lot terminé marquait toute la diffusion finie).
+        $done = $emailsSent + $emailsFailed + $skipped >= (int) ($currentStatus['total_students'] ?? 0);
+
+        \Cache::put($cacheKey, array_merge($currentStatus, [
+            'emails_sent' => $emailsSent,
+            'emails_failed' => $emailsFailed,
+            'skipped' => $skipped,
+            'status' => $done ? 'completed' : 'processing',
+            'completed_at' => $done ? now() : null,
+        ]), now()->addHours(24));
+    }
+
+    private function buildWhatsAppMessage(): string
+    {
+        $title = trim((string) ($this->informationData['title'] ?? ''));
+        $description = trim(strip_tags((string) ($this->informationData['description'] ?? '')));
+        if (mb_strlen($description) > 1200) {
+            $description = mb_substr($description, 0, 1200) . '…';
+        }
+        $link = trim((string) ($this->informationData['link'] ?? ''));
+
+        return \App\Modules\Core\Support\WhatsAppText::compose('Information importante', [
+            "*{$title}*",
+            $description,
+            $link !== '' ? "_Lien :_\n{$link}" : '',
+            !empty($this->fileUrls) ? '_Les pièces jointes vous ont été envoyées par e-mail._' : '',
+        ]);
     }
 
     /**

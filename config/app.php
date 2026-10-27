@@ -25,7 +25,23 @@ return [
     'APP_MINIO_URL' => env('APP_MINIO_URL', 'http://127.0.0.1:8012/api'),
     'APP_FRONT_URL' => env('APP_FRONT_URL', 'http://localhost:4200'),
     'APP_AUTH_WEB_URL' => env('APP_AUTH_WEB_URL', 'http://127.0.0.1:8000'),
-    'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
+    // Adresse publique du site vitrine (liens des emails et messages WhatsApp).
+    // Le site est servi à la racine du même domaine que l'API : si
+    // FRONTEND_URL est absent ou pointe encore sur une machine locale alors
+    // qu'APP_URL est une vraie adresse (test.cap-epac.bj, cap-epac.bj), on
+    // prend APP_URL. Ainsi aucun lien « localhost » ne part chez un étudiant.
+    'frontend_url' => (static function (): string {
+        $front = rtrim(trim((string) env('FRONTEND_URL', '')), '/');
+        $app   = rtrim(trim((string) env('APP_URL', '')), '/');
+        $local = static fn (string $u): bool => $u === ''
+            || (bool) preg_match('#^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/|$)#i', $u);
+
+        if ($local($front) && !$local($app)) {
+            return $app;
+        }
+
+        return $front !== '' ? $front : 'http://localhost:5173';
+    })(),
 
 
     /*

@@ -1,0 +1,268 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add VPS to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to Staging VPS
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          ssh $SSH_USER@$SSH_HOST << 'ENDSSH'
+            set -e
+            
+            # Variables
+            DEPLOY_PATH="/var/www/laravel-app-staging"
+            REPO_URL="git@github.com:Centre-Autonome-de-Perfectionnement-CAP/backend-modules.git"
+            BRANCH="develop"
+            RELEASE_DIR="$DEPLOY_PATH/releases/$(date +%Y%m%d%H%M%S)"
+            SHARED_DIR="$DEPLOY_PATH/shared"
+            CURRENT_DIR="$DEPLOY_PATH/current"
+            
+            echo "🚀 Starting STAGING deployment..."
+            
+            # Create release directory
+            mkdir -p $RELEASE_DIR
+            
+            # Clone repository
+            echo "📦 Cloning repository (develop branch)..."
+            git clone --depth 1 --branch $BRANCH $REPO_URL $RELEASE_DIR
+            
+            # Navigate to release directory
+            cd $RELEASE_DIR
+            
+            # Install Composer dependencies
+            echo "📚 Installing Composer dependencies..."
+            composer install --no-dev --optimize-autoloader --no-interaction
+
+            # ── WhatsApp Node - build ──────────────────────────────────────────
+            # Le module Node vit dans app/Modules/WhatsApp/node/.
+            # On build Baileys vendorisé puis le service lui-même (tsc → dist/).
+            # Toute erreur ici est loguée mais NE bloque pas le déploiement
+            # Laravel - le Node peut être buildé séparément si nécessaire.
+            NODE_DIR="$RELEASE_DIR/app/Modules/WhatsApp/node"
+            if [ -d "$NODE_DIR" ]; then
+              echo "📦 Building WhatsApp Node service..."
+              cd "$NODE_DIR"
+
+              # Build Baileys vendorisé (vendor/baileys/)
+              if [ -d "vendor/baileys" ]; then
+                echo "  → Building vendored Baileys..."
+                cd vendor/baileys
+                npm install --prefer-offline --no-audit --no-fund 2>&1 || echo "  ⚠️  Baileys npm install warning (non-bloquant)"
+                npm install link-preview-js --no-audit --no-fund 2>&1 || true
+                chmod -R +x node_modules/.bin || true
+                npm run build 2>&1 || echo "  ⚠️  Baileys build warning (non-bloquant)"
+                cd "$NODE_DIR"
+              fi
+
+              # Install des dépendances Node du service
+              echo "  → Installing Node dependencies..."
+              npm ci --no-audit --no-fund 2>&1 || echo "  ⚠️  npm ci warning (non-bloquant)"
+
+              # Fix permissions for executables
+              chmod -R +x node_modules/.bin || true
+
+              # Compilation TypeScript → dist/
+              echo "  → Compiling TypeScript (tsc)..."
+              # On utilise directement npx tsc au lieu de npm run build pour ne pas que npm relance le build:vendor qui échoue
+              npx tsc 2>&1 || echo "  ⚠️  tsc build warning (non-bloquant)"
+
+              cd "$RELEASE_DIR"
+              echo "  ✅ WhatsApp Node build terminé"
+            else
+              echo "  ⚠️  $NODE_DIR introuvable - build Node ignoré"
+            fi
+
+            # ── Fin build Node ─────────────────────────────────────────────────
+            
+            # Polices des PDF (storage/fonts du dépôt) : storage est remplacé par
+            # le dossier partagé ci-dessous, on y copie donc les polices
+            # manquantes (sans jamais écraser l'existant).
+            mkdir -p $SHARED_DIR/storage/fonts
+            cp -n $RELEASE_DIR/storage/fonts/* $SHARED_DIR/storage/fonts/ 2>/dev/null || true
+            chown -R deployer:www-data $SHARED_DIR/storage/fonts || true
+            chmod -R 775 $SHARED_DIR/storage/fonts || true
+
+            # Create symlinks to shared directories
+            echo "🔗 Creating symlinks..."
+            rm -rf $RELEASE_DIR/storage
+            ln -nfs $SHARED_DIR/storage $RELEASE_DIR/storage
+            
+            rm -f $RELEASE_DIR/.env
+            ln -nfs $SHARED_DIR/.env $RELEASE_DIR/.env
+
+            # Symlink .env pour le Node
+            ln -nfs $SHARED_DIR/.env $RELEASE_DIR/app/Modules/WhatsApp/node/.env || true
+
+            # Symlink public/storage → shared storage/app/public
+            echo "🔗 Creating public/storage symlink..."
+            rm -rf $RELEASE_DIR/public/storage
+            ln -nfs $SHARED_DIR/storage/app/public $RELEASE_DIR/public/storage
+            echo "   public/storage → $SHARED_DIR/storage/app/public"
+            
+            # Set permissions
+            echo "🔐 Setting permissions..."
+            chown -R deployer:www-data $RELEASE_DIR
+            chmod -R 755 $RELEASE_DIR
+            chmod -R 775 $RELEASE_DIR/bootstrap/cache
+            
+            # Generate APP_KEY if not set
+            if ! grep -q "APP_KEY=base64:" $SHARED_DIR/.env; then
+              echo "🔑 Generating application key..."
+              php artisan key:generate --force
+            fi
+            
+            # ── Migrations ────────────────────────────────────────────────────
+            # migrate --force est IDEMPOTENT : Laravel vérifie la table `migrations`
+            # et n'exécute QUE celles pas encore passées. Les migrations déjà
+            # appliquées ne sont JAMAIS rejouées, même si listées ici.
+            #
+            # Nouvelles migrations introduites dans ce cycle (pour traçabilité) :
+            #   - 2026_08_14_000001_create_wa_sessions_table
+            #   - 2026_08_14_000002_create_wa_session_keys_table
+            #   - 2026_08_14_000003_create_wa_message_log_table
+            #   - 2026_08_15_000001_add_module_and_file_columns_to_wa_message_log_table
+            echo "🗄️  Vérification des migrations en attente..."
+            php artisan migrate:status --no-ansi 2>&1 | grep "Pending\|No" || true
+
+            echo "🗄️  Application des migrations..."
+            php artisan migrate --force
+            echo "  ✅ Migrations terminées"
+            # ── Fin migrations ─────────────────────────────────────────────────
+            
+            # Clear and cache config
+            echo "🧹 Clearing caches..."
+            php artisan config:clear
+            php artisan cache:clear || echo "⚠️  Cache clear failed, continuing..."
+            php artisan route:clear
+            php artisan view:clear
+            
+            echo "⚡ Optimizing..."
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache || echo "⚠️  View cache failed, continuing..."
+            
+            # Update current symlink
+            echo "🔄 Updating current release..."
+            ln -nfs $RELEASE_DIR $CURRENT_DIR
+            
+            # Restart PHP-FPM
+            echo "♻️  Restarting PHP-FPM..."
+            sudo systemctl reload php8.4-fpm
+            
+            # ── Restart workers + Node ─────────────────────────────────────────
+            # Les workers en cours terminent leur job puis s'arrêtent proprement.
+            php artisan queue:restart || true
+
+            WORKER_GROUP=""
+            for g in laravel-worker laravel-app-worker; do
+              if command -v supervisorctl &> /dev/null && sudo supervisorctl status "$g:*" &> /dev/null; then
+                WORKER_GROUP="$g"; break
+              fi
+            done
+
+            if [ -n "$WORKER_GROUP" ]; then
+              echo "👷 Restarting queue workers via supervisor ($WORKER_GROUP)..."
+              echo "   ⚠️  Leur commande doit écouter --queue=default,emails (voir supervisor/laravel-worker.conf)"
+              sudo supervisorctl restart "$WORKER_GROUP:*" || true
+            else
+              echo "⚠️  Supervisor non configuré : 3 workers auto-relancés en arrière-plan..."
+              # Tuer les anciennes boucles PUIS les workers (sinon une boucle les relance)
+              pkill -f "queue-worker-loop.sh" || true
+              pkill -f "artisan queue:work" || true
+              sleep 1
+              chmod +x "$RELEASE_DIR/scripts/queue-worker-loop.sh"
+              for i in 1 2 3; do
+                # Le script tourne depuis la release ; il exécute toujours "current".
+                # setsid : détache complètement de la session SSH (sinon les
+                # workers meurent à la fin du déploiement - même méthode que le Node).
+                nohup setsid "$RELEASE_DIR/scripts/queue-worker-loop.sh" "$CURRENT_DIR" < /dev/null > /dev/null 2>&1 &
+              done
+            fi
+
+            # Filet de sécurité : le scheduler Laravel vide la file chaque minute
+            # (workers tués, redémarrage du serveur…). Ajouté une seule fois.
+            if command -v crontab &> /dev/null; then
+              CRON_LINE="* * * * * cd $CURRENT_DIR && php artisan schedule:run >> /dev/null 2>&1"
+              if ! crontab -l 2>/dev/null | grep -Fq "$CURRENT_DIR && php artisan schedule:run"; then
+                ( crontab -l 2>/dev/null; echo "$CRON_LINE" ) | crontab - && echo "⏰ Cron du scheduler Laravel installé"
+              fi
+            fi
+
+            sleep 2
+            echo "👷 Workers actifs : $(pgrep -fc 'artisan queue:work' || true)"
+
+            echo "🔄 Restarting WhatsApp Node via Artisan..."
+            # 1. Tuer l'ancien processus Node WhatsApp s'il tourne
+            pkill -f "node.*dist/index.js" || true
+            pkill -f "node.*whatsapp/node" || true
+            sleep 2
+
+            # Verifier que le build a bien produit dist/index.js
+            echo "🔍 Vérification de dist/index.js :"
+            ls -la app/Modules/WhatsApp/node/dist/index.js || echo "❌ dist/index.js N'EXISTE PAS !"
+
+            # 2. Vider le cache config pour que env() relise le .env,
+            #    puis démarrer avec WA_AUTO_START forcé, puis re-cacher
+            php artisan config:clear
+            # REDIRECTION TOTALE vers /dev/null requise ici pour éviter que le 
+            # processus Node n'hérite des descripteurs SSH et bloque la session
+            WA_AUTO_START=true php artisan whatsapp:node:start > /dev/null 2>&1 || {
+              echo "⚠️  Erreur au démarrage de WhatsApp Node."
+            }
+
+            # 3. Vérification post-démarrage : le process est-il toujours vivant ?
+            echo "⏳ Attente 4s pour vérifier que le Node reste en vie..."
+            sleep 4
+            if pgrep -f "node.*dist/index.js" > /dev/null 2>&1; then
+              echo "✅ Le process Node est toujours en vie après 4s."
+            else
+              echo "❌ Le process Node a crashé après le lancement !"
+              echo "--- LOG NODE (stdout) ---"
+              tail -n 30 storage/logs/whatsapp-node.log 2>/dev/null || echo "(fichier introuvable)"
+              echo "--- LOG NODE (stderr) ---"
+              tail -n 30 storage/logs/whatsapp-node-error.log 2>/dev/null || echo "(fichier introuvable)"
+              echo "--- LOG LARAVEL ---"
+              tail -n 20 storage/logs/laravel.log 2>/dev/null || true
+              echo "--- Contenu de .env (WA_ et DB_ vars seulement) ---"
+              grep -E '^(WA_|DB_|APP_URL|WHATSAPP_|NODE_ENV)' $SHARED_DIR/.env 2>/dev/null | sed 's/=.*/=***/' || true
+              echo "--------------------"
+            fi
+            php artisan config:cache
+
+            # Keep only last 3 releases for staging
+            echo "🧹 Cleaning old releases..."
+            cd $DEPLOY_PATH/releases
+            ls -t | tail -n +4 | xargs -r rm -rf || echo "⚠️  Some old releases could not be removed"
+            
+            echo "✅ STAGING deployment completed successfully!"
+          ENDSSH
+
+      - name: Deployment Status
+        if: success()
+        run: echo "🎉 Deployment to STAGING completed successfully!"
+
+      - name: Deployment Failed
+        if: failure()
+        run: echo "❌ STAGING deployment failed. Please check the logs."

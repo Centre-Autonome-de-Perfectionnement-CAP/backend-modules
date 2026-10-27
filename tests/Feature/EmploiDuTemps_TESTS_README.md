@@ -12,7 +12,7 @@ Tests de gestion des bâtiments :
 - ✅ CRUD complet (Create, Read, Update, Delete)
 - ✅ Validation des données
 - ✅ Unicité du code
-- ✅ Filtrage par recherche et statut
+- ✅ Filtrage par recherche et status
 
 ### 2. RoomTest.php (12 tests)
 Tests de gestion des salles :
@@ -174,7 +174,7 @@ php artisan test --coverage --filter=EmploiDuTemps
 ### ✅ Filtrage et Recherche
 - Recherche textuelle
 - Filtres par relations
-- Filtres par statut
+- Filtres par status
 - Filtres par période
 
 ### ✅ Logique Métier
@@ -262,7 +262,7 @@ test_cancelled_courses_are_not_included_in_schedule()
 - `assertValidationErrors()` - Vérifier les erreurs de validation
 
 ### Structure des Assertions
-- Status HTTP codes (200, 201, 401, 422)
+- status HTTP codes (200, 201, 401, 422)
 - Structure JSON (assertJsonStructure)
 - Contenu JSON (assertJson)
 - Database (assertDatabaseHas, assertDatabaseMissing)

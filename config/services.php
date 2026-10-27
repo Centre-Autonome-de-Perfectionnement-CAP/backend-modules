@@ -41,4 +41,23 @@ return [
         ],
     ],
 
+    // Paiement en ligne via le Trésor Public. Fermé tant que l'API réelle du
+    // Trésor n'est pas branchée : sans contrôle côté serveur, une référence
+    // de paiement inventée dispenserait de la quittance.
+    'tresor' => [
+        'online_payment' => (bool) env('TRESOR_ONLINE_PAYMENT', false),
+    ],
+
+    'whatsapp_bridge' => [
+        'url'        => env('WHATSAPP_BRIDGE_URL', 'http://127.0.0.1:3005'),
+        'timeout'    => env('WHATSAPP_BRIDGE_TIMEOUT', 30),
+        // AJOUT (15/08/2026) - clé partagée Laravel <-> Node, utilisée dans
+        // les deux sens : header X-Api-Key envoyé par WhatsAppBridgeClient,
+        // et vérifiée sur le webhook interne /api/whatsapp/internal/webhook.
+        'api_key'    => env('WHATSAPP_BRIDGE_API_KEY', ''),
+        // Utilisé par WhatsAppProcessManager::startDetached() - filet de
+        // secours sans Supervisor uniquement (voir whatsapp:node:start).
+        'auto_start' => env('WA_AUTO_START', false),
+    ],
+
 ];

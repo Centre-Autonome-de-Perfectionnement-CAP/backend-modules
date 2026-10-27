@@ -60,7 +60,7 @@
     @endif
 
     <div style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0;">
-        <p style="margin: 0;"><strong>⏳ Statut :</strong> En cours de vérification</p>
+        <p style="margin: 0;"><strong>Statut :</strong> En cours de vérification</p>
     </div>
 
     <h3>Prochaines étapes :</h3>
@@ -82,7 +82,7 @@
     @endif
 
     <div style="background: #e3f2fd; padding: 15px; border-left: 4px solid #2196F3; margin: 20px 0;">
-        <p style="margin: 0;"><strong>ℹ️ Important :</strong></p>
+        <p style="margin: 0;"><strong>Important :</strong></p>
         <p style="margin: 10px 0 0 0;">
             {{ $informationImportante ?? 'Conservez votre numéro de référence pour toute correspondance ultérieure. Votre paiement ne sera effectif qu\'après validation de votre quittance.' }}
         </p>
@@ -92,7 +92,7 @@
 
     @if(isset($contact))
         <div style="background: #f5f5f5; padding: 15px; margin: 20px 0;">
-            <p style="margin: 0 0 10px 0;"><strong>📞 Contact - Service Financier :</strong></p>
+            <p style="margin: 0 0 10px 0;"><strong>Contact - Service Financier :</strong></p>
             @if(isset($contact['email']))
                 <p style="margin: 5px 0;">Email : {{ $contact['email'] }}</p>
             @endif

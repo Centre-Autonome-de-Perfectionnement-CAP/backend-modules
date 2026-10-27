@@ -3,6 +3,7 @@
 namespace App\Modules\Inscription\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Support\UploadLimit;
 
 class SubmitDocumentsRequest extends FormRequest
 {
@@ -21,7 +22,7 @@ class SubmitDocumentsRequest extends FormRequest
     {
         return [
             'documents' => 'required|array|min:1|max:10',
-            'documents.*' => 'required|file|max:51200|mimes:pdf,doc,docx,jpg,jpeg,png', // 50MB max, types spécifiques
+            'documents.*' => 'required|file|' . UploadLimit::rule() . '|mimes:pdf,doc,docx,jpg,jpeg,png',
             'document_types' => 'required|array|min:1',
             'document_types.*' => 'required|string|in:diploma,certificate,transcript,photo,id_card,other',
         ];
@@ -39,7 +40,7 @@ class SubmitDocumentsRequest extends FormRequest
             'documents.max' => 'Maximum 10 documents peuvent être soumis.',
             'documents.*.required' => 'Chaque document est requis.',
             'documents.*.file' => 'Chaque élément doit être un fichier.',
-            'documents.*.max' => 'Chaque fichier ne peut pas dépasser 50MB.',
+            'documents.*.max' => UploadLimit::message(),
             'documents.*.mimes' => 'Les fichiers doivent être de type PDF, DOC, DOCX, JPG, JPEG, ou PNG.',
             'document_types.required' => 'Les types de documents sont requis.',
             'document_types.array' => 'Les types de documents doivent être un tableau.',

@@ -14,7 +14,7 @@ class TimeSlotTest extends TestCase
     {
         $response = $this->getJson('/api/emploi-temps/time-slots');
 
-        $response->assertStatus(401);
+        $response->assertstatus(401);
     }
 
     /**
@@ -27,7 +27,7 @@ class TimeSlotTest extends TestCase
 
         $response = $this->getJson('/api/emploi-temps/time-slots');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -66,7 +66,7 @@ class TimeSlotTest extends TestCase
 
         $response = $this->postJson('/api/emploi-temps/time-slots', $data);
 
-        $response->assertStatus(201)
+        $response->assertstatus(201)
             ->assertJson([
                 'success' => true,
                 'data' => [
@@ -78,7 +78,7 @@ class TimeSlotTest extends TestCase
         $this->assertDatabaseHas('time_slots', [
             'day_of_week' => 'monday',
         ]);
-        
+
         // Vérifier que start_time et end_time sont présents (format peut varier)
         $this->assertNotNull($response->json('data.start_time'));
         $this->assertNotNull($response->json('data.end_time'));
@@ -125,7 +125,7 @@ class TimeSlotTest extends TestCase
             'name' => 'Créneau Modifié',
         ]);
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson([
                 'success' => true,
                 'data' => [
@@ -149,7 +149,7 @@ class TimeSlotTest extends TestCase
 
         $response = $this->deleteJson("/api/emploi-temps/time-slots/{$timeSlot->id}");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson(['success' => true]);
 
         $this->assertDatabaseMissing('time_slots', [
@@ -168,7 +168,7 @@ class TimeSlotTest extends TestCase
 
         $response = $this->getJson('/api/emploi-temps/time-slots?day_of_week=monday');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonPath('meta.total', 1);
     }
 
@@ -183,7 +183,7 @@ class TimeSlotTest extends TestCase
 
         $response = $this->getJson('/api/emploi-temps/time-slots?type=lecture');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonPath('meta.total', 1);
     }
 
@@ -198,7 +198,7 @@ class TimeSlotTest extends TestCase
 
         $response = $this->getJson('/api/emploi-temps/time-slots/day/monday');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson(['success' => true])
             ->assertJsonCount(3, 'data');
     }
@@ -219,7 +219,7 @@ class TimeSlotTest extends TestCase
 
         $response = $this->postJson('/api/emploi-temps/time-slots', $data);
 
-        $response->assertStatus(201)
+        $response->assertstatus(201)
             ->assertJson([
                 'data' => [
                     'duration_in_minutes' => 150,

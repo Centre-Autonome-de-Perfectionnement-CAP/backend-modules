@@ -9,12 +9,7 @@ use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-/**
- * @OA\Tag(
- *     name="Cycles",
- *     description="Gestion des cycles d'études"
- * )
- */
+
 class CycleController extends Controller
 {
     use ApiResponse;
@@ -172,7 +167,7 @@ class CycleController extends Controller
     {
         $academicYearId = $request->get('academic_year_id');
         $departmentId = $request->get('department_id');
-        
+
         if (!$academicYearId) {
             return $this->successResponse([], 'Aucune année académique spécifiée');
         }
@@ -207,7 +202,7 @@ class CycleController extends Controller
                 'label' => "Cohorte {$i}"
             ];
         }
-        
+
         return $this->successResponse(
             $cohorts,
             'Cohortes récupérées avec succès'

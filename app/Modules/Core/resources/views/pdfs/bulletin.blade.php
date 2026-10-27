@@ -46,7 +46,8 @@
                         </tr>
                         <tr>
                             <td style="border: none; padding: 2px 4px;"><span style="font-weight: normal;">Lieu de naissance :</span> <span style="font-weight: bolder;">{{ $etudiant->lieu_de_naissance }}</span></td>
-                            <td style="border: none; padding: 2px 4px;" colspan="2"><span style="font-weight: normal;">Niveau :</span> <span style="font-weight: bolder;">Classes Préparatoires</span></td>
+                            <td style="border: none; padding: 2px 4px;"><span style="font-weight: normal;">Matricule :</span> <span style="font-weight: bolder;">{{ $etudiant->matricule ?? '' }}</span></td>{{-- FUSION : champ Matricule (develop) conservé dans la mise en page main --}}
+                            <td style="border: none; padding: 2px 4px;"><span style="font-weight: normal;">Niveau :</span> <span style="font-weight: bolder;">Classes Préparatoires</span></td>
                         </tr>
                     </tbody>
                 </table>

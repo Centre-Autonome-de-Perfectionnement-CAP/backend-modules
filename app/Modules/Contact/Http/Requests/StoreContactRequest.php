@@ -15,6 +15,23 @@ class StoreContactRequest extends FormRequest
     }
 
     /**
+     * Nettoyage avant validation : espaces superflus, et retours à la ligne
+     * retirés des champs d'une ligne (nom, objet) - ils faisaient échouer
+     * l'envoi de l'email (en-tête invalide).
+     */
+    protected function prepareForValidation(): void
+    {
+        $oneLine = fn ($v) => is_string($v) ? trim(preg_replace('/[\r\n\t]+/', ' ', $v)) : $v;
+
+        $this->merge([
+            'name'    => $oneLine($this->input('name')),
+            'subject' => $oneLine($this->input('subject')),
+            'email'   => is_string($this->input('email')) ? trim($this->input('email')) : $this->input('email'),
+            'message' => is_string($this->input('message')) ? trim($this->input('message')) : $this->input('message'),
+        ]);
+    }
+
+    /**
      * Get the validation rules that apply to the request.
      */
     public function rules(): array

@@ -52,7 +52,7 @@ class AdminUserService
     {
         return DB::transaction(function () use ($data, $ribFile, $ifuFile, $photoFile, $userId) {
             $data['password'] = Hash::make($this->passwordGenerator->generate());
-            
+
             if (!empty($data['bank'])) {
                 $data['bank'] = StringUtilityService::capitalize($data['bank']);
             }
@@ -96,7 +96,7 @@ class AdminUserService
             }
 
             $user = User::create($data);
-            
+
             if (!empty($data['role_id'])) {
                 $user->roles()->attach($data['role_id']);
             } elseif (!empty($data['role_ids']) && is_array($data['role_ids'])) {

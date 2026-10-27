@@ -154,7 +154,7 @@ Dans `StudentMigrationSeeder.php`, ligne ~332:
 'password' => Hash::make('cap2024'), // Au lieu du matricule
 ```
 
-### Modifier le statut financier:
+### Modifier le status financier:
 
 Dans `StudentMigrationSeeder.php`, ligne ~358:
 

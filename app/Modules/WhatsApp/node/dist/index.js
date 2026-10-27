@@ -1,0 +1,583 @@
+/**
+ * WhatsApp Bridge — Serveur Express (interne, jamais exposé à un navigateur)
+ *
+ * Expose :
+ *   POST /send-message  → envoyer un message WhatsApp (protégé par clé API)
+ *   GET  /status        → état de la connexion (protégé par clé API)
+ *   DELETE /logout      → déconnecter et réinitialiser la session (protégé par clé API)
+ *
+ * MODIFIÉ (15/08/2026) — changements structurels majeurs :
+ *
+ *   1. PLUS DE VUE : le dashboard HTML (public/) est supprimé. Le QR code
+ *      passe exclusivement par Laravel (voir webhook ci-dessous), affiché
+ *      dans le module admin du progiciel, jamais servi directement par ce
+ *      process Node.
+ *
+ *   2. PLUS DE CORS NI DE SOCKET.IO : ce service n'est appelé QUE par
+ *      Laravel, côté serveur, jamais par un navigateur. CORS n'a de sens
+ *      que pour des requêtes cross-origin depuis un navigateur — supprimé.
+ *      Socket.io n'a plus de consommateur (le frontend admin communique
+ *      avec Laravel, qui poll ce service, pas l'inverse) — supprimé.
+ *      Conséquence : moins de dépendances, moins de surface d'attaque,
+ *      config plus simple.
+ *
+ *   3. RELAIS WEBHOOK : à chaque événement (qr, ready, logged_out,
+ *      status_update), ce process notifie Laravel via
+ *      POST {APP_URL}/api/whatsapp/internal/webhook (header X-Api-Key).
+ *      Laravel met en cache et le frontend admin récupère par polling
+ *      sur GET /api/whatsapp/admin/status.
+ *
+ *   4. JOURNALISATION : chaque appel à /send-message ou /send-file crée
+ *      une ligne dans wa_message_log (queued→sending→sent|failed), avec
+ *      le module d'origine détecté automatiquement côté Laravel — lue
+ *      ensuite par Laravel pour les onglets Messages/Statistiques/Retry,
+ *      filtrable module par module.
+ *
+ *   5. ENVOI DE FICHIERS : POST /send-file (NOUVEAU, endpoint séparé —
+ *      /send-message garde sa signature strictement inchangée). Reçoit une
+ *      URL interne Laravel (fileUrl) que Baileys télécharge lui-même —
+ *      pas de base64 volumineux à faire transiter.
+ *
+ * Signature de /send-message, /status, /logout INCHANGÉE — aucune
+ * régression pour WhatsAppBridgeClient.php côté Laravel.
+ */
+import express from 'express';
+import { WhatsAppManager } from './whatsapp.js';
+import qrcode from 'qrcode';
+import { config } from './config.js';
+import { assertDbConnection } from './db/connection.js';
+import { createMessageLog, markMessageSent, markMessageFailed } from './db/messageStore.js';
+// ─── Validation de la configuration au démarrage ─────────────────────────────
+// (la validation stricte des variables requises est déjà faite dans config.ts,
+//  qui process.exit(1) si quelque chose d'essentiel manque)
+// ─── Serveur Express ──────────────────────────────────────────────────────────
+const app = express();
+app.use(express.json({ limit: '10kb' }));
+app.disable('x-powered-by');
+// ─── Middleware : authentification par clé API ────────────────────────────────
+const requireApiKey = (req, res, next) => {
+    if (!config.apiKey) {
+        next();
+        return;
+    }
+    const provided = req.headers['x-api-key']?.trim();
+    if (!provided) {
+        res.status(401).json({ success: false, error: 'Header X-Api-Key manquant' });
+        return;
+    }
+    if (!timingSafeEqual(provided, config.apiKey)) {
+        res.status(401).json({ success: false, error: 'Clé API invalide' });
+        return;
+    }
+    next();
+};
+function timingSafeEqual(a, b) {
+    if (a.length !== b.length)
+        return false;
+    let diff = 0;
+    for (let i = 0; i < a.length; i++) {
+        diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    }
+    return diff === 0;
+}
+// ─── Rate limiting simple (protection contre le spam) ────────────────────────
+const rateLimitMap = new Map();
+const RATE_LIMIT_MAX = 30;
+const RATE_LIMIT_WINDOW = 60_000;
+//
+// CORRECTIF (13/10/2026) : ce service n'écoute QUE sur 127.0.0.1 et n'est
+// appelé QUE par Laravel. Toutes les requêtes ont donc la même IP (loopback) :
+// la limite de 30 req/min s'appliquait à TOUTES les notifications du serveur
+// confondues. Au-delà (soumissions simultanées, transitions vers plusieurs
+// acteurs, pièces jointes…), le bridge répondait 429 et les messages étaient
+// perdus. Les appels authentifiés par la clé API (Laravel) ne sont donc plus
+// limités ici — le débit est déjà régulé par la queue Laravel. La limite reste
+// active si aucune clé API n'est configurée (mode dev).
+const rateLimit = (req, res, next) => {
+    if (config.apiKey) {
+        next();
+        return;
+    }
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim()
+        ?? req.socket.remoteAddress
+        ?? 'unknown';
+    const now = Date.now();
+    const entry = rateLimitMap.get(ip);
+    if (!entry || now > entry.resetAt) {
+        rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+        next();
+        return;
+    }
+    if (entry.count >= RATE_LIMIT_MAX) {
+        res.status(429).json({ success: false, error: 'Trop de requêtes — réessayez dans un moment' });
+        return;
+    }
+    entry.count++;
+    next();
+};
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, entry] of rateLimitMap) {
+        if (now > entry.resetAt)
+            rateLimitMap.delete(ip);
+    }
+}, 5 * 60_000);
+// ─── Relais webhook vers Laravel ───────────────────────────────────────────────
+/**
+ * Notifie Laravel d'un changement d'état (qr, ready, logged_out, status_update).
+ * Ne lève JAMAIS d'exception — un Laravel temporairement indisponible ne doit
+ * jamais faire planter ce process. Utilise fetch natif (Node 18+).
+ */
+async function notifyLaravel(event, payload) {
+    try {
+        const response = await fetch(`${config.laravelUrl}/api/whatsapp/internal/webhook`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(config.apiKey ? { 'X-Api-Key': config.apiKey } : {}),
+            },
+            body: JSON.stringify({ event, payload }),
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!response.ok) {
+            console.warn(`[Webhook] Laravel a répondu ${response.status} pour l'événement "${event}"`);
+        }
+    }
+    catch (err) {
+        console.warn(`[Webhook] Échec de notification Laravel pour "${event}" :`, err.message);
+    }
+}
+// ─── WhatsApp Manager ─────────────────────────────────────────────────────────
+const waManager = new WhatsAppManager();
+waManager.on('qr', async (qr) => {
+    try {
+        const qrImage = await qrcode.toDataURL(qr);
+        await notifyLaravel('qr', { qr: qrImage });
+    }
+    catch (e) {
+        console.error('[Webhook] Erreur génération/envoi QR :', e);
+    }
+});
+waManager.on('ready', () => {
+    const status = waManager.getStatus();
+    void notifyLaravel('ready', {
+        status: 'connected',
+        phone: status.user?.id?.split(':')[0] ?? null,
+        displayName: status.user?.name ?? null,
+        connectedAt: new Date().toISOString(),
+    });
+});
+waManager.on('logged_out', () => {
+    void notifyLaravel('logged_out', {});
+});
+waManager.on('status_update', (status) => {
+    void notifyLaravel('status_update', status);
+});
+// ─── Résolution JID partagée (texte + fichier) ─────────────────────────────
+/**
+ * Résout un numéro nettoyé vers un JID WhatsApp existant, avec les mêmes
+ * fallbacks béninois que l'implémentation d'origine. Factorisé ici pour
+ * que /send-message et /send-file ne dupliquent pas cette logique.
+ */
+async function resolveJid(sock, cleanTo) {
+    const jid = cleanTo.includes('@s.whatsapp.net') ? cleanTo : `${cleanTo}@s.whatsapp.net`;
+    const waResults = await sock.onWhatsApp(jid);
+    const result = waResults?.[0];
+    if (result?.exists)
+        return result.jid;
+    if (cleanTo.startsWith('22901') && cleanTo.length === 13) {
+        const fallbackJid = `229${cleanTo.substring(5)}@s.whatsapp.net`;
+        const fb = (await sock.onWhatsApp(fallbackJid))?.[0];
+        if (fb?.exists)
+            return fb.jid;
+    }
+    if (cleanTo.startsWith('229') && !cleanTo.startsWith('22901') && cleanTo.length === 11) {
+        const fallbackJid = `22901${cleanTo.substring(3)}@s.whatsapp.net`;
+        const fb = (await sock.onWhatsApp(fallbackJid))?.[0];
+        if (fb?.exists)
+            return fb.jid;
+    }
+    return null;
+}
+// ─── REST : POST /send-message ────────────────────────────────────────────────
+app.post('/send-message', requireApiKey, rateLimit, async (req, res) => {
+    const { to, text, context, module } = req.body;
+    if (typeof to !== 'string' || typeof text !== 'string') {
+        res.status(400).json({ success: false, error: 'Paramètres invalides : to et text doivent être des chaînes' });
+        return;
+    }
+    const toTrimmed = to.trim();
+    const textTrimmed = text.trim();
+    const contextStr = typeof context === 'string' ? context.trim().substring(0, 255) : null;
+    const moduleStr = typeof module === 'string' ? module.trim().substring(0, 100) : null;
+    if (!toTrimmed || !textTrimmed) {
+        res.status(400).json({ success: false, error: 'Paramètres manquants : to et text sont requis' });
+        return;
+    }
+    if (textTrimmed.length > 4096) {
+        res.status(400).json({ success: false, error: 'Message trop long (max 4096 caractères)' });
+        return;
+    }
+    if (!/^[+\d\s]+$/.test(toTrimmed)) {
+        res.status(400).json({ success: false, error: 'Format de numéro invalide' });
+        return;
+    }
+    console.log(`[Bridge] Demande d'envoi vers : ${toTrimmed.substring(0, 8)}... (module: ${moduleStr ?? 'inconnu'})`);
+    const cleanTo = toTrimmed.replace(/[+\s\-]/g, '');
+    // Journalisation systématique — créée AVANT la tentative d'envoi
+    // pour que même un crash inattendu laisse une trace "sending" en base
+    // plutôt qu'aucune trace du tout.
+    let logId = null;
+    try {
+        logId = await createMessageLog({ recipient: cleanTo, message: textTrimmed, context: contextStr, module: moduleStr });
+    }
+    catch (err) {
+        // Un échec de journalisation ne doit pas empêcher l'envoi réel
+        console.error('[MessageStore] Échec création du log — envoi tenté quand même :', err);
+    }
+    try {
+        const sock = waManager.getSocket();
+        if (!sock) {
+            if (logId)
+                await markMessageFailed(logId, 'Service WhatsApp non initialisé');
+            res.status(503).json({ success: false, error: 'Service WhatsApp non initialisé' });
+            return;
+        }
+        const jid = await resolveJid(sock, cleanTo);
+        if (!jid) {
+            if (logId)
+                await markMessageFailed(logId, 'Numéro non enregistré sur WhatsApp');
+            res.status(404).json({ success: false, error: 'Numéro non enregistré sur WhatsApp' });
+            return;
+        }
+        await waManager.sendMessage(jid, textTrimmed);
+        if (logId)
+            await markMessageSent(logId);
+        res.json({ success: true });
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : 'Erreur interne';
+        console.error('[Bridge] Erreur envoi :', error);
+        if (logId)
+            await markMessageFailed(logId, message);
+        res.status(500).json({
+            success: false,
+            error: config.isProd ? 'Erreur lors de l\'envoi du message' : message,
+        });
+    }
+});
+// ─── REST : POST /send-file (NOUVEAU) ──────────────────────────────────────────
+app.post('/send-file', requireApiKey, rateLimit, async (req, res) => {
+    const { to, fileUrl, fileName, mimeType, caption, context, module, fileDisk, filePath } = req.body;
+    if (typeof to !== 'string' || typeof fileUrl !== 'string' || typeof fileName !== 'string' || typeof mimeType !== 'string') {
+        res.status(400).json({ success: false, error: 'Paramètres invalides : to, fileUrl, fileName, mimeType sont requis' });
+        return;
+    }
+    const toTrimmed = to.trim();
+    const captionStr = typeof caption === 'string' ? caption.trim().substring(0, 1024) : '';
+    const contextStr = typeof context === 'string' ? context.trim().substring(0, 255) : null;
+    const moduleStr = typeof module === 'string' ? module.trim().substring(0, 100) : null;
+    if (!toTrimmed || !/^[+\d\s]+$/.test(toTrimmed)) {
+        res.status(400).json({ success: false, error: 'Format de numéro invalide' });
+        return;
+    }
+    console.log(`[Bridge] Demande d'envoi fichier "${fileName}" vers : ${toTrimmed.substring(0, 8)}... (module: ${moduleStr ?? 'inconnu'})`);
+    const cleanTo = toTrimmed.replace(/[+\s\-]/g, '');
+    const mediaType = mimeType.startsWith('image/') ? 'image' : 'document';
+    let logId = null;
+    try {
+        logId = await createMessageLog({
+            recipient: cleanTo,
+            message: captionStr,
+            context: contextStr,
+            module: moduleStr,
+            fileName,
+            mediaType,
+            fileDisk: typeof fileDisk === 'string' ? fileDisk : null,
+            filePath: typeof filePath === 'string' ? filePath : null,
+        });
+    }
+    catch (err) {
+        console.error('[MessageStore] Échec création du log (fichier) — envoi tenté quand même :', err);
+    }
+    try {
+        const sock = waManager.getSocket();
+        if (!sock) {
+            if (logId)
+                await markMessageFailed(logId, 'Service WhatsApp non initialisé');
+            res.status(503).json({ success: false, error: 'Service WhatsApp non initialisé' });
+            return;
+        }
+        const jid = await resolveJid(sock, cleanTo);
+        if (!jid) {
+            if (logId)
+                await markMessageFailed(logId, 'Numéro non enregistré sur WhatsApp');
+            res.status(404).json({ success: false, error: 'Numéro non enregistré sur WhatsApp' });
+            return;
+        }
+        await waManager.sendFileMessage(jid, { url: fileUrl, fileName, mimetype: mimeType, caption: captionStr });
+        if (logId)
+            await markMessageSent(logId);
+        res.json({ success: true });
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : 'Erreur interne';
+        console.error('[Bridge] Erreur envoi fichier :', error);
+        if (logId)
+            await markMessageFailed(logId, message);
+        res.status(500).json({
+            success: false,
+            error: config.isProd ? 'Erreur lors de l\'envoi du fichier' : message,
+        });
+    }
+});
+// ─── REST : GET /status ───────────────────────────────────────────────────────
+app.get('/status', requireApiKey, (_req, res) => {
+    res.json(waManager.getStatus());
+});
+// ─── REST : DELETE /logout ────────────────────────────────────────────────────
+app.delete('/logout', requireApiKey, async (_req, res) => {
+    try {
+        await waManager.logout();
+        res.json({ success: true, message: 'Session supprimée — QR code requis au prochain démarrage' });
+    }
+    catch (error) {
+        console.error('[Bridge] Erreur logout :', error);
+        res.status(500).json({ success: false, error: 'Erreur lors de la déconnexion' });
+    }
+});
+// ─── REST : groupes WhatsApp (module Stages) ──────────────────────────────────
+//
+// Utilisés par Laravel pour le groupe annuel des stagiaires : création,
+// ajout / retrait / promotion de membres, lien d'invitation, groupe existant
+// (rejoint par son lien), départ. Le numéro du CAP doit être administrateur
+// du groupe pour ajouter ou retirer des membres.
+const GROUP_JID_RE = /^[0-9-]{5,40}@g\.us$/;
+const PHONE_RE = /^[+\d\s]{8,20}$/;
+function connectedSocket(res) {
+    const sock = waManager.getSocket();
+    if (!sock || waManager.getStatus().status !== 'connected') {
+        res.status(503).json({ success: false, error: 'WhatsApp non connecté' });
+        return null;
+    }
+    return sock;
+}
+function phoneList(value) {
+    if (!Array.isArray(value) || value.length === 0 || value.length > 256)
+        return null;
+    const out = [];
+    for (const v of value) {
+        if (typeof v !== 'string' || !PHONE_RE.test(v.trim()))
+            return null;
+        out.push(v.trim().replace(/[+\s\-]/g, ''));
+    }
+    return out;
+}
+/** Numéros → JID existants ; les numéros absents de WhatsApp sont signalés. */
+async function resolveMany(sock, phones) {
+    const jids = {};
+    const missing = [];
+    for (const phone of phones) {
+        const jid = await resolveJid(sock, phone);
+        if (jid)
+            jids[phone] = jid;
+        else
+            missing.push(phone);
+    }
+    return { jids, missing };
+}
+function groupError(res, error, label) {
+    const message = error instanceof Error ? error.message : 'Erreur interne';
+    console.error(`[Bridge] ${label} :`, error);
+    const status = /not-authorized|forbidden|403/i.test(message) ? 403
+        : /item-not-found|404|not found/i.test(message) ? 404 : 500;
+    res.status(status).json({ success: false, error: config.isProd ? label : message });
+}
+app.post('/groups/create', requireApiKey, rateLimit, async (req, res) => {
+    const { subject, participants, admins } = req.body;
+    const phones = phoneList(participants);
+    const adminPhones = admins === undefined ? [] : phoneList(admins);
+    if (typeof subject !== 'string' || !subject.trim() || subject.length > 100 || !phones || adminPhones === null) {
+        res.status(400).json({ success: false, error: 'Paramètres invalides' });
+        return;
+    }
+    const sock = connectedSocket(res);
+    if (!sock)
+        return;
+    try {
+        const { jids, missing } = await resolveMany(sock, phones);
+        const list = Object.values(jids);
+        if (list.length === 0) {
+            res.status(422).json({ success: false, error: 'Aucun participant joignable sur WhatsApp', missing });
+            return;
+        }
+        const meta = await sock.groupCreate(subject.trim(), list);
+        const toPromote = adminPhones.map(p => jids[p]).filter((j) => !!j);
+        if (toPromote.length) {
+            try {
+                await sock.groupParticipantsUpdate(meta.id, toPromote, 'promote');
+            }
+            catch (e) {
+                console.error('[Bridge] Promotion admin :', e);
+            }
+        }
+        const present = new Set((meta.participants ?? []).map((p) => p.id));
+        res.json({
+            success: true,
+            jid: meta.id,
+            added: Object.entries(jids).filter(([, j]) => present.has(j)).map(([p]) => p),
+            not_added: Object.entries(jids).filter(([, j]) => !present.has(j)).map(([p]) => p),
+            missing,
+        });
+    }
+    catch (error) {
+        groupError(res, error, 'Création du groupe impossible');
+    }
+});
+app.post('/groups/participants', requireApiKey, rateLimit, async (req, res) => {
+    const { jid, action, participants } = req.body;
+    const phones = phoneList(participants);
+    if (typeof jid !== 'string' || !GROUP_JID_RE.test(jid) || !phones
+        || !['add', 'remove', 'promote', 'demote'].includes(action)) {
+        res.status(400).json({ success: false, error: 'Paramètres invalides' });
+        return;
+    }
+    const sock = connectedSocket(res);
+    if (!sock)
+        return;
+    try {
+        const { jids, missing } = await resolveMany(sock, phones);
+        const results = {};
+        for (const p of missing)
+            results[p] = 'not_on_whatsapp';
+        const list = Object.values(jids);
+        if (list.length) {
+            const out = await sock.groupParticipantsUpdate(jid, list, action);
+            const byJid = new Map(out.map((o) => [o.jid, String(o.status)]));
+            for (const [phone, j] of Object.entries(jids))
+                results[phone] = byJid.get(j) ?? 'unknown';
+        }
+        // Statuts WhatsApp : 200 = fait, 403 = refusé (confidentialité : inviter
+        // par lien), 408 = a quitté récemment, 409 = déjà membre, 404 = absent.
+        res.json({ success: true, results });
+    }
+    catch (error) {
+        groupError(res, error, 'Mise à jour des membres impossible');
+    }
+});
+app.post('/groups/invite-code', requireApiKey, rateLimit, async (req, res) => {
+    const { jid } = req.body;
+    if (typeof jid !== 'string' || !GROUP_JID_RE.test(jid)) {
+        res.status(400).json({ success: false, error: 'Paramètres invalides' });
+        return;
+    }
+    const sock = connectedSocket(res);
+    if (!sock)
+        return;
+    try {
+        const code = await sock.groupInviteCode(jid);
+        res.json({ success: true, code, link: code ? `https://chat.whatsapp.com/${code}` : null });
+    }
+    catch (error) {
+        groupError(res, error, "Lien d'invitation indisponible");
+    }
+});
+app.post('/groups/join', requireApiKey, rateLimit, async (req, res) => {
+    const { code } = req.body;
+    if (typeof code !== 'string' || !/^[A-Za-z0-9]{10,40}$/.test(code)) {
+        res.status(400).json({ success: false, error: 'Paramètres invalides' });
+        return;
+    }
+    const sock = connectedSocket(res);
+    if (!sock)
+        return;
+    try {
+        let jid;
+        try {
+            jid = await sock.groupAcceptInvite(code);
+        }
+        catch {
+            // Déjà membre : on retrouve le groupe à partir du lien.
+            const info = await sock.groupGetInviteInfo(code);
+            jid = info?.id;
+        }
+        if (!jid)
+            throw new Error('item-not-found');
+        res.json({ success: true, jid });
+    }
+    catch (error) {
+        groupError(res, error, 'Groupe introuvable ou lien expiré');
+    }
+});
+app.post('/groups/info', requireApiKey, rateLimit, async (req, res) => {
+    const { jid } = req.body;
+    if (typeof jid !== 'string' || !GROUP_JID_RE.test(jid)) {
+        res.status(400).json({ success: false, error: 'Paramètres invalides' });
+        return;
+    }
+    const sock = connectedSocket(res);
+    if (!sock)
+        return;
+    try {
+        const meta = await sock.groupMetadata(jid);
+        const me = (sock.user?.id ?? '').split(':')[0];
+        const mine = (meta.participants ?? []).find((p) => String(p.id).split('@')[0].split(':')[0] === me);
+        res.json({
+            success: true,
+            subject: meta.subject,
+            size: (meta.participants ?? []).length,
+            is_admin: !!mine?.admin,
+            participants: (meta.participants ?? []).map((p) => String(p.id).split('@')[0]),
+        });
+    }
+    catch (error) {
+        groupError(res, error, 'Groupe introuvable');
+    }
+});
+app.post('/groups/leave', requireApiKey, rateLimit, async (req, res) => {
+    const { jid } = req.body;
+    if (typeof jid !== 'string' || !GROUP_JID_RE.test(jid)) {
+        res.status(400).json({ success: false, error: 'Paramètres invalides' });
+        return;
+    }
+    const sock = connectedSocket(res);
+    if (!sock)
+        return;
+    try {
+        await sock.groupLeave(jid);
+        res.json({ success: true });
+    }
+    catch (error) {
+        groupError(res, error, 'Impossible de quitter le groupe');
+    }
+});
+// ─── Route fallback — 404 propre ──────────────────────────────────────────────
+app.use((_req, res) => {
+    res.status(404).json({ success: false, error: 'Route introuvable' });
+});
+// ─── Gestion des erreurs non catchées ─────────────────────────────────────────
+process.on('uncaughtException', (err) => {
+    console.error('[Process] Exception non catchée :', err);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('[Process] Promise rejetée non gérée :', reason);
+});
+// ─── Démarrage ────────────────────────────────────────────────────────────────
+async function start() {
+    await assertDbConnection();
+    app.listen(config.port, '127.0.0.1', async () => {
+        console.log('');
+        console.log('╔══════════════════════════════════════════════════╗');
+        console.log(`║  WhatsApp Bridge   http://127.0.0.1:${config.port}         ║`);
+        console.log(`║  Environnement : ${config.isProd ? 'production  ' : 'local       '}              ║`);
+        console.log(`║  API Key        : ${config.apiKey ? '✅ configurée  ' : '⚠️  non définie'}           ║`);
+        console.log(`║  Webhook Laravel: ${config.laravelUrl}`);
+        console.log('╚══════════════════════════════════════════════════╝');
+        console.log('');
+        await waManager.init();
+    });
+}
+start().catch((err) => {
+    console.error('[Bridge] Échec critique au démarrage :', err);
+    process.exit(1);
+});

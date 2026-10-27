@@ -23,27 +23,27 @@ class ScheduledCourseTest extends TestCase
     {
         $classGroup = ClassGroup::factory()->create();
         $professor = Professor::factory()->create();
-        
+
         // Créer un Program temporaire pour satisfaire la contrainte de TeachingUnit
         $tempProgram = Program::create([
             'class_group_id' => $classGroup->id,
             'course_element_professor_id' => 1, // Temporaire
         ]);
-        
+
         // Créer TeachingUnit avec le program_id
         $teachingUnit = TeachingUnit::create([
             'name' => 'Test Teaching Unit',
             'code' => 'TEST-' . uniqid(),
             'program_id' => $tempProgram->id,
         ]);
-        
+
         $courseElement = CourseElement::create([
             'name' => 'Test Course Element',
             'code' => 'CE-' . uniqid(),
             'credits' => 6,
             'teaching_unit_id' => $teachingUnit->id,
         ]);
-        
+
         $courseElementProfessor = CourseElementProfessor::create([
             'course_element_id' => $courseElement->id,
             'professor_id' => $professor->id,
@@ -64,7 +64,7 @@ class ScheduledCourseTest extends TestCase
     {
         $response = $this->getJson('/api/emploi-temps/scheduled-courses');
 
-        $response->assertStatus(401);
+        $response->assertstatus(401);
     }
 
     /**
@@ -88,7 +88,7 @@ class ScheduledCourseTest extends TestCase
 
         $response = $this->getJson('/api/emploi-temps/scheduled-courses');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -135,7 +135,7 @@ class ScheduledCourseTest extends TestCase
 
         $response = $this->postJson('/api/emploi-temps/scheduled-courses', $data);
 
-        $response->assertStatus(201)
+        $response->assertstatus(201)
             ->assertJson([
                 'success' => true,
                 'data' => [
@@ -214,7 +214,7 @@ class ScheduledCourseTest extends TestCase
             'notes' => 'Notes modifiées',
         ]);
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson([
                 'success' => true,
                 'data' => [
@@ -243,7 +243,7 @@ class ScheduledCourseTest extends TestCase
 
         $response = $this->deleteJson("/api/emploi-temps/scheduled-courses/{$scheduledCourse->id}");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson(['success' => true]);
 
         $this->assertDatabaseMissing('scheduled_courses', [
@@ -273,7 +273,7 @@ class ScheduledCourseTest extends TestCase
             'notes' => 'Annulation pour test',
         ]);
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson([
                 'success' => true,
                 'data' => [
@@ -310,7 +310,7 @@ class ScheduledCourseTest extends TestCase
             'hours_completed' => 12.5,
         ]);
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson([
                 'success' => true,
                 'data' => [
@@ -345,7 +345,7 @@ class ScheduledCourseTest extends TestCase
             'date' => $dateToExclude,
         ]);
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson(['success' => true]);
 
         $scheduledCourse->refresh();
@@ -373,7 +373,7 @@ class ScheduledCourseTest extends TestCase
 
         $response = $this->getJson("/api/emploi-temps/scheduled-courses/{$scheduledCourse->id}/occurrences");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson(['success' => true])
             ->assertJsonStructure([
                 'data' => [
@@ -404,7 +404,7 @@ class ScheduledCourseTest extends TestCase
 
         $response = $this->getJson("/api/emploi-temps/scheduled-courses/{$scheduledCourse->id}");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson([
                 'data' => [
                     'progress_percentage' => 25.0,

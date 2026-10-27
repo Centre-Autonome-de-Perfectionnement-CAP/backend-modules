@@ -3,6 +3,7 @@
 namespace App\Modules\Contact\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Route;
 
 class ContactServiceProvider extends ServiceProvider
 {
@@ -20,7 +21,9 @@ class ContactServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Load routes
-        $this->loadRoutesFrom(__DIR__ . '/../routes/api.php');
+        Route::prefix('api')
+            ->middleware('api')
+            ->group(__DIR__.'/../routes/api.php');
 
         // Load migrations
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');

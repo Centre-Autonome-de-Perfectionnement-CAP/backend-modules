@@ -15,7 +15,9 @@ class BroadcastWhatsAppInvitationJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $timeout = 300; // 5 minutes max par job
+    // < retry_after (90 s) de la file : sinon le job est relancé en double
+    // pendant qu'il tourne encore (emails envoyés deux fois). Lots de 20.
+    public $timeout = 85;
     public $tries = 3; // Réessayer 3 fois en cas d'échec
 
     protected $students;
@@ -46,6 +48,12 @@ class BroadcastWhatsAppInvitationJob implements ShouldQueue
         $sentCount = 0;
         $failedCount = 0;
         $failedEmails = [];
+        $skippedCount = 0;
+        $notifier = app(\App\Modules\Core\Services\Notifier::class);
+        $waMessage = \App\Modules\Core\Support\WhatsAppText::compose("Groupe WhatsApp {$this->departmentName}", [
+            trim(strip_tags((string) $this->message)),
+            $this->whatsappLink ? "_Rejoindre le groupe :_\n{$this->whatsappLink}" : '',
+        ]);
 
         foreach ($this->students as $student) {
             Log::debug('Processing student in WhatsApp broadcast job', [
@@ -59,6 +67,18 @@ class BroadcastWhatsAppInvitationJob implements ShouldQueue
             if ($personalInfo && !empty($personalInfo)) {
                 // Si c'est un tableau, accéder comme un tableau
                 $email = is_array($personalInfo) ? ($personalInfo['email'] ?? null) : ($personalInfo->email ?? null);
+
+                // WhatsApp : job indépendant, cadencé, publié une seule fois.
+                if ($this->attempts() <= 1) {
+                    $contacts = is_array($personalInfo) ? ($personalInfo['contacts'] ?? null) : ($personalInfo->contacts ?? null);
+                    $notifier->whatsapp(
+                        $notifier->phoneFromContacts($contacts),
+                        $waMessage,
+                        "invitation-groupe:{$this->broadcastId}:" . ($student['id'] ?? ''),
+                        'Inscription',
+                        bulk: true,
+                    );
+                }
                 
                 if ($email) {
                     try {
@@ -84,12 +104,14 @@ class BroadcastWhatsAppInvitationJob implements ShouldQueue
                         ]);
                     }
                 } else {
+                    $skippedCount++;
                     Log::warning('Student sans email', [
                         'broadcast_id' => $this->broadcastId,
                         'student_id' => $student['id'] ?? 'unknown',
                     ]);
                 }
             } else {
+                $skippedCount++;
                 Log::warning('Student sans personal_information', [
                     'broadcast_id' => $this->broadcastId,
                     'student_id' => $student['id'] ?? 'unknown',
@@ -115,13 +137,20 @@ class BroadcastWhatsAppInvitationJob implements ShouldQueue
             'status' => 'processing',
         ]);
 
-        \Cache::put($cacheKey, [
-            'total_students' => $currentStatus['total_students'],
-            'emails_sent' => $currentStatus['emails_sent'] + $sentCount,
-            'emails_failed' => $currentStatus['emails_failed'] + $failedCount,
-            'status' => 'completed',
-            'completed_at' => now(),
-        ], now()->addHours(24));
+        $emailsSent   = $currentStatus['emails_sent'] + $sentCount;
+        $emailsFailed = $currentStatus['emails_failed'] + $failedCount;
+        $skipped      = ($currentStatus['skipped'] ?? 0) + $skippedCount;
+        // CORRECTIF : "completed" (et suppression du PDF) seulement quand tous
+        // les lots sont passés - avant, le 1er lot supprimait le PDF des suivants.
+        $done = $emailsSent + $emailsFailed + $skipped >= (int) ($currentStatus['total_students'] ?? 0);
+
+        \Cache::put($cacheKey, array_merge($currentStatus, [
+            'emails_sent' => $emailsSent,
+            'emails_failed' => $emailsFailed,
+            'skipped' => $skipped,
+            'status' => $done ? 'completed' : 'processing',
+            'completed_at' => $done ? now() : null,
+        ]), now()->addHours(24));
 
         // Nettoyer le PDF temporaire après l'envoi (seulement pour le dernier chunk)
         if ($this->pdfPath && file_exists($this->pdfPath)) {

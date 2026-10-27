@@ -265,7 +265,7 @@ class LegacyPrepaLinkService
                 $pendingStudent->refresh();
             }
 
-            // A1 — "déplacer" l'année au lieu d'ajouter une ligne au cursus :
+            // A1 - "déplacer" l'année au lieu d'ajouter une ligne au cursus :
             // on récupère le parcours du dossier (année courante) et on le repositionne
             // sur l'année historique de la Prépa. À défaut (déjà déplacé lors d'un
             // rattachement antérieur), on repart d'un parcours Prépa existant.

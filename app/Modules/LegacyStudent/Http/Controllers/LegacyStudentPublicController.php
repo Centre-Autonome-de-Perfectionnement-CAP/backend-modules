@@ -92,7 +92,11 @@ class LegacyStudentPublicController extends Controller
                 }
             ],
             'phone' => 'nullable|string|max:30',
+            // SÉCURITÉ (fusion) : l'OTP doit être vérifié côté serveur, pas
+            // seulement dans le navigateur.
+            'verification_token' => 'required|string|max:100',
         ], [
+            'verification_token.required' => 'Veuillez vérifier votre adresse email (code OTP) avant de poursuivre.',
             'registrationYear.required' => 'L\'année d\'inscription est requise.',
             'registrationYear.max' => 'Ce formulaire est réservé aux étudiants inscrits avant 2023.',
             'matricule.required' => 'Le matricule est requis.',
@@ -112,6 +116,15 @@ class LegacyStudentPublicController extends Controller
         }
 
         $validated = $validator->validated();
+
+        if (!app(\App\Modules\Core\Services\OtpService::class)->validateToken($validated['verification_token'], $validated['email'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'La vérification de votre adresse email a expiré ou est invalide. Veuillez redemander un code.',
+                'errors' => ['verification_token' => ['Vérification email invalide ou expirée.']],
+            ], 422);
+        }
+
         $selectedFiliereId = $validated['filiereId'] ?? ($validated['filiereIds'][0] ?? null);
         $placeOfBirth = $validated['placeOfBirth'] ?? ($validated['place_of_birth'] ?? $request->input('lieu_naissance'));
 
@@ -133,9 +146,22 @@ class LegacyStudentPublicController extends Controller
 
         return DB::transaction(function () use ($validated, $selectedFiliereId, $placeOfBirth, $existingStudent, $request) {
             $student = $existingStudent ?? new LegacyStudent();
-            
-            // Conserver le statut 'validated' si déjà validé, sinon passer/rester en 'pending'
-            $newStatus = ($student->status === 'validated') ? 'validated' : 'pending';
+
+            // SÉCURITÉ (fusion) : un dossier déjà validé par la scolarité n'est
+            // jamais réécrit depuis le formulaire public. Seul son titulaire
+            // (même email, prouvé par OTP) peut s'y rattacher.
+            if ($student->exists && $student->status === 'validated') {
+                if (mb_strtolower(trim((string) $student->email)) !== mb_strtolower(trim($validated['email']))) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Un dossier validé existe déjà pour cet étudiant avec une autre adresse email. Contactez la scolarité pour toute modification.',
+                    ], 409);
+                }
+                return $this->registerResponse($student, false);
+            }
+
+            $newStatus = 'pending';
+            $isNewDeclaration = !$student->exists || $student->status === 'rejected';
 
             $student->fill([
                 'matricule' => $validated['matricule'],
@@ -157,30 +183,41 @@ class LegacyStudentPublicController extends Controller
                 $student->departments()->sync([$selectedFiliereId]);
             }
 
-            $filieres = $student->departments()->select('departments.id', 'departments.name', 'departments.abbreviation')->get();
-            $mainFiliere = $filieres->first() ?? $student->department;
+            // D4 : secrétaire + responsable de division du cycle notifiés,
+            // accusé de réception à l'étudiant (jobs publiés après COMMIT).
+            if ($isNewDeclaration) {
+                app(\App\Modules\LegacyStudent\Services\LegacyDeclarationService::class)->notifyNewDeclaration($student);
+            }
 
-            return response()->json([
-                'id' => $student->id,
-                'matricule' => $student->matricule,
-                'lastName' => $student->last_name,
-                'firstName' => $student->first_name,
-                'dateOfBirth' => $student->date_of_birth,
-                'placeOfBirth' => $student->place_of_birth,
-                'place_of_birth' => $student->place_of_birth,
-                'cycle' => $student->cycle,
-                'filiere' => $mainFiliere,
-                'filieres' => $filieres,
-                'email' => $student->email,
-                'phone' => $student->phone,
-                'registrationYear' => $student->enrollment_year,
-                'status' => 'attached',
-                'dossier_status' => $student->status,
-                'message' => $student->wasRecentlyCreated 
-                    ? 'Votre dossier a été enregistré avec succès. Vous pouvez poursuivre votre démarche.'
-                    : 'Votre dossier a été retrouvé et mis à jour. Vous pouvez poursuivre votre démarche.',
-            ], 200);
+            return $this->registerResponse($student, $student->wasRecentlyCreated);
         });
+    }
+
+    private function registerResponse(LegacyStudent $student, bool $created): JsonResponse
+    {
+        $filieres = $student->departments()->select('departments.id', 'departments.name', 'departments.abbreviation')->get();
+        $mainFiliere = $filieres->first() ?? $student->department;
+
+        return response()->json([
+            'id' => $student->id,
+            'matricule' => $student->matricule,
+            'lastName' => $student->last_name,
+            'firstName' => $student->first_name,
+            'dateOfBirth' => $student->date_of_birth,
+            'placeOfBirth' => $student->place_of_birth,
+            'place_of_birth' => $student->place_of_birth,
+            'cycle' => $student->cycle,
+            'filiere' => $mainFiliere,
+            'filieres' => $filieres,
+            'email' => $student->email,
+            'phone' => $student->phone,
+            'registrationYear' => $student->enrollment_year,
+            'status' => 'attached',
+            'dossier_status' => $student->status,
+            'message' => $created
+                ? 'Votre dossier a été enregistré avec succès. Vous pouvez poursuivre votre démarche.'
+                : 'Votre dossier a été retrouvé et mis à jour. Vous pouvez poursuivre votre démarche.',
+        ], 200);
     }
 
     /**
@@ -194,10 +231,14 @@ class LegacyStudentPublicController extends Controller
         $birthDate = $request->input('birth_date') ?? $request->input('date_of_birth') ?? $request->input('dateOfBirth') ?? $request->input('date_naissance') ?? null;
         $birthPlace = $request->input('birth_place') ?? $request->input('place_of_birth') ?? $request->input('placeOfBirth') ?? $request->input('lieu_naissance') ?? null;
 
-        if (empty($lastName) || empty($firstNames)) {
+        // CORRECTIF SÉCURITÉ (fusion) : la date de naissance devient obligatoire,
+        // comme pour la recherche des étudiants récents (lookup-id). Sans elle,
+        // un simple nom suffisait à obtenir le matricule d'un tiers - matricule
+        // qui permet ensuite de déposer des demandes en son nom.
+        if (empty($lastName) || empty($firstNames) || empty($birthDate)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Le nom et les prénoms sont requis.',
+                'message' => 'Le nom, les prénoms et la date de naissance sont requis.',
             ], 422);
         }
 
@@ -207,9 +248,7 @@ class LegacyStudentPublicController extends Controller
             ->whereRaw('LOWER(last_name) = ?', [mb_strtolower(trim($lastName))])
             ->whereRaw('LOWER(first_name) LIKE ?', ["%{$firstWord}%"]);
 
-        if (!empty($birthDate)) {
-            $query->whereDate('date_of_birth', $birthDate);
-        }
+        $query->whereDate('date_of_birth', $birthDate);
 
         if (!empty($birthPlace)) {
             $query->where(function ($q) use ($birthPlace) {
@@ -234,8 +273,7 @@ class LegacyStudentPublicController extends Controller
                 'matricule'         => $student->matricule,
                 'last_name'         => $student->last_name,
                 'first_names'       => $student->first_name,
-                'date_of_birth'     => $student->date_of_birth,
-                'place_of_birth'    => $student->place_of_birth,
+                // date/lieu de naissance non renvoyés : déjà connus du demandeur
                 'source'            => 'legacy',
             ],
             'message' => 'Matricule retrouvé dans les dossiers anciens.',

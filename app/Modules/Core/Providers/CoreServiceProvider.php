@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\Providers;
 
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use App\Modules\Core\Services\MailService;
 use App\Modules\Core\Services\PdfService;
@@ -32,6 +33,16 @@ class CoreServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        \App\Support\UploadLimit::registerMessages();
+
+        // FUSION develop/main : routes du module Core (OTP, ajoutées sur main).
+        // Sur main elles étaient chargées par bootstrap/app.php (then:) ; selon la
+        // convention develop, chaque module charge ses routes dans son provider.
+        // Le fichier porte déjà le préfixe 'api/core' → middleware 'api' seul.
+        if (file_exists(__DIR__.'/../routes/api.php')) {
+            Route::middleware('api')->group(__DIR__.'/../routes/api.php');
+        }
+
         // Charger les vues (templates)
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'core');
 

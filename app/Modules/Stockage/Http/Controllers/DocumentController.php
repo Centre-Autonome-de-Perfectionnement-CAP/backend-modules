@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use App\Traits\ApiResponse;
+use App\Support\UploadLimit;
 
 /**
  * @OA\Tag(
@@ -161,7 +162,7 @@ class DocumentController extends Controller
         $data = $request->validate([
             'titre' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],
-            'file' => ['required_without:lien', 'file', 'max:10240'],
+            'file' => ['required_without:lien', 'file', UploadLimit::rule()],
             'lien' => ['required_without:file', 'url'],
             'datePublication' => ['required', 'date'],
             'categorie' => ['required', 'in:administratif,pedagogique,legal,organisation'],

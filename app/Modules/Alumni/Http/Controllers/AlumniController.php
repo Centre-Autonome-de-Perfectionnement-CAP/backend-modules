@@ -53,7 +53,7 @@ class AlumniController extends Controller
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    //  ADMIN — LISTE
+    //  ADMIN - LISTE
     // ──────────────────────────────────────────────────────────────────────────
 
     /**
@@ -88,7 +88,7 @@ class AlumniController extends Controller
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    //  ADMIN — DÉTAIL
+    //  ADMIN - DÉTAIL
     // ──────────────────────────────────────────────────────────────────────────
 
     public function show(int $id): JsonResponse
@@ -102,7 +102,7 @@ class AlumniController extends Controller
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    //  ADMIN — MISE À JOUR
+    //  ADMIN - MISE À JOUR
     // ──────────────────────────────────────────────────────────────────────────
 
     public function update(Request $request, int $id): JsonResponse
@@ -137,7 +137,7 @@ class AlumniController extends Controller
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    //  ADMIN — SUPPRESSION
+    //  ADMIN - SUPPRESSION
     // ──────────────────────────────────────────────────────────────────────────
 
     public function destroy(int $id): JsonResponse
@@ -151,7 +151,7 @@ class AlumniController extends Controller
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    //  ADMIN — DASHBOARD KPI
+    //  ADMIN - DASHBOARD KPI
     // ──────────────────────────────────────────────────────────────────────────
 
     /**

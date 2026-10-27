@@ -118,7 +118,7 @@ class ExampleTest extends TestCase
         $response = $this->postJson('/api/endpoint', $data);
 
         // 3. ASSERT: Vérifier les résultats
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson(['success' => true]);
         
         $this->assertDatabaseHas('table', ['field' => 'value']);
@@ -148,7 +148,7 @@ class ExampleTest extends TestCase
 ### 4. **Assertions claires**
 ```php
 // ✅ BON
-$response->assertStatus(200);
+$response->assertstatus(200);
 $this->assertDatabaseHas('users', ['email' => 'test@example.com']);
 
 // ❌ ÉVITER
@@ -184,8 +184,8 @@ Pour chaque endpoint API, tester :
 ## 📊 Assertions Courantes
 
 ```php
-// Statut HTTP
-$response->assertStatus(200);
+// status HTTP
+$response->assertstatus(200);
 $response->assertOk();
 $response->assertCreated();
 $response->assertNoContent();
@@ -229,7 +229,7 @@ Cela garantit :
 
 ## 📈 Couverture de Test Actuelle
 
-| Module | Fichier de Test | Statut |
+| Module | Fichier de Test | status |
 |--------|----------------|--------|
 | Authentification | `AuthTest.php` | ✅ Complet |
 | Inscriptions | `PendingStudentTest.php` | ✅ Complet |
@@ -266,7 +266,7 @@ public function test_mon_test(): void
     $response = $this->getJson('/api/endpoint');
     
     // Assert: Vérifier
-    $response->assertStatus(200);
+    $response->assertstatus(200);
 }
 ```
 

@@ -19,21 +19,51 @@ class PdfService
      */
     public function generatePdf(string $view, array $data = [], array $options = [])
     {
-        \Log::info('PdfService: Début génération PDF', ['view' => $view, 'data_keys' => array_keys($data)]);
-        
+        \Log::info('PdfService: Début génération PDF', [
+            'view' => $view,
+            'data_keys' => array_keys($data)
+        ]);
+
         try {
+            // Augmenter les limites pour éviter les erreurs de timeout
+            ini_set('max_execution_time', 300);
+            ini_set('memory_limit', '512M');
+
             $pdf = Pdf::loadView($view, $data);
 
-            // Appliquer les options
+            // Optimisations DomPDF
+            $pdf->setOptions([
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+                'isPhpEnabled' => false,
+                'isFontSubsettingEnabled' => true,
+                'defaultFont' => 'Arial',
+                'dpi' => 96,
+                'debugCss' => false,
+                'debugLayout' => false,
+                'debugLayoutLines' => false,
+                'debugLayoutBlocks' => false,
+                'debugLayoutInline' => false,
+                'debugLayoutPaddingBox' => false,
+                'tempDir' => storage_path('app/dompdf'),
+                'chroot' => public_path(),
+            ]);
+
+            // Appliquer les options de papier
             if (isset($options['orientation'])) {
                 $pdf->setPaper('A4', $options['orientation']);
             }
 
             if (isset($options['paper_size'])) {
-                $pdf->setPaper($options['paper_size'], $options['orientation'] ?? 'portrait');
+                $pdf->setPaper(
+                    $options['paper_size'],
+                    $options['orientation'] ?? 'portrait'
+                );
             }
 
-            \Log::info('PdfService: PDF généré avec succès', ['view' => $view]);
+            \Log::info('PdfService: PDF généré avec succès', [
+                'view' => $view
+            ]);
 
             return $pdf;
         } catch (\Exception $e) {
@@ -48,11 +78,6 @@ class PdfService
 
     /**
      * Générer un PDF avec un template prédéfini
-     *
-     * @param string $template
-     * @param array $data
-     * @param array $options
-     * @return \Barryvdh\DomPDF\PDF
      */
     public function generateWithTemplate(string $template, array $data = [], array $options = [])
     {
@@ -62,20 +87,24 @@ class PdfService
 
     /**
      * Télécharger un PDF généré
-     *
-     * @param string $view
-     * @param array $data
-     * @param string $filename
-     * @param array $options
-     * @return Response
      */
-    public function downloadPdf(string $view, array $data = [], string $filename = 'document.pdf', array $options = [])
-    {
-        \Log::info('PdfService: Début téléchargement PDF', ['filename' => $filename]);
-        
+    public function downloadPdf(
+        string $view,
+        array $data = [],
+        string $filename = 'document.pdf',
+        array $options = []
+    ): Response {
+        \Log::info('PdfService: Début téléchargement PDF', [
+            'filename' => $filename
+        ]);
+
         try {
             $pdf = $this->generatePdf($view, $data, $options);
-            \Log::info('PdfService: Téléchargement PDF prêt', ['filename' => $filename]);
+
+            \Log::info('PdfService: Téléchargement PDF prêt', [
+                'filename' => $filename
+            ]);
+
             return $pdf->download($filename);
         } catch (\Exception $e) {
             \Log::error('PdfService: Erreur téléchargement PDF', [
@@ -88,28 +117,21 @@ class PdfService
 
     /**
      * Télécharger un PDF avec un template prédéfini
-     *
-     * @param string $template
-     * @param array $data
-     * @param string $filename
-     * @param array $options
-     * @return Response
      */
-    public function downloadWithTemplate(string $template, array $data = [], string $filename = 'document.pdf', array $options = [])
-    {
+    public function downloadWithTemplate(
+        string $template,
+        array $data = [],
+        string $filename = 'document.pdf',
+        array $options = []
+    ): Response {
         $view = "core::pdfs.{$template}";
         return $this->downloadPdf($view, $data, $filename, $options);
     }
 
     /**
      * Afficher un PDF dans le navigateur
-     *
-     * @param string $view
-     * @param array $data
-     * @param array $options
-     * @return Response
      */
-    public function streamPdf(string $view, array $data = [], array $options = [])
+    public function streamPdf(string $view, array $data = [], array $options = []): Response
     {
         $pdf = $this->generatePdf($view, $data, $options);
         return $pdf->stream();
@@ -117,13 +139,8 @@ class PdfService
 
     /**
      * Afficher un PDF avec un template prédéfini
-     *
-     * @param string $template
-     * @param array $data
-     * @param array $options
-     * @return Response
      */
-    public function streamWithTemplate(string $template, array $data = [], array $options = [])
+    public function streamWithTemplate(string $template, array $data = [], array $options = []): Response
     {
         $view = "core::pdfs.{$template}";
         return $this->streamPdf($view, $data, $options);
@@ -131,12 +148,6 @@ class PdfService
 
     /**
      * Sauvegarder un PDF sur le disque
-     *
-     * @param string $view
-     * @param array $data
-     * @param string $path
-     * @param array $options
-     * @return bool
      */
     public function savePdf(string $view, array $data = [], string $path, array $options = []): bool
     {
@@ -152,12 +163,6 @@ class PdfService
 
     /**
      * Sauvegarder un PDF avec un template prédéfini
-     *
-     * @param string $template
-     * @param array $data
-     * @param string $path
-     * @param array $options
-     * @return bool
      */
     public function saveWithTemplate(string $template, array $data = [], string $path, array $options = []): bool
     {
@@ -167,11 +172,6 @@ class PdfService
 
     /**
      * Obtenir le contenu d'un PDF en string
-     *
-     * @param string $view
-     * @param array $data
-     * @param array $options
-     * @return string
      */
     public function getPdfOutput(string $view, array $data = [], array $options = []): string
     {

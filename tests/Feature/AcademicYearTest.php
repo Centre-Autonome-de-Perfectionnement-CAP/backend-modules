@@ -16,7 +16,7 @@ class AcademicYearTest extends TestCase
 
         $response = $this->getJson('/api/inscription/academic-years');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -41,7 +41,7 @@ class AcademicYearTest extends TestCase
 
         $response = $this->getJson("/api/inscription/academic-years/{$year->id}");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -65,7 +65,7 @@ class AcademicYearTest extends TestCase
             'year_end' => '2025-06-30',
         ]);
 
-        $response->assertStatus(401)
+        $response->assertstatus(401)
             ->assertJsonStructure(['message']);
     }
 
@@ -80,7 +80,7 @@ class AcademicYearTest extends TestCase
         $response = $this->postJson('/api/inscription/academic-years', []);
 
         // Doit retourner 422 (validation) et non 401 (non authentifié)
-        $response->assertStatus(422)
+        $response->assertstatus(422)
             ->assertJsonStructure([
                 'message',
                 'errors',
@@ -98,7 +98,7 @@ class AcademicYearTest extends TestCase
             'year_start' => '2024-09-15',
         ]);
 
-        $response->assertStatus(401);
+        $response->assertstatus(401);
     }
 
     /**
@@ -110,7 +110,7 @@ class AcademicYearTest extends TestCase
 
         $response = $this->deleteJson("/api/inscription/academic-years/{$year->id}");
 
-        $response->assertStatus(401);
+        $response->assertstatus(401);
     }
 
     /**
@@ -122,7 +122,7 @@ class AcademicYearTest extends TestCase
 
         $response = $this->getJson('/api/inscription/academic-years');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -146,7 +146,7 @@ class AcademicYearTest extends TestCase
 
         $response = $this->getJson("/api/inscription/academic-years/{$year->id}");
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -167,7 +167,7 @@ class AcademicYearTest extends TestCase
         // Ne créer aucune année académique
         $response = $this->getJson('/api/inscription/academic-years');
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -248,7 +248,7 @@ class AcademicYearTest extends TestCase
 
         // Peut retourner 422 (validation), 409 (conflit) ou 500 (erreur contrainte unique)
         $this->assertContains($response->status(), [422, 409, 500]);
-        
+
         if (in_array($response->status(), [422, 409])) {
             $response->assertJsonStructure([
                 'success',

@@ -1,0 +1,26 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up()
+    {
+        if (!Schema::hasColumn('professors', 'specialty')) {
+            return;
+        }
+
+        Schema::table('professors', function (Blueprint $table) {
+            $table->renameColumn('specialty', 'speciality');
+        });
+    }
+
+    public function down()
+    {
+        Schema::table('professors', function (Blueprint $table) {
+            $table->renameColumn('speciality', 'specialty');
+        });
+    }
+};

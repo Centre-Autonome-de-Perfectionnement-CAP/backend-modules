@@ -6,14 +6,44 @@ use App\Http\Controllers\Controller;
 use App\Modules\LegacyStudent\Models\LegacyStudent;
 use App\Modules\LegacyStudent\Models\LegacyStudentServiceRequest;
 use App\Traits\ApiResponse;
+use App\Traits\RestrictsToRoles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use App\Support\UploadLimit;
 
 class LegacyStudentAdminController extends Controller
 {
-    use ApiResponse;
+    use ApiResponse, RestrictsToRoles;
+
+    /**
+     * Rôles autorisés sur l'administration des anciens étudiants.
+     * (secrétaire + admin valident les déclarations ; chef CAP et responsables
+     * de division consultent et suivent les dossiers de leur périmètre)
+     */
+    public const ALLOWED_ROLES = ['admin', 'secretaire', 'chef-cap', 'responsable-division', 'chef-division'];
+
+    /**
+     * CORRECTIF SÉCURITÉ (fusion develop/main) : ce contrôleur n'avait AUCUNE
+     * protection. N'importe qui pouvait lister les anciens étudiants (emails,
+     * téléphones), les créer/modifier/valider, importer un fichier Excel et
+     * modifier leurs relevés de notes via /api/admin/legacy-students/*.
+     */
+    /** Actions d'écriture : réservées à la secrétaire et à l'admin (décision D1). */
+    public const WRITE_ROLES = ['admin', 'secretaire'];
+
+    private const WRITE_ACTIONS = [
+        'store', 'update', 'validateStudent', 'rejectStudent', 'bulkValidate', 'bulkReject',
+        'updateServiceStatus', 'import', 'academicRecordsStore', 'academicRecordsUpdate', 'academicRecordsDestroy',
+    ];
+
+    public function __construct(
+        private readonly \App\Modules\LegacyStudent\Services\LegacyDeclarationService $declarations,
+    ) {
+        $this->restrictToRoles(self::ALLOWED_ROLES);
+        $this->restrictToRoles(self::WRITE_ROLES, self::WRITE_ACTIONS);
+    }
 
     /**
      * Liste paginée des anciens étudiants avec statistiques et filtres
@@ -250,26 +280,19 @@ class LegacyStudentAdminController extends Controller
     public function validateStudent(Request $request, int $id): JsonResponse
     {
         $student = LegacyStudent::findOrFail($id);
-        $user = $request->user();
-        $validatorName = $user ? "{$user->first_name} {$user->last_name}" : 'Secrétariat Scolarité';
-
-        $student->update([
-            'status' => 'validated',
-            'validated_by' => $validatorName,
-            'validated_at' => now(),
-            'rejection_reason' => null,
-        ]);
+        $student = $this->declarations->validate($student, $request->user());
 
         return response()->json(['success' => true, 'data' => $student]);
     }
 
     /**
-     * Rejet d'un dossier avec motif
+     * Rejet d'un dossier avec motif - rejette en cascade les demandes
+     * ouvertes de l'étudiant (décision D1) et le notifie.
      */
     public function rejectStudent(Request $request, int $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'reason' => 'required|string|min:3',
+            'reason' => 'required|string|min:3|max:1000',
         ]);
 
         if ($validator->fails()) {
@@ -277,47 +300,50 @@ class LegacyStudentAdminController extends Controller
         }
 
         $student = LegacyStudent::findOrFail($id);
-        $student->update([
-            'status' => 'rejected',
-            'rejection_reason' => $request->input('reason'),
-        ]);
+        $result = $this->declarations->reject($student, $request->input('reason'), $request->user());
 
-        return response()->json(['success' => true, 'data' => $student]);
+        return response()->json([
+            'success' => true,
+            'data' => $result['student'],
+            'rejected_references' => $result['rejected_references'],
+        ]);
     }
 
     /**
-     * Validation en masse
+     * Validation en masse (même traitement unitaire : notifications incluses)
      */
     public function bulkValidate(Request $request): JsonResponse
     {
-        $ids = $request->input('ids', []);
-        $user = $request->user();
-        $validatorName = $user ? "{$user->first_name} {$user->last_name}" : 'Secrétariat Scolarité';
+        $request->validate(['ids' => 'required|array|max:500', 'ids.*' => 'integer']);
 
-        LegacyStudent::whereIn('id', $ids)->update([
-            'status' => 'validated',
-            'validated_by' => $validatorName,
-            'validated_at' => now(),
-            'rejection_reason' => null,
-        ]);
+        $count = 0;
+        foreach (LegacyStudent::whereIn('id', $request->input('ids'))->get() as $student) {
+            $this->declarations->validate($student, $request->user(), bulk: true);
+            $count++;
+        }
 
-        return response()->json(['success' => true, 'count' => count($ids)]);
+        return response()->json(['success' => true, 'count' => $count]);
     }
 
     /**
-     * Rejet en masse
+     * Rejet en masse (cascade + notifications pour chaque dossier)
      */
     public function bulkReject(Request $request): JsonResponse
     {
-        $ids = $request->input('ids', []);
-        $reason = $request->input('reason', 'Rejet administratif');
-
-        LegacyStudent::whereIn('id', $ids)->update([
-            'status' => 'rejected',
-            'rejection_reason' => $reason,
+        $request->validate([
+            'ids' => 'required|array|max:500',
+            'ids.*' => 'integer',
+            'reason' => 'nullable|string|max:1000',
         ]);
+        $reason = $request->input('reason') ?: 'Rejet administratif';
 
-        return response()->json(['success' => true, 'count' => count($ids)]);
+        $count = 0;
+        foreach (LegacyStudent::whereIn('id', $request->input('ids'))->get() as $student) {
+            $this->declarations->reject($student, $reason, $request->user(), bulk: true);
+            $count++;
+        }
+
+        return response()->json(['success' => true, 'count' => $count]);
     }
 
     /**
@@ -522,7 +548,7 @@ class LegacyStudentAdminController extends Controller
     public function import(Request $request): JsonResponse
     {
         $request->validate([
-            'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+            'file' => ['required', 'file', 'mimes:xlsx,xls,csv', UploadLimit::rule()],
         ]);
 
         $import = new \App\Modules\LegacyStudent\Imports\LegacyStudentsImport();

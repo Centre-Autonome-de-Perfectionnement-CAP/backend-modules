@@ -9,7 +9,7 @@ use App\Modules\Soutenance\Http\Controllers\DefenseSubmissionPeriodController;
 
 
 // Routes publiques
-Route::prefix('api/soutenance')->group(function () {
+Route::prefix('soutenance')->group(function () {
     Route::post('/submissions', [DefenseSubmissionController::class, 'store']);
     Route::post('/validation_qui', [DefensePdfController::class, 'generateQuitus'])->name('qunewpost');
     Route::post('/correction_post', [DefensePdfController::class, 'generateCorrection'])->name('correction_post');
@@ -17,7 +17,7 @@ Route::prefix('api/soutenance')->group(function () {
 });
 
 // Routes protégées
-Route::prefix('api/soutenance')->middleware('auth:sanctum')->group(function () {
+Route::prefix('soutenance')->middleware('auth:sanctum')->group(function () {
     // Périodes de soumission
     Route::get('/periods', [DefenseSubmissionPeriodController::class, 'index']);
     Route::post('/periods', [DefenseSubmissionPeriodController::class, 'store']);

@@ -27,7 +27,7 @@ class ConflictDetectionTest extends TestCase
             'teaching_unit_id' => $teachingUnit->id,
         ]);
         $professor = $professor ?? Professor::factory()->create();
-        
+
         $courseElementProfessor = CourseElementProfessor::create([
             'course_element_id' => $courseElement->id,
             'professor_id' => $professor->id,
@@ -58,7 +58,7 @@ class ConflictDetectionTest extends TestCase
             'recurrence_end_date' => Carbon::now()->addDays(70)->format('Y-m-d'),
         ]);
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson([
                 'success' => true,
                 'data' => [
@@ -100,7 +100,7 @@ class ConflictDetectionTest extends TestCase
             'recurrence_end_date' => $startDate->copy()->addDays(70)->format('Y-m-d'),
         ]);
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson([
                 'data' => [
                     'has_conflicts' => true,
@@ -145,7 +145,7 @@ class ConflictDetectionTest extends TestCase
             'recurrence_end_date' => $startDate->copy()->addDays(70)->format('Y-m-d'),
         ]);
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson([
                 'data' => [
                     'has_conflicts' => true,
@@ -190,7 +190,7 @@ class ConflictDetectionTest extends TestCase
             'recurrence_end_date' => $startDate->copy()->addDays(70)->format('Y-m-d'),
         ]);
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson([
                 'data' => [
                     'has_conflicts' => true,
@@ -232,7 +232,7 @@ class ConflictDetectionTest extends TestCase
             'is_recurring' => true,
         ]);
 
-        $response->assertStatus(422)
+        $response->assertstatus(422)
             ->assertJson([
                 'success' => false,
                 'message' => 'Des conflits ont été détectés',
@@ -273,7 +273,7 @@ class ConflictDetectionTest extends TestCase
             'recurrence_end_date' => $startDate->copy()->addDays(70)->format('Y-m-d'),
         ]);
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson([
                 'data' => [
                     'has_conflicts' => false,
@@ -305,7 +305,7 @@ class ConflictDetectionTest extends TestCase
             'notes' => 'Notes modifiées',
         ]);
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson(['success' => true]);
     }
 
@@ -344,7 +344,7 @@ class ConflictDetectionTest extends TestCase
             'recurrence_end_date' => $startDate->copy()->addDays(70)->format('Y-m-d'),
         ]);
 
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJson([
                 'data' => [
                     'has_conflicts' => true,

@@ -98,7 +98,7 @@ class SubmissionController extends Controller
     /**
      * @OA\Post(
      *     path="/api/submissions/check-status",
-     *     summary="Vérifier le statut de soumission",
+     *     summary="Vérifier le status de soumission",
      *     description="Vérifie si la soumission est ouverte pour une année académique donnée",
      *     operationId="checkSubmissionStatus",
      *     tags={"Submission Management"},
@@ -106,13 +106,14 @@ class SubmissionController extends Controller
      *     @OA\RequestBody(
      *         required=true,
      *         @OA\JsonContent(
-     *             required={"academic_year_id"},
-     *             @OA\Property(property="academic_year_id", type="integer", example=1)
+     *             required={"academic_year_id", "department_id"},
+     *             @OA\Property(property="academic_year_id", type="integer", example=1),
+     *             @OA\Property(property="department_id", type="integer", example=1)
      *         )
      *     ),
      *     @OA\Response(
      *         response=200,
-     *         description="Statut vérifié avec succès",
+     *         description="status vérifié avec succès",
      *         @OA\JsonContent(
      *             @OA\Property(property="success", type="boolean", example=true),
      *             @OA\Property(property="data", type="object",
@@ -129,15 +130,23 @@ class SubmissionController extends Controller
      */
     public function checkSubmissionStatus(Request $request): JsonResponse
     {
-        $statusData = $this->academicYearService->checkSubmissionStatus($request->academic_year_id);
-        
-        return $this->successResponse($statusData, 'Statut de soumission vérifié avec succès');
+        $request->validate([
+            'academic_year_id' => 'required|integer|exists:academic_years,id',
+            'department_id'    => 'required|integer|exists:departments,id',
+        ]);
+
+        $statusData = $this->academicYearService->checkSubmissionStatus(
+            $request->academic_year_id,
+            $request->department_id,
+        );
+
+        return $this->successResponse($statusData, 'status de soumission vérifié avec succès');
     }
 
     /**
      * @OA\Post(
      *     path="/api/submissions/check-reclamation-status",
-     *     summary="Vérifier le statut de réclamation",
+     *     summary="Vérifier le status de réclamation",
      *     description="Vérifie si la réclamation est ouverte pour une année académique donnée",
      *     operationId="checkReclamationStatus",
      *     tags={"Submission Management"},
@@ -151,7 +160,7 @@ class SubmissionController extends Controller
      *     ),
      *     @OA\Response(
      *         response=200,
-     *         description="Statut vérifié avec succès",
+     *         description="status vérifié avec succès",
      *         @OA\JsonContent(
      *             @OA\Property(property="success", type="boolean", example=true),
      *             @OA\Property(property="data", type="object",
@@ -169,8 +178,8 @@ class SubmissionController extends Controller
     public function checkReclamationStatus(CheckReclamationStatusRequest $request): JsonResponse
     {
         $statusData = $this->academicYearService->checkReclamationStatus($request->academic_year_id);
-        
-        return $this->successResponse($statusData, 'Statut de réclamation vérifié avec succès');
+
+        return $this->successResponse($statusData, 'status de réclamation vérifié avec succès');
     }
 
     /**

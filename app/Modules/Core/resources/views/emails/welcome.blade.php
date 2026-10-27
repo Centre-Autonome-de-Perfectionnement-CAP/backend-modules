@@ -17,7 +17,7 @@
             <p><strong>Email :</strong> {{ $credentials['email'] }}</p>
             @if(isset($credentials['password']))
                 <p><strong>Mot de passe temporaire :</strong> {{ $credentials['password'] }}</p>
-                <p style="color: #d32f2f; font-size: 11pt;"><em>⚠️ Veuillez changer ce mot de passe lors de votre première connexion.</em></p>
+                <p style="color: #d32f2f; font-size: 11pt;"><em>Veuillez changer ce mot de passe lors de votre première connexion.</em></p>
             @endif
         </div>
     @endif

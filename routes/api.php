@@ -2,6 +2,10 @@
 
 use Illuminate\Support\Facades\Route;
 
+// Les routes des modules sont enregistrées par chaque ServiceProvider dans
+// app/Modules/*/Providers/*ServiceProvider.php (préfixe 'api' + middleware 'api').
+// Ce fichier ne contient que les routes transverses (préfixe 'api' automatique).
+
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -59,7 +63,9 @@ Route::match(['get', 'post'], '/core/validate-email', function (\Illuminate\Http
     return response()->json($result, 200);
 })->name('api.core.validate-email');
 
-// Routes de validation d'email par code OTP à 6 chiffres
-Route::post('/core/otp/send', [\App\Modules\Core\Http\Controllers\OtpVerificationController::class, 'sendOtp'])->name('api.core.otp.send');
-Route::post('/core/otp/verify', [\App\Modules\Core\Http\Controllers\OtpVerificationController::class, 'verifyOtp'])->name('api.core.otp.verify');
-
+// FUSION develop/main : les routes OTP /core/otp/send et /core/otp/verify
+// (OtpVerificationController) ne sont PAS reprises ici. Sur main, elles étaient
+// déjà écrasées par celles du module Core (app/Modules/Core/routes/api.php →
+// OtpController, limité à 10 requêtes/min), chargées après ce fichier : même
+// URI, donc seule la version du module Core était réellement active. On garde
+// ce comportement effectif sans doublon.

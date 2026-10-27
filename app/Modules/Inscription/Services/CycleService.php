@@ -102,7 +102,7 @@ class CycleService
     {
         $cycle->update(['is_active' => !$cycle->is_active]);
 
-        Log::info('Statut du cycle changé', [
+        Log::info('status du cycle changé', [
             'cycle_id' => $cycle->id,
             'is_active' => $cycle->is_active,
         ]);
@@ -206,7 +206,7 @@ class CycleService
         // Formater les données
         $periods = $groupedByDeadline->map(function ($periodsGroup, $dateKey) {
             $deadline = \Illuminate\Support\Carbon::parse($dateKey)->endOfDay();
-            
+
             $filieres = $periodsGroup->filter(function ($period) {
                 return $period->department !== null;
             })->map(function ($period) {
@@ -300,7 +300,7 @@ class CycleService
         return $allLevels->map(function ($level) {
             $label = match($level) {
                 'L1' => 'Licence 1',
-                'L2' => 'Licence 2', 
+                'L2' => 'Licence 2',
                 'L3' => 'Licence 3',
                 'M1' => 'Master 1',
                 'M2' => 'Master 2',

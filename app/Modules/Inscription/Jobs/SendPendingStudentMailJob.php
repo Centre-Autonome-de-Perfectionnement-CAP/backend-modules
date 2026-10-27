@@ -34,8 +34,6 @@ class SendPendingStudentMailJob implements ShouldQueue
             return;
         }
 
-        $mailService = app(\App\Modules\Core\Services\MailService::class);
-        
         $opinionCuca = $this->studentData['opinionCuca'] ?? null;
         $opinionCuo = $this->studentData['opinionCuo'] ?? null;
         
@@ -77,25 +75,47 @@ class SendPendingStudentMailJob implements ShouldQueue
             ? 'Acceptation de votre candidature' 
             : 'Décision concernant votre candidature';
 
-        try {
-            $mailService->sendWithTemplate(
-                $student->personalInformation->email,
-                $subject,
-                $template,
-                $mailData
+        // Email + WhatsApp en jobs indépendants. Publiés une seule fois : si
+        // la suite (création de l'étudiant) échoue et que ce job est
+        // retenté, le candidat ne reçoit pas de doublons.
+        if ($this->attempts() <= 1) {
+            $notifier = app(\App\Modules\Core\Services\Notifier::class);
+            $pi = $student->personalInformation;
+
+            // Envois de masse (décisions CUCA/CUO par lots) : cadencés.
+            $notifier->email($pi->email, $subject, "core::emails.{$template}", $mailData, bulk: true);
+
+            $nom = trim($pi->first_names . ' ' . $pi->last_name);
+            $filiere = $student->department->name ?? '';
+            $commentaire = trim((string) ($this->studentData['commentaireCuo'] ?? $this->studentData['commentaireCuca'] ?? ''));
+            $wa = $template === 'acceptation-candidature'
+                ? \App\Modules\Core\Support\WhatsAppText::compose('Candidature acceptée', [
+                    "Bonjour {$nom},",
+                    "Félicitations : votre candidature en *{$filiere}* a été *acceptée*.",
+                    '_Les informations relatives à votre admission vous ont été envoyées par e-mail._',
+                ])
+                : \App\Modules\Core\Support\WhatsAppText::compose('Décision de candidature', [
+                    "Bonjour {$nom},",
+                    "Après examen, votre candidature en *{$filiere}* n'a pas été retenue.",
+                    \App\Modules\Core\Support\WhatsAppText::fields(['Observation' => $commentaire]),
+                    '_Le détail vous a été envoyé par e-mail._',
+                ]);
+
+            $notifier->whatsapp(
+                $notifier->phoneFromContacts($pi->contacts),
+                $wa,
+                "inscription-decision:{$student->tracking_code}",
+                'Inscription',
+                bulk: true,
             );
-            
-            Log::info('Mail envoyé avec succès', [
+
+            Log::info('Décision de candidature mise en file (email + WhatsApp)', [
                 'student_id' => $student->id,
-                'email' => $student->personalInformation->email,
                 'opinionCuca' => $opinionCuca,
                 'opinionCuo' => $opinionCuo,
             ]);
-        } catch (\Exception $e) {
-            Log::error('Erreur envoi mail', ['error' => $e->getMessage()]);
-            throw $e;
         }
-        
+
         // Créer Student, StudentPendingStudent et AcademicPath si favorable
         $cycle = strtolower($student->department->cycle->name ?? '');
         $departmentName = strtolower($student->department->name ?? '');

@@ -19,7 +19,7 @@ class ValidationService
     }
 
     /**
-     * Récupère les paiements selon le statut
+     * Récupère les paiements selon le status
      */
     public function getPendingPayments($filters = [])
     {
@@ -28,8 +28,8 @@ class ValidationService
             'studentPendingStudent.pendingStudent.personalInformation',
             'legacyStudent'
         ]);
-        
-        // Filtrer par statut
+
+        // Filtrer par status
         $status = $filters['status'] ?? 'pending';
         if ($status === 'approved') {
             $query->where('status', 'approved');
@@ -42,9 +42,9 @@ class ValidationService
         if (!empty($filters['search'])) {
             $this->applySearchFilter($query, $filters['search']);
         }
-        
+
         $perPage = $filters['per_page'] ?? 15;
-        
+
         return $query->orderBy('updated_at', 'desc')->paginate($perPage);
     }
 
@@ -141,26 +141,21 @@ class ValidationService
     public function validatePayment($paymentId, $data)
     {
         DB::beginTransaction();
-        
+
         try {
             $payment = Paiement::findOrFail($paymentId);
-            
+
             $payment->update([
                 'status' => 'approved',
                 'observation' => $data['observation'] ?? null,
                 'validated_at' => now(),
                 'validated_by' => auth()->id()
             ]);
-            
+
             // Envoyer notification par email
-            if ($payment->email) {
-                SendPaymentNotificationJob::dispatch(
-                    $payment->email,
-                    'validation',
-                    $payment->toArray()
-                );
-            }
-            
+            // Email + WhatsApp asynchrones, publiés après le COMMIT.
+            SendPaymentNotificationJob::notify(app(\App\Modules\Core\Services\Notifier::class), $payment->email, 'validation', $payment->toArray());
+
             DB::commit();
             return $payment;
         } catch (\Exception $e) {
@@ -175,26 +170,26 @@ class ValidationService
     public function rejectPayment($paymentId, $data)
     {
         DB::beginTransaction();
-        
+
         try {
             $payment = Paiement::findOrFail($paymentId);
-            
+
             $payment->update([
                 'status' => 'rejected',
                 'observation' => $data['motif'],
                 'rejected_at' => now(),
                 'rejected_by' => auth()->id()
             ]);
-            
+
             // Envoyer notification par email avec motif de rejet
-            if ($payment->email) {
-                SendPaymentNotificationJob::dispatch(
-                    $payment->email,
-                    'rejection',
-                    array_merge($payment->toArray(), ['rejection_reason' => $data['motif']])
-                );
-            }
-            
+            // Email + WhatsApp asynchrones, publiés après le COMMIT.
+            SendPaymentNotificationJob::notify(
+                app(\App\Modules\Core\Services\Notifier::class),
+                $payment->email,
+                'rejection',
+                array_merge($payment->toArray(), ['rejection_reason' => $data['motif'] ?? null])
+            );
+
             DB::commit();
             return $payment;
         } catch (\Exception $e) {
@@ -205,21 +200,32 @@ class ValidationService
 
     /**
      * Récupère le fichier de quittance
+     *
+     * CORRECTIF : Storage::exists() / Storage::path() sans disk cible le disk
+     * "local" (storage/app/private) par défaut, alors que les quittances sont
+     * stockées sur le disk "public" (storage/app/public). Le fichier était
+     * introuvable → exception → HTTP 500.
      */
     public function getReceiptFile($paymentId)
     {
         $payment = Paiement::findOrFail($paymentId);
-        
-        if (!$payment->receipt_path || !Storage::exists($payment->receipt_path)) {
-            throw new \Exception('Quittance non trouvée');
+
+        if (!$payment->receipt_path) {
+            throw new \Exception('Aucune quittance associée à ce paiement.');
         }
-        
+
+        $disk = Storage::disk('public');
+
+        if (!$disk->exists($payment->receipt_path)) {
+            throw new \Exception('Quittance non trouvée sur le serveur.');
+        }
+
         // Nettoyer le nom du fichier en remplaçant les caractères interdits
         $cleanReference = str_replace(['/', '\\'], '_', $payment->reference);
-        
+
         return [
-            'path' => Storage::path($payment->receipt_path),
-            'filename' => 'quittance_' . $cleanReference . '.' . pathinfo($payment->receipt_path, PATHINFO_EXTENSION)
+            'path'     => $disk->path($payment->receipt_path),
+            'filename' => 'quittance_' . $cleanReference . '.' . pathinfo($payment->receipt_path, PATHINFO_EXTENSION),
         ];
     }
 }

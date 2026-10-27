@@ -248,7 +248,7 @@ moyenne_finale = moyenne_normale
 validé = (moyenne_finale >= 12)
 ```
 
-### Statut de Rattrapage (LMD uniquement)
+### status de Rattrapage (LMD uniquement)
 
 ```
 Si moyenne < 7:

@@ -24,7 +24,7 @@ class CursusesMigrationSeeder extends Seeder
         'niveau_3' => 0,
         'errors' => 0,
     ];
-    
+
     private $errors = [];
     private $studentIdMapping = []; // Cache pour mapper ancien ID → nouveau Student
 
@@ -57,7 +57,7 @@ class CursusesMigrationSeeder extends Seeder
         // Extraire tous les cursuses
         $this->command->info('🔍 Extraction des cursuses depuis le SQL...');
         $cursuses = $this->extractAllCursuses();
-        
+
         if (empty($cursuses)) {
             $this->command->error('❌ Aucun cursus trouvé');
             return;
@@ -74,7 +74,7 @@ class CursusesMigrationSeeder extends Seeder
             try {
                 $this->migrateCursus($cursus);
                 $this->stats['created_paths']++;
-                
+
                 // Stats par niveau
                 $niveau = (int) $cursus['niveau_etude'];
                 if ($niveau >= 1 && $niveau <= 3) {
@@ -93,7 +93,7 @@ class CursusesMigrationSeeder extends Seeder
 
         $bar->finish();
         $this->command->newLine(2);
-        
+
         $this->displayStats();
     }
 
@@ -101,23 +101,23 @@ class CursusesMigrationSeeder extends Seeder
     {
         // Réutiliser la même extraction que StudentMigrationSeeder
         $students = $this->extractStudentsFromSQL();
-        
+
         $count = 0;
         foreach ($students as $oldStudent) {
             $oldId = (int) ($oldStudent['id'] ?? 0);
             $matricule = trim($oldStudent['matricule'] ?? '');
-            
+
             if ($oldId > 0 && $matricule && $matricule !== 'NULL' && strtoupper($matricule) !== 'NULL') {
                 // Chercher le Student par matricule
                 $student = Student::where('student_id_number', $matricule)->first();
-                
+
                 if ($student) {
                     $this->studentIdMapping[$oldId] = $student->id;
                     $count++;
                 }
             }
         }
-        
+
         $this->command->info("   ✓ {$count} étudiants mappés (ancien_id → student_id)");
     }
 
@@ -127,29 +127,29 @@ class CursusesMigrationSeeder extends Seeder
     private function extractStudentsFromSQL(): array
     {
         $sqlContent = file_get_contents($this->sqlFile);
-        
+
         $pattern = '/INSERT INTO `etudiants`.*?VALUES\s*(.*?);/s';
         preg_match_all($pattern, $sqlContent, $allMatches, PREG_SET_ORDER);
-        
+
         if (empty($allMatches)) {
             return [];
         }
 
         $students = [];
-        
+
         foreach ($allMatches as $match) {
             $insertData = $match[1];
-            
+
             // Parser ligne par ligne avec gestion des parenthèses
             $depth = 0;
             $currentRow = '';
             $inString = false;
             $stringChar = '';
-            
+
             for ($i = 0; $i < strlen($insertData); $i++) {
                 $char = $insertData[$i];
                 $prevChar = $i > 0 ? $insertData[$i - 1] : '';
-                
+
                 if (($char === '"' || $char === "'") && $prevChar !== '\\') {
                     if (!$inString) {
                         $inString = true;
@@ -158,7 +158,7 @@ class CursusesMigrationSeeder extends Seeder
                         $inString = false;
                     }
                 }
-                
+
                 if (!$inString) {
                     if ($char === '(') {
                         $depth++;
@@ -174,13 +174,13 @@ class CursusesMigrationSeeder extends Seeder
                         }
                     }
                 }
-                
+
                 if ($depth > 0) {
                     $currentRow .= $char;
                 }
             }
         }
-        
+
         return $students;
     }
 
@@ -188,18 +188,18 @@ class CursusesMigrationSeeder extends Seeder
     {
         // Enlever les parenthèses externes
         $row = trim($row, '() ');
-        
+
         // Parser les valeurs
         $values = [];
         $current = '';
         $inString = false;
         $stringChar = '';
         $depth = 0;
-        
+
         for ($i = 0; $i < strlen($row); $i++) {
             $char = $row[$i];
             $prevChar = $i > 0 ? $row[$i - 1] : '';
-            
+
             if (($char === '"' || $char === "'") && $prevChar !== '\\') {
                 if (!$inString) {
                     $inString = true;
@@ -208,25 +208,25 @@ class CursusesMigrationSeeder extends Seeder
                     $inString = false;
                 }
             }
-            
+
             if (!$inString) {
                 if ($char === '[') $depth++;
                 if ($char === ']') $depth--;
-                
+
                 if ($char === ',' && $depth === 0) {
                     $values[] = trim($current, " '\"");
                     $current = '';
                     continue;
                 }
             }
-            
+
             $current .= $char;
         }
-        
+
         if ($current !== '') {
             $values[] = trim($current, " '\"");
         }
-        
+
         // Mapper aux colonnes
         return [
             'id' => $values[0] ?? null,
@@ -245,7 +245,7 @@ class CursusesMigrationSeeder extends Seeder
     private function extractAllCursuses(): array
     {
         $sqlContent = file_get_contents($this->sqlFile);
-        
+
         // Pattern pour extraire les INSERT de cursuses
         $pattern = '/INSERT INTO `cursuses`[^V]+VALUES\s*(.+?);(?=\s*(?:INSERT|\/\*|$))/s';
         preg_match_all($pattern, $sqlContent, $matches);
@@ -255,10 +255,10 @@ class CursusesMigrationSeeder extends Seeder
         }
 
         $cursuses = [];
-        
+
         foreach ($matches[1] as $insertData) {
             $rows = $this->extractRows($insertData);
-            
+
             foreach ($rows as $row) {
                 $values = $this->parseRow($row);
                 if ($values) {
@@ -278,11 +278,11 @@ class CursusesMigrationSeeder extends Seeder
         $inString = false;
         $stringChar = '';
         $length = strlen($data);
-        
+
         for ($i = 0; $i < $length; $i++) {
             $char = $data[$i];
             $prevChar = $i > 0 ? $data[$i - 1] : '';
-            
+
             if (($char === "'" || $char === '"') && $prevChar !== '\\') {
                 if (!$inString) {
                     $inString = true;
@@ -291,7 +291,7 @@ class CursusesMigrationSeeder extends Seeder
                     $inString = false;
                 }
             }
-            
+
             if (!$inString) {
                 if ($char === '(') {
                     $depth++;
@@ -310,12 +310,12 @@ class CursusesMigrationSeeder extends Seeder
                     }
                 }
             }
-            
+
             if ($depth > 0) {
                 $currentRow .= $char;
             }
         }
-        
+
         return $rows;
     }
 
@@ -323,7 +323,7 @@ class CursusesMigrationSeeder extends Seeder
     {
         // Format: id, etudiant_id, 'annee', niveau, 'decision', created, updated
         $values = str_getcsv($row, ',', "'");
-        
+
         if (count($values) < 4) {
             return null;
         }
@@ -341,21 +341,21 @@ class CursusesMigrationSeeder extends Seeder
     {
         // Trouver le nouveau student_id
         $newStudentId = $this->studentIdMapping[$cursus['etudiant_id']] ?? null;
-        
+
         if (!$newStudentId) {
             throw new \Exception("Student introuvable pour ancien etudiant_id {$cursus['etudiant_id']}");
         }
 
         // Récupérer le lien student_pending_student
         $link = StudentPendingStudent::where('student_id', $newStudentId)->first();
-        
+
         if (!$link) {
             throw new \Exception("Lien pivot introuvable pour student_id {$newStudentId}");
         }
 
         // Trouver l'année académique
         $academicYear = AcademicYear::where('academic_year', $cursus['annee_academique'])->first();
-        
+
         if (!$academicYear) {
             // Utiliser l'année académique du pending_student par défaut
             $academicYear = $link->pendingStudent->academicYear;
@@ -388,19 +388,19 @@ class CursusesMigrationSeeder extends Seeder
         $this->command->info('║           STATISTIQUES MIGRATION CURSUSES                     ║');
         $this->command->info('╚═══════════════════════════════════════════════════════════════╝');
         $this->command->newLine();
-        
+
         $this->command->info("📊 Total cursuses: {$this->stats['total_cursuses']}");
         $this->command->info("   ✅ Academic paths créés: {$this->stats['created_paths']}");
         $this->command->newLine();
-        
+
         $this->command->info("Répartition par niveau:");
         $this->command->info("   • Niveau 1: {$this->stats['niveau_1']}");
         $this->command->info("   • Niveau 2: {$this->stats['niveau_2']}");
         $this->command->info("   • Niveau 3: {$this->stats['niveau_3']}");
-        
+
         if ($this->stats['errors'] > 0) {
             $this->command->error("\n❌ Erreurs: {$this->stats['errors']}");
-            
+
             if (!empty($this->errors)) {
                 $this->command->error("\n⚠ Premières erreurs:");
                 foreach (array_slice($this->errors, 0, 10) as $error) {

@@ -24,7 +24,7 @@ use App\Services\StringUtilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class DossierSubmissionService
@@ -233,12 +233,14 @@ class DossierSubmissionService
                 ];
 
                 // Générer le PDF
+                // Fiche persistée sur le disque privé "local" : l'email et le
+                // WhatsApp partent en file et la joignent après la réponse HTTP.
                 $pdfFileName = 'fiche_confirmation_' . $pendingStudent->tracking_code . '.pdf';
-                $pdfPath = storage_path('app/temp/' . $pdfFileName);
-                
-                // Créer le dossier temp s'il n'existe pas
-                if (!file_exists(storage_path('app/temp'))) {
-                    mkdir(storage_path('app/temp'), 0755, true);
+                $pdfRelPath = 'inscriptions/fiches-confirmation/' . $pdfFileName;
+                $pdfPath = Storage::disk('local')->path($pdfRelPath);
+
+                if (!is_dir(dirname($pdfPath))) {
+                    mkdir(dirname($pdfPath), 0755, true);
                 }
 
                 $this->pdfService->saveWithTemplate('fiche-confirmation-inscription', $pdfData, $pdfPath);
@@ -257,15 +259,32 @@ class DossierSubmissionService
                     'submission_datetime' => $submissionDatetime,
                 ];
 
-                // Envoyer l'email avec la fiche en pièce jointe
-                Mail::to($personalInformation->email)->send(new DossierSubmissionWithAttachment($mailData, $pdfPath));
+                // Email (fiche jointe) + WhatsApp (fiche PDF) : asynchrones,
+                // indépendants, publiés après le COMMIT.
+                $notifier = app(\App\Modules\Core\Services\Notifier::class);
+                $notifier->mailable($personalInformation->email, new DossierSubmissionWithAttachment($mailData, $pdfRelPath));
 
-                // Supprimer le fichier temporaire après l'envoi
-                if (file_exists($pdfPath)) {
-                    unlink($pdfPath);
-                }
+                $nomComplet = trim($personalInformation->first_names . ' ' . $personalInformation->last_name);
+                $notifier->whatsappFile(
+                    $notifier->phoneFromContacts($personalInformation->contacts),
+                    'local',
+                    $pdfRelPath,
+                    'Fiche_Confirmation_Inscription_' . $pendingStudent->tracking_code . '.pdf',
+                    \App\Modules\Core\Support\WhatsAppText::compose('Dossier de candidature reçu', [
+                        "Bonjour {$nomComplet},",
+                        'Votre dossier de candidature a bien été reçu.',
+                        \App\Modules\Core\Support\WhatsAppText::fields([
+                            'Filière'        => $department->name,
+                            'Année'          => $academicYear->academic_year,
+                            'Code de suivi'  => $pendingStudent->tracking_code,
+                        ]),
+                        'Imprimez la fiche ci-jointe et joignez-la à votre dossier physique.',
+                    ]),
+                    "inscription-soumission:{$pendingStudent->tracking_code}",
+                    'Inscription',
+                );
 
-                Log::info('Fiche de confirmation envoyée avec succès', [
+                Log::info('Fiche de confirmation mise en file (email + WhatsApp)', [
                     'tracking_code' => $pendingStudent->tracking_code,
                     'email' => $personalInformation->email
                 ]);
@@ -353,7 +372,23 @@ class DossierSubmissionService
                     'study_level' => $pendingStudent->study_level,
                     'first_names' => $personalInformation->first_names,
                 ];
-                Mail::to($personalInformation->email)->send(new DossierCompletedConfirmation($mailData));
+                // Email + WhatsApp asynchrones (après COMMIT).
+                $notifier = app(\App\Modules\Core\Services\Notifier::class);
+                $notifier->mailable($personalInformation->email, new DossierCompletedConfirmation($mailData));
+                $notifier->whatsapp(
+                    $notifier->phoneFromContacts($personalInformation->contacts),
+                    \App\Modules\Core\Support\WhatsAppText::compose('Complément reçu', [
+                        "Bonjour {$personalInformation->first_names},",
+                        'Le complément de votre dossier a bien été reçu.',
+                        \App\Modules\Core\Support\WhatsAppText::fields([
+                            'Code de suivi'      => $pendingStudent->tracking_code,
+                            'Filière'            => $department->name,
+                            'Document(s) ajouté(s)' => (string) count($documents),
+                        ]),
+                    ]),
+                    "inscription-complement:{$pendingStudent->tracking_code}",
+                    'Inscription',
+                );
             } catch (\Exception $e) {
                 Log::error('Failed to send confirmation email: ' . $e->getMessage());
             }
@@ -850,17 +885,15 @@ class DossierSubmissionService
                 );
             }
 
-            // Vérification du jeton OTP si présent
-            $verificationToken = $request->input('verification_token', $request->input('_verificationToken'));
-            if (!empty($verificationToken)) {
-                $otpService = app(\App\Modules\Core\Services\OtpService::class);
-                if (!$otpService->validateToken((string)$verificationToken, $email)) {
-                    throw new BusinessException(
-                        message: "Le jeton de vérification est invalide ou a expiré.",
-                        errorCode: 'INVALID_VERIFICATION_TOKEN',
-                        statusCode: 403
-                    );
-                }
+            // Vérification du jeton OTP - OBLIGATOIRE (avant : vérifié seulement
+            // s'il était fourni ; email + code de suivi suffisaient à modifier).
+            $verificationToken = (string) $request->input('verification_token', $request->input('_verificationToken'));
+            if (!app(\App\Modules\Core\Services\OtpService::class)->validateToken($verificationToken, $email)) {
+                throw new BusinessException(
+                    message: "Le jeton de vérification est invalide ou a expiré.",
+                    errorCode: 'INVALID_VERIFICATION_TOKEN',
+                    statusCode: 403
+                );
             }
 
             $isValidated = (
@@ -1062,9 +1095,10 @@ class DossierSubmissionService
                 ];
 
                 $pdfFileName = 'fiche_confirmation_' . $pendingStudent->tracking_code . '.pdf';
-                $pdfPath = storage_path('app/temp/' . $pdfFileName);
-                if (!file_exists(storage_path('app/temp'))) {
-                    mkdir(storage_path('app/temp'), 0755, true);
+                $pdfRelPath = 'inscriptions/fiches-confirmation/' . $pdfFileName;
+                $pdfPath = Storage::disk('local')->path($pdfRelPath);
+                if (!is_dir(dirname($pdfPath))) {
+                    mkdir(dirname($pdfPath), 0755, true);
                 }
 
                 $this->pdfService->saveWithTemplate('fiche-confirmation-inscription', $pdfData, $pdfPath);
@@ -1082,20 +1116,25 @@ class DossierSubmissionService
                     'submission_datetime' => $submissionDatetime . ' (Mise à jour)',
                 ];
 
-                if (filter_var($personalInfo->email, FILTER_VALIDATE_EMAIL)) {
-                    Mail::to($personalInfo->email)->send(
-                        new DossierSubmissionWithAttachment($mailData, $pdfPath)
-                    );
-                }
-
-                if (file_exists($pdfPath)) {
-                    unlink($pdfPath);
-                }
+                // Email (fiche jointe) + WhatsApp (fiche PDF) asynchrones.
+                $notifier = app(\App\Modules\Core\Services\Notifier::class);
+                $notifier->mailable($personalInfo->email, new DossierSubmissionWithAttachment($mailData, $pdfRelPath));
+                $notifier->whatsappFile(
+                    $notifier->phoneFromContacts($personalInfo->contacts),
+                    'local',
+                    $pdfRelPath,
+                    'Fiche_Confirmation_Inscription_' . $pendingStudent->tracking_code . '.pdf',
+                    \App\Modules\Core\Support\WhatsAppText::compose('Dossier mis à jour', [
+                        'Bonjour ' . trim($personalInfo->first_names . ' ' . $personalInfo->last_name) . ',',
+                        'Votre dossier a bien été mis à jour.',
+                        \App\Modules\Core\Support\WhatsAppText::fields(['Code de suivi' => $pendingStudent->tracking_code]),
+                        'Voici votre nouvelle fiche de confirmation.',
+                    ]),
+                    "inscription-maj:{$pendingStudent->tracking_code}",
+                    'Inscription',
+                );
             } catch (\Throwable $e) {
-                Log::error('Erreur lors de la génération PDF ou envoi email de mise à jour: ' . $e->getMessage());
-                if (isset($pdfPath) && file_exists($pdfPath)) {
-                    @unlink($pdfPath);
-                }
+                Log::error('Erreur lors de la génération PDF ou mise en file des notifications de mise à jour: ' . $e->getMessage());
             }
 
             return [

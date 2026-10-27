@@ -17,6 +17,7 @@ class CreateCourseElementRequest extends FormRequest
             'name' => 'required|string|max:255',
             'code' => 'required|string|max:255|unique:course_elements,code',
             'credits' => 'required|integer|min:1',
+            'hours' => 'nullable|integer|min:0',
             'teaching_unit_id' => 'required|exists:teaching_units,id',
         ];
     }

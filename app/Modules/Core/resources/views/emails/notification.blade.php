@@ -57,7 +57,7 @@
             <h1>{{ $title ?? 'Notification' }}</h1>
         </div>
         <div class="content">
-            <p>{{ $message }}</p>
+            <p>{!! nl2br(e($body ?? '')) !!}</p>
 
             @if(isset($actionUrl) && isset($actionText))
                 <div style="text-align: center;">

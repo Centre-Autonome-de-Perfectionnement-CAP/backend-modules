@@ -92,21 +92,21 @@ class AcademicYearService
             Log::info('Début de la progression automatique des étudiants', [
                 'academic_year_id' => $year->id,
             ]);
-            
+
             $this->progressionService->progressStudents($year);
-            
+
             Log::info('Fin de la progression automatique des étudiants', [
                 'academic_year_id' => $year->id,
             ]);
 
             $freshYear = $year->fresh();
-            
+
             Log::info('Année académique créée avec succès - Résumé final', [
                 'academic_year_id' => $freshYear->id,
                 'label' => $academicYearLabel,
                 'is_current' => $freshYear->is_current,
             ]);
-            
+
             return $freshYear;
         });
     }
@@ -127,19 +127,19 @@ class AcademicYearService
         return DB::transaction(function () use ($academicYear, $data) {
             // Mise à jour des dates si fournies
             $updateData = [];
-            
+
             if (isset($data['year_start'])) {
                 $updateData['year_start'] = $data['year_start'];
             }
-            
+
             if (isset($data['year_end'])) {
                 $updateData['year_end'] = $data['year_end'];
             }
-            
+
             if (isset($data['submission_start'])) {
                 $updateData['submission_start'] = $data['submission_start'];
             }
-            
+
             if (isset($data['submission_end'])) {
                 $updateData['submission_end'] = $data['submission_end'];
             }
@@ -152,7 +152,7 @@ class AcademicYearService
             if (isset($data['departments'])) {
                 // Supprimer les anciennes périodes
                 $academicYear->submissionPeriod()->delete();
-                
+
                 // Créer les nouvelles
                 foreach ($data['departments'] as $departmentId) {
                     SubmissionPeriod::create([
@@ -203,7 +203,7 @@ class AcademicYearService
         return DB::transaction(function () use ($academicYear) {
             // Désactiver toutes les autres
             AcademicYear::where('is_current', true)->update(['is_current' => false]);
-            
+
             // Activer celle-ci
             $academicYear->update(['is_current' => true]);
 
@@ -225,12 +225,72 @@ class AcademicYearService
     }
 
     /**
+     * AJOUT - méthode appelée par SubmissionController::checkSubmissionStatus()
+     * mais qui n'existait nulle part (ni ici, ni même sur main/prod) : tout
+     * appel à POST /inscription/submissions/check-status plantait avec une
+     * erreur fatale "Call to undefined method".
+     *
+     * CORRECTIF - la première version de cette méthode vérifiait "une
+     * période toutes filières confondues", ce qui NE correspond PAS à la
+     * vraie règle métier déjà active en prod. La logique réellement utilisée
+     * (DossierSubmissionService::submitDossier(), ligne ~39) exige un
+     * couple (academic_year_id, department_id) pour trouver une période
+     * active - la soumission est ouverte PAR FILIÈRE, jamais globalement.
+     * Aligné ici sur cette même règle.
+     */
+    public function checkSubmissionStatus(int $academicYearId, int $departmentId): array
+    {
+        $academicYear = AcademicYear::findOrFail($academicYearId);
+        $now = now()->toDateString();
+
+        $activePeriod = SubmissionPeriod::where('academic_year_id', $academicYear->id)
+            ->where('department_id', $departmentId)
+            ->where('start_date', '<=', $now)
+            ->where('end_date', '>=', $now)
+            ->first();
+
+        return [
+            'is_open'           => $activePeriod !== null,
+            'academic_year'     => $academicYear,
+            'submission_period' => $activePeriod,
+            'current_time'      => now()->toIso8601String(),
+        ];
+    }
+
+    /**
+     * AJOUT - même situation que checkSubmissionStatus() ci-dessus, pour
+     * SubmissionController::checkReclamationStatus(). Les réclamations ne
+     * sont PAS scopées par filière dans le modèle ReclamationPeriod
+     * (pas de colonne department_id) - donc ici la vérification reste
+     * globale par année académique, cohérent avec la structure de données
+     * existante.
+     */
+    public function checkReclamationStatus(int $academicYearId): array
+    {
+        $academicYear = AcademicYear::findOrFail($academicYearId);
+        $now = now();
+
+        $activePeriod = ReclamationPeriod::where('academic_year_id', $academicYear->id)
+            ->where('is_active', true)
+            ->where('start_date', '<=', $now)
+            ->where('end_date', '>=', $now)
+            ->first();
+
+        return [
+            'is_open'            => $activePeriod !== null,
+            'academic_year'      => $academicYear,
+            'reclamation_period' => $activePeriod,
+            'current_time'       => $now->toIso8601String(),
+        ];
+    }
+
+    /**
      * Vérifier si les inscriptions sont ouvertes
      */
     public function isSubmissionOpen(): bool
     {
         $current = $this->getCurrent();
-        
+
         if (!$current) {
             return false;
         }
@@ -565,7 +625,7 @@ class AcademicYearService
 
         // Récupérer les périodes de réclamation
         $reclamationPeriods = $academicYear->reclamationPeriod;
-        
+
         foreach ($reclamationPeriods as $period) {
             $periods[] = [
                 'id' => $period->id,
@@ -656,70 +716,11 @@ class AcademicYearService
             ->get();
     }
 
-    /**
-     * Vérifie le statut de soumission pour une année académique
-     */
-    public function checkSubmissionStatus(?int $academicYearId = null): array
-    {
-        $now = now();
-        $academicYear = $academicYearId ? AcademicYear::find($academicYearId) : $this->getCurrent();
-
-        if (!$academicYear) {
-            return [
-                'is_open' => false,
-                'academic_year' => null,
-                'submission_period' => null,
-                'current_time' => $now->toISOString(),
-            ];
-        }
-
-        $activePeriod = SubmissionPeriod::where('academic_year_id', $academicYear->id)
-            ->where('start_date', '<=', $now)
-            ->where('end_date', '>=', $now)
-            ->first();
-
-        $isOpen = $activePeriod !== null || (
-            $academicYear->submission_start &&
-            $academicYear->submission_end &&
-            $now->between($academicYear->submission_start, $academicYear->submission_end)
-        );
-
-        return [
-            'is_open' => (bool) $isOpen,
-            'academic_year' => $academicYear,
-            'submission_period' => $activePeriod,
-            'current_time' => $now->toISOString(),
-        ];
-    }
-
-    /**
-     * Vérifie le statut de réclamation pour une année académique
-     */
-    public function checkReclamationStatus(?int $academicYearId = null): array
-    {
-        $now = now();
-        $academicYear = $academicYearId ? AcademicYear::find($academicYearId) : $this->getCurrent();
-
-        if (!$academicYear) {
-            return [
-                'is_open' => false,
-                'academic_year' => null,
-                'reclamation_period' => null,
-                'current_time' => $now->toISOString(),
-            ];
-        }
-
-        $activePeriod = ReclamationPeriod::where('academic_year_id', $academicYear->id)
-            ->where('start_date', '<=', $now)
-            ->where('end_date', '>=', $now)
-            ->first();
-
-        return [
-            'is_open' => $activePeriod !== null,
-            'academic_year' => $academicYear,
-            'reclamation_period' => $activePeriod,
-            'current_time' => $now->toISOString(),
-        ];
-    }
+    // FUSION develop/main : les versions main de checkSubmissionStatus(?int) et
+    // checkReclamationStatus(?int) sont retirées - elles redéclaraient les
+    // méthodes develop plus haut (erreur fatale PHP). SubmissionController
+    // (version develop) valide academic_year_id + department_id et appelle la
+    // version develop, alignée sur la règle métier « période ouverte PAR
+    // FILIÈRE » de DossierSubmissionService. Aucun écran ne consomme ces routes.
 }
 

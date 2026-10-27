@@ -111,7 +111,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Correction d'informations — Résultat</h1>
+            <h1>Correction d'informations - Résultat</h1>
         </div>
 
         <div class="content">
@@ -210,7 +210,7 @@
         </div>
 
         <div class="footer">
-            <p>Merci de votre confiance,<br>Bureau des Admissions — CAP-EPAC</p>
+            <p>Merci de votre confiance,<br>Bureau des Admissions - CAP-EPAC</p>
         </div>
     </div>
 </body>

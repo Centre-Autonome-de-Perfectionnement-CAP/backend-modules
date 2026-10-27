@@ -21,13 +21,28 @@ class DossierSubmissionWithAttachment extends Mailable
 
     public function build()
     {
-        return $this->subject('Confirmation de soumission - Fiche à joindre au dossier physique')
-            ->view('core::emails.dossier_submission_with_attachment')
-            ->attach($this->pdfPath, [
+        // Envoi en file : le chemin est relatif au disque "local" (résolu au
+        // moment de l'envoi, indépendant du dossier de release). Un chemin
+        // absolu reste accepté (compatibilité).
+        $absolute = (str_starts_with($this->pdfPath, '/') || preg_match('/^[A-Za-z]:[\\\\\/]/', $this->pdfPath))
+            ? $this->pdfPath
+            : \Illuminate\Support\Facades\Storage::disk('local')->path($this->pdfPath);
+
+        $mail = $this->subject('Confirmation de soumission - Fiche à joindre au dossier physique')
+            ->view('core::emails.dossier_submission_with_attachment');
+
+        if (is_file($absolute)) {
+            $mail->attach($absolute, [
                 'as' => 'Fiche_Confirmation_Inscription_' . $this->mailData['tracking_code'] . '.pdf',
                 'mime' => 'application/pdf',
-            ])
-            ->with([
+            ]);
+        } else {
+            \Illuminate\Support\Facades\Log::warning('Fiche de confirmation introuvable - email envoyé sans pièce jointe', [
+                'tracking_code' => $this->mailData['tracking_code'] ?? null,
+            ]);
+        }
+
+        return $mail->with([
                 'department' => $this->mailData['department'],
                 'academic_year' => $this->mailData['academic_year'],
                 'tracking_code' => $this->mailData['tracking_code'],

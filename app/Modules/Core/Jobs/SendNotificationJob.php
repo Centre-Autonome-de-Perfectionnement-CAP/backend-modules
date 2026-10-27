@@ -1,0 +1,352 @@
+<?php
+
+namespace App\Modules\Core\Jobs;
+
+use App\Modules\WhatsApp\Services\WhatsAppBridgeClient;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Mail\Mailable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
+
+/**
+ * SendNotificationJob - job unique d'envoi asynchrone (tous modules).
+ *
+ * UN job = UN canal = UN destinataire : un échec email n'a aucun effet sur
+ * le WhatsApp correspondant (et inversement), et un destinataire en échec
+ * ne bloque jamais les autres.
+ *
+ * Canaux :
+ *   'email'          → { to, to_name?, cc?: [], subject, view, vars, attachments?: [{disk, path, name}] }
+ *   'mailable'       → { to, cc?: [], mailable: Mailable, after_sent?: [{channel, payload}] }
+ *                      (after_sent : publiés UNIQUEMENT si l'email est accepté par le SMTP)
+ *   'whatsapp'       → { phone, message, context, module? }
+ *   'whatsapp_file'  → { phone, disk, path, file_name, caption?, context, module? }
+ *
+ * Politique de retry :
+ *   - retryUntil() = 24 h pour les incidents transitoires (bridge
+ *     déconnecté / saturé, SMTP indisponible) avec backoff progressif ;
+ *   - maxExceptions = 6 : une exception répétée ne boucle pas 24 h ;
+ *   - les échecs définitifs (numéro invalide / absent de WhatsApp, fichier
+ *     introuvable, adresse email invalide) sont journalisés, jamais retentés.
+ *
+ * Envoi immédiat (send()) : depuis une requête HTTP, le message part
+ * juste APRÈS la réponse (l'utilisateur n'attend pas) sans dépendre d'un
+ * worker. Seuls les nouveaux essais (bridge déconnecté, SMTP indisponible)
+ * passent par la file - traitée par les workers ou, à défaut, par le
+ * scheduler chaque minute.
+ *
+ * Historique : ce job vivait dans App\Modules\Demandes\Jobs. La classe
+ * Demandes l'étend désormais (compatibilité des jobs déjà en file).
+ */
+class SendNotificationJob implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    /** Nombre maximal d'exceptions avant échec définitif (failed_jobs). */
+    public int $maxExceptions = 6;
+
+    /**
+     * Timeout d'une exécution (s) : > timeout fichier du bridge (60 s) + ping
+     * /status (5 s), et < retry_after de la connexion queue (90 s).
+     */
+    public int $timeout = 80;
+
+    /** Backoff progressif entre deux tentatives (secondes). */
+    private const BACKOFF = [15, 30, 60, 120, 300, 600];
+
+    public function __construct(
+        public string $channel,
+        public array  $payload,
+    ) {
+        // Dispatch dans une transaction → publié seulement après le COMMIT.
+        $this->afterCommit();
+    }
+
+    /**
+     * Point d'entrée transactionnel : envoi juste après la réponse HTTP (et
+     * après le COMMIT éventuel), sinon mise en file classique (console,
+     * worker, tests). Ne lève jamais d'exception.
+     */
+    public static function send(string $channel, array $payload): void
+    {
+        if (app()->runningInConsole()) {
+            static::dispatch($channel, $payload);
+            return;
+        }
+
+        try {
+            // Annulé si la transaction englobante est annulée (rollback).
+            \Illuminate\Support\Facades\DB::afterCommit(
+                fn () => app()->terminating(fn () => static::sendNow($channel, $payload))
+            );
+        } catch (\Throwable $e) {
+            static::queueRetry($channel, $payload, 0);
+        }
+    }
+
+    /**
+     * Exécute l'envoi tout de suite, dans le processus courant. Tout échec
+     * (exception ou échec transitoire) est remis en file pour un nouvel
+     * essai : rien n'est perdu.
+     */
+    public static function sendNow(string $channel, array $payload): void
+    {
+        try {
+            app(\Illuminate\Contracts\Bus\Dispatcher::class)->dispatchNow(new static($channel, $payload));
+        } catch (\Throwable $e) {
+            Log::warning('[SendNotificationJob] Envoi immédiat en échec - remis en file', [
+                'channel' => $channel,
+                'to'      => $payload['phone'] ?? ($payload['to'] ?? null),
+                'error'   => $e->getMessage(),
+            ]);
+            static::queueRetry($channel, $payload, self::BACKOFF[0]);
+        }
+    }
+
+    /** Exécution hors file (sendNow / dispatchNow) : pas de release() possible. */
+    private function isImmediate(): bool
+    {
+        return $this->job === null || $this->job instanceof \Illuminate\Queue\Jobs\SyncJob;
+    }
+
+    private static function queueRetry(string $channel, array $payload, int $delaySeconds): void
+    {
+        // Sans vraie file (QUEUE_CONNECTION=sync), un nouvel essai
+        // s'exécuterait tout de suite, en boucle : on journalise seulement.
+        if (config('queue.default') === 'sync') {
+            Log::error('[SendNotificationJob] Notification non envoyée (aucune file configurée pour réessayer)', [
+                'channel' => $channel,
+                'to'      => $payload['phone'] ?? ($payload['to'] ?? null),
+            ]);
+            return;
+        }
+
+        try {
+            // Nouvel essai : indépendant de toute transaction en cours.
+            static::dispatch($channel, $payload)->beforeCommit()->delay(now()->addSeconds($delaySeconds));
+        } catch (\Throwable $e) {
+            Log::error('[SendNotificationJob] Mise en file impossible - notification perdue', [
+                'channel' => $channel,
+                'to'      => $payload['phone'] ?? ($payload['to'] ?? null),
+                'error'   => $e->getMessage(),
+            ]);
+        }
+    }
+
+    public function retryUntil(): \DateTimeInterface
+    {
+        return now()->addHours(24);
+    }
+
+    /** @return int[] */
+    public function backoff(): array
+    {
+        return self::BACKOFF;
+    }
+
+    public function handle(WhatsAppBridgeClient $bridge): void
+    {
+        match ($this->channel) {
+            'email'         => $this->handleEmail(),
+            'mailable'      => $this->handleMailable(),
+            'whatsapp'      => $this->handleWhatsApp($bridge),
+            'whatsapp_file' => $this->handleWhatsAppFile($bridge),
+            default         => Log::warning("[SendNotificationJob] Canal inconnu : {$this->channel}"),
+        };
+    }
+
+    // ── Email (vue Blade) ──────────────────────────────────────────────────────
+
+    private function handleEmail(): void
+    {
+        $p = $this->payload;
+
+        if (!$this->validEmail($p['to'] ?? null)) {
+            Log::warning('[SendNotificationJob] Email ignoré : adresse invalide', [
+                'to' => $p['to'] ?? null, 'sub' => $p['subject'] ?? null,
+            ]);
+            return;
+        }
+
+        // Pas de catch : SMTP indisponible → retry avec backoff.
+        Mail::send($p['view'], $p['vars'] ?? [], function ($m) use ($p) {
+            $m->to($p['to'], $p['to_name'] ?? null)->subject($p['subject']);
+
+            foreach ($this->validCc($p['cc'] ?? []) as $cc) {
+                $m->cc($cc);
+            }
+
+            foreach ($p['attachments'] ?? [] as $att) {
+                $disk = $att['disk'] ?? 'public';
+                if (!empty($att['path']) && Storage::disk($disk)->exists($att['path'])) {
+                    $m->attachFromStorageDisk($disk, $att['path'], $att['name'] ?? basename($att['path']));
+                } else {
+                    Log::warning('[SendNotificationJob] Pièce jointe email introuvable - ignorée', [
+                        'to' => $p['to'], 'path' => $att['path'] ?? null,
+                    ]);
+                }
+            }
+        });
+
+        Log::info('[SendNotificationJob] Email envoyé', ['to' => $p['to'], 'sub' => $p['subject']]);
+    }
+
+    // ── Email (classe Mailable) ────────────────────────────────────────────────
+
+    private function handleMailable(): void
+    {
+        $p = $this->payload;
+        $mailable = $p['mailable'] ?? null;
+
+        if (!$mailable instanceof Mailable || !$this->validEmail($p['to'] ?? null)) {
+            Log::warning('[SendNotificationJob] Mailable ignoré : destinataire ou contenu invalide', [
+                'to' => $p['to'] ?? null, 'class' => is_object($mailable) ? get_class($mailable) : null,
+            ]);
+            return;
+        }
+
+        $pending = Mail::to($p['to']);
+        $cc = $this->validCc($p['cc'] ?? []);
+        if ($cc) {
+            $pending->cc($cc);
+        }
+
+        // send() (et non queue()) : on est déjà dans le worker.
+        $pending->send($mailable);
+
+        Log::info('[SendNotificationJob] Mailable envoyé', ['to' => $p['to'], 'class' => get_class($mailable)]);
+
+        $this->dispatchAfterSent($p['after_sent'] ?? []);
+    }
+
+    /**
+     * Notifications conditionnées à la réussite de l'email (ex. WhatsApp
+     * « consultez votre boîte mail »). Une erreur ici est journalisée sans
+     * relancer le job : l'email est déjà parti, il ne doit pas être renvoyé.
+     */
+    private function dispatchAfterSent(array $followUps): void
+    {
+        foreach ($followUps as $followUp) {
+            try {
+                // Envoi immédiat → suivi immédiat ; depuis la file → en file.
+                $this->isImmediate()
+                    ? static::sendNow($followUp['channel'], $followUp['payload'])
+                    : static::dispatch($followUp['channel'], $followUp['payload']);
+            } catch (\Throwable $e) {
+                Log::error('[SendNotificationJob] Notification de suivi non publiée', [
+                    'channel' => $followUp['channel'] ?? null,
+                    'error'   => $e->getMessage(),
+                ]);
+            }
+        }
+    }
+
+    // ── WhatsApp ───────────────────────────────────────────────────────────────
+
+    private function handleWhatsApp(WhatsAppBridgeClient $bridge): void
+    {
+        $p = $this->payload;
+
+        if (!$bridge->isConnected()) {
+            $this->retryLater('Bridge WhatsApp déconnecté');
+            return;
+        }
+
+        $res = $bridge->sendDetailed($p['phone'], $p['message'], $p['context'] ?? '', $p['module'] ?? 'Demandes');
+        $this->handleResult($res, 'WhatsApp');
+    }
+
+    private function handleWhatsAppFile(WhatsAppBridgeClient $bridge): void
+    {
+        $p = $this->payload;
+
+        if (!$bridge->isConnected()) {
+            $this->retryLater('Bridge WhatsApp déconnecté (fichier)');
+            return;
+        }
+
+        $res = $bridge->sendFileDetailed(
+            $p['phone'],
+            $p['disk'] ?? 'public',
+            $p['path'],
+            $p['file_name'] ?? basename($p['path']),
+            $p['caption'] ?? '',
+            $p['context'] ?? '',
+            $p['module'] ?? 'Demandes',
+        );
+        $this->handleResult($res, 'WhatsApp (fichier)');
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    private function validEmail(mixed $email): bool
+    {
+        return is_string($email) && filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+    }
+
+    /** @return string[] */
+    private function validCc(array $cc): array
+    {
+        return array_values(array_filter($cc, fn ($e) => $this->validEmail($e)));
+    }
+
+    /** @param array{ok: bool, retryable: bool, http: int, error: ?string} $res */
+    private function handleResult(array $res, string $label): void
+    {
+        $p = $this->payload;
+
+        if ($res['ok']) {
+            Log::info("[SendNotificationJob] {$label} envoyé", ['to' => $p['phone'] ?? null, 'ctx' => $p['context'] ?? '']);
+            return;
+        }
+
+        if ($res['retryable']) {
+            $this->retryLater("{$label} : échec transitoire ({$res['error']})");
+            return;
+        }
+
+        Log::warning("[SendNotificationJob] {$label} non envoyé - échec définitif", [
+            'to' => $p['phone'] ?? null, 'ctx' => $p['context'] ?? '',
+            'http' => $res['http'], 'error' => $res['error'],
+        ]);
+    }
+
+    private function retryLater(string $reason): void
+    {
+        $attempt = max(1, $this->attempts());
+        $delay   = self::BACKOFF[min($attempt - 1, count(self::BACKOFF) - 1)];
+
+        // Envoi immédiat (hors file) : le nouvel essai passe par la file.
+        if ($this->isImmediate()) {
+            Log::warning("[SendNotificationJob] {$reason} - remis en file (nouvel essai dans {$delay}s)", [
+                'to'  => $this->payload['phone'] ?? ($this->payload['to'] ?? null),
+                'ctx' => $this->payload['context'] ?? '',
+            ]);
+            static::queueRetry($this->channel, $this->payload, $delay);
+            return;
+        }
+
+        Log::warning("[SendNotificationJob] {$reason} - nouvelle tentative dans {$delay}s", [
+            'to' => $this->payload['phone'] ?? ($this->payload['to'] ?? null),
+            'ctx' => $this->payload['context'] ?? '',
+            'attempt' => $attempt,
+        ]);
+
+        $this->release($delay);
+    }
+
+    public function failed(?\Throwable $e): void
+    {
+        Log::error('[SendNotificationJob] Notification abandonnée', [
+            'channel' => $this->channel,
+            'to'      => $this->payload['phone'] ?? ($this->payload['to'] ?? null),
+            'ctx'     => $this->payload['context'] ?? ($this->payload['subject'] ?? ''),
+            'error'   => $e?->getMessage(),
+        ]);
+    }
+}

@@ -19,14 +19,14 @@ trait ApiResponse
             'success' => true,
             'message' => $message,
         ];
-        
+
         if ($data !== null) {
             $response['data'] = $data;
         }
-        
+
         return response()->json($response, $statusCode);
     }
-    
+
     /**
      * Retourne une réponse JSON de succès avec des données paginées
      */
@@ -48,7 +48,7 @@ trait ApiResponse
             ],
         ]);
     }
-    
+
     /**
      * Retourne une réponse JSON d'erreur
      */
@@ -62,18 +62,18 @@ trait ApiResponse
             'success' => false,
             'message' => $message,
         ];
-        
+
         if ($errorCode) {
             $response['error_code'] = $errorCode;
         }
-        
+
         if ($errors) {
             $response['errors'] = $errors;
         }
-        
+
         return response()->json($response, $statusCode);
     }
-    
+
     /**
      * Retourne une réponse JSON de création réussie
      */
@@ -83,7 +83,7 @@ trait ApiResponse
     ): JsonResponse {
         return $this->successResponse($data, $message, 201);
     }
-    
+
     /**
      * Retourne une réponse JSON de suppression réussie
      */
@@ -92,7 +92,7 @@ trait ApiResponse
     ): JsonResponse {
         return $this->successResponse(null, $message);
     }
-    
+
     /**
      * Retourne une réponse JSON de mise à jour réussie
      */
@@ -102,7 +102,7 @@ trait ApiResponse
     ): JsonResponse {
         return $this->successResponse($data, $message);
     }
-    
+
     /**
      * Retourne une réponse JSON pour une ressource non trouvée
      */
@@ -111,7 +111,7 @@ trait ApiResponse
     ): JsonResponse {
         return $this->errorResponse($message, 404, 'RESOURCE_NOT_FOUND');
     }
-    
+
     /**
      * Retourne une réponse JSON pour une validation échouée
      */
@@ -121,7 +121,7 @@ trait ApiResponse
     ): JsonResponse {
         return $this->errorResponse($message, 422, 'VALIDATION_ERROR', $errors);
     }
-    
+
     /**
      * Retourne une réponse JSON pour une authentification échouée
      */
@@ -130,7 +130,7 @@ trait ApiResponse
     ): JsonResponse {
         return $this->errorResponse($message, 401, 'AUTHENTICATION_REQUIRED');
     }
-    
+
     /**
      * Retourne une réponse JSON pour une autorisation refusée
      */

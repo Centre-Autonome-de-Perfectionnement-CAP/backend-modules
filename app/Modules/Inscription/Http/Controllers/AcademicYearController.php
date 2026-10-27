@@ -13,13 +13,9 @@ use App\Modules\Inscription\Http\Resources\AcademicYearResource;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
-/**
- * @OA\Tag(
- *     name="Academic Years",
- *     description="Gestion des années académiques et périodes"
- * )
- */
 class AcademicYearController extends Controller
 {
     use ApiResponse;

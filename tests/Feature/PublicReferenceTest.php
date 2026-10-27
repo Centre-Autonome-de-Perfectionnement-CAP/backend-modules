@@ -21,7 +21,7 @@ class PublicReferenceTest extends TestCase
         $response = $this->getJson('/api/inscription/public/academic-years');
 
         // Assert - Structure stricte
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -57,7 +57,7 @@ class PublicReferenceTest extends TestCase
         $response = $this->getJson("/api/inscription/public/academic-years/department/{$department->id}");
 
         // Assert - Structure stricte
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -87,7 +87,7 @@ class PublicReferenceTest extends TestCase
         $response = $this->getJson('/api/inscription/public/entry-diplomas');
 
         // Assert - Structure stricte
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -117,9 +117,9 @@ class PublicReferenceTest extends TestCase
         $response3 = $this->getJson('/api/inscription/public/entry-diplomas');
 
         // Assert - Tous devraient retourner 200, pas 401
-        $response1->assertStatus(200);
-        $response2->assertStatus(200);
-        $response3->assertStatus(200);
+        $response1->assertstatus(200);
+        $response2->assertstatus(200);
+        $response3->assertstatus(200);
     }
 
     /**
@@ -133,7 +133,7 @@ class PublicReferenceTest extends TestCase
         $response = $this->getJson('/api/inscription/public/academic-years');
 
         // Assert
-        $response->assertStatus(200)
+        $response->assertstatus(200)
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -162,7 +162,7 @@ class PublicReferenceTest extends TestCase
             ])
             ->assertJson(['success' => true]);
         } else {
-            $response->assertStatus(404);
+            $response->assertstatus(404);
         }
     }
 
@@ -182,16 +182,16 @@ class PublicReferenceTest extends TestCase
         $response = $this->getJson('/api/inscription/public/academic-years');
 
         // Assert
-        $response->assertStatus(200);
-        
+        $response->assertstatus(200);
+
         $data = $response->json('data');
         $this->assertNotEmpty($data);
-        
+
         $firstYear = $data[0];
         $this->assertArrayHasKey('academic_year', $firstYear);
         $this->assertArrayHasKey('year_start', $firstYear);
         $this->assertArrayHasKey('year_end', $firstYear);
-        
+
         // Vérifier le format de l'année académique
         $this->assertMatchesRegularExpression('/^\d{4}-\d{4}$/', $firstYear['academic_year']);
     }

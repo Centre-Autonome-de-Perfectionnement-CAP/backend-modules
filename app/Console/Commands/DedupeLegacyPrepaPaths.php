@@ -76,7 +76,7 @@ class DedupeLegacyPrepaPaths extends Command
             $handled++;
             foreach ($duplicates as $dup) {
                 $this->line(sprintf(
-                    'sps=%d : suppression path id=%d (%s, %s) — conservation id=%d (%s)',
+                    'sps=%d : suppression path id=%d (%s, %s) - conservation id=%d (%s)',
                     $spsId,
                     $dup->id,
                     $dup->academic_year,

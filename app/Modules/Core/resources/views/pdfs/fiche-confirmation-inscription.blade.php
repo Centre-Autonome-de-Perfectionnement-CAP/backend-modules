@@ -100,7 +100,7 @@
     </div>
 
     <div style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 30px 0;">
-        <h3 style="margin: 0 0 10px 0; color: #856404;">⚠️ IMPORTANT - À LIRE ATTENTIVEMENT</h3>
+        <h3 style="margin: 0 0 10px 0; color: #856404;">IMPORTANT - À LIRE ATTENTIVEMENT</h3>
         <ul style="margin: 0; padding-left: 20px; color: #856404; line-height: 1.8;">
             <li><strong>Cette fiche est OBLIGATOIRE pour le dépôt physique de votre dossier.</strong></li>
             <li>Vous devez <strong>IMPRIMER</strong> cette fiche et la joindre à votre dossier physique.</li>

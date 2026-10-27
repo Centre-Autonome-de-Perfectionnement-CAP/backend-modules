@@ -8,7 +8,7 @@ use App\Traits\HasUuid;
 
 /**
  * Amount Model - Fee Structure
- * 
+ *
  * Stores the fee structure for each academic year, department, and level combination.
  * Different fees apply based on student status (national, international, exempted, sponsored).
  */
@@ -44,7 +44,7 @@ class Amount extends Model
     protected static function boot()
     {
         parent::boot();
-        
+
         static::creating(function ($model) {
             if (empty($model->uuid)) {
                 $model->uuid = (string) Str::uuid();
@@ -75,7 +75,7 @@ class Amount extends Model
 
     /**
      * Get the appropriate training fee based on student origin
-     * 
+     *
      * @param string $origin - 'uemoa', 'non_uemoa', 'exempted'
      * @return float
      */
@@ -91,7 +91,7 @@ class Amount extends Model
 
     /**
      * Get total fee (registration + training) based on student origin
-     * 
+     *
      * @param string $origin
      * @return float
      */

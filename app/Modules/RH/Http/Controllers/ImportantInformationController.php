@@ -7,10 +7,28 @@ use App\Modules\RH\Models\ImportantInformation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Traits\ApiResponse;
+use App\Traits\RestrictsToRoles;
+use App\Support\UploadLimit;
 
 class ImportantInformationController extends Controller
 {
-    use ApiResponse;
+    use ApiResponse, RestrictsToRoles;
+
+    /**
+     * AJOUT (audit sécurité) - indexAdmin/store/update/destroy/broadcast/
+     * getBroadcastStatus n'avaient AUCUNE protection : n'importe quel
+     * compte connecté pouvait créer/modifier/supprimer une annonce ou
+     * déclencher un broadcast WhatsApp. `index()` (lecture publique des
+     * annonces actives) reste volontairement non restreint.
+     */
+    private const ALLOWED_ROLES = ['admin', 'chef-cap', 'rh'];
+
+    public function __construct()
+    {
+        $this->restrictToRoles(self::ALLOWED_ROLES, only: [
+            'indexAdmin', 'store', 'update', 'destroy', 'broadcast', 'getBroadcastStatus',
+        ]);
+    }
 
     public function index(): JsonResponse
     {
@@ -81,9 +99,9 @@ class ImportantInformationController extends Controller
             'color' => 'required|in:primary,success,info,warning,danger',
             'link' => 'nullable|string',
             'file_id' => 'nullable|exists:files,id',
-            'file' => 'nullable|file|mimes:pdf|max:51200', // 50 MB
+            'file' => 'nullable|file|mimes:pdf|' . UploadLimit::rule(),
             'files' => 'nullable|array',
-            'files.*' => 'file|mimes:pdf|max:51200', // 50 MB
+            'files.*' => 'file|mimes:pdf|' . UploadLimit::rule(),
             'is_active' => 'boolean',
             'order' => 'integer',
         ]);
@@ -162,9 +180,9 @@ class ImportantInformationController extends Controller
             'color' => 'sometimes|in:primary,success,info,warning,danger',
             'link' => 'nullable|string',
             'file_id' => 'nullable|exists:files,id',
-            'file' => 'nullable|file|mimes:pdf|max:51200', // 50 MB
+            'file' => 'nullable|file|mimes:pdf|' . UploadLimit::rule(),
             'files' => 'nullable|array',
-            'files.*' => 'file|mimes:pdf|max:51200', // 50 MB
+            'files.*' => 'file|mimes:pdf|' . UploadLimit::rule(),
             'is_active' => 'boolean',
             'order' => 'integer',
         ]);
@@ -456,7 +474,7 @@ class ImportantInformationController extends Controller
             ], now()->addHours(24));
 
             // Diviser les étudiants en chunks de 50 pour éviter les jobs trop lourds
-            $chunks = $students->chunk(50);
+            $chunks = $students->chunk(20); // 20 : tient sous le timeout du job (85 s)
             
             foreach ($chunks as $chunk) {
                 // Dispatcher le job en queue

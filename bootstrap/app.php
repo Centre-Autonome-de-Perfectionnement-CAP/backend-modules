@@ -11,21 +11,11 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
-        then: function () {
-            // Charger les routes API des modules
-            $modules = ['Core', 'Auth', 'Stockage', 'Inscription', 'Finance', 'Cours', 'RH', 'Contact', 'Notes', 'EmploiDuTemps', 'Soutenance', 'Attestation', 'CahierTexte', 'Alumni', 'LegacyStudent'];
-            foreach ($modules as $module) {
-                $routePath = base_path("app/Modules/{$module}/routes/api.php");
-                if (file_exists($routePath)) {
-                    Route::middleware('api')
-                        ->group($routePath);
-                }
-            }
-        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->api(prepend: [
             \Illuminate\Http\Middleware\HandleCors::class,
+            \App\Http\Middleware\ForceJsonResponse::class,
         ]);
         
         $middleware->api(remove: [
@@ -105,6 +95,26 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
         
+        // Erreurs HTTP volontaires (abort(403/404/409/422), limitation 429…) :
+        // CORRECTIF - le gestionnaire générique ci-dessous les transformait
+        // toutes en « 500 Une erreur interne est survenue » pour l'API, ce qui
+        // masquait les vrais messages (accès refusé, action non autorisée,
+        // trop de tentatives…). On conserve leur code et leur message.
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e, $request) {
+            if ($request->expectsJson()) {
+                $status = $e->getStatusCode();
+                $message = $e->getMessage() !== ''
+                    ? $e->getMessage()
+                    : (\Symfony\Component\HttpFoundation\Response::$statusTexts[$status] ?? 'Erreur');
+
+                return response()->json([
+                    'success' => false,
+                    'message' => $status === 429 ? 'Trop de tentatives. Veuillez patienter un instant puis réessayer.' : $message,
+                    'error_code' => 'HTTP_' . $status,
+                ], $status, $e->getHeaders());
+            }
+        });
+
         // Gestion générique des exceptions
         $exceptions->render(function (\Throwable $e, $request) {
             if ($request->expectsJson()) {

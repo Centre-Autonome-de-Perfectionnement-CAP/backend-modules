@@ -83,3 +83,18 @@ deploy.php
 
 
 *.sql
+app/Modules_backup/
+
+# Archives et sauvegardes (ne jamais versionner)
+*.zip
+*.tar.gz
+*.rar
+*.7z
+/.marscode
+# Rapports ponctuels de scripts de migration
+payment_migration_errors_*.csv
+
+# Cache des polices généré par dompdf (PDF du module Stages)
+storage/fonts/*_normal_*
+storage/fonts/*_bold_*
+storage/fonts/*_italic_*

@@ -3,6 +3,7 @@
 namespace App\Modules\Notes\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Route;
 
 class NotesServiceProvider extends ServiceProvider
 {
@@ -20,7 +21,9 @@ class NotesServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Charger les routes
-        $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
+        Route::prefix('api')
+            ->middleware('api')
+            ->group(__DIR__.'/../routes/api.php');
         
         // Charger les migrations si nécessaire
         // $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');

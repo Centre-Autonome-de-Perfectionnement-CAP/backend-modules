@@ -66,14 +66,14 @@
 <body>
     <div class="header">
         <img src="https://www.cap-epac.online/assets/imgs/logo.png" alt="CAP Logo" class="logo">
-        <h1>✋ Votre dossier de soutenance n'a pas été retenu</h1>
+        <h1>Votre dossier de soutenance n'a pas été retenu</h1>
     </div>
     
     <div class="content">
         <p>Bonjour <strong>{{ $studentName }}</strong>,</p>
         
         <div class="details">
-            <p><span class="warning-icon">⚠</span> Après examen par notre comité pédagogique, votre dossier de soutenance nécessite des modifications avant acceptation.</p>
+            <p>Après examen par notre comité pédagogique, votre dossier de soutenance nécessite des modifications avant acceptation.</p>
             <p><strong>Titre du mémoire :</strong> {{ $thesisTitle }}</p>
         </div>
 

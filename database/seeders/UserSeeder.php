@@ -81,7 +81,7 @@ class UserSeeder extends Seeder
         foreach ($users as $userData) {
             $roleName = $userData['role'];
             unset($userData['role']);
-            
+
             $user = User::updateOrCreate(
                 ['email' => $userData['email']],
                 array_merge($userData, [
@@ -90,10 +90,19 @@ class UserSeeder extends Seeder
                 ])
             );
 
+
             $role = Role::where('slug', $roleName)->first();
-            if ($role) {
-                $user->roles()->syncWithoutDetaching([$role->id]);
+
+            if (!$role) {
+                $this->command->error("Rôle introuvable : $roleName");
+                continue;
             }
+
+            $user->roles()->syncWithoutDetaching([$role->id]);
         }
+
+
+        $this->command->info('Utilisateurs créés avec succès!');
+
     }
 }

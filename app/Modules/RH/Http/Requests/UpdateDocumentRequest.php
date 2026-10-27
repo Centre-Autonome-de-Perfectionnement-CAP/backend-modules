@@ -3,6 +3,7 @@
 namespace App\Modules\RH\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Support\UploadLimit;
 
 class UpdateDocumentRequest extends FormRequest
 {
@@ -16,7 +17,7 @@ class UpdateDocumentRequest extends FormRequest
         return [
             'titre' => 'sometimes|string|max:255',
             'description' => 'sometimes|string',
-            'file' => 'nullable|file|max:10240',
+            'file' => 'nullable|file|' . UploadLimit::rule(),
             'lien' => 'nullable|url',
             'datePublication' => 'sometimes|date',
             'categorie' => 'sometimes|in:administratif,pedagogique,legal,organisation',

@@ -13,7 +13,6 @@ use App\Modules\Inscription\Models\StudentPendingStudent;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 
 class InformationCorrectionService
 {
@@ -150,6 +149,7 @@ class InformationCorrectionService
         DB::transaction(function () use ($correctionRequest, $reviewerId) {
             $student = Student::where('student_id_number', $correctionRequest->student_id_number)->first();
             $emailTo = null;
+            $phoneContacts = null;
             $firstName = 'Étudiant(e)';
 
             if ($student) {
@@ -167,6 +167,7 @@ class InformationCorrectionService
                 $personalInfo->update($correctionRequest->suggested_values);
                 $emailTo = $correctionRequest->suggested_values['email'] ?? $personalInfo->fresh()->email;
                 $firstName = $correctionRequest->suggested_values['first_names'] ?? $personalInfo->first_names;
+                $phoneContacts = $personalInfo->fresh()->contacts;
             } else {
                 $legacy = \App\Modules\LegacyStudent\Models\LegacyStudent::where('matricule', $correctionRequest->student_id_number)->first();
                 if (!$legacy) {
@@ -191,6 +192,7 @@ class InformationCorrectionService
                 $legacy->update($legacyUpdates);
                 $emailTo = $correctionRequest->suggested_values['email'] ?? $legacy->email;
                 $firstName = $correctionRequest->suggested_values['first_names'] ?? $legacy->first_name;
+                $phoneContacts = $legacy->fresh()->phone;
             }
 
             // Mettre à jour la demande
@@ -200,22 +202,27 @@ class InformationCorrectionService
                 'reviewed_at' => now(),
             ]);
 
-            // Envoyer le mail vers le NOUVEL email (s'il a été modifié) ou l'actuel
-            if ($emailTo) {
-                try {
-                    Mail::to($emailTo)->send(new InformationCorrectionResult([
-                        'first_names'      => $firstName,
-                        'student_id_number' => $correctionRequest->student_id_number,
-                        'status'           => 'approved',
-                        'suggested_values' => $correctionRequest->suggested_values,
-                        'rejection_reason' => null,
-                    ]));
-                } catch (\Exception $e) {
-                    Log::error('Échec envoi mail approbation correction: ' . $e->getMessage(), [
-                        'correction_id' => $correctionRequest->id,
-                    ]);
-                }
-            }
+            // Email (vers le NOUVEL email s'il a été modifié) + WhatsApp :
+            // asynchrones, publiés après le COMMIT.
+            $notifier = app(\App\Modules\Core\Services\Notifier::class);
+            $notifier->mailable($emailTo, new InformationCorrectionResult([
+                'first_names'       => $firstName,
+                'student_id_number' => $correctionRequest->student_id_number,
+                'status'            => 'approved',
+                'suggested_values'  => $correctionRequest->suggested_values,
+                'rejection_reason'  => null,
+            ]));
+            $notifier->whatsapp(
+                $notifier->phoneFromContacts($phoneContacts),
+                \App\Modules\Core\Support\WhatsAppText::compose("Correction d'informations", [
+                    "Bonjour {$firstName},",
+                    'Votre demande de correction a été *approuvée*.',
+                    \App\Modules\Core\Support\WhatsAppText::fields(['Matricule' => $correctionRequest->student_id_number]),
+                    'Vos informations ont été mises à jour.',
+                ]),
+                "correction-approved:{$correctionRequest->id}",
+                'Inscription',
+            );
 
             Log::info('Demande de correction approuvée', [
                 'correction_id'     => $correctionRequest->id,
@@ -245,15 +252,32 @@ class InformationCorrectionService
             $firstName = $correctionRequest->current_values['first_names'] ?? 'Étudiant(e)';
 
             try {
-                Mail::to($currentEmail)->send(new InformationCorrectionResult([
+                $notifier = app(\App\Modules\Core\Services\Notifier::class);
+                $notifier->mailable($currentEmail, new InformationCorrectionResult([
                     'first_names'       => $firstName,
                     'student_id_number' => $correctionRequest->student_id_number,
                     'status'            => 'rejected',
                     'suggested_values'  => $correctionRequest->suggested_values,
                     'rejection_reason'  => $rejectionReason,
                 ]));
-            } catch (\Exception $e) {
-                Log::error('Échec envoi mail rejet correction: ' . $e->getMessage(), [
+
+                $contacts = $correctionRequest->current_values['contacts']
+                    ?? ($this->lookupStudent($correctionRequest->student_id_number)['contacts'] ?? null);
+                $notifier->whatsapp(
+                    $notifier->phoneFromContacts($contacts),
+                    \App\Modules\Core\Support\WhatsAppText::compose("Correction d'informations", [
+                        "Bonjour {$firstName},",
+                        "Votre demande de correction n'a pas été retenue.",
+                        \App\Modules\Core\Support\WhatsAppText::fields([
+                            'Matricule' => $correctionRequest->student_id_number,
+                            'Motif'     => $rejectionReason,
+                        ]),
+                    ]),
+                    "correction-rejected:{$correctionRequest->id}",
+                    'Inscription',
+                );
+            } catch (\Throwable $e) {
+                Log::error('Échec mise en file des notifications de rejet de correction: ' . $e->getMessage(), [
                     'correction_id' => $correctionRequest->id,
                 ]);
             }
