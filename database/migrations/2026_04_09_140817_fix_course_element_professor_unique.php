@@ -18,6 +18,22 @@ return new class extends Migration
             return;
         }
 
+        // Vérification AVANT toute modification (MySQL n'annule pas un
+        // changement de structure à moitié fait) : des affectations en double
+        // empêcheraient la nouvelle règle d'unicité.
+        $duplicates = DB::table('course_element_professor')
+            ->select('course_element_id', 'professor_id', 'academic_year_id', 'class_group_id')
+            ->whereNotNull('academic_year_id')->whereNotNull('class_group_id')
+            ->groupBy('course_element_id', 'professor_id', 'academic_year_id', 'class_group_id')
+            ->havingRaw('COUNT(*) > 1')
+            ->get();
+        if ($duplicates->isNotEmpty()) {
+            throw new RuntimeException(
+                $duplicates->count() . ' affectation(s) enseignant en double (même cours, enseignant, année et groupe) : '
+                . 'rien n\'a été modifié. Supprimez les doublons puis relancez.'
+            );
+        }
+
         Schema::table('course_element_professor', function (Blueprint $table) {
             // Supprimer la FK sur course_element_id
             $table->dropForeign('course_element_professor_course_element_id_foreign');
