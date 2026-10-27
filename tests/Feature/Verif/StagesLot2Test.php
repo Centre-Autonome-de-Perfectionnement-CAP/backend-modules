@@ -263,7 +263,8 @@ class StagesLot2Test extends TestCase
 
     public function test_whatsapp_group_sync_adds_invites_and_removes(): void
     {
-        $this->lead();
+        $lead = $this->lead();
+        $sup = $this->user('superviseur', null, '0197445599');
         $t = BusinessHours::today();
         $joined   = $this->intern($t->subDays(2)->toDateString(), $t->addMonth()->toDateString(), '0196000031');
         $private  = $this->intern($t->subDays(1)->toDateString(), $t->addMonth()->toDateString(), '0196000032');
@@ -297,11 +298,22 @@ class StagesLot2Test extends TestCase
         $this->assertTrue(collect($this->sent)->contains(fn ($s) => $s['to'] === '+2290196000032' && str_contains($s['text'], 'chat.whatsapp.com')));
         $this->assertNull($upcoming->fresh()->wa_group_id);
 
+        // Les superviseurs sont ajoutés au groupe
+        $this->assertTrue(collect($calls)->contains(fn ($c) => $c[0] === '/groups/participants' && ($c[1]['action'] ?? '') === 'add' && $c[1]['participants'] === ['2290197445599']));
+        $this->assertNotNull(DB::table('stage_whatsapp_group_staff')->where(['group_id' => $group->id, 'user_id' => $sup->id])->value('added_at'));
+        $this->assertSame(1, $this->actingAs($lead, 'sanctum')->getJson('/api/stages/admin/groupe-whatsapp')->json('data.group.supervisors'));
+
         // Une semaine après la fin : retiré du groupe
         $joined->forceFill(['date_fin' => $t->subDays(8)->toDateString()])->save();
         $this->artisan('stages:sync-whatsapp-group')->assertSuccessful();
         $this->assertNotNull($joined->fresh()->wa_removed_at);
         $this->assertTrue(collect($calls)->contains(fn ($c) => $c[0] === '/groups/participants' && ($c[1]['action'] ?? '') === 'remove'));
+
+        // N'est plus superviseur : retiré du groupe
+        DB::table('role_user')->where('user_id', $sup->id)->delete();
+        $this->artisan('stages:sync-whatsapp-group')->assertSuccessful();
+        $this->assertNotNull(DB::table('stage_whatsapp_group_staff')->where('user_id', $sup->id)->value('removed_at'));
+        $this->assertTrue(collect($calls)->contains(fn ($c) => ($c[1]['action'] ?? '') === 'remove' && $c[1]['participants'] === ['2290197445599']));
     }
 
     public function test_whatsapp_group_link_rejects_bad_link_and_requires_lead(): void

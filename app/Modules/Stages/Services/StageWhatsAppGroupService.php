@@ -12,6 +12,7 @@ use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Support\BusinessHours;
 use App\Modules\Stages\Support\StageAccess;
 use App\Modules\Stages\Support\StageStatus;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -22,6 +23,7 @@ use Illuminate\Support\Facades\Log;
  *  - créé automatiquement au premier stagiaire de l'année (ou à la main),
  *    le numéro du CAP le crée et les responsables de division en sont
  *    administrateurs ; on peut aussi utiliser un groupe existant (lien) ;
+ *  - les superviseurs y sont ajoutés (et retirés s'ils ne le sont plus) ;
  *  - chaque stagiaire y est ajouté à son début de stage ; si WhatsApp
  *    refuse l'ajout (réglages de confidentialité), le lien du groupe lui
  *    est envoyé en privé ;
@@ -54,11 +56,14 @@ class StageWhatsAppGroupService
             ->where('date_debut', '<=', $today)->where('date_fin', '>=', $today)
             ->whereNull('wa_added_at')->count();
 
+        $supervisors = $group ? DB::table('stage_whatsapp_group_staff')->where('group_id', $group->id)
+            ->whereNotNull('added_at')->whereNull('removed_at')->count() : 0;
+
         return [
             'year'    => $year,
             'group'   => $group ? [
                 'id' => $group->id, 'name' => $group->name, 'origin' => $group->origin,
-                'created_at' => $group->created_at, 'members' => $members,
+                'created_at' => $group->created_at, 'members' => $members, 'supervisors' => $supervisors,
             ] : null,
             'waiting' => $waiting,
             'history' => DB::table('stage_whatsapp_groups')->orderByDesc('id')->limit(10)
@@ -140,11 +145,13 @@ class StageWhatsAppGroupService
         ]);
         StageRequest::where('wa_group_id', $groupId)->whereNull('wa_removed_at')->whereNotNull('wa_added_at')
             ->update(['wa_removed_at' => now()]);
+        DB::table('stage_whatsapp_group_staff')->where('group_id', $groupId)->whereNull('removed_at')
+            ->update(['removed_at' => now(), 'updated_at' => now()]);
     }
 
     /**
      * Tâche quotidienne : ajoute les stagiaires qui commencent, retire ceux
-     * qui ont fini depuis une semaine.
+     * qui ont fini depuis une semaine ; tient à jour les superviseurs.
      *
      * @return array{added: int, invited: int, removed: int, errors: int}
      */
@@ -230,7 +237,67 @@ class StageWhatsAppGroupService
             }
         }
 
+        $this->syncSupervisors($today, $stats);
+
         return $stats;
+    }
+
+    /**
+     * Superviseurs du groupe de l'année (s'il existe) : chaque superviseur
+     * avec un numéro y est ajouté ; celui qui ne l'est plus en est retiré
+     * (sauf s'il est aussi responsable de division, administrateur du groupe).
+     */
+    private function syncSupervisors(CarbonImmutable $today, array &$stats): void
+    {
+        $group = $this->activeGroup((int) $today->format('Y'));
+        if (!$group) {
+            return;
+        }
+        $supervisors = StageAccess::supervisors()->keyBy('id');
+        $rows = DB::table('stage_whatsapp_group_staff')->where('group_id', $group->id)->get()->keyBy('user_id');
+
+        foreach ($supervisors as $sup) {
+            $row = $rows[$sup->id] ?? null;
+            $phone = $this->digits($sup->phone);
+            if (!$phone || ($row && !$row->removed_at && ($row->added_at || $row->invite_sent_at))) {
+                continue;
+            }
+            try {
+                $res    = $this->call('/groups/participants', ['jid' => $group->jid, 'action' => 'add', 'participants' => [$phone]]);
+                $status = (string) ($res['results'][$phone] ?? 'unknown');
+                $added  = in_array($status, ['200', '409'], true);
+                if (!$added && $status !== 'not_on_whatsapp' && ($link = $this->call('/groups/invite-code', ['jid' => $group->jid])['link'] ?? null)) {
+                    $this->notifier->whatsapp($sup->phone, WhatsAppText::compose('Groupe des stagiaires', [
+                        'Bonjour ' . trim($sup->first_name . ' ' . $sup->last_name) . ',',
+                        "En tant que superviseur, rejoignez le groupe WhatsApp des stagiaires du CAP-EPAC :\n{$link}",
+                    ]), "stage-groupe-superviseur:{$sup->id}", 'Stages');
+                }
+                DB::table('stage_whatsapp_group_staff')->updateOrInsert(
+                    ['group_id' => $group->id, 'user_id' => $sup->id],
+                    ['added_at' => $added ? now() : null, 'invite_sent_at' => $added ? null : now(), 'removed_at' => null, 'updated_at' => now(), 'created_at' => $row->created_at ?? now()],
+                );
+                $added ? $stats['added']++ : $stats['invited']++;
+            } catch (\Throwable $e) {
+                $stats['errors']++;
+                Log::warning('[Stages] Ajout d\'un superviseur au groupe WhatsApp échoué', ['user' => $sup->id, 'error' => $e->getMessage()]);
+            }
+        }
+
+        // N'est plus superviseur : retiré (un responsable reste, il administre le groupe).
+        $managers = StageAccess::managers()->pluck('id')->all();
+        foreach ($rows->filter(fn ($r) => $r->added_at && !$r->removed_at && !isset($supervisors[$r->user_id]) && !in_array($r->user_id, $managers)) as $row) {
+            try {
+                $phone = $this->digits(DB::table('users')->where('id', $row->user_id)->value('phone'));
+                if ($phone) {
+                    $this->call('/groups/participants', ['jid' => $group->jid, 'action' => 'remove', 'participants' => [$phone]]);
+                }
+                DB::table('stage_whatsapp_group_staff')->where('id', $row->id)->update(['removed_at' => now(), 'updated_at' => now()]);
+                $stats['removed']++;
+            } catch (\Throwable $e) {
+                $stats['errors']++;
+                Log::warning('[Stages] Retrait d\'un superviseur du groupe WhatsApp échoué', ['user' => $row->user_id, 'error' => $e->getMessage()]);
+            }
+        }
     }
 
     // ── Interne ──────────────────────────────────────────────────────────
