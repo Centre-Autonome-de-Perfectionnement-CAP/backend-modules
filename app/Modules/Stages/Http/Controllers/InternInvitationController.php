@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Stages\Services\InternAuthService;
 use App\Modules\Stages\Services\InternInvitationService;
 use App\Modules\Stages\Services\StageSettingsService;
+use App\Modules\Stages\Support\StudyLevel;
 use App\Modules\Stages\Support\BusinessHours;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -102,7 +103,6 @@ class InternInvitationController extends Controller
             'nationalite'           => $text(60),
             'email'                 => ['required', 'email', 'max:254'],
             'etablissement_origine' => $text(150),
-            'filiere_niveau'        => $text(150),
             'theme'                 => $text(200, false),
             'service'               => $text(150, false),
             'date_debut'            => ['required', 'date_format:Y-m-d'],
@@ -110,12 +110,12 @@ class InternInvitationController extends Controller
             'password'              => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
             'note_papier'           => ['nullable', 'file', UploadLimit::rule(), 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png'],
             'consentement'          => ['accepted'],
-        ], [
+        ] + StudyLevel::rules($request->all()), StudyLevel::MESSAGES + [
             'password.confirmed'      => 'Les deux mots de passe ne correspondent pas.',
             'date_fin.after_or_equal' => 'La date de fin doit suivre la date de début.',
             'consentement.accepted'   => 'Vous devez accepter le traitement de vos données.',
         ]);
-        foreach (['nom', 'prenoms', 'lieu_naissance', 'nationalite', 'etablissement_origine', 'filiere_niveau', 'theme', 'service'] as $k) {
+        foreach (['nom', 'prenoms', 'lieu_naissance', 'nationalite', 'etablissement_origine', 'filiere', 'theme', 'service'] as $k) {
             if (isset($data[$k])) {
                 $data[$k] = trim(strip_tags((string) $data[$k])) ?: null;
             }

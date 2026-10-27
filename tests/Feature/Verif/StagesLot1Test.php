@@ -82,7 +82,7 @@ class StagesLot1Test extends TestCase
         return array_merge([
             'civilite' => 'M.', 'nom' => 'AGOSSA', 'prenoms' => 'Jean <b>Marie</b>',
             'date_naissance' => '2002-05-10', 'lieu_naissance' => 'Cotonou', 'nationalite' => 'Béninoise',
-            'etablissement_origine' => 'UAC', 'filiere_niveau' => 'Licence 3 Informatique',
+            'etablissement_origine' => 'UAC', 'filiere' => 'Informatique', 'cycle' => 'licence', 'annee_etude' => 3,
             'email' => 'Jean.Agossa' . random_int(100, 999) . '@example.org',
             'telephone' => '01 97 ' . random_int(10, 99) . ' 44 55',
             'duree_stage' => '3_mois', 'consentement' => '1',
@@ -130,6 +130,7 @@ class StagesLot1Test extends TestCase
         $this->assertMatchesRegularExpression('/^STG-[A-Z2-9]{6}$/', $req->reference);
         $this->assertSame('submitted', $req->status);
         $this->assertSame('Jean Marie', $req->prenoms, 'les balises sont retirées');
+        $this->assertSame(['Informatique', 'licence', 3, 'Licence 3 Informatique'], [$req->filiere, $req->cycle, $req->annee_etude, $req->filiere_niveau]);
         $this->assertStringStartsWith('+229', $req->whatsapp);
         foreach (['cv', 'lettre_motivation', 'acte_naissance'] as $k) {
             Storage::disk('local')->assertExists($req->files[$k]);
@@ -147,6 +148,12 @@ class StagesLot1Test extends TestCase
 
         $this->post('/api/stages/demandes', $this->payload(['cv' => UploadedFile::fake()->create('x.exe', 10, 'application/octet-stream')]), ['Accept' => 'application/json'])
             ->assertStatus(422)->assertJsonValidationErrors('cv');
+        // Année hors du cycle (pas de Licence 4) ; cycle inconnu
+        Cache::flush();
+        $this->post('/api/stages/demandes', $this->payload(['annee_etude' => 4]), ['Accept' => 'application/json'])
+            ->assertStatus(422)->assertJsonValidationErrors('annee_etude');
+        $this->post('/api/stages/demandes', $this->payload(['cycle' => 'licence-pro']), ['Accept' => 'application/json'])
+            ->assertStatus(422)->assertJsonValidationErrors('cycle');
 
         $this->actingAs($this->manager(), 'sanctum')
             ->putJson('/api/stages/admin/reglages', ['requests_open' => false])->assertOk();

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Stages\Models;
 
+use App\Modules\Stages\Support\StudyLevel;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -10,6 +11,16 @@ class StageRequest extends Model
     protected $table = 'stage_requests';
 
     protected $guarded = ['id'];
+
+    /** Libellé de formation tenu à jour depuis la filière et le niveau. */
+    protected static function booted(): void
+    {
+        static::saving(function (self $req) {
+            if ($req->cycle && $req->isDirty(['filiere', 'cycle', 'annee_etude'])) {
+                $req->filiere_niveau = StudyLevel::formation($req->filiere, $req->cycle, $req->annee_etude) ?: (string) $req->filiere;
+            }
+        });
+    }
 
     protected function casts(): array
     {
@@ -35,6 +46,7 @@ class StageRequest extends Model
             'activated_at'          => 'datetime',
             'withdrawn_at'          => 'datetime',
             'attestation_prepared_at' => 'datetime',
+            'annee_etude'           => 'integer',
         ];
     }
 

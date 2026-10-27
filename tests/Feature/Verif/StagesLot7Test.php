@@ -109,7 +109,7 @@ class StagesLot7Test extends TestCase
         return $extra + [
             'token' => $token, 'civilite' => 'Mlle', 'nom' => 'adjovi', 'prenoms' => 'Carine', 'date_naissance' => '2002-04-12',
             'lieu_naissance' => 'Porto-Novo', 'nationalite' => 'Béninoise', 'email' => 'carine@example.org',
-            'etablissement_origine' => 'EPAC / UAC', 'filiere_niveau' => 'Licence 3 Informatique', 'theme' => 'Réseau',
+            'etablissement_origine' => 'EPAC / UAC', 'filiere' => 'Génie civil', 'cycle' => 'ingenieur', 'annee_etude' => 1, 'theme' => 'Réseau',
             'date_debut' => $start, 'date_fin' => $end, 'password' => 'Stage2026', 'password_confirmation' => 'Stage2026', 'consentement' => '1',
         ];
     }
@@ -129,6 +129,7 @@ class StagesLot7Test extends TestCase
         $h = ['X-Stagiaire-Token' => $r->json('data.token'), 'Accept' => 'application/json'];
 
         $req = StageRequest::where('reference', $r->json('data.reference'))->first();
+        $this->assertSame('1re année du cycle ingénieur Génie civil', StageRequest::where('reference', $r->json('data.reference'))->value('filiere_niveau'));
         $this->assertSame(['invitation', 'accepted', '2026-10-22', '+2290197112233', 'ADJOVI'],
             [$req->origin, $req->status, $req->attendance_from->toDateString(), $req->whatsapp, $req->nom]);
         $this->assertArrayHasKey('note_papier', $req->files);

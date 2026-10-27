@@ -9,6 +9,7 @@ use App\Modules\Stages\Services\BinomeService;
 use App\Modules\Stages\Services\StageRequestService;
 use App\Modules\Stages\Services\StageSettingsService;
 use App\Modules\Stages\Services\StageSuiviOtpService;
+use App\Modules\Stages\Support\StudyLevel;
 use App\Modules\Stages\Support\BusinessHours;
 use App\Modules\Stages\Support\StageStatus;
 use App\Traits\ApiResponse;
@@ -58,7 +59,6 @@ class StagePublicController extends Controller
             'lieu_naissance'        => $text(100),
             'nationalite'           => $text(60),
             'etablissement_origine' => $text(150),
-            'filiere_niveau'        => $text(150),
             'date_debut_souhaitee'  => ['nullable', 'date_format:Y-m-d', 'after_or_equal:' . BusinessHours::today()->toDateString()],
             'theme_souhaite'        => $text(200, false),
             'email'                 => ['required', 'email', 'max:254'],
@@ -69,7 +69,7 @@ class StagePublicController extends Controller
             'cv'                    => self::FILE_RULE,
             'lettre_motivation'     => self::FILE_RULE,
             'acte_naissance'        => self::FILE_RULE,
-        ], [
+        ] + StudyLevel::rules($request->all()), StudyLevel::MESSAGES + [
             'consentement.accepted'    => 'Vous devez accepter le traitement de vos données.',
             'date_naissance.before'    => 'Date de naissance invalide.',
             'date_debut_souhaitee.after_or_equal' => 'La date de début ne peut pas être passée.',
@@ -79,7 +79,7 @@ class StagePublicController extends Controller
             '*.max'                    => 'Ce champ est trop long, ou ce fichier dépasse ' . UploadLimit::label() . '.',
         ]);
 
-        foreach (['nom', 'prenoms', 'lieu_naissance', 'nationalite', 'etablissement_origine', 'filiere_niveau', 'theme_souhaite', 'duree_stage'] as $k) {
+        foreach (['nom', 'prenoms', 'lieu_naissance', 'nationalite', 'etablissement_origine', 'filiere', 'theme_souhaite', 'duree_stage'] as $k) {
             if (isset($data[$k])) {
                 $data[$k] = trim(strip_tags((string) $data[$k]));
             }

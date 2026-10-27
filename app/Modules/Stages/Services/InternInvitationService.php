@@ -194,7 +194,7 @@ class InternInvitationService
                     'civilite' => $data['civilite'], 'nom' => mb_strtoupper(trim($data['nom'])), 'prenoms' => trim($data['prenoms']),
                     'date_naissance' => $data['date_naissance'], 'lieu_naissance' => trim($data['lieu_naissance']),
                     'nationalite' => trim($data['nationalite']), 'etablissement_origine' => trim($data['etablissement_origine']),
-                    'filiere_niveau' => trim($data['filiere_niveau']), 'theme_souhaite' => $data['theme'] ?? null,
+                    'filiere' => trim($data['filiere']), 'cycle' => $data['cycle'], 'annee_etude' => $data['annee_etude'] ?? null, 'theme_souhaite' => $data['theme'] ?? null,
                     'duree_souhaitee' => $this->requests->durationLabel($start->toDateString(), $end->toDateString()),
                     'email' => mb_strtolower(trim($data['email'])), 'whatsapp' => $inv->phone,
                     'files' => $files, 'consent_at' => now(),
