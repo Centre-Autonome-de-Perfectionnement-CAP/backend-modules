@@ -56,7 +56,8 @@ Route::get('/services/{any?}', function () {
 })->where('any', '^(?!.*\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot|map)).*');
 
 // Route catch-all pour app-cap (doit être en dernier) - exclure les fichiers
-// statiques, les routes API et le stockage
+// statiques, les routes API, le stockage et les pages des travaux (module
+// Bibliotheque, rendues par le serveur pour le référencement)
 Route::get('/{any}', function () {
     return file_get_contents(public_path('app-cap/index.html'));
-})->where('any', '^(?!api/)(?!services/)(?!stockage/)(?!.*\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot|map)).*');
+})->where('any', '^(?!api/)(?!services/)(?!stockage/)(?!travaux(?:/|$))(?!sitemap\.xml$)(?!.*\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot|map)).*');

@@ -4,6 +4,7 @@ namespace App\Modules\Stages\Http\Controllers\Public;
 
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
+use App\Modules\Bibliotheque\Services\LibraryService;
 use App\Modules\Stages\Models\StageInternAccount;
 use App\Modules\Stages\Models\StageInternRequest;
 use App\Modules\Stages\Services\BinomeService;
@@ -53,6 +54,7 @@ class InternSpaceController extends Controller
         private readonly ReportService $reports,
         private readonly AttestationService $attestations,
         private readonly BinomeService $binomes,
+        private readonly LibraryService $library,
     ) {}
 
     // ── Activation (lien du premier jour) ───────────────────────────────
@@ -396,7 +398,12 @@ class InternSpaceController extends Controller
 
     public function reportsIndex(Request $request): JsonResponse
     {
-        return $this->successResponse($this->reports->overview($this->account($request)->stage));
+        $stage = $this->account($request)->stage;
+        $final = StageReport::where('stage_request_id', $stage->id)->where('kind', 'final')->first();
+
+        return $this->successResponse($this->reports->overview($stage) + [
+            'bibliotheque' => $final ? $this->library->proposalFor($final) : null,
+        ]);
     }
 
     public function reportsStore(Request $request): JsonResponse
@@ -405,11 +412,30 @@ class InternSpaceController extends Controller
             'period_key' => ['required', 'string', 'max:20', 'regex:/^(FINAL|J\d{4}-\d{2}-\d{2}|S\d{4}-W\d{2}|M\d{4}-\d{2})$/'],
             'fichier'    => ['required', 'file', 'mimes:pdf', UploadLimit::rule(UploadLimit::REPORT_KB)],
             'note'       => ['nullable', 'string', 'max:1000'],
-        ], ['fichier.mimes' => 'Le rapport doit être un fichier PDF.', 'fichier.max' => UploadLimit::message(UploadLimit::REPORT_KB)]);
+            // Rapport final présenté comme rapport de fin de formation (bibliothèque)
+            'fin_formation'            => ['nullable', 'boolean'],
+            'theme'                    => ['exclude_unless:fin_formation,1', 'required', 'string', 'min:5', 'max:300'],
+            'resume'                   => ['exclude_unless:fin_formation,1', 'required', 'string', 'min:30', 'max:3000'],
+            'mots_cles'                => ['exclude_unless:fin_formation,1', 'nullable', 'string', 'max:400'],
+            'maitre_nom'               => ['exclude_unless:fin_formation,1', 'nullable', 'string', 'max:150'],
+            'maitre_fonction'          => ['exclude_unless:fin_formation,1', 'nullable', 'string', 'max:150'],
+            'maitre_email'             => ['exclude_unless:fin_formation,1', 'nullable', 'email', 'max:254'],
+            'maitre_telephone'         => ['exclude_unless:fin_formation,1', 'nullable', 'string', 'max:30', 'regex:/^\+?[0-9\s\-.]{8,30}$/'],
+            'consentement_publication' => ['exclude_unless:fin_formation,1', 'accepted'],
+        ], [
+            'fichier.mimes' => 'Le rapport doit être un fichier PDF.', 'fichier.max' => UploadLimit::message(UploadLimit::REPORT_KB),
+            'theme.required' => 'Indiquez le thème de votre travail.', 'resume.required' => 'Ajoutez un résumé de votre travail.',
+            'resume.min' => 'Le résumé est trop court (30 caractères au moins).',
+            'maitre_telephone.regex' => 'Numéro du maître de mémoire invalide.',
+            'consentement_publication.accepted' => 'Acceptez que le CAP puisse publier votre travail après validation, ou décochez « rapport de fin de formation ».',
+        ]);
         $note = isset($data['note']) ? (trim(strip_tags($data['note'])) ?: null) : null;
 
         return $this->guard(function () use ($data, $note, $request) {
             $r = $this->reports->submit($this->ready($request)->stage, $data['period_key'], $request->file('fichier'), $note);
+            if (!empty($data['fin_formation'])) {
+                $this->library->proposeFromReport($r->load('stage'), array_map(fn ($v) => is_string($v) ? (trim(strip_tags($v)) ?: null) : $v, $data));
+            }
 
             return $this->successResponse($this->reports->detail($r->load('stage'), false),
                 $r->late ? 'Rapport déposé (hors délai).' : 'Rapport déposé. Votre superviseur en est informé.', 201);

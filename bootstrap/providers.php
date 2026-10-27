@@ -21,4 +21,5 @@ return [
     App\Modules\AdminDb\Providers\AdminDbServiceProvider::class,
     App\Modules\LegacyStudent\Providers\LegacyStudentServiceProvider::class,
     App\Modules\Stages\Providers\StagesServiceProvider::class,
+    App\Modules\Bibliotheque\Providers\BibliothequeServiceProvider::class,
 ];
