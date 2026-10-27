@@ -138,7 +138,7 @@ class SendGroupedReminders extends Command
         $query = DB::table('users as u')
             ->join('role_user as ru', 'ru.user_id', '=', 'u.id')
             ->join('roles as r', 'r.id', '=', 'ru.role_id')
-            ->where('r.slug', $roleSlug)
+            ->whereIn('r.slug', WorkflowConstants::roleSlugVariants($roleSlug))
             ->whereNotNull('u.email')
             ->whereNull('u.deleted_at')
             ->select(
@@ -148,8 +148,13 @@ class SendGroupedReminders extends Command
                 'u.phone'
             );
 
-        if ($roleSlug === 'chef-division' && $responsableDivisionType) {
-            $query->where('u.responsable_division_type', $responsableDivisionType);
+        // Responsable Division : celui du type du dossier ; si aucun n'y est
+        // rattaché, tous (un dossier en retard ne reste jamais sans relance).
+        if ($roleSlug === 'responsable-division' && $responsableDivisionType) {
+            $ofType = (clone $query)->where('u.chef_division_type', $responsableDivisionType)->get();
+            if ($ofType->isNotEmpty()) {
+                return $ofType;
+            }
         }
 
         return $query->get();
