@@ -138,11 +138,16 @@ class BibliothequeTest extends TestCase
         $this->actingAs($lead, 'sanctum');
         $this->getJson('/api/bibliotheque/admin/travaux')->assertOk()->assertJsonPath('data.counts.proposed', 1);
         $publish = ['visibility' => 'public', 'downloadable' => true, 'license' => 'tous_droits'];
+        $this->getJson("/api/bibliotheque/admin/travaux/{$work->id}")->assertOk()->assertJsonPath('data.has_file', false);
         $this->postJson("/api/bibliotheque/admin/travaux/{$work->id}/publier", $publish)->assertStatus(422)->assertJsonPath('error_code', 'LIBRARY_NOT_VALIDATED');
         $this->postJson("/api/stages/admin/rapports/{$reportId}/decision", ['decision' => 'approved'])->assertOk();
+        // Rapport validé : son PDF est déjà le document du travail, rien à ajouter
+        $this->getJson("/api/bibliotheque/admin/travaux/{$work->id}")->assertOk()
+            ->assertJsonPath('data.has_file', true)->assertJsonPath('data.file_origin', 'rapport');
+        $this->getJson("/api/bibliotheque/admin/travaux/{$work->id}/fichier")->assertOk()->assertJsonPath('mime', 'application/pdf');
         $this->postJson("/api/bibliotheque/admin/travaux/{$work->id}/publier", $publish)->assertOk()->assertJsonPath('data.status', 'published');
         $work->refresh();
-        Storage::disk('local')->assertExists($work->file_path);
+        $this->assertNull($work->file_path); // pas de copie : la version officielle du rapport est servie
         $this->assertStringStartsWith('supervision-du-reseau-du-cap-avec-zabbix-', $work->slug);
 
         // Repris par le responsable : le stagiaire ne modifie plus la fiche
@@ -160,7 +165,7 @@ class BibliothequeTest extends TestCase
             ->assertSee('citation_pdf_url', false)->assertSee('<div id="root"></div>', false)
             ->assertDontSee('p.adjovi@example.org');
         $this->get('/sitemap.xml')->assertOk()->assertSee("/travaux/{$work->slug}", false);
-        $this->get("/travaux/{$work->slug}/pdf")->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->get("/travaux/{$work->slug}/pdf")->assertOk()->assertHeader('Content-Type', 'application/pdf')->assertHeader('X-Frame-Options', 'SAMEORIGIN');
         $this->assertSame([1, 1], [$work->fresh()->views, $work->fresh()->downloads]); // vue comptée par la fiche du site
     }
 

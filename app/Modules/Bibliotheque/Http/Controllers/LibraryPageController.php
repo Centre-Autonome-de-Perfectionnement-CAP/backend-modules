@@ -50,13 +50,15 @@ class LibraryPageController extends Controller
     public function pdf(Request $request, string $slug): StreamedResponse
     {
         $work = LibraryWork::where('slug', $slug)->first();
-        abort_unless($work && $work->isVisibleWith($request->query('cle')) && $work->downloadable
-            && $work->file_path && Storage::disk(LibraryService::DISK)->exists($work->file_path), 404);
+        $doc = $work && $work->isVisibleWith($request->query('cle')) && $work->downloadable ? $this->library->document($work) : null;
+        abort_unless($doc, 404);
         $work->increment('downloads');
 
-        return Storage::disk(LibraryService::DISK)->response($work->file_path, $work->slug . '.pdf', [
+        // Affiché aussi dans la fiche du site (même origine).
+        return Storage::disk($doc['disk'])->response($doc['path'], $work->slug . '.pdf', [
             'Content-Type' => 'application/pdf',
             'X-Content-Type-Options' => 'nosniff',
+            'X-Frame-Options' => 'SAMEORIGIN',
             ...($work->visibility === 'link' ? ['X-Robots-Tag' => 'noindex'] : []),
         ], 'inline');
     }
