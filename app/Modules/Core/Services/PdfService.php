@@ -31,7 +31,10 @@ class PdfService
 
             $pdf = Pdf::loadView($view, $data);
 
-            // Optimisations DomPDF
+            // Optimisations DomPDF, fusionnées avec config/dompdf.php : sans la
+            // fusion, le dossier des polices retombe sur celui du paquet
+            // (vendor/…/lib/fonts) et Arial, installée dans storage/fonts, devient
+            // introuvable (échec de génération en requête HTTP).
             $pdf->setOptions([
                 'isHtml5ParserEnabled' => true,
                 'isRemoteEnabled' => true,
@@ -47,7 +50,7 @@ class PdfService
                 'debugLayoutPaddingBox' => false,
                 'tempDir' => storage_path('app/dompdf'),
                 'chroot' => public_path(),
-            ]);
+            ], true);
 
             // Appliquer les options de papier
             if (isset($options['orientation'])) {
