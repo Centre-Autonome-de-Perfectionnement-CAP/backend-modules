@@ -25,6 +25,6 @@ Route::prefix('api/bibliotheque/admin')->middleware(['api', 'auth:sanctum', 'can
 // Site vitrine : travaux publiés (et « par lien » avec la clé).
 Route::prefix('api/travaux')->middleware(['api', 'throttle:120,1'])->group(function () {
     Route::get('/', [LibraryPublicController::class, 'index']);
-    Route::get('{slug}', [LibraryPublicController::class, 'show'])->where('slug', '[a-z0-9-]+');
-    Route::post('{slug}/contact', [LibraryPublicController::class, 'contact'])->where('slug', '[a-z0-9-]+')->middleware('throttle:bibliotheque-contact');
+    Route::get('{id}', [LibraryPublicController::class, 'show'])->whereNumber('id');
+    Route::post('{id}/contact', [LibraryPublicController::class, 'contact'])->whereNumber('id')->middleware('throttle:bibliotheque-contact');
 });
