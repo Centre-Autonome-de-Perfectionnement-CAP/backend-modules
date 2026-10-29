@@ -1,7 +1,12 @@
 name: Journaux serveur (manuel)
 
 # Lecture SEULE des journaux et de l'état d'un serveur, sans accès SSH
-# personnel : onglet Actions > « Journaux serveur (manuel) » > Run workflow.
+# personnel. Deux façons de le lancer :
+#   - onglet Actions > « Journaux serveur (manuel) » > Run workflow
+#     (bouton visible une fois ce fichier présent sur main) ;
+#   - pousser un tag, sans toucher aux branches ni redéployer :
+#       git tag journaux-1 && git push origin journaux-1        (serveur de test)
+#       git tag journaux-prod-1 && git push origin journaux-prod-1   (prod)
 # Rien n'est modifié sur le serveur. Le .env et les mots de passe ne sont
 # jamais affichés.
 
@@ -19,9 +24,11 @@ on:
         required: true
         default: "200"
         type: string
+  push:
+    tags: ['journaux-*']
 
 concurrency:
-  group: journaux-${{ inputs.serveur }}
+  group: journaux-${{ inputs.serveur || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -39,12 +46,12 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Journaux (${{ inputs.serveur }})
+      - name: Journaux
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
-          SERVEUR: ${{ inputs.serveur }}
-          LIGNES: ${{ inputs.lignes }}
+          SERVEUR: ${{ inputs.serveur || (startsWith(github.ref_name, 'journaux-prod') && 'prod' || 'test') }}
+          LIGNES: ${{ inputs.lignes || '200' }}
         run: |
           case "$LIGNES" in ''|*[!0-9]*) LIGNES=200 ;; esac
           ssh $SSH_USER@$SSH_HOST "SERVEUR=$SERVEUR LIGNES=$LIGNES bash -s" << 'ENDSSH'
