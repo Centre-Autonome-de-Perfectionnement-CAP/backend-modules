@@ -26,6 +26,7 @@ use Illuminate\Support\Facades\Storage;
  *                      (after_sent : publiés UNIQUEMENT si l'email est accepté par le SMTP)
  *   'whatsapp'       → { phone, message, context, module? }
  *   'whatsapp_file'  → { phone, disk, path, file_name, caption?, context, module? }
+ *                      (caption : envoyé en message à part, AVANT le fichier)
  *
  * Politique de retry :
  *   - retryUntil() = 24 h pour les incidents transitoires (bridge
@@ -58,6 +59,9 @@ class SendNotificationJob implements ShouldQueue
 
     /** Backoff progressif entre deux tentatives (secondes). */
     private const BACKOFF = [15, 30, 60, 120, 300, 600];
+
+    /** Vrai quand une partie de l'envoi est déjà faite (voir handleWhatsAppFile). */
+    private bool $payloadChanged = false;
 
     public function __construct(
         public string $channel,
@@ -270,12 +274,31 @@ class SendNotificationJob implements ShouldQueue
             return;
         }
 
+        // Le texte part d'abord, en message à part, puis le fichier sans
+        // légende : le destinataire lit le message en entier (une légende est
+        // tronquée à 1 024 caractères) et avant le document.
+        $message = trim((string) ($p['caption'] ?? ''));
+        if ($message !== '') {
+            $res = $bridge->sendDetailed($p['phone'], $message, $p['context'] ?? '', $p['module'] ?? 'Demandes');
+            if (!$res['ok']) {
+                $this->handleResult($res, 'WhatsApp (message du fichier)');
+                return;
+            }
+            Log::info('[SendNotificationJob] WhatsApp (message du fichier) envoyé', ['to' => $p['phone'], 'ctx' => $p['context'] ?? '']);
+
+            // Message parti : un nouvel essai ne concerne plus que le fichier
+            // (jamais de message en double).
+            unset($p['caption']);
+            $this->payload        = $p;
+            $this->payloadChanged = true;
+        }
+
         $res = $bridge->sendFileDetailed(
             $p['phone'],
             $p['disk'] ?? 'public',
             $p['path'],
             $p['file_name'] ?? basename($p['path']),
-            $p['caption'] ?? '',
+            '',
             $p['context'] ?? '',
             $p['module'] ?? 'Demandes',
         );
@@ -321,8 +344,10 @@ class SendNotificationJob implements ShouldQueue
         $attempt = max(1, $this->attempts());
         $delay   = self::BACKOFF[min($attempt - 1, count(self::BACKOFF) - 1)];
 
-        // Envoi immédiat (hors file) : le nouvel essai passe par la file.
-        if ($this->isImmediate()) {
+        // Envoi immédiat (hors file) ou contenu à renvoyer modifié (message
+        // déjà parti) : le nouvel essai est un nouveau job, release()
+        // rejouerait le job d'origine tel quel.
+        if ($this->isImmediate() || $this->payloadChanged) {
             Log::warning("[SendNotificationJob] {$reason} - remis en file (nouvel essai dans {$delay}s)", [
                 'to'  => $this->payload['phone'] ?? ($this->payload['to'] ?? null),
                 'ctx' => $this->payload['context'] ?? '',
