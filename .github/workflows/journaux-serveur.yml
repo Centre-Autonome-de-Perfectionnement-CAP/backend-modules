@@ -1,0 +1,98 @@
+name: Journaux serveur (manuel)
+
+# Lecture SEULE des journaux et de l'état d'un serveur, sans accès SSH
+# personnel : onglet Actions > « Journaux serveur (manuel) » > Run workflow.
+# Rien n'est modifié sur le serveur. Le .env et les mots de passe ne sont
+# jamais affichés.
+
+on:
+  workflow_dispatch:
+    inputs:
+      serveur:
+        description: "Serveur à lire"
+        required: true
+        default: test
+        type: choice
+        options: [test, prod]
+      lignes:
+        description: "Nombre de lignes de laravel.log à afficher"
+        required: true
+        default: "200"
+        type: string
+
+concurrency:
+  group: journaux-${{ inputs.serveur }}
+  cancel-in-progress: true
+
+jobs:
+  journaux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add VPS to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Journaux (${{ inputs.serveur }})
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SERVEUR: ${{ inputs.serveur }}
+          LIGNES: ${{ inputs.lignes }}
+        run: |
+          case "$LIGNES" in ''|*[!0-9]*) LIGNES=200 ;; esac
+          ssh $SSH_USER@$SSH_HOST "SERVEUR=$SERVEUR LIGNES=$LIGNES bash -s" << 'ENDSSH'
+            set -uo pipefail
+            if [ "$SERVEUR" = "prod" ]; then BASE=/var/www/laravel-app; else BASE=/var/www/laravel-app-staging; fi
+            APP="$BASE/current"
+            cd "$APP" || { echo "❌ Dossier introuvable : $APP"; exit 1; }
+            LOGS=storage/logs
+            LARAVEL_LOG=$(ls -t $LOGS/laravel*.log 2>/dev/null | head -1)
+
+            echo "== Serveur : $SERVEUR ($APP) · $(date '+%d/%m/%Y %H:%M:%S')"
+            echo "== Release active : $(readlink -f "$APP")"
+
+            echo; echo "== 1. Erreurs récentes ($LARAVEL_LOG)"
+            if [ -n "$LARAVEL_LOG" ]; then
+              grep -nE "\.(ERROR|CRITICAL|ALERT|EMERGENCY):|Maximum execution|Allowed memory" "$LARAVEL_LOG" | tail -n 40 \
+                || echo "(aucune erreur)"
+            else
+              echo "(aucun fichier laravel*.log)"
+            fi
+
+            echo; echo "== 2. Dernières lignes de $LARAVEL_LOG"
+            [ -n "$LARAVEL_LOG" ] && tail -n "$LIGNES" "$LARAVEL_LOG"
+
+            echo; echo "== 3. Serveur web et PHP (si lisibles)"
+            for f in /var/log/nginx/error.log /var/log/php*-fpm.log; do
+              [ -e "$f" ] || continue
+              echo "--- $f"
+              tail -n 30 "$f" 2>/dev/null || sudo -n tail -n 30 "$f" 2>/dev/null || echo "(lecture non autorisée)"
+            done
+            echo "--- Limites PHP-FPM (php.ini)"
+            grep -hE "^(max_execution_time|max_input_time|memory_limit|upload_max_filesize|post_max_size|max_file_uploads)\b" /etc/php/*/fpm/php.ini 2>/dev/null \
+              || echo "(php.ini FPM non lisible)"
+            [ -f public/.user.ini ] && { echo "--- public/.user.ini"; cat public/.user.ini; }
+
+            echo; echo "== 4. WhatsApp"
+            php artisan tinker --execute="echo app(\App\Modules\WhatsApp\Services\WhatsAppBridgeClient::class)->getStatus()['status'] ?? 'inconnu';" 2>&1 | tail -n 1
+            for f in whatsapp-node.log whatsapp-node-error.log; do
+              [ -f "$LOGS/$f" ] && { echo "--- $f"; tail -n 20 "$LOGS/$f"; }
+            done
+
+            echo; echo "== 5. File d'attente (jobs en attente / échoués)"
+            php artisan tinker --execute="echo 'en attente : '.\DB::table('jobs')->count().' · échoués : '.\DB::table('failed_jobs')->count();" 2>&1 | tail -n 1
+            php artisan queue:failed --no-ansi 2>/dev/null | tail -n 15
+
+            echo; echo "== 6. Disque et droits d'écriture"
+            df -h "$APP" | tail -n 1
+            for d in storage/logs storage/app storage/app/public storage/framework; do
+              ls -ld "$(readlink -f "$d")" 2>/dev/null
+            done
+          ENDSSH
