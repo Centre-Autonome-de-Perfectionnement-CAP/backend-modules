@@ -175,11 +175,12 @@ class InternSpaceController extends Controller
             ],
             'notes'       => $req->notes()->get()->map(fn ($n) => ['id' => $n->id, 'number' => $n->number, 'kind' => $n->kind, 'issued_at' => $n->issued_at?->toIso8601String()]),
             'supervisors' => $sup->map(fn ($u) => ['name' => trim($u->first_name . ' ' . $u->last_name), 'phone' => $u->phone]),
-            'reglement'   => [
+            // Stage terminé : le règlement n'est plus affiché ni demandé.
+            'reglement'   => $this->reglementApplies($req) ? [
                 'version'  => $version,
                 'text'     => $this->settings->reglementFor($req),
                 'accepted' => (int) $account->reglement_version === $version,
-            ],
+            ] : null,
             'webauthn'    => ['enrolled' => (bool) $device, 'rp_id' => $this->webauthn->rpId()],
             'device'      => $device ? ['label' => $device->device_label, 'since' => \Carbon\Carbon::parse($device->created_at)->toIso8601String()] : null,
             'today'       => $this->attendance->today($req),
@@ -490,15 +491,22 @@ class InternSpaceController extends Controller
         return $request->attributes->get('intern');
     }
 
-    /** Compte dont le règlement en vigueur est accepté. */
+    /** Compte dont le règlement en vigueur est accepté (stage en cours). */
     private function ready(Request $request): StageInternAccount
     {
         $account = $this->account($request);
-        if ((int) $account->reglement_version !== (int) $this->settings->get('reglement_version')) {
+        if ($this->reglementApplies($account->stage)
+            && (int) $account->reglement_version !== (int) $this->settings->get('reglement_version')) {
             throw new BusinessException('Lisez et acceptez d\'abord le règlement intérieur.', 'STAGE_REGLEMENT_REQUIRED', 403);
         }
 
         return $account;
+    }
+
+    /** Le règlement ne concerne que le stage en cours (jusqu'au dernier jour inclus). */
+    private function reglementApplies(\App\Modules\Stages\Models\StageRequest $req): bool
+    {
+        return !$req->date_fin || $req->date_fin->toDateString() >= BusinessHours::today()->toDateString();
     }
 
     private function sessionKey(Request $request): string

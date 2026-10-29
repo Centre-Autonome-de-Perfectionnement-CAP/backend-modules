@@ -326,6 +326,13 @@ class StagesLot3Test extends TestCase
         $this->postJson('/api/stagiaire/reglement', ['version' => 99], $h)->assertStatus(409);
         $this->postJson('/api/stagiaire/reglement', ['version' => $me['reglement']['version']], $h)->assertOk();
 
+        // Stage terminé : le règlement n'est plus affiché ni exigé, même après une nouvelle version
+        app(StageSettingsService::class)->update(['reglement_text' => str_repeat('Règlement revu après la fin du stage. ', 4)], null);
+        $req->forceFill(['date_fin' => '2026-11-01'])->saveQuietly();
+        $this->assertNull($this->getJson('/api/stagiaire/moi', $h)->assertOk()->json('data.reglement'));
+        $this->getJson('/api/stagiaire/rapports', $h)->assertOk();
+        $req->forceFill(['date_fin' => '2027-01-31'])->saveQuietly();
+
         // Isolation : jeton stagiaire refusé côté progiciel, et inversement
         $this->getJson('/api/stages/admin/suivi', ['Authorization' => "Bearer {$token}"])->assertStatus(401);
         $staff = $this->user('admin')->createToken('t')->plainTextToken;
