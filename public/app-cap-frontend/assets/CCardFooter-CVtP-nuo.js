@@ -1,1 +1,0 @@
-import{r as d,an as l,R as n,ao as p,ap as e}from"./index-icWnjeeD.js";const r=d.forwardRef((a,s)=>{var{children:o,className:t}=a,c=l(a,["children","className"]);return n.createElement("div",Object.assign({className:p("card-footer",t)},c,{ref:s}),o)});r.propTypes={children:e.node,className:e.string};r.displayName="CCardFooter";export{r as C};
