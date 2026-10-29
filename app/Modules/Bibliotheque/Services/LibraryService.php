@@ -231,20 +231,10 @@ class LibraryService
         if (mb_strlen(trim((string) $work->summary)) < 30) {
             throw new BusinessException('Ajoutez un résumé (30 caractères au moins) : c\'est lui que les visiteurs et les moteurs de recherche lisent.', 'LIBRARY_NO_SUMMARY', 422);
         }
-        if ($work->source_type === 'stage_report' && !$work->file_path) {
-            $report = StageReport::find($work->source_id);
-            if (!$report || !$this->reports->isValidated($report)) {
-                throw new BusinessException('Le rapport doit d\'abord être validé.', 'LIBRARY_NOT_VALIDATED', 422);
-            }
-            $path = $this->reports->filePath($report, (int) $report->official_version);
-            if (!$path) {
-                throw new BusinessException('Fichier du rapport introuvable : ajoutez le PDF à la main.', 'LIBRARY_NO_FILE', 422);
-            }
-            $work->file_path = $this->keep($work, Storage::disk(StageRequestService::DISK)->get($path));
-            $work->file_size = Storage::disk(StageRequestService::DISK)->size($path);
-        }
-        if (!$work->file_path) {
-            throw new BusinessException('Ajoutez le PDF du travail avant de le publier.', 'LIBRARY_NO_FILE', 422);
+        if (!$this->document($work)) {
+            throw $work->source_type === 'stage_report' && !$this->validatedReport($work)
+                ? new BusinessException('Le rapport doit d\'abord être validé.', 'LIBRARY_NOT_VALIDATED', 422)
+                : new BusinessException('Ajoutez le PDF du travail avant de le publier.', 'LIBRARY_NO_FILE', 422);
         }
 
         $work->fill([
@@ -289,7 +279,8 @@ class LibraryService
             'summary' => $work->summary, 'keywords' => $work->keywords ?? [],
             'etablissement' => $work->etablissement, 'universite' => $work->universite,
             'filiere' => $work->filiere, 'cycle' => $work->cycle, 'annee_etude' => $work->annee_etude,
-            'license' => $work->license, 'downloadable' => $work->downloadable, 'has_file' => (bool) $work->file_path,
+            'license' => $work->license, 'downloadable' => $work->downloadable,
+            'has_file' => $this->document($work) !== null, 'file_origin' => $this->ownFile($work) ? 'travail' : 'rapport',
             'authors_consent' => $work->authors_consent,
             'people' => $work->people->map(fn (LibraryPerson $p) => $p->only(['id', 'role', 'name', 'fonction', 'email', 'phone']))->values(),
             'share_url' => $this->publicUrl($work) . '?cle=' . $work->share_token,
@@ -356,12 +347,31 @@ class LibraryService
                 'id' => $p->id, 'role' => $p->role, 'role_label' => LibraryPerson::ROLES[$p->role] ?? $p->role,
                 'name' => $p->name, 'fonction' => $p->fonction, 'reachable' => $p->reachable(),
             ])->values(),
-            'pdf_url' => $w->downloadable && $w->file_path ? $this->publicUrl($w) . '/pdf' . $key : null,
+            'pdf_url' => $w->downloadable && $this->document($w) ? $this->publicUrl($w) . '/pdf' . $key : null,
             'license' => LibraryWork::LICENSES[$w->license] ?? null,
             'url' => $this->publicUrl($w),
             'citation' => $authors->implode(', ') . ($w->year ? " ({$w->year})" : '') . '. ' . $w->title . '. '
                 . $kind . ($institution ? ', ' . $institution : '') . '. ' . $this->publicUrl($w),
         ];
+    }
+
+    /**
+     * Document du travail : le PDF propre au travail (ajouté ou remplacé par
+     * le responsable, mémoire repris) ou, pour un rapport de fin de
+     * formation, la version officielle du rapport validé - sans copie :
+     * une version corrigée après soutenance est reprise d'elle-même.
+     *
+     * @return array{disk: string, path: string}|null
+     */
+    public function document(LibraryWork $work): ?array
+    {
+        if ($this->ownFile($work)) {
+            return ['disk' => self::DISK, 'path' => $work->file_path];
+        }
+        $report = $this->validatedReport($work);
+        $path = $report ? $this->reports->filePath($report, (int) $report->official_version) : null;
+
+        return $path ? ['disk' => StageRequestService::DISK, 'path' => $path] : null;
     }
 
     public function publicUrl(LibraryWork $work): string
@@ -398,6 +408,21 @@ class LibraryService
     }
 
     // ── Interne ──────────────────────────────────────────────────────────
+
+    private function ownFile(LibraryWork $work): bool
+    {
+        return $work->file_path && Storage::disk(self::DISK)->exists($work->file_path);
+    }
+
+    private function validatedReport(LibraryWork $work): ?StageReport
+    {
+        if ($work->source_type !== 'stage_report') {
+            return null;
+        }
+        $report = StageReport::find($work->source_id);
+
+        return $report && $this->reports->isValidated($report) ? $report : null;
+    }
 
     private function newWork(string $kind, string $sourceType, ?int $sourceId, string $status, ?User $by): LibraryWork
     {

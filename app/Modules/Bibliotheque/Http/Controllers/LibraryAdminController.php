@@ -86,13 +86,14 @@ class LibraryAdminController extends Controller
     public function file(int $id): JsonResponse
     {
         $work = LibraryWork::findOrFail($id);
-        if (!$work->file_path || !Storage::disk(LibraryService::DISK)->exists($work->file_path)) {
+        $doc = $this->library->document($work);
+        if (!$doc) {
             return $this->errorResponse('Aucun fichier pour ce travail.', 404, 'LIBRARY_NO_FILE');
         }
 
         return response()->json([
-            'name' => $work->slug . '.pdf', 'mime' => 'application/pdf',
-            'content' => base64_encode(Storage::disk(LibraryService::DISK)->get($work->file_path)),
+            'name' => ($work->slug ?: 'travail') . '.pdf', 'mime' => 'application/pdf',
+            'content' => base64_encode(Storage::disk($doc['disk'])->get($doc['path'])),
         ])->header('Cache-Control', 'private, no-store');
     }
 
