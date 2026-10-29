@@ -1,1 +1,0 @@
-import{r as n,an as p,R as l,ao as i,ap as e}from"./index-vMVQjiti.js";const a=n.forwardRef((s,r)=>{var{children:t,as:o="div",className:m}=s,c=p(s,["children","as","className"]);return l.createElement(o,Object.assign({className:i("form-text",m)},c,{ref:r}),t)});a.propTypes={as:e.elementType,children:e.node,className:e.string};a.displayName="CFormText";export{a as C};
