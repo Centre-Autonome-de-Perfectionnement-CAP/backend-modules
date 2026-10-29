@@ -1,0 +1,1 @@
+import{r as o,an as l,R as p,ao as m,ap as e}from"./index-Cjwvqso-.js";const s=o.forwardRef((a,r)=>{var{children:t,className:n}=a,c=l(a,["children","className"]);return p.createElement("div",Object.assign({className:m("tab-content",n)},c,{ref:r}),t)});s.propTypes={children:e.node,className:e.string};s.displayName="CTabContent";export{s as C};
