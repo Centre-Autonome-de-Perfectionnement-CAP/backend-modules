@@ -5,6 +5,7 @@ namespace App\Modules\Bibliotheque\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Bibliotheque\Models\LibraryWork;
 use App\Modules\Bibliotheque\Services\LibraryService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
@@ -30,9 +31,9 @@ class LibraryPageController extends Controller
         ])->render());
     }
 
-    public function show(Request $request, string $slug): Response
+    public function show(Request $request, int $id): Response
     {
-        $work = LibraryWork::with('people')->where('slug', $slug)->first();
+        $work = LibraryWork::with('people')->find($id);
         if (!$work || !$work->isVisibleWith($request->query('cle'))) {
             return $this->page(view('bibliotheque::head', [
                 'title' => 'Travail introuvable', 'description' => '', 'canonical' => null, 'robots' => 'noindex', 'work' => null,
@@ -47,9 +48,21 @@ class LibraryPageController extends Controller
         ])->render());
     }
 
-    public function pdf(Request $request, string $slug): StreamedResponse
+    /** Ancienne adresse avec le titre : redirection définitive vers /travaux/{id}. */
+    public function legacy(Request $request, string $slug): RedirectResponse|Response
     {
         $work = LibraryWork::where('slug', $slug)->first();
+        $cle = $request->query('cle');
+        if (!$work || !$work->isVisibleWith(is_string($cle) ? $cle : null)) {
+            return $this->show($request, 0);
+        }
+
+        return redirect()->to($this->library->publicUrl($work) . (is_string($cle) ? '?cle=' . urlencode($cle) : ''), 301);
+    }
+
+    public function pdf(Request $request, int $id): StreamedResponse
+    {
+        $work = LibraryWork::find($id);
         $doc = $work && $work->isVisibleWith($request->query('cle')) && $work->downloadable ? $this->library->document($work) : null;
         abort_unless($doc, 404);
         $work->increment('downloads');
@@ -67,7 +80,7 @@ class LibraryPageController extends Controller
     public function sitemap(): Response
     {
         $works = LibraryWork::where('status', 'published')->where('visibility', 'public')->orderByDesc('published_at')
-            ->get(['slug', 'updated_at']);
+            ->get(['id', 'updated_at']);
 
         return response()->view('bibliotheque::sitemap', ['works' => $works, 'base' => rtrim((string) config('app.url'), '/')])
             ->header('Content-Type', 'application/xml');

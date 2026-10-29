@@ -41,17 +41,17 @@ class LibraryPublicController extends Controller
         ]);
     }
 
-    public function show(Request $request, string $slug): JsonResponse
+    public function show(Request $request, int $id): JsonResponse
     {
-        $work = $this->visible($request, $slug);
+        $work = $this->visible($request, $id);
         $work->increment('views');
 
         return $this->successResponse($this->library->publicDetail($work));
     }
 
-    public function contact(Request $request, string $slug): JsonResponse
+    public function contact(Request $request, int $id): JsonResponse
     {
-        $work = $this->visible($request, $slug);
+        $work = $this->visible($request, $id);
         $data = $request->validate([
             'person_id' => ['required', 'integer'],
             'nom'       => ['required', 'string', 'min:2', 'max:120'],
@@ -74,9 +74,9 @@ class LibraryPublicController extends Controller
         return $this->successResponse(null, "Votre message a été transmis à {$person->name}. Sa réponse vous parviendra directement.");
     }
 
-    private function visible(Request $request, string $slug): LibraryWork
+    private function visible(Request $request, int $id): LibraryWork
     {
-        $work = LibraryWork::where('slug', $slug)->first();
+        $work = LibraryWork::find($id);
         abort_unless($work && $work->isVisibleWith($request->query('cle') ?? $request->input('cle')), 404);
 
         return $work;

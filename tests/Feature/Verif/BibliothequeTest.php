@@ -155,17 +155,20 @@ class BibliothequeTest extends TestCase
 
         // Site : liste et fiche (sans aucun contact) ; page avec balises Google Scholar écrites par le serveur
         $this->getJson('/api/travaux?q=zabbix')->assertOk()->assertJsonPath('data.items.0.title', 'Supervision du réseau du CAP avec Zabbix');
-        $fiche = $this->getJson("/api/travaux/{$work->slug}")->assertOk()
+        $fiche = $this->getJson("/api/travaux/{$work->id}")->assertOk()
             ->assertJsonPath('data.people.1.name', 'Dr Paul ADJOVI')->assertJsonPath('data.people.1.reachable', true);
         foreach (['p.adjovi@example.org', '97 11 22 33', $req->email] as $private) {
             $this->assertStringNotContainsString($private, $fiche->getContent());
         }
-        $this->get("/travaux/{$work->slug}")->assertOk()
+        $this->get("/travaux/{$work->id}")->assertOk()
             ->assertSee('<meta name="citation_title" content="Supervision du réseau du CAP avec Zabbix">', false)
             ->assertSee('citation_pdf_url', false)->assertSee('<div id="root"></div>', false)
             ->assertDontSee('p.adjovi@example.org');
-        $this->get('/sitemap.xml')->assertOk()->assertSee("/travaux/{$work->slug}", false);
-        $this->get("/travaux/{$work->slug}/pdf")->assertOk()->assertHeader('Content-Type', 'application/pdf')->assertHeader('X-Frame-Options', 'SAMEORIGIN');
+        $this->get('/sitemap.xml')->assertOk()->assertSee("/travaux/{$work->id}", false);
+        // Adresse courte ; l'ancienne adresse avec le titre redirige vers elle
+        $this->assertSame(url("/travaux/{$work->id}"), $fiche->json('data.url'));
+        $this->get("/travaux/{$work->slug}")->assertStatus(301)->assertRedirect(url("/travaux/{$work->id}"));
+        $this->get("/travaux/{$work->id}/pdf")->assertOk()->assertHeader('Content-Type', 'application/pdf')->assertHeader('X-Frame-Options', 'SAMEORIGIN');
         $this->assertSame([1, 1], [$work->fresh()->views, $work->fresh()->downloads]); // vue comptée par la fiche du site
     }
 
@@ -181,17 +184,17 @@ class BibliothequeTest extends TestCase
         $work->refresh();
 
         // Par lien : introuvable sans la clé, non référencé, PDF fermé
-        $this->get("/travaux/{$work->slug}")->assertNotFound();
-        $this->getJson("/api/travaux/{$work->slug}")->assertNotFound();
+        $this->get("/travaux/{$work->id}")->assertNotFound();
+        $this->getJson("/api/travaux/{$work->id}")->assertNotFound();
         $this->getJson('/api/travaux')->assertOk()->assertJsonPath('data.total', 0);
-        $this->get('/sitemap.xml')->assertDontSee($work->slug);
-        $this->get("/travaux/{$work->slug}?cle={$work->share_token}")->assertOk()->assertSee('noindex, nofollow', false)->assertDontSee('citation_title', false);
-        $this->getJson("/api/travaux/{$work->slug}?cle={$work->share_token}")->assertOk()->assertJsonPath('data.pdf_url', null);
-        $this->get("/travaux/{$work->slug}/pdf?cle={$work->share_token}")->assertNotFound();
+        $this->get('/sitemap.xml')->assertDontSee("/travaux/{$work->id}<", false);
+        $this->get("/travaux/{$work->id}?cle={$work->share_token}")->assertOk()->assertSee('noindex, nofollow', false)->assertDontSee('citation_title', false);
+        $this->getJson("/api/travaux/{$work->id}?cle={$work->share_token}")->assertOk()->assertJsonPath('data.pdf_url', null);
+        $this->get("/travaux/{$work->id}/pdf?cle={$work->share_token}")->assertNotFound();
 
         // Contacter le maître de mémoire : message relayé par email, robots écartés
         $maitre = $work->people()->where('role', 'maitre')->first();
-        $url = "/api/travaux/{$work->slug}/contact?cle={$work->share_token}";
+        $url = "/api/travaux/{$work->id}/contact?cle={$work->share_token}";
         $form = ['person_id' => $maitre->id, 'nom' => 'Jean AGOSSA', 'email' => 'jean@example.org', 'message' => 'Bonjour, je travaille sur un sujet proche et souhaiterais échanger.'];
         $this->postJson($url, $form + ['site' => 'spam'])->assertStatus(422)->assertJsonValidationErrors('site');
         $this->postJson($url, $form)->assertOk();
@@ -201,7 +204,7 @@ class BibliothequeTest extends TestCase
         // Lien renouvelé : l'ancien ne marche plus
         $old = $work->share_token;
         $this->postJson("/api/bibliotheque/admin/travaux/{$work->id}/nouveau-lien")->assertOk();
-        $this->get("/travaux/{$work->slug}?cle={$old}")->assertNotFound();
+        $this->get("/travaux/{$work->id}?cle={$old}")->assertNotFound();
     }
 
     public function test_only_lead_manages_and_manual_work_needs_summary(): void

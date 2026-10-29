@@ -321,7 +321,7 @@ class LibraryService
     public function publicCard(LibraryWork $w): array
     {
         return [
-            'slug' => $w->slug, 'kind' => $w->kind, 'kind_label' => LibraryWork::KINDS[$w->kind] ?? $w->kind,
+            'id' => $w->id, 'kind' => $w->kind, 'kind_label' => LibraryWork::KINDS[$w->kind] ?? $w->kind,
             'title' => $w->title, 'year' => $w->year, 'formation' => $w->formation(),
             'authors' => $w->people->where('role', 'auteur')->pluck('name')->values(),
             'summary' => $w->summary ? Str::limit($w->summary, 240) : null,
@@ -347,7 +347,9 @@ class LibraryService
                 'id' => $p->id, 'role' => $p->role, 'role_label' => LibraryPerson::ROLES[$p->role] ?? $p->role,
                 'name' => $p->name, 'fonction' => $p->fonction, 'reachable' => $p->reachable(),
             ])->values(),
-            'pdf_url' => $w->downloadable && $this->document($w) ? $this->publicUrl($w) . '/pdf' . $key : null,
+            'pdf_url' => ($doc = $w->downloadable ? $this->document($w) : null) ? $this->publicUrl($w) . '/pdf' . $key : null,
+            'pdf_size' => $doc ? Storage::disk($doc['disk'])->size($doc['path']) : null,
+            'published_at' => $w->published_at?->toDateString(),
             'license' => LibraryWork::LICENSES[$w->license] ?? null,
             'url' => $this->publicUrl($w),
             'citation' => $authors->implode(', ') . ($w->year ? " ({$w->year})" : '') . '. ' . $w->title . '. '
@@ -376,7 +378,7 @@ class LibraryService
 
     public function publicUrl(LibraryWork $work): string
     {
-        return rtrim((string) config('app.url'), '/') . '/travaux/' . $work->slug;
+        return rtrim((string) config('app.url'), '/') . '/travaux/' . $work->id;
     }
 
     /** Message d'un visiteur à une personne du travail (coordonnées jamais montrées). */

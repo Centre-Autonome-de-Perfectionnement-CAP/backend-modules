@@ -24,7 +24,7 @@ class BibliothequeServiceProvider extends ServiceProvider
         // Messages aux auteurs : quelques-uns par visiteur, contre les abus.
         RateLimiter::for('bibliotheque-contact', fn (Request $r) => [
             Limit::perMinutes(10, 3)->by('ip:' . $r->ip()),
-            Limit::perDay(30)->by('travail:' . $r->route('slug')),
+            Limit::perDay(30)->by('travail:' . $r->route('id')),
         ]);
     }
 }
