@@ -325,6 +325,8 @@ class LibraryService
             'title' => $w->title, 'year' => $w->year, 'formation' => $w->formation(),
             'authors' => $w->people->where('role', 'auteur')->pluck('name')->values(),
             'summary' => $w->summary ? Str::limit($w->summary, 240) : null,
+            // Taille du PDF consultable en ligne ; null : document sur demande.
+            'pdf_size' => ($doc = $w->downloadable ? $this->document($w) : null) ? Storage::disk($doc['disk'])->size($doc['path']) : null,
         ];
     }
 
@@ -340,21 +342,22 @@ class LibraryService
         $kind = LibraryWork::KINDS[$w->kind] ?? $w->kind;
         $key = $w->visibility === 'link' ? '?cle=' . $w->share_token : '';
 
-        return $this->publicCard($w) + [
+        $card = $this->publicCard($w);
+
+        return [
             'summary' => $w->summary, 'keywords' => $w->keywords ?? [], 'etablissement' => $w->etablissement,
             'universite' => $w->universite, 'institution' => $institution, 'visibility' => $w->visibility,
             'people' => $w->people->map(fn (LibraryPerson $p) => [
                 'id' => $p->id, 'role' => $p->role, 'role_label' => LibraryPerson::ROLES[$p->role] ?? $p->role,
                 'name' => $p->name, 'fonction' => $p->fonction, 'reachable' => $p->reachable(),
             ])->values(),
-            'pdf_url' => ($doc = $w->downloadable ? $this->document($w) : null) ? $this->publicUrl($w) . '/pdf' . $key : null,
-            'pdf_size' => $doc ? Storage::disk($doc['disk'])->size($doc['path']) : null,
+            'pdf_url' => $card['pdf_size'] !== null ? $this->publicUrl($w) . '/pdf' . $key : null,
             'published_at' => $w->published_at?->toDateString(),
             'license' => LibraryWork::LICENSES[$w->license] ?? null,
             'url' => $this->publicUrl($w),
             'citation' => $authors->implode(', ') . ($w->year ? " ({$w->year})" : '') . '. ' . $w->title . '. '
                 . $kind . ($institution ? ', ' . $institution : '') . '. ' . $this->publicUrl($w),
-        ];
+        ] + $card; // résumé complet ici, celui de la carte (abrégé) est écarté
     }
 
     /**
