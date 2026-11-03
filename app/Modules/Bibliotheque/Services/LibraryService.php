@@ -374,7 +374,8 @@ class LibraryService
             return ['disk' => self::DISK, 'path' => $work->file_path];
         }
         $report = $this->validatedReport($work);
-        $path = $report ? $this->reports->filePath($report, (int) $report->official_version) : null;
+        // Version officielle ; à défaut (rapport validé avant son introduction), la version validée en cours.
+        $path = $report ? $this->reports->filePath($report, (int) ($report->official_version ?: $report->current_version)) : null;
 
         return $path ? ['disk' => StageRequestService::DISK, 'path' => $path] : null;
     }
