@@ -35,9 +35,16 @@ class StageWhatsAppGroupService
 {
     private const REMOVE_AFTER_DAYS = 7;
 
+    /** Pause avant chaque nouvel essai (secondes) : WhatsApp limite les opérations de groupe rapprochées. */
+    protected array $retryDelays = [3, 8];
+
+    /** Lien d'invitation, demandé une seule fois par synchronisation. */
+    private array $inviteLinks = [];
+
     public function __construct(
         private readonly WhatsAppBridgeClient $phones,
         private readonly Notifier $notifier,
+        private readonly StageSettingsService $settings,
     ) {}
 
     public function activeGroup(int $year): ?object
@@ -61,6 +68,7 @@ class StageWhatsAppGroupService
 
         return [
             'year'    => $year,
+            'auto'    => (bool) $this->settings->get('wa_group_auto'),
             'group'   => $group ? [
                 'id' => $group->id, 'name' => $group->name, 'origin' => $group->origin,
                 'created_at' => $group->created_at, 'members' => $members, 'supervisors' => $supervisors,
@@ -172,47 +180,64 @@ class StageWhatsAppGroupService
             ->whereNull('wa_added_at')->whereNull('wa_invite_sent_at')
             ->orderBy('id')->limit(100)->get();
 
+        $this->inviteLinks = [];
         foreach ($toAdd->groupBy(fn ($r) => (int) $r->date_debut->format('Y')) as $year => $reqs) {
             try {
-                $group = $this->activeGroup((int) $year) ?? $this->create((int) $year, null);
+                $group = $this->activeGroup((int) $year)
+                    ?? ($this->settings->get('wa_group_auto') ? $this->create((int) $year, null) : null);
             } catch (\Throwable $e) {
                 $stats['errors']++;
                 Log::error('[Stages] Groupe WhatsApp indisponible', ['year' => $year, 'error' => $e->getMessage()]);
                 continue;
             }
+            if (!$group) {
+                continue; // Création automatique désactivée : en attente d'un groupe.
+            }
 
+            $byPhone = [];
             foreach ($reqs as $req) {
-                try {
-                    $phone = $this->digits($req->whatsapp);
-                    if (!$phone) {
-                        continue;
-                    }
-                    $res    = $this->call('/groups/participants', ['jid' => $group->jid, 'action' => 'add', 'participants' => [$phone]]);
-                    $status = (string) ($res['results'][$phone] ?? 'unknown');
+                if ($phone = $this->digits($req->whatsapp)) {
+                    $byPhone[$phone] = $req;
+                }
+            }
 
-                    if (in_array($status, ['200', '409'], true)) {
-                        $req->forceFill(['wa_group_id' => $group->id, 'wa_added_at' => now(), 'wa_removed_at' => null])->save();
-                        $this->log($req, 'whatsapp_group_added', $group->name);
-                        $stats['added']++;
-                    } elseif ($status === 'not_on_whatsapp') {
-                        $req->forceFill(['wa_group_id' => $group->id, 'wa_invite_sent_at' => now()])->save();
-                        $this->log($req, 'whatsapp_group_unreachable', 'Numéro absent de WhatsApp');
-                    } else {
-                        // Refus (confidentialité) : lien envoyé en privé.
-                        $link = $this->call('/groups/invite-code', ['jid' => $group->jid])['link'] ?? null;
-                        if ($link) {
-                            $this->notifier->whatsapp($req->whatsapp, WhatsAppText::compose('Groupe des stagiaires', [
-                                'Bonjour ' . trim($req->civilite . ' ' . $req->fullName()) . ',',
-                                "Rejoignez le groupe WhatsApp des stagiaires du CAP-EPAC : les informations utiles à votre stage y sont partagées.\n{$link}",
-                            ]), "stage-groupe:{$req->reference}", 'Stages');
-                        }
-                        $req->forceFill(['wa_group_id' => $group->id, 'wa_invite_sent_at' => now()])->save();
-                        $this->log($req, 'whatsapp_group_invited', $group->name);
-                        $stats['invited']++;
-                    }
+            // Ajouts groupés (une opération pour plusieurs stagiaires) : des
+            // opérations une à une sont vite refusées par WhatsApp.
+            // Clés numériques converties en entiers par PHP : on les remet en texte.
+            foreach (array_chunk(array_map('strval', array_keys($byPhone)), 20) as $phones) {
+                try {
+                    $results = $this->callWithRetry('/groups/participants', ['jid' => $group->jid, 'action' => 'add', 'participants' => $phones])['results'] ?? [];
                 } catch (\Throwable $e) {
-                    $stats['errors']++;
-                    Log::warning('[Stages] Ajout au groupe WhatsApp échoué', ['reference' => $req->reference, 'error' => $e->getMessage()]);
+                    $stats['errors'] += count($phones);
+                    Log::warning('[Stages] Ajout au groupe WhatsApp échoué', ['references' => array_map(fn ($p) => $byPhone[$p]->reference, $phones), 'error' => $e->getMessage()]);
+                    continue;
+                }
+
+                foreach ($phones as $phone) {
+                    $req    = $byPhone[$phone];
+                    $status = (string) ($results[$phone] ?? 'unknown');
+                    try {
+                        if (in_array($status, ['200', '409'], true)) {
+                            $req->forceFill(['wa_group_id' => $group->id, 'wa_added_at' => now(), 'wa_removed_at' => null])->save();
+                            $this->log($req, 'whatsapp_group_added', $group->name);
+                            $stats['added']++;
+                        } elseif ($status === 'not_on_whatsapp') {
+                            $req->forceFill(['wa_group_id' => $group->id, 'wa_invite_sent_at' => now()])->save();
+                            $this->log($req, 'whatsapp_group_unreachable', 'Numéro absent de WhatsApp');
+                        } else {
+                            // Refus (confidentialité) : lien envoyé en privé.
+                            $this->sendInvite($group, $req->whatsapp, [
+                                'Bonjour ' . trim($req->civilite . ' ' . $req->fullName()) . ',',
+                                'Rejoignez le groupe WhatsApp des stagiaires du CAP-EPAC : les informations utiles à votre stage y sont partagées.',
+                            ], "stage-groupe:{$req->reference}");
+                            $req->forceFill(['wa_group_id' => $group->id, 'wa_invite_sent_at' => now()])->save();
+                            $this->log($req, 'whatsapp_group_invited', $group->name);
+                            $stats['invited']++;
+                        }
+                    } catch (\Throwable $e) {
+                        $stats['errors']++;
+                        Log::warning('[Stages] Invitation au groupe WhatsApp échouée', ['reference' => $req->reference, 'error' => $e->getMessage()]);
+                    }
                 }
             }
         }
@@ -256,30 +281,45 @@ class StageWhatsAppGroupService
         $supervisors = StageAccess::supervisors()->keyBy('id');
         $rows = DB::table('stage_whatsapp_group_staff')->where('group_id', $group->id)->get()->keyBy('user_id');
 
+        $byPhone = [];
         foreach ($supervisors as $sup) {
             $row = $rows[$sup->id] ?? null;
             $phone = $this->digits($sup->phone);
-            if (!$phone || ($row && !$row->removed_at && ($row->added_at || $row->invite_sent_at))) {
+            if ($phone && !($row && !$row->removed_at && ($row->added_at || $row->invite_sent_at))) {
+                $byPhone[$phone] = $sup;
+            }
+        }
+
+        // Clés numériques converties en entiers par PHP : on les remet en texte.
+        foreach (array_chunk(array_map('strval', array_keys($byPhone)), 20) as $phones) {
+            try {
+                $results = $this->callWithRetry('/groups/participants', ['jid' => $group->jid, 'action' => 'add', 'participants' => $phones])['results'] ?? [];
+            } catch (\Throwable $e) {
+                $stats['errors'] += count($phones);
+                Log::warning('[Stages] Ajout des superviseurs au groupe WhatsApp échoué', ['users' => array_map(fn ($p) => $byPhone[$p]->id, $phones), 'error' => $e->getMessage()]);
                 continue;
             }
-            try {
-                $res    = $this->call('/groups/participants', ['jid' => $group->jid, 'action' => 'add', 'participants' => [$phone]]);
-                $status = (string) ($res['results'][$phone] ?? 'unknown');
+
+            foreach ($phones as $phone) {
+                $sup    = $byPhone[$phone];
+                $status = (string) ($results[$phone] ?? 'unknown');
                 $added  = in_array($status, ['200', '409'], true);
-                if (!$added && $status !== 'not_on_whatsapp' && ($link = $this->call('/groups/invite-code', ['jid' => $group->jid])['link'] ?? null)) {
-                    $this->notifier->whatsapp($sup->phone, WhatsAppText::compose('Groupe des stagiaires', [
-                        'Bonjour ' . trim($sup->first_name . ' ' . $sup->last_name) . ',',
-                        "En tant que superviseur, rejoignez le groupe WhatsApp des stagiaires du CAP-EPAC :\n{$link}",
-                    ]), "stage-groupe-superviseur:{$sup->id}", 'Stages');
+                try {
+                    if (!$added && $status !== 'not_on_whatsapp') {
+                        $this->sendInvite($group, $sup->phone, [
+                            'Bonjour ' . trim($sup->first_name . ' ' . $sup->last_name) . ',',
+                            'En tant que superviseur, rejoignez le groupe WhatsApp des stagiaires du CAP-EPAC.',
+                        ], "stage-groupe-superviseur:{$sup->id}");
+                    }
+                    DB::table('stage_whatsapp_group_staff')->updateOrInsert(
+                        ['group_id' => $group->id, 'user_id' => $sup->id],
+                        ['added_at' => $added ? now() : null, 'invite_sent_at' => $added ? null : now(), 'removed_at' => null, 'updated_at' => now(), 'created_at' => ($rows[$sup->id] ?? null)?->created_at ?? now()],
+                    );
+                    $added ? $stats['added']++ : $stats['invited']++;
+                } catch (\Throwable $e) {
+                    $stats['errors']++;
+                    Log::warning('[Stages] Invitation d\'un superviseur au groupe WhatsApp échouée', ['user' => $sup->id, 'error' => $e->getMessage()]);
                 }
-                DB::table('stage_whatsapp_group_staff')->updateOrInsert(
-                    ['group_id' => $group->id, 'user_id' => $sup->id],
-                    ['added_at' => $added ? now() : null, 'invite_sent_at' => $added ? null : now(), 'removed_at' => null, 'updated_at' => now(), 'created_at' => $row->created_at ?? now()],
-                );
-                $added ? $stats['added']++ : $stats['invited']++;
-            } catch (\Throwable $e) {
-                $stats['errors']++;
-                Log::warning('[Stages] Ajout d\'un superviseur au groupe WhatsApp échoué', ['user' => $sup->id, 'error' => $e->getMessage()]);
             }
         }
 
@@ -301,6 +341,43 @@ class StageWhatsAppGroupService
     }
 
     // ── Interne ──────────────────────────────────────────────────────────
+
+    /**
+     * Lien du groupe envoyé en privé : message d'abord, puis le lien seul
+     * (cliquable, facile à transférer). Lien demandé une fois par synchronisation.
+     */
+    private function sendInvite(object $group, string $to, array $lines, string $context): void
+    {
+        $link = $this->inviteLinks[$group->jid] ??= $this->callWithRetry('/groups/invite-code', ['jid' => $group->jid])['link'] ?? null;
+        if (!$link) {
+            throw new BusinessException('Lien du groupe indisponible.', 'STAGE_WA_NO_LINK', 502);
+        }
+        $this->notifier->whatsapp($to, WhatsAppText::compose('Groupe des stagiaires', [...$lines, $link]), $context, 'Stages');
+    }
+
+    /**
+     * Opération de groupe avec nouveaux essais espacés : WhatsApp refuse
+     * souvent des opérations trop rapprochées, sans que ce soit définitif.
+     * Les refus nets (non connecté, pas administrateur, groupe introuvable)
+     * ne sont pas réessayés.
+     */
+    protected function callWithRetry(string $endpoint, array $payload): array
+    {
+        foreach ([0, ...$this->retryDelays] as $i => $delay) {
+            if ($delay) {
+                sleep($delay);
+            }
+            try {
+                return $this->call($endpoint, $payload);
+            } catch (BusinessException $e) {
+                if (in_array($e->getStatusCode(), [400, 403, 404, 422, 503], true) || $i === count($this->retryDelays)) {
+                    throw $e;
+                }
+            }
+        }
+
+        throw new \LogicException('unreachable');
+    }
 
     /** Appel au service WhatsApp ; lève une BusinessException lisible en cas d'échec. */
     protected function call(string $endpoint, array $payload): array

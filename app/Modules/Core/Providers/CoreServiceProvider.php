@@ -14,6 +14,13 @@ class CoreServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        // Polices de dompdf : dossier propre à chaque utilisateur système
+        // (voir PdfFonts), pour tous les PDF de l'application.
+        $this->app->extend('dompdf.options', fn (array $options) => [
+            'font_dir'   => \App\Modules\Core\Support\PdfFonts::dir(),
+            'font_cache' => \App\Modules\Core\Support\PdfFonts::dir(),
+        ] + $options);
+
         // Enregistrer les services en tant que singleton
         $this->app->singleton(MailService::class, function ($app) {
             return new MailService();

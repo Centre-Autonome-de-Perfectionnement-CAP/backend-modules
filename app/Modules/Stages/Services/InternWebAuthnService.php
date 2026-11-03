@@ -9,6 +9,7 @@ use App\Modules\Stages\Support\StageStatus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use lbuchs\WebAuthn\Binary\ByteBuffer;
 use lbuchs\WebAuthn\WebAuthn;
 use lbuchs\WebAuthn\WebAuthnException;
@@ -27,6 +28,8 @@ use lbuchs\WebAuthn\WebAuthnException;
 class InternWebAuthnService
 {
     private const CHALLENGE_TTL_SEC = 180;
+    /** Applications d'un même téléphone (navigateurs, application installée) rattachées à sa clé. */
+    private const MAX_DEVICE_LINKS = 4;
 
     public function rpId(): string
     {
@@ -123,13 +126,61 @@ class InternWebAuthnService
         $taken = DB::table('stage_webauthn_credentials as c')
             ->join('stage_intern_accounts as a', 'a.id', '=', 'c.account_id')
             ->join('stage_requests as r', 'r.id', '=', 'a.stage_request_id')
-            ->where('c.device_hash', $deviceHash)->whereNull('c.revoked_at')
+            ->leftJoin('stage_webauthn_device_links as l', 'l.credential_id', '=', 'c.id')
+            ->where(fn ($q) => $q->where('c.device_hash', $deviceHash)->orWhere('l.device_hash', $deviceHash))
+            ->whereNull('c.revoked_at')
             ->where('r.status', StageStatus::ACCEPTED)
             ->when($accountId, fn ($q) => $q->where('c.account_id', '!=', $accountId))
             ->exists();
         if ($taken) {
             throw new BusinessException("Ce téléphone est déjà le téléphone de stage d'un autre stagiaire. Chaque stagiaire s'enregistre et pointe avec son propre téléphone.", 'STAGE_DEVICE_TAKEN', 409);
         }
+    }
+
+    /**
+     * Cet identifiant d'appareil est-il celui du téléphone de stage ? Celui
+     * de l'enregistrement, ou une autre application du même téléphone
+     * confirmée par l'empreinte (voir confirmDevice).
+     */
+    public function matches(object $cred, string $deviceHash): bool
+    {
+        return !$cred->device_hash
+            || hash_equals($cred->device_hash, $deviceHash)
+            || DB::table('stage_webauthn_device_links')->where('credential_id', $cred->id)->where('device_hash', $deviceHash)->exists();
+    }
+
+    /** Défi pour confirmer une autre application du téléphone de stage (avant ouverture de session). */
+    public function confirmationOptions(StageInternAccount $account): array
+    {
+        $token = Str::random(48);
+        $args  = $this->assertionOptions($account, 'confirm:' . hash('sha256', $token));
+        Cache::put($this->key('confirm', hash('sha256', $token)), $account->id, self::CHALLENGE_TTL_SEC);
+
+        return ['confirmation' => $token, 'publicKey' => $args['publicKey'] ?? $args];
+    }
+
+    /** Compte en attente de confirmation pour ce jeton (null si expiré). */
+    public function pendingAccount(string $token): ?StageInternAccount
+    {
+        $id = Cache::get($this->key('confirm', hash('sha256', $token)));
+
+        return $id ? StageInternAccount::with('stage')->find($id) : null;
+    }
+
+    /**
+     * Empreinte du téléphone de stage prouvée : cette application du
+     * téléphone est rattachée à la clé, puis le compte est rendu.
+     */
+    public function confirmDevice(StageInternAccount $account, string $token, array $payload, string $deviceHash): void
+    {
+        Cache::forget($this->key('confirm', hash('sha256', $token)));
+        $cred = $this->checkAssertion($account, 'confirm:' . hash('sha256', $token), $payload);
+        $this->assertDeviceFree($deviceHash, $account->id);
+
+        if (DB::table('stage_webauthn_device_links')->where('credential_id', $cred->id)->count() >= self::MAX_DEVICE_LINKS) {
+            throw new BusinessException('Trop d\'applications différentes pour ce téléphone. Demandez à votre superviseur de réinitialiser votre téléphone de stage.', 'STAGE_DEVICE_LINKS', 409);
+        }
+        DB::table('stage_webauthn_device_links')->insertOrIgnore(['credential_id' => $cred->id, 'device_hash' => $deviceHash, 'created_at' => now()]);
     }
 
     /** Défi de pointage (lié à la session). */
@@ -150,14 +201,27 @@ class InternWebAuthnService
     /** Vérifie la signature ; lève une exception explicite sinon. */
     public function verify(StageInternAccount $account, string $sessionKey, array $payload, string $deviceHash): void
     {
+        $cred = $this->checkAssertion($account, $sessionKey, $payload);
+        if (!$this->matches($cred, $deviceHash)) {
+            throw new BusinessException('Ce téléphone n\'est pas votre téléphone de stage.', 'STAGE_WEBAUTHN_UNKNOWN_DEVICE', 422);
+        }
+        // Empreinte enregistrée avant le téléphone de stage : liée à ce téléphone dès qu'elle est prouvée.
+        if (!$cred->device_hash) {
+            DB::table('stage_webauthn_credentials')->where('id', $cred->id)->update(['device_hash' => $deviceHash]);
+        }
+    }
+
+    /** Signature de l'empreinte vérifiée sur la clé active du compte ; renvoie la clé. */
+    private function checkAssertion(StageInternAccount $account, string $sessionKey, array $payload): object
+    {
         $challenge = base64_decode((string) Cache::pull($this->key('get', $sessionKey)), true);
         if (!$challenge) {
-            throw new BusinessException('Délai dépassé. Recommencez votre pointage.', 'STAGE_WEBAUTHN_TIMEOUT', 422);
+            throw new BusinessException('Délai dépassé. Recommencez.', 'STAGE_WEBAUTHN_TIMEOUT', 422);
         }
         $credId = (string) ($payload['id'] ?? '');
         $cred = DB::table('stage_webauthn_credentials')->where('account_id', $account->id)->whereNull('revoked_at')
             ->where('credential_id', $this->b64url($this->unb64url($credId)))->first();
-        if (!$cred || ($cred->device_hash && !hash_equals($cred->device_hash, $deviceHash))) {
+        if (!$cred) {
             throw new BusinessException('Ce téléphone n\'est pas votre téléphone de stage.', 'STAGE_WEBAUTHN_UNKNOWN_DEVICE', 422);
         }
 
@@ -180,11 +244,11 @@ class InternWebAuthnService
 
         DB::table('stage_webauthn_credentials')->where('id', $cred->id)->update([
             'sign_count'   => (int) ($lib->getSignatureCounter() ?? $cred->sign_count),
-            // Empreinte enregistrée avant le téléphone de stage : liée à ce téléphone dès qu'elle est prouvée.
-            'device_hash'  => $cred->device_hash ?: $deviceHash,
             'last_used_at' => now(),
             'updated_at'   => now(),
         ]);
+
+        return $cred;
     }
 
     public function revokeAll(int $accountId, ?int $byUserId): int

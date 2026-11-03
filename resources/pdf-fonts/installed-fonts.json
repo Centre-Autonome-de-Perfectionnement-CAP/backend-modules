@@ -1,0 +1,30 @@
+{
+    "algeria": {
+        "normal": "algeria_normal_ce097e3e6033b200135e8f8a8630afc7"
+    },
+    "arial": {
+        "normal": "arial_normal_06a28346239c325e0c813eff764e3b50"
+    },
+    "albertus medium": {
+        "normal": "albertus_medium_normal_79a02ea0713920c61685932b85ca131f"
+    },
+    "pristina": {
+        "normal": "pristina_normal_f645f5ec0d72d25cefa5098c8a81c509",
+        "bold": "pristina_bold_a352dd0432849e17b2e3aaef6b0b7035"
+    },
+    "berlin sans fb": {
+        "normal": "berlin_sans_fb_normal_45c8defea3621e0c60cae5df9909f614"
+    },
+    "economica": {
+        "normal": "economica_normal_0cb7185cec9e5631c5f5fa48bd046371"
+    },
+    "algerian": {
+        "normal": "algerian_normal_d90e90975e75c6dc9425a3c097f39e1f"
+    },
+    "albertus": {
+        "normal": "albertus_normal_0a651ad009506f3ec4652400fe992de4",
+        "bold": "albertus_bold_0a651ad009506f3ec4652400fe992de4",
+        "italic": "albertus_italic_0a651ad009506f3ec4652400fe992de4",
+        "bold_italic": "albertus_bold_italic_0a651ad009506f3ec4652400fe992de4"
+    }
+}

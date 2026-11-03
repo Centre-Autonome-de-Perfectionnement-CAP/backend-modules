@@ -47,6 +47,9 @@ class StageSettingsService
         'note_numero_suffixe'      => 'STG/CAP/EPAC/UAC', // « N° 001-26/STG/CAP/EPAC/UAC » : série propre aux notes de stage
         'note_signature'           => null,   // image : voir NoteSignatureService
         'pdf_pied_de_page'         => '01 B.P. 2009 COTONOU - Tél. : +229 01 99 54 62 67 / 01 91 94 73 67 - www.cap-epac.bj',
+        // Groupe WhatsApp : créé automatiquement au premier stagiaire de l'année
+        // (sinon : créé ou lié à la main depuis le progiciel).
+        'wa_group_auto'            => true,
         'reglement_version'        => 4,
         'reglement_text'           => self::REGLEMENT,
     ];
@@ -88,6 +91,7 @@ class StageSettingsService
         'seuil_assiduite', 'attestation_structure', 'numero_suffixe', 'pdf_ville',
         'signataire_titre', 'signataire_nom', 'pdf_pied_de_page',
         'note_signataire_titre', 'note_signataire_nom', 'note_numero_suffixe',
+        'wa_group_auto',
     ];
 
     public function all(): array

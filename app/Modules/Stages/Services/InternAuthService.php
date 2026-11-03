@@ -5,6 +5,7 @@ namespace App\Modules\Stages\Services;
 use App\Exceptions\BusinessException;
 use App\Modules\Core\Services\Notifier;
 use App\Modules\Core\Support\WhatsAppText;
+use App\Modules\Stages\Exceptions\DeviceConfirmationRequired;
 use App\Modules\Stages\Models\StageInternAccount;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Support\StageStatus;
@@ -48,16 +49,45 @@ class InternAuthService
     }
 
     /**
-     * L'espace ne s'ouvre que sur le téléphone de stage. Tentative depuis un
-     * autre appareil : refusée, tracée dans le dossier, le stagiaire prévenu.
+     * L'espace ne s'ouvre que sur le téléphone de stage. Autre application
+     * du même téléphone (sur iPhone : navigateur puis application installée,
+     * chacune avec son propre stockage) : confirmation par l'empreinte du
+     * téléphone de stage (voir confirmDevice). Sans cette empreinte, la
+     * connexion est refusée, tracée dans le dossier, le stagiaire prévenu.
      */
     public function assertDevice(StageInternAccount $account, string $deviceHash): void
     {
         $device = $this->devices->device($account->id);
-        if (!$device || !$device->device_hash || hash_equals($device->device_hash, $deviceHash)) {
+        if (!$device || $this->devices->matches($device, $deviceHash)) {
             return;
         }
 
+        throw new DeviceConfirmationRequired($this->devices->confirmationOptions($account));
+    }
+
+    /** Empreinte du téléphone de stage prouvée depuis une autre de ses applications : session ouverte. */
+    public function confirmDevice(string $confirmation, array $webauthn, Request $request): string
+    {
+        $device  = self::deviceHash($request);
+        $account = $this->devices->pendingAccount($confirmation);
+        if (!$account) {
+            throw new BusinessException('Délai dépassé. Reconnectez-vous.', 'STAGE_WEBAUTHN_TIMEOUT', 422);
+        }
+        try {
+            $this->devices->confirmDevice($account, $confirmation, $webauthn, $device);
+        } catch (BusinessException $e) {
+            if (in_array($e->getErrorCode(), ['STAGE_WEBAUTHN_FAILED', 'STAGE_WEBAUTHN_UNKNOWN_DEVICE'], true)) {
+                $this->refuseDevice($account);
+            }
+            throw $e;
+        }
+
+        return $this->open($account, $request);
+    }
+
+    /** Autre téléphone : refus tracé dans le dossier, stagiaire prévenu (une fois par heure). */
+    private function refuseDevice(StageInternAccount $account): never
+    {
         $req = $account->stage;
         DB::table('stage_request_history')->insert([
             'stage_request_id' => $req->id, 'action' => 'device_refused', 'from_status' => $req->status, 'to_status' => $req->status,
