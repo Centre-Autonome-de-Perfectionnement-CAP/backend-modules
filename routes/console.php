@@ -27,10 +27,10 @@ Schedule::command('stages:process-activations')
     ->everyFifteenMinutes()
     ->withoutOverlapping(15);
 
-// Stages : rapports (rappels aux stagiaires le matin, récapitulatif des
+// Stages : rapports (rappels aux stagiaires à 9h - le vendredi pour les rapports hebdomadaires -, récapitulatif des
 // rapports journaliers au responsable en fin de journée ouvrée).
 Schedule::command('stages:process-reports')
-    ->dailyAt('08:00')
+    ->dailyAt('09:00')
     ->timezone('Africa/Porto-Novo')
     ->withoutOverlapping(30);
 Schedule::command('stages:process-reports --digest')
