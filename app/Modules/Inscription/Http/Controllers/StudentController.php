@@ -3,6 +3,7 @@
 namespace App\Modules\Inscription\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Inscription\Services\CapStudentHistoryPdfService;
 use App\Modules\Inscription\Services\StudentService;
 use App\Modules\Inscription\Models\PersonalInformation;
 use Illuminate\Support\Facades\DB;
@@ -57,6 +58,11 @@ class StudentController extends Controller{
         }
 
         return $this->successResponse($student, 'Détails de l\'étudiant récupérés');
+    }
+
+    public function exportCapHistory(CapStudentHistoryPdfService $pdfService)
+    {
+        return $pdfService->download();
     }
 
     public function exportFichePresence(Request $request)
