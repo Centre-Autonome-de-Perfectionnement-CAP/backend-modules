@@ -91,7 +91,7 @@ class OtpVerificationController extends Controller
             'code' => $code,
             'purpose' => $purpose,
             'attempts' => 0,
-            'expires_at' => now()->addMinutes(10),
+            'expires_at' => now()->addMinutes(\App\Modules\Core\Support\OtpTtl::MINUTES),
         ]);
 
         // Envoi de l'email

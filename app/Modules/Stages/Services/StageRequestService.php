@@ -673,7 +673,9 @@ class StageRequestService
     {
         try {
             $pdf  = app(StagePdfService::class)->note($note);
-            $path = 'stages/notes/' . preg_replace('/[^A-Za-z0-9-]/', '-', $note->number) . '.pdf';
+            // Dans le dossier du stagiaire : stages/STG-…/notes/note-001-26.pdf
+            $reference = StageRequest::whereKey($note->stage_request_id)->value('reference');
+            $path = "stages/{$reference}/notes/note-" . preg_replace('/[^A-Za-z0-9-]/', '-', $note->number) . '.pdf';
             Storage::disk(self::DISK)->put($path, $pdf['content']);
 
             return ['disk' => self::DISK, 'path' => $path, 'name' => $pdf['name'], 'caption' => 'Note de service n° ' . $note->number];

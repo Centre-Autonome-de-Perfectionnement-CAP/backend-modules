@@ -87,7 +87,7 @@ class StagesLot2Test extends TestCase
         $lead = $this->lead();
         $this->actingAs($lead, 'sanctum')->postJson('/api/stages/admin/invitations', ['numeros' => $phone])->assertOk();
         $msg = collect($this->sent)->last(fn ($s) => str_contains($s['text'], 'invitation-superviseur'));
-        preg_match('/token=([A-Za-z0-9]{48})/', $msg['text'], $m);
+        preg_match('#(?:invitation-superviseur|activer|rejoindre)/([A-Za-z0-9]{16})\b#', $msg['text'], $m);
         $this->app['auth']->forgetGuards();
         $this->postJson('/api/stages/invitation/accepter', [
             'token' => $m[1], 'prenom' => 'Sena', 'nom' => 'Dossou', 'email' => 'sup' . uniqid() . '@example.org',
@@ -110,7 +110,7 @@ class StagesLot2Test extends TestCase
 
         $wa = collect($this->sent)->firstWhere('to', '+2290197554433');
         $this->assertStringContainsString('superviseur de stage', $wa['text']);
-        preg_match('/token=([A-Za-z0-9]{48})/', $wa['text'], $m);
+        preg_match('#(?:invitation-superviseur|activer|rejoindre)/([A-Za-z0-9]{16})\b#', $wa['text'], $m);
         $token = $m[1];
 
         $this->app['auth']->forgetGuards();
@@ -139,11 +139,11 @@ class StagesLot2Test extends TestCase
     {
         $lead = $this->lead();
         $this->actingAs($lead, 'sanctum')->postJson('/api/stages/admin/invitations', ['numeros' => '0197889900'])->assertOk();
-        preg_match('/token=([A-Za-z0-9]{48})/', collect($this->sent)->last()['text'], $first);
+        preg_match('#(?:invitation-superviseur|activer|rejoindre)/([A-Za-z0-9]{16})\b#', collect($this->sent)->last()['text'], $first);
         $id = DB::table('stage_supervisor_invitations')->where('phone', '+2290197889900')->value('id');
 
         $this->postJson("/api/stages/admin/invitations/{$id}/renvoyer")->assertOk();
-        preg_match('/token=([A-Za-z0-9]{48})/', collect($this->sent)->last()['text'], $second);
+        preg_match('#(?:invitation-superviseur|activer|rejoindre)/([A-Za-z0-9]{16})\b#', collect($this->sent)->last()['text'], $second);
         $this->assertNotSame($first[1], $second[1]);
 
         $this->deleteJson("/api/stages/admin/invitations/{$id}")->assertOk();

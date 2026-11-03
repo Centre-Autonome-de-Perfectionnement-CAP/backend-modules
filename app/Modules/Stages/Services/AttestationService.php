@@ -400,7 +400,7 @@ class AttestationService
         $ext  = strtolower($file->guessExtension() ?: 'bin');
         $path = $file->storeAs(
             "stages/{$a->stage->reference}/attestations",
-            "attestation-{$a->id}-" . now()->format('YmdHis') . '-' . bin2hex(random_bytes(4)) . ".{$ext}",
+            "attestation-signee-{$a->id}-" . now()->format('Ymd-His') . ".{$ext}",
             StageRequestService::DISK,
         );
         if (!$path) {
@@ -478,15 +478,21 @@ class AttestationService
                     continue;
                 }
                 if ($a->status === 'a_valider') {
+                    // Conditions remplies ou non, le responsable et les
+                    // superviseurs du stagiaire sont relancés : c'est à eux
+                    // de valider, ou d'aider le stagiaire à remplir les conditions.
                     $elig = $this->eligibility($a->stage);
-                    if (!$elig['eligible'] && $a->kind === 'normale') {
-                        continue; // rien à décider tant que les conditions ne sont pas réunies
-                    }
-                    $this->notifier->toManagersGeneric('Attestation de stage en attente de validation', [
-                        'Une attestation de stage attend votre validation.',
-                        $elig['eligible'] ? 'Les conditions sont remplies.' : 'Conditions non remplies : ' . implode(' ', $elig['missing']),
+                    $this->notifier->toFollowers($a->stage, 'Attestation de stage en attente', [
+                        $elig['eligible']
+                            ? 'Les conditions sont remplies : l\'attestation attend la validation du responsable de division.'
+                            : 'Les conditions ne sont pas encore remplies : ' . implode(' ', $elig['missing']) . ' Accompagnez le stagiaire pour qu\'il les remplisse, ou établissez une attestation exceptionnelle (responsable).',
                     ], ['Stagiaire' => $a->stage->fullName(), 'Fin du stage' => $this->requests->frDate($a->stage->date_fin)],
-                        "stage-attestation-relance:{$a->stage->reference}", $this->staffUrl($a), $a->stage->reference);
+                        'stage-attestation-relance', $this->staffUrl($a));
+
+                    // Rien n'a bougé depuis la relance précédente : le stagiaire est informé.
+                    if ($a->reminded_at) {
+                        $this->remindIntern($a, $elig);
+                    }
                 } else {
                     $this->notifySecretariat($a, 'Rappel : attestation de stage à imprimer');
                 }
@@ -709,6 +715,24 @@ class AttestationService
                 context: 'stage-attestation-preparation',
             );
         }
+    }
+
+    /** Attestation bloquée : le stagiaire sait ce qui manque et vers qui se tourner. */
+    private function remindIntern(StageAttestation $a, array $elig): void
+    {
+        $this->notifier->toDemandeur(
+            $a->stage,
+            'Votre attestation de stage',
+            $elig['eligible']
+                ? ['Votre attestation de stage est prête mais attend encore la validation du responsable de division.',
+                   'Rapprochez-vous de votre superviseur ou du responsable de division.']
+                : ['Votre attestation de stage ne peut pas encore être délivrée : ' . implode(' ', $elig['missing']),
+                   'Rapprochez-vous de votre superviseur ou du responsable de division pour savoir comment la débloquer.'],
+            ['Assiduité' => $elig['taux'] !== null ? "{$elig['taux']} % (minimum {$elig['seuil']} %)" : '-', 'Rapport final' => $elig['final_validated'] ? 'validé' : 'pas encore validé'],
+            ctaLabel: 'Mon espace stagiaire',
+            ctaUrl: $this->notifier->spaceUrl('/stage'),
+            context: 'stage-attestation-blocage',
+        );
     }
 
     private function notifySecretariat(StageAttestation $a, string $title): void

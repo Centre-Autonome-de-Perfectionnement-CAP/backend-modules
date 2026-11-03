@@ -97,9 +97,9 @@ class StagesLot7Test extends TestCase
     {
         $this->actingAs($this->lead(), 'sanctum')
             ->postJson('/api/stages/admin/invitations-stagiaires', ['numeros' => $phone])->assertOk()->assertJsonCount(1, 'data.invited');
-        $wa = collect($this->sent)->last(fn ($s) => str_contains($s['text'], '/stage/rejoindre?token='));
+        $wa = collect($this->sent)->last(fn ($s) => str_contains($s['text'], '/stage/rejoindre/'));
         $this->assertNotNull($wa);
-        preg_match('/token=([A-Za-z0-9]{48})/', $wa['text'], $m);
+        preg_match('#(?:invitation-superviseur|activer|rejoindre)/([A-Za-z0-9]{16})\b#', $wa['text'], $m);
 
         return $m[1];
     }

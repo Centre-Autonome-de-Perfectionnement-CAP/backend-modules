@@ -94,9 +94,12 @@ class InternRequestService
         }
 
         if ($file) {
+            // Rangé dans le dossier du stagiaire, nommé d'après la demande :
+            // « permission-absence-20261103-142530.pdf ».
             $row['file_path'] = $file->storeAs(
                 "stages/{$req->reference}/demandes",
-                now()->format('YmdHis') . '-' . substr(bin2hex(random_bytes(4)), 0, 8) . '.' . strtolower($file->guessExtension() ?: 'bin'),
+                $kind . ($kind === 'permission' ? '-' . str_replace('_', '-', $row['type']) : '') . '-' . now()->format('Ymd-His')
+                    . '.' . strtolower($file->guessExtension() ?: 'bin'),
                 StageRequestService::DISK,
             ) ?: null;
         }

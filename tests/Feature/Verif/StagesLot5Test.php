@@ -318,4 +318,28 @@ class StagesLot5Test extends TestCase
         $this->at('2026-12-01 08:15');
         $this->assertSame(0, $svc->tick()['reminded']);
     }
+
+    public function test_blocked_attestation_reminds_followers_then_informs_intern(): void
+    {
+        [$req] = $this->intern('2026-11-02', '2026-11-27');
+        $this->lead();
+        $sup = $this->user('superviseur');
+        DB::table('stage_supervisions')->insert(['stage_request_id' => $req->id, 'user_id' => $sup->id, 'created_at' => now()]);
+        $svc = app(AttestationService::class);
+        $this->attend($req, '2026-11-02', '2026-11-27'); // assiduité ok, rapport final absent
+
+        $this->at('2026-11-20 08:15');
+        $svc->tick(); // préparation (J-7)
+        $this->at('2026-11-27 08:15');
+        $this->assertSame(1, $svc->tick()['reminded']);
+        // Conditions non remplies : le superviseur est relancé aussi, le stagiaire pas encore
+        Queue::assertPushed(SendNotificationJob::class, fn ($j) => str_ends_with((string) ($j->payload['phone'] ?? ''), substr($sup->phone, -8))
+            && str_contains((string) $j->payload['message'], 'Rapport final pas encore validé'));
+        $this->assertFalse(collect($this->sent)->contains(fn ($m) => $m['to'] === $req->whatsapp && str_contains($m['text'], 'Rapprochez-vous')));
+
+        // Rien n'a bougé au lundi suivant : le stagiaire est informé
+        $this->at('2026-11-30 08:15');
+        $this->assertSame(1, $svc->tick()['reminded']);
+        $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['to'] === $req->whatsapp && str_contains($m['text'], 'Rapprochez-vous de votre superviseur')));
+    }
 }

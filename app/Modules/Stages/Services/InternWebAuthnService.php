@@ -28,8 +28,6 @@ use lbuchs\WebAuthn\WebAuthnException;
 class InternWebAuthnService
 {
     private const CHALLENGE_TTL_SEC = 180;
-    /** Applications d'un même téléphone (navigateurs, application installée) rattachées à sa clé. */
-    private const MAX_DEVICE_LINKS = 4;
 
     public function rpId(): string
     {
@@ -126,12 +124,18 @@ class InternWebAuthnService
         $taken = DB::table('stage_webauthn_credentials as c')
             ->join('stage_intern_accounts as a', 'a.id', '=', 'c.account_id')
             ->join('stage_requests as r', 'r.id', '=', 'a.stage_request_id')
-            ->leftJoin('stage_webauthn_device_links as l', 'l.credential_id', '=', 'c.id')
-            ->where(fn ($q) => $q->where('c.device_hash', $deviceHash)->orWhere('l.device_hash', $deviceHash))
-            ->whereNull('c.revoked_at')
+            ->where('c.device_hash', $deviceHash)->whereNull('c.revoked_at')
             ->where('r.status', StageStatus::ACCEPTED)
             ->when($accountId, fn ($q) => $q->where('c.account_id', '!=', $accountId))
-            ->exists();
+            ->exists()
+            // Autre application d'un téléphone de stage, confirmée par l'empreinte (session ouverte).
+            || DB::table('stage_intern_sessions as s')
+                ->join('stage_intern_accounts as a', 'a.id', '=', 's.account_id')
+                ->join('stage_requests as r', 'r.id', '=', 'a.stage_request_id')
+                ->where('s.device_hash', $deviceHash)->where('s.expires_at', '>', now())
+                ->where('r.status', StageStatus::ACCEPTED)
+                ->when($accountId, fn ($q) => $q->where('s.account_id', '!=', $accountId))
+                ->exists();
         if ($taken) {
             throw new BusinessException("Ce téléphone est déjà le téléphone de stage d'un autre stagiaire. Chaque stagiaire s'enregistre et pointe avec son propre téléphone.", 'STAGE_DEVICE_TAKEN', 409);
         }
@@ -139,14 +143,16 @@ class InternWebAuthnService
 
     /**
      * Cet identifiant d'appareil est-il celui du téléphone de stage ? Celui
-     * de l'enregistrement, ou une autre application du même téléphone
-     * confirmée par l'empreinte (voir confirmDevice).
+     * de l'enregistrement, ou une autre application du même téléphone dont
+     * l'empreinte a été confirmée (une session y est ouverte depuis ; elles
+     * sont toutes fermées quand le téléphone est réinitialisé).
      */
     public function matches(object $cred, string $deviceHash): bool
     {
         return !$cred->device_hash
             || hash_equals($cred->device_hash, $deviceHash)
-            || DB::table('stage_webauthn_device_links')->where('credential_id', $cred->id)->where('device_hash', $deviceHash)->exists();
+            || DB::table('stage_intern_sessions')->where('account_id', $cred->account_id)->where('device_hash', $deviceHash)
+                ->where('expires_at', '>', now())->where('created_at', '>=', $cred->created_at)->exists();
     }
 
     /** Défi pour confirmer une autre application du téléphone de stage (avant ouverture de session). */
@@ -168,19 +174,14 @@ class InternWebAuthnService
     }
 
     /**
-     * Empreinte du téléphone de stage prouvée : cette application du
-     * téléphone est rattachée à la clé, puis le compte est rendu.
+     * Empreinte du téléphone de stage prouvée depuis une autre de ses
+     * applications : la session ouverte ensuite la rattache au téléphone.
      */
     public function confirmDevice(StageInternAccount $account, string $token, array $payload, string $deviceHash): void
     {
         Cache::forget($this->key('confirm', hash('sha256', $token)));
-        $cred = $this->checkAssertion($account, 'confirm:' . hash('sha256', $token), $payload);
+        $this->checkAssertion($account, 'confirm:' . hash('sha256', $token), $payload);
         $this->assertDeviceFree($deviceHash, $account->id);
-
-        if (DB::table('stage_webauthn_device_links')->where('credential_id', $cred->id)->count() >= self::MAX_DEVICE_LINKS) {
-            throw new BusinessException('Trop d\'applications différentes pour ce téléphone. Demandez à votre superviseur de réinitialiser votre téléphone de stage.', 'STAGE_DEVICE_LINKS', 409);
-        }
-        DB::table('stage_webauthn_device_links')->insertOrIgnore(['credential_id' => $cred->id, 'device_hash' => $deviceHash, 'created_at' => now()]);
     }
 
     /** Défi de pointage (lié à la session). */

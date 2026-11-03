@@ -124,8 +124,8 @@ class StagesLot3Test extends TestCase
 
     private function linkToken(): string
     {
-        $msg = collect($this->sent)->last(fn ($s) => str_contains($s['text'], '/activer?token='));
-        preg_match('/token=([A-Za-z0-9]{48})/', $msg['text'], $m);
+        $msg = collect($this->sent)->last(fn ($s) => str_contains($s['text'], '/activer/'));
+        preg_match('#(?:invitation-superviseur|activer|rejoindre)/([A-Za-z0-9]{16})\b#', $msg['text'], $m);
 
         return $m[1];
     }
@@ -553,8 +553,8 @@ class StagesLot3Test extends TestCase
         // Un camarade active son compte sur le même téléphone : refusé
         $second = $this->intern('2026-11-02', '2027-01-31');
         $this->artisan('stages:process-activations')->assertSuccessful();
-        $token = collect($this->sent)->last(fn ($m) => $m['to'] === $second->whatsapp && str_contains($m['text'], '/activer?token='));
-        preg_match('/token=([A-Za-z0-9]{48})/', $token['text'], $m);
+        $token = collect($this->sent)->last(fn ($m) => $m['to'] === $second->whatsapp && str_contains($m['text'], '/activer/'));
+        preg_match('#(?:invitation-superviseur|activer|rejoindre)/([A-Za-z0-9]{16})\b#', $token['text'], $m);
         $this->activate($m[1])->assertStatus(409)->assertJsonPath('error_code', 'STAGE_DEVICE_TAKEN');
         $this->assertNull($second->fresh()->activated_at);
         // Sur son propre téléphone : accepté

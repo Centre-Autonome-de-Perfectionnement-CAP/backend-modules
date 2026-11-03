@@ -62,7 +62,7 @@ class InternSpaceController extends Controller
 
     public function activationInfo(Request $request): JsonResponse
     {
-        $data = $request->validate(['token' => ['required', 'string', 'size:48', 'alpha_num']]);
+        $data = $request->validate(['token' => \App\Modules\Core\Support\LinkToken::RULE]);
         $req  = $this->activation->findByToken($data['token']);
         if (!$req) {
             return $this->errorResponse("Ce lien n'est plus valable. Si votre compte est déjà activé, connectez-vous.", 410, 'STAGE_ACTIVATION_INVALID');
@@ -80,7 +80,7 @@ class InternSpaceController extends Controller
     /** Défi d'enregistrement du téléphone de stage (avant de confirmer sa présence). */
     public function activationDevice(Request $request): JsonResponse
     {
-        $data = $request->validate(['token' => ['required', 'string', 'size:48', 'alpha_num']]);
+        $data = $request->validate(['token' => \App\Modules\Core\Support\LinkToken::RULE]);
 
         return $this->guard(fn () => $this->successResponse(
             $this->activation->deviceOptions($data['token'], InternAuthService::deviceHash($request)),
@@ -90,7 +90,7 @@ class InternSpaceController extends Controller
     public function activate(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'token'    => ['required', 'string', 'size:48', 'alpha_num'],
+            'token'    => \App\Modules\Core\Support\LinkToken::RULE,
             'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
             'reglement_version'          => ['required', 'integer'],
             'webauthn'                   => ['required', 'array'],

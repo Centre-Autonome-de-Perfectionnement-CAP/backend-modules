@@ -66,7 +66,7 @@ class SupervisorInvitationService
                 $result['already_supervisor'][] = $phone;
                 continue;
             }
-            $token = Str::random(48);
+            $token = \App\Modules\Core\Support\LinkToken::make();
 
             DB::transaction(function () use ($phone, $name, $by, $token) {
                 // Un numéro ne garde qu'une invitation valable : l'ancienne est annulée.
@@ -98,7 +98,7 @@ class SupervisorInvitationService
     public function resend(int $id, User $by): void
     {
         $inv = $this->pending($id);
-        $token = Str::random(48);
+        $token = \App\Modules\Core\Support\LinkToken::make();
 
         DB::table('stage_supervisor_invitations')->where('id', $inv->id)->update([
             'token_hash'   => hash('sha256', $token),
@@ -223,7 +223,7 @@ class SupervisorInvitationService
 
     private function sendLink(string $phone, ?string $name, string $token, User $by): void
     {
-        $url  = rtrim((string) config('app.url'), '/') . '/services/invitation-superviseur?token=' . $token;
+        $url  = rtrim((string) config('app.url'), '/') . '/services/invitation-superviseur/' . $token;
         $from = trim(($by->first_name ?? '') . ' ' . ($by->last_name ?? ''));
 
         $this->notifier->whatsapp(
