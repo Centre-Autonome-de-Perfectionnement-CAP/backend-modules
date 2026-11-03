@@ -508,6 +508,15 @@ class StagesLot3Test extends TestCase
         $this->getJson('/api/stagiaire/moi', $h)->assertOk();
     }
 
+    public function test_login_before_activation_explains_what_to_do(): void
+    {
+        $req = $this->intern('2026-11-02', '2027-01-31');
+        $this->postJson('/api/stagiaire/connexion', ['identifiant' => $req->reference, 'password' => 'nimportequoi'])
+            ->assertStatus(409)->assertJsonPath('error_code', 'STAGE_NOT_ACTIVATED');
+        $this->postJson('/api/stagiaire/connexion', ['identifiant' => 'STG-ZZZZZZ', 'password' => 'x'])
+            ->assertStatus(422)->assertJsonPath('error_code', 'STAGE_LOGIN_FAILED');
+    }
+
     public function test_installed_app_on_the_stage_phone_is_confirmed_by_fingerprint(): void
     {
         [$req, $h] = $this->readyIntern('2026-11-02');

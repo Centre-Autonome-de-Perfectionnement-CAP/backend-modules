@@ -8,6 +8,7 @@ use App\Modules\Core\Support\WhatsAppText;
 use App\Modules\Stages\Exceptions\DeviceConfirmationRequired;
 use App\Modules\Stages\Models\StageInternAccount;
 use App\Modules\Stages\Models\StageRequest;
+use App\Modules\Stages\Support\BusinessHours;
 use App\Modules\Stages\Support\StageStatus;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -174,6 +175,9 @@ class InternAuthService
     public function login(string $identifier, string $password): StageInternAccount
     {
         $account = $this->findAccount($identifier);
+        if (!$account && ($pending = $this->notActivated($identifier))) {
+            throw new BusinessException($pending, 'STAGE_NOT_ACTIVATED', 409);
+        }
         if (!$account || !Hash::check($password, $account->password)) {
             throw new BusinessException('Identifiant ou mot de passe incorrect.', 'STAGE_LOGIN_FAILED', 422);
         }
@@ -232,6 +236,32 @@ class InternAuthService
         $this->closeAll($account);
 
         return $account;
+    }
+
+    /**
+     * Stagiaire accepté qui essaie de se connecter avant d'avoir activé son
+     * espace : il n'a pas encore de compte, on lui dit quoi faire au lieu
+     * d'« identifiant incorrect ».
+     */
+    private function notActivated(string $identifier): ?string
+    {
+        $identifier = trim($identifier);
+        $req = (preg_match('/^STG-[A-Za-z0-9]{6}$/i', $identifier)
+            ? StageRequest::where('reference', strtoupper($identifier))
+            : StageRequest::where('email', mb_strtolower($identifier)))
+            ->where('status', StageStatus::ACCEPTED)->whereNull('activated_at')->whereNull('withdrawn_at')
+            ->orderByDesc('id')->first();
+        if (!$req) {
+            return null;
+        }
+        $delay = (int) app(StageSettingsService::class)->get('activation_delay_hours');
+        $start = $req->date_debut && $req->date_debut->toDateString() > BusinessHours::today()->toDateString()
+            ? 'Votre stage commence le ' . app(StageRequestService::class)->frDate($req->date_debut) . '. Ce jour-là, '
+            : 'Le premier jour de votre stage, ';
+
+        return 'Votre espace stagiaire n\'est pas encore activé : il n\'y a pas encore de mot de passe. '
+            . $start . "vous recevez sur WhatsApp (et par email) le lien « Confirmer ma présence », {$delay} h après votre heure d'arrivée. "
+            . 'Ouvrez-le sur votre propre téléphone, sur votre lieu de stage : vous y choisirez votre mot de passe.';
     }
 
     private function findAccount(string $identifier): ?StageInternAccount
