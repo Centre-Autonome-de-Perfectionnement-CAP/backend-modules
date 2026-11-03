@@ -5,6 +5,7 @@ namespace App\Modules\Stages\Services;
 use App\Exceptions\BusinessException;
 use App\Modules\Core\Services\Notifier;
 use App\Modules\Core\Support\WhatsAppText;
+use App\Modules\Stages\Exceptions\DeviceConfirmationRequired;
 use App\Modules\Stages\Models\StageInternAccount;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Support\StageStatus;
@@ -29,7 +30,7 @@ class InternAuthService
     public const HEADER = 'X-Stagiaire-Token';
     public const DEVICE_HEADER = 'X-Stagiaire-Appareil';
     private const SESSION_DAYS = 30;
-    private const RESET_TTL_MIN = 10;
+    private const RESET_TTL_MIN = \App\Modules\Core\Support\OtpTtl::MINUTES;
 
     public function __construct(
         private readonly Notifier $notifier,
@@ -48,16 +49,45 @@ class InternAuthService
     }
 
     /**
-     * L'espace ne s'ouvre que sur le téléphone de stage. Tentative depuis un
-     * autre appareil : refusée, tracée dans le dossier, le stagiaire prévenu.
+     * L'espace ne s'ouvre que sur le téléphone de stage. Autre application
+     * du même téléphone (sur iPhone : navigateur puis application installée,
+     * chacune avec son propre stockage) : confirmation par l'empreinte du
+     * téléphone de stage (voir confirmDevice). Sans cette empreinte, la
+     * connexion est refusée, tracée dans le dossier, le stagiaire prévenu.
      */
     public function assertDevice(StageInternAccount $account, string $deviceHash): void
     {
         $device = $this->devices->device($account->id);
-        if (!$device || !$device->device_hash || hash_equals($device->device_hash, $deviceHash)) {
+        if (!$device || $this->devices->matches($device, $deviceHash)) {
             return;
         }
 
+        throw new DeviceConfirmationRequired($this->devices->confirmationOptions($account));
+    }
+
+    /** Empreinte du téléphone de stage prouvée depuis une autre de ses applications : session ouverte. */
+    public function confirmDevice(string $confirmation, array $webauthn, Request $request): string
+    {
+        $device  = self::deviceHash($request);
+        $account = $this->devices->pendingAccount($confirmation);
+        if (!$account) {
+            throw new BusinessException('Délai dépassé. Reconnectez-vous.', 'STAGE_WEBAUTHN_TIMEOUT', 422);
+        }
+        try {
+            $this->devices->confirmDevice($account, $confirmation, $webauthn, $device);
+        } catch (BusinessException $e) {
+            if (in_array($e->getErrorCode(), ['STAGE_WEBAUTHN_FAILED', 'STAGE_WEBAUTHN_UNKNOWN_DEVICE'], true)) {
+                $this->refuseDevice($account);
+            }
+            throw $e;
+        }
+
+        return $this->session($account, $request);
+    }
+
+    /** Autre téléphone : refus tracé dans le dossier, stagiaire prévenu (une fois par heure). */
+    private function refuseDevice(StageInternAccount $account): never
+    {
         $req = $account->stage;
         DB::table('stage_request_history')->insert([
             'stage_request_id' => $req->id, 'action' => 'device_refused', 'from_status' => $req->status, 'to_status' => $req->status,
@@ -79,8 +109,14 @@ class InternAuthService
 
     public function open(StageInternAccount $account, Request $request): string
     {
+        $this->assertDevice($account, self::deviceHash($request));
+
+        return $this->session($account, $request);
+    }
+
+    private function session(StageInternAccount $account, Request $request): string
+    {
         $device = self::deviceHash($request);
-        $this->assertDevice($account, $device);
 
         $token = 'stg_' . Str::random(60);
         DB::table('stage_intern_sessions')->insert([
@@ -167,7 +203,7 @@ class InternAuthService
         $this->notifier->whatsapp($req->whatsapp, WhatsAppText::compose('Mot de passe oublié', [
             'Votre code pour choisir un nouveau mot de passe de votre espace stagiaire :',
             "*{$code}*",
-            '_Valable ' . self::RESET_TTL_MIN . ' minutes. Ne le communiquez à personne._',
+            '_Valable ' . \App\Modules\Core\Support\OtpTtl::label(self::RESET_TTL_MIN) . '. Ne le communiquez à personne._',
         ]), "stage-reset:{$req->reference}", 'Stages');
         $this->notifier->email($req->email, 'Code de vérification - espace stagiaire', 'core::emails.otp-verification', [
             'code' => $code, 'email' => $req->email, 'ttlMinutes' => self::RESET_TTL_MIN,

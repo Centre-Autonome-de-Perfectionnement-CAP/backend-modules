@@ -12,14 +12,14 @@ use Illuminate\Support\Str;
  * Accès du demandeur à sa demande de stage : référence + code à 6 chiffres
  * envoyé à SON numéro WhatsApp et à SON email enregistrés.
  *
- *  - code valable 10 min, 5 essais, nouvel envoi après 60 s,
+ *  - code valable 24 h, 5 essais, nouvel envoi après 60 s,
  *    5 envois maximum par heure et par demande ;
  *  - code vérifié → jeton de session valable 30 min pour CETTE référence
  *    (consultation + réponse à une proposition).
  */
 class StageSuiviOtpService
 {
-    private const CODE_TTL_MIN       = 10;
+    private const CODE_TTL_MIN       = \App\Modules\Core\Support\OtpTtl::MINUTES;
     private const TOKEN_TTL_MIN      = 30;
     private const MAX_ATTEMPTS       = 5;
     private const RESEND_COOLDOWN    = 60;
@@ -51,7 +51,7 @@ class StageSuiviOtpService
             WhatsAppText::compose('Code de vérification', [
                 "Votre code pour consulter la demande de stage *{$reference}* :",
                 "*{$code}*",
-                '_Valable ' . self::CODE_TTL_MIN . ' minutes. Ne le communiquez à personne._',
+                '_Valable ' . \App\Modules\Core\Support\OtpTtl::label(self::CODE_TTL_MIN) . '. Ne le communiquez à personne._',
             ]),
             "stage-otp:{$reference}",
             'Stages',

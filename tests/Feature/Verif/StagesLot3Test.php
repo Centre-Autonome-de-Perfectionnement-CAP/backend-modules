@@ -124,8 +124,8 @@ class StagesLot3Test extends TestCase
 
     private function linkToken(): string
     {
-        $msg = collect($this->sent)->last(fn ($s) => str_contains($s['text'], '/activer?token='));
-        preg_match('/token=([A-Za-z0-9]{48})/', $msg['text'], $m);
+        $msg = collect($this->sent)->last(fn ($s) => str_contains($s['text'], '/activer/'));
+        preg_match('#(?:invitation-superviseur|activer|rejoindre)/([A-Za-z0-9]{16})\b#', $msg['text'], $m);
 
         return $m[1];
     }
@@ -488,8 +488,13 @@ class StagesLot3Test extends TestCase
         $other = ['X-Stagiaire-Appareil' => 'telephone-d-un-camarade-0123456789abcd'];
         $login = ['identifiant' => $req->reference, 'password' => 'Stage2026'];
 
-        // Connexion depuis un autre téléphone : refusée, tracée, stagiaire prévenu
-        $this->postJson('/api/stagiaire/connexion', $login, $other)->assertStatus(403)->assertJsonPath('error_code', 'STAGE_DEVICE_OTHER');
+        // Connexion depuis un autre téléphone : l'empreinte du téléphone de stage est demandée…
+        $confirm = $this->postJson('/api/stagiaire/connexion', $login, $other)->assertStatus(409)
+            ->assertJsonPath('error_code', 'STAGE_DEVICE_CONFIRM')->json('data');
+        // … sans elle (autre clé) : refusée, tracée, stagiaire prévenu
+        $this->postJson('/api/stagiaire/connexion/appareil', [
+            'confirmation' => $confirm['confirmation'], 'webauthn' => $this->sign($confirm['publicKey']['challenge'], 7, openssl_pkey_new(['curve_name' => 'prime256v1', 'private_key_type' => OPENSSL_KEYTYPE_EC])),
+        ], $other)->assertStatus(403)->assertJsonPath('error_code', 'STAGE_DEVICE_OTHER');
         $this->assertTrue(DB::table('stage_request_history')->where('stage_request_id', $req->id)->where('action', 'device_refused')->exists());
         $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['to'] === $req->whatsapp && str_contains($m['text'], 'Connexion refusée')));
         // Mot de passe oublié depuis cet autre téléphone : refusé aussi
@@ -503,14 +508,53 @@ class StagesLot3Test extends TestCase
         $this->getJson('/api/stagiaire/moi', $h)->assertOk();
     }
 
+    public function test_installed_app_on_the_stage_phone_is_confirmed_by_fingerprint(): void
+    {
+        [$req, $h] = $this->readyIntern('2026-11-02');
+        // iPhone : l'application installée sur l'écran d'accueil a son propre stockage, donc un autre identifiant
+        $app = ['X-Stagiaire-Appareil' => 'application-installee-ecran-accueil-0123'];
+        $login = ['identifiant' => $req->reference, 'password' => 'Stage2026'];
+
+        $confirm = $this->postJson('/api/stagiaire/connexion', $login, $app)->assertStatus(409)->json('data');
+        $token = $this->postJson('/api/stagiaire/connexion/appareil', [
+            'confirmation' => $confirm['confirmation'], 'webauthn' => $this->sign($confirm['publicKey']['challenge'], 50),
+        ], $app)->assertOk()->json('data.token');
+        $this->assertFalse(DB::table('stage_request_history')->where('stage_request_id', $req->id)->where('action', 'device_refused')->exists());
+
+        // Ensuite : connexion directe, et pointage possible depuis l'application
+        $this->postJson('/api/stagiaire/connexion', $login, $app)->assertOk();
+        $this->getJson('/api/stagiaire/moi', ['X-Stagiaire-Token' => $token] + $app)->assertOk();
+        // Jeton de confirmation à usage unique
+        $this->postJson('/api/stagiaire/connexion/appareil', [
+            'confirmation' => $confirm['confirmation'], 'webauthn' => $this->sign($confirm['publicKey']['challenge'], 51),
+        ], $app)->assertStatus(422);
+        // Téléphone de stage réinitialisé : l'application n'est plus reconnue
+        $lead = $this->user('responsable-division', 'formation_continue');
+        $this->actingAs($lead, 'sanctum')->postJson("/api/stages/admin/stagiaires/{$req->id}/appareil/reinitialiser")->assertOk();
+        $this->getJson('/api/stagiaire/moi', $h)->assertStatus(401);
+    }
+
+    /** Signature d'un défi par la clé du téléphone (ou une autre clé). */
+    private function sign(string $challenge, int $counter, $key = null): array
+    {
+        $authData = hash('sha256', 'test.cap-epac.bj', true) . chr(0x05) . pack('N', $counter);
+        $client = json_encode(['type' => 'webauthn.get', 'challenge' => $challenge, 'origin' => self::ORIGIN]);
+        openssl_sign($authData . hash('sha256', $client, true), $sig, $key ?? $this->key, OPENSSL_ALGO_SHA256);
+
+        return [
+            'id' => $this->b64u($this->credId), 'clientDataJSON' => $this->b64u($client),
+            'authenticatorData' => $this->b64u($authData), 'signature' => $this->b64u($sig),
+        ];
+    }
+
     public function test_one_phone_serves_one_intern_only(): void
     {
         $this->readyIntern('2026-11-02');
         // Un camarade active son compte sur le même téléphone : refusé
         $second = $this->intern('2026-11-02', '2027-01-31');
         $this->artisan('stages:process-activations')->assertSuccessful();
-        $token = collect($this->sent)->last(fn ($m) => $m['to'] === $second->whatsapp && str_contains($m['text'], '/activer?token='));
-        preg_match('/token=([A-Za-z0-9]{48})/', $token['text'], $m);
+        $token = collect($this->sent)->last(fn ($m) => $m['to'] === $second->whatsapp && str_contains($m['text'], '/activer/'));
+        preg_match('#(?:invitation-superviseur|activer|rejoindre)/([A-Za-z0-9]{16})\b#', $token['text'], $m);
         $this->activate($m[1])->assertStatus(409)->assertJsonPath('error_code', 'STAGE_DEVICE_TAKEN');
         $this->assertNull($second->fresh()->activated_at);
         // Sur son propre téléphone : accepté
@@ -535,7 +579,11 @@ class StagesLot3Test extends TestCase
         $this->credId = random_bytes(32); // nouveau téléphone
         $this->enroll($h);
         $this->punch($h, 'arrivee', 1)->assertStatus(201);
-        // L'ancien téléphone n'ouvre plus l'espace
-        $this->postJson('/api/stagiaire/connexion', ['identifiant' => $req->reference, 'password' => 'Stage2026'])->assertStatus(403);
+        // L'ancien téléphone n'ouvre plus l'espace : il n'a pas la clé du nouveau
+        $old = ['X-Stagiaire-Appareil' => 'ancien-telephone-du-stagiaire-0123456789'];
+        $confirm = $this->postJson('/api/stagiaire/connexion', ['identifiant' => $req->reference, 'password' => 'Stage2026'], $old)->assertStatus(409)->json('data');
+        $this->postJson('/api/stagiaire/connexion/appareil', [
+            'confirmation' => $confirm['confirmation'], 'webauthn' => $this->sign($confirm['publicKey']['challenge'], 9, openssl_pkey_new(['curve_name' => 'prime256v1', 'private_key_type' => OPENSSL_KEYTYPE_EC])),
+        ], $old)->assertStatus(403);
     }
 }

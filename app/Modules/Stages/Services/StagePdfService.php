@@ -6,6 +6,7 @@ use App\Modules\Stages\Models\StageAttestation;
 use App\Modules\Stages\Models\StageNote;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Support\BusinessHours;
+use App\Modules\Core\Support\PdfFonts;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonImmutable;
 
@@ -142,12 +143,11 @@ class StagePdfService
                 'isFontSubsettingEnabled' => true,
                 'isHtml5ParserEnabled'    => true,
                 'dpi'                     => 96,
-                // Polices et logos dans le module (jamais dans storage/, qui est
-                // un lien vers le dossier partagé en production, hors chroot) ;
-                // cache des polices dans storage/fonts, accessible en écriture.
+                // Logos dans le module ; polices déjà enregistrées, dans un
+                // dossier propre à l'utilisateur système (voir PdfFonts).
                 'chroot'                  => base_path(),
-                'fontDir'                 => storage_path('fonts'),
-                'fontCache'               => storage_path('fonts'),
+                'fontDir'                 => PdfFonts::dir(),
+                'fontCache'               => PdfFonts::dir(),
             ])
             ->output();
     }

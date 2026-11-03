@@ -87,7 +87,7 @@ class StagesLot2Test extends TestCase
         $lead = $this->lead();
         $this->actingAs($lead, 'sanctum')->postJson('/api/stages/admin/invitations', ['numeros' => $phone])->assertOk();
         $msg = collect($this->sent)->last(fn ($s) => str_contains($s['text'], 'invitation-superviseur'));
-        preg_match('/token=([A-Za-z0-9]{48})/', $msg['text'], $m);
+        preg_match('#(?:invitation-superviseur|activer|rejoindre)/([A-Za-z0-9]{16})\b#', $msg['text'], $m);
         $this->app['auth']->forgetGuards();
         $this->postJson('/api/stages/invitation/accepter', [
             'token' => $m[1], 'prenom' => 'Sena', 'nom' => 'Dossou', 'email' => 'sup' . uniqid() . '@example.org',
@@ -110,7 +110,7 @@ class StagesLot2Test extends TestCase
 
         $wa = collect($this->sent)->firstWhere('to', '+2290197554433');
         $this->assertStringContainsString('superviseur de stage', $wa['text']);
-        preg_match('/token=([A-Za-z0-9]{48})/', $wa['text'], $m);
+        preg_match('#(?:invitation-superviseur|activer|rejoindre)/([A-Za-z0-9]{16})\b#', $wa['text'], $m);
         $token = $m[1];
 
         $this->app['auth']->forgetGuards();
@@ -139,11 +139,11 @@ class StagesLot2Test extends TestCase
     {
         $lead = $this->lead();
         $this->actingAs($lead, 'sanctum')->postJson('/api/stages/admin/invitations', ['numeros' => '0197889900'])->assertOk();
-        preg_match('/token=([A-Za-z0-9]{48})/', collect($this->sent)->last()['text'], $first);
+        preg_match('#(?:invitation-superviseur|activer|rejoindre)/([A-Za-z0-9]{16})\b#', collect($this->sent)->last()['text'], $first);
         $id = DB::table('stage_supervisor_invitations')->where('phone', '+2290197889900')->value('id');
 
         $this->postJson("/api/stages/admin/invitations/{$id}/renvoyer")->assertOk();
-        preg_match('/token=([A-Za-z0-9]{48})/', collect($this->sent)->last()['text'], $second);
+        preg_match('#(?:invitation-superviseur|activer|rejoindre)/([A-Za-z0-9]{16})\b#', collect($this->sent)->last()['text'], $second);
         $this->assertNotSame($first[1], $second[1]);
 
         $this->deleteJson("/api/stages/admin/invitations/{$id}")->assertOk();
@@ -277,9 +277,8 @@ class StagesLot2Test extends TestCase
             return match ($path) {
                 '/status'              => Http::response(['status' => 'connected', 'user' => ['id' => '22901000000:1@s.whatsapp.net']]),
                 '/groups/create'       => Http::response(['success' => true, 'jid' => '120363000000000001@g.us', 'added' => [], 'not_added' => [], 'missing' => []]),
-                '/groups/participants' => Http::response(['success' => true, 'results' => [
-                    ($request->data()['participants'][0]) => str_ends_with($request->data()['participants'][0], '32') ? '403' : '200',
-                ]]),
+                '/groups/participants' => Http::response(['success' => true, 'results' => collect($request->data()['participants'])
+                    ->mapWithKeys(fn ($p) => [$p => str_ends_with($p, '32') ? '403' : '200'])->all()]),
                 '/groups/invite-code'  => Http::response(['success' => true, 'code' => 'AbCdEfGhIjKl', 'link' => 'https://chat.whatsapp.com/AbCdEfGhIjKl']),
                 default                => Http::response(['success' => false], 404),
             };
@@ -314,6 +313,52 @@ class StagesLot2Test extends TestCase
         $this->artisan('stages:sync-whatsapp-group')->assertSuccessful();
         $this->assertNotNull(DB::table('stage_whatsapp_group_staff')->where('user_id', $sup->id)->value('removed_at'));
         $this->assertTrue(collect($calls)->contains(fn ($c) => ($c[1]['action'] ?? '') === 'remove' && $c[1]['participants'] === ['2290197445599']));
+    }
+
+    public function test_whatsapp_group_batches_adds_retries_and_respects_auto_switch(): void
+    {
+        $t = \App\Modules\Stages\Support\BusinessHours::today();
+        $a = $this->intern($t->subDays(1)->toDateString(), $t->addMonth()->toDateString(), '0196000041');
+        $b = $this->intern($t->subDays(1)->toDateString(), $t->addMonth()->toDateString(), '0196000042');
+        $c = $this->intern($t->subDays(1)->toDateString(), $t->addMonth()->toDateString(), '0196000043');
+        $calls = [];
+        $failures = 1;
+
+        Http::fake(function ($request) use (&$calls, &$failures) {
+            $path = parse_url($request->url(), PHP_URL_PATH);
+            $calls[] = [$path, $request->data()];
+            if ($path === '/groups/participants' && $failures-- > 0) {
+                return Http::response(['success' => false, 'error' => 'rate-overlimit'], 500);
+            }
+            return match ($path) {
+                '/status'              => Http::response(['status' => 'connected', 'user' => ['id' => '22901000000:1@s.whatsapp.net']]),
+                '/groups/create'       => Http::response(['success' => true, 'jid' => '120363000000000002@g.us', 'added' => [], 'not_added' => [], 'missing' => []]),
+                '/groups/participants' => Http::response(['success' => true, 'results' => collect($request->data()['participants'])
+                    ->mapWithKeys(fn ($p) => [$p => str_ends_with($p, '41') ? '200' : '403'])->all()]),
+                '/groups/invite-code'  => Http::response(['success' => true, 'code' => 'AbCdEfGhIjKl', 'link' => 'https://chat.whatsapp.com/AbCdEfGhIjKl']),
+                default                => Http::response(['success' => false], 404),
+            };
+        });
+        $service = app(\App\Modules\Stages\Services\StageWhatsAppGroupService::class);
+        (new \ReflectionProperty($service, 'retryDelays'))->setValue($service, [0]);
+
+        // Création automatique désactivée : aucun groupe créé, personne d'ajouté.
+        app(\App\Modules\Stages\Services\StageSettingsService::class)->update(['wa_group_auto' => false], null);
+        $this->assertFalse($this->actingAs($this->lead(), 'sanctum')->getJson('/api/stages/admin/groupe-whatsapp')->json('data.auto'));
+        $this->artisan('stages:sync-whatsapp-group')->assertSuccessful();
+        $this->assertFalse(collect($calls)->contains(fn ($x) => $x[0] === '/groups/create'));
+        $this->assertNull($a->fresh()->wa_group_id);
+
+        // Réactivée : une seule opération pour les trois (après un refus passager), un seul lien demandé.
+        app(\App\Modules\Stages\Services\StageSettingsService::class)->update(['wa_group_auto' => true], null);
+        $this->artisan('stages:sync-whatsapp-group')->assertSuccessful();
+        $adds = collect($calls)->filter(fn ($x) => $x[0] === '/groups/participants' && ($x[1]['action'] ?? '') === 'add' && in_array('2290196000041', $x[1]['participants'], true));
+        $this->assertCount(2, $adds); // refus passager puis nouvel essai
+        $this->assertCount(3, $adds->last()[1]['participants']);
+        $this->assertCount(1, collect($calls)->where(0, '/groups/invite-code'));
+        $this->assertNotNull($a->fresh()->wa_added_at);
+        $this->assertNotNull($b->fresh()->wa_invite_sent_at);
+        $this->assertNotNull($c->fresh()->wa_invite_sent_at);
     }
 
     public function test_whatsapp_group_link_rejects_bad_link_and_requires_lead(): void

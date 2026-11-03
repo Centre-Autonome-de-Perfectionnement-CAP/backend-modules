@@ -3,6 +3,7 @@
 namespace App\Modules\Stages\Http\Controllers\Public;
 
 use App\Exceptions\BusinessException;
+use App\Modules\Stages\Exceptions\DeviceConfirmationRequired;
 use App\Http\Controllers\Controller;
 use App\Modules\Bibliotheque\Services\LibraryService;
 use App\Modules\Stages\Models\StageInternAccount;
@@ -61,7 +62,7 @@ class InternSpaceController extends Controller
 
     public function activationInfo(Request $request): JsonResponse
     {
-        $data = $request->validate(['token' => ['required', 'string', 'size:48', 'alpha_num']]);
+        $data = $request->validate(['token' => \App\Modules\Core\Support\LinkToken::RULE]);
         $req  = $this->activation->findByToken($data['token']);
         if (!$req) {
             return $this->errorResponse("Ce lien n'est plus valable. Si votre compte est déjà activé, connectez-vous.", 410, 'STAGE_ACTIVATION_INVALID');
@@ -79,7 +80,7 @@ class InternSpaceController extends Controller
     /** Défi d'enregistrement du téléphone de stage (avant de confirmer sa présence). */
     public function activationDevice(Request $request): JsonResponse
     {
-        $data = $request->validate(['token' => ['required', 'string', 'size:48', 'alpha_num']]);
+        $data = $request->validate(['token' => \App\Modules\Core\Support\LinkToken::RULE]);
 
         return $this->guard(fn () => $this->successResponse(
             $this->activation->deviceOptions($data['token'], InternAuthService::deviceHash($request)),
@@ -89,7 +90,7 @@ class InternSpaceController extends Controller
     public function activate(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'token'    => ['required', 'string', 'size:48', 'alpha_num'],
+            'token'    => \App\Modules\Core\Support\LinkToken::RULE,
             'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
             'reglement_version'          => ['required', 'integer'],
             'webauthn'                   => ['required', 'array'],
@@ -122,6 +123,24 @@ class InternSpaceController extends Controller
 
             return $this->successResponse(['token' => $this->auth->open($account, $request)]);
         });
+    }
+
+    /** Autre application du téléphone de stage, confirmée par l'empreinte. */
+    public function confirmDevice(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'confirmation'               => ['required', 'string', 'size:48'],
+            'webauthn'                   => ['required', 'array'],
+            'webauthn.id'                => ['required', 'string', 'max:1024'],
+            'webauthn.clientDataJSON'    => ['required', 'string', 'max:20000'],
+            'webauthn.authenticatorData' => ['required', 'string', 'max:20000'],
+            'webauthn.signature'         => ['required', 'string', 'max:20000'],
+        ]);
+
+        return $this->guard(fn () => $this->successResponse(
+            ['token' => $this->auth->confirmDevice($data['confirmation'], $data['webauthn'], $request)],
+            'Téléphone de stage confirmé.',
+        ));
     }
 
     public function logout(Request $request): JsonResponse
@@ -518,6 +537,8 @@ class InternSpaceController extends Controller
     {
         try {
             return $fn();
+        } catch (DeviceConfirmationRequired $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage(), 'error_code' => $e->getErrorCode(), 'data' => $e->data], $e->getStatusCode());
         } catch (BusinessException $e) {
             return $this->errorResponse($e->getMessage(), $e->getStatusCode(), $e->getErrorCode());
         }

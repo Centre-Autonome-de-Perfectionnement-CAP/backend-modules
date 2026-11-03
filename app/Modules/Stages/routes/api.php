@@ -139,6 +139,7 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
             Route::post('demandes/{id}/accepter-contre-proposition', [StageAdminController::class, 'acceptCounter'])->whereNumber('id');
             Route::post('demandes/{id}/rejet', [StageAdminController::class, 'reject'])->whereNumber('id');
             Route::post('demandes/{id}/rectification', [StageAdminController::class, 'rectify'])->whereNumber('id');
+            Route::post('demandes/{id}/notes/{noteId}/renvoyer', [StageAdminController::class, 'resendNote'])->whereNumber(['id', 'noteId']);
         });
     });
 });
@@ -152,6 +153,7 @@ Route::prefix('api/stagiaire')->middleware('api')->group(function () {
         Route::post('activation/appareil', [InternSpaceController::class, 'activationDevice']);
         Route::post('activation', [InternSpaceController::class, 'activate']);
         Route::post('connexion', [InternSpaceController::class, 'login']);
+        Route::post('connexion/appareil', [InternSpaceController::class, 'confirmDevice']);
         Route::post('mot-de-passe/code', [InternSpaceController::class, 'resetCode']);
         Route::post('mot-de-passe', [InternSpaceController::class, 'resetPassword']);
     });

@@ -11,7 +11,6 @@ use App\Modules\Stages\Support\StageStatus;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 /**
  * Activation de l'espace stagiaire, le jour du début :
@@ -205,7 +204,7 @@ class InternActivationService
 
     private function sendLink(StageRequest $req, bool $reminder): void
     {
-        $token = Str::random(48);
+        $token = \App\Modules\Core\Support\LinkToken::make();
         $req->forceFill([
             'activation_token_hash' => hash('sha256', $token),
             'activation_sent_at'    => now(),
@@ -226,7 +225,7 @@ class InternActivationService
             ],
             ['Référence' => $req->reference],
             ctaLabel: 'Confirmer ma présence',
-            ctaUrl: $this->notifier->spaceUrl('/activer?token=' . $token),
+            ctaUrl: $this->notifier->spaceUrl('/activer/' . $token),
             context: $reminder ? 'stage-activation-rappel' : 'stage-activation',
         );
         StageHistory::create([

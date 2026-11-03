@@ -15,13 +15,13 @@ use Illuminate\Support\Str;
  * numéro WhatsApp ENREGISTRÉ dans la demande (et, en secours, à son email
  * enregistré) : seul le demandeur peut compléter son dossier.
  *
- *  - code valable 10 min, 5 essais, nouvel envoi possible après 60 s,
+ *  - code valable 24 h, 5 essais, nouvel envoi possible après 60 s,
  *    5 envois maximum par heure et par dossier ;
  *  - code vérifié → jeton à usage unique valable 30 min pour CETTE référence.
  */
 class ComplementOtpService
 {
-    private const CODE_TTL_MIN    = 10;
+    private const CODE_TTL_MIN    = \App\Modules\Core\Support\OtpTtl::MINUTES;
     private const TOKEN_TTL_MIN   = 30;
     private const MAX_ATTEMPTS    = 5;
     private const RESEND_COOLDOWN = 60;
@@ -70,7 +70,7 @@ class ComplementOtpService
                 \App\Modules\Core\Support\WhatsAppText::compose('Code de vérification', [
                     "Votre code pour compléter le dossier *{$reference}* :",
                     "*{$code}*",
-                    '_Valable ' . self::CODE_TTL_MIN . ' minutes. Ne le communiquez à personne._',
+                    '_Valable ' . \App\Modules\Core\Support\OtpTtl::label(self::CODE_TTL_MIN) . '. Ne le communiquez à personne._',
                 ]),
                 "complement-otp:{$reference}",
                 'Attestation',

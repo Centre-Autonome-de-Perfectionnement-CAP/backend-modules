@@ -15,7 +15,7 @@ class SupervisorInvitationController extends Controller
 {
     use ApiResponse;
 
-    private const TOKEN_RULE = ['required', 'string', 'size:48', 'alpha_num'];
+    private const TOKEN_RULE = \App\Modules\Core\Support\LinkToken::RULE;
 
     public function __construct(private readonly SupervisorInvitationService $service) {}
 

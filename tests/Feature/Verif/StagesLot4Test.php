@@ -287,6 +287,12 @@ class StagesLot4Test extends TestCase
         $this->artisan('stages:process-reports')->assertSuccessful();
         $this->assertTrue(collect($this->sent)->contains(fn ($s) => str_contains($s['text'], 'Dernier jour')));
 
+        // Toujours pas déposé le jour ouvré suivant : un rappel de retard, une seule fois
+        $this->at('2026-11-11 08:00');
+        $this->artisan('stages:process-reports')->assertSuccessful();
+        $this->artisan('stages:process-reports')->assertSuccessful();
+        $this->assertSame(1, collect($this->sent)->where('channel', 'whatsapp')->filter(fn ($s) => str_contains($s['text'], 'Rapport en retard'))->count());
+
         // Fréquence journalière : récapitulatif du soir au responsable
         app(StageSettingsService::class)->update(['report_frequency' => 'journalier'], null);
         [, $h2] = $this->intern('2026-11-09', '2026-12-31');

@@ -17,7 +17,6 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 /**
  * Stagiaires arrivés avant le système (ou en dehors) : le responsable de
@@ -80,7 +79,7 @@ class InternInvitationService
                 $result['already_intern'][] = $phone;
                 continue;
             }
-            $token = Str::random(48);
+            $token = \App\Modules\Core\Support\LinkToken::make();
             DB::transaction(function () use ($phone, $by, $token) {
                 // Un numéro ne garde qu'une invitation valable : l'ancienne est annulée.
                 DB::table('stage_intern_invitations')->where('phone', $phone)->whereNull('used_at')->whereNull('revoked_at')
@@ -101,7 +100,7 @@ class InternInvitationService
     public function resend(int $id): void
     {
         $inv = $this->pending($id);
-        $token = Str::random(48);
+        $token = \App\Modules\Core\Support\LinkToken::make();
         DB::table('stage_intern_invitations')->where('id', $inv->id)->update([
             'token_hash' => hash('sha256', $token), 'expires_at' => now()->addDays(self::TTL_DAYS),
             'last_sent_at' => now(), 'send_count' => $inv->send_count + 1, 'updated_at' => now(),
@@ -280,7 +279,7 @@ class InternInvitationService
 
     private function sendLink(string $phone, string $token): void
     {
-        $url = rtrim((string) config('app.frontend_url'), '/') . '/stage/rejoindre?token=' . $token;
+        $url = rtrim((string) config('app.frontend_url'), '/') . '/stage/rejoindre/' . $token;
 
         $this->notifier->whatsapp(
             $phone,

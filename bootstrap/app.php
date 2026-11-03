@@ -125,9 +125,12 @@ return Application::configure(basePath: dirname(__DIR__))
                     'trace' => $e->getTraceAsString(),
                 ]);
                 
-                $message = config('app.debug')
+                // Jamais de message technique (chemins, SQL…) hors du poste du
+                // développeur, même si APP_DEBUG est resté activé : le détail
+                // est dans les journaux.
+                $message = config('app.debug') && app()->environment('local')
                     ? $e->getMessage()
-                    : 'Une erreur interne est survenue';
+                    : 'Une erreur est survenue. Réessayez dans un instant ; si cela se reproduit, prévenez l\'administrateur.';
                 
                 return response()->json([
                     'success' => false,

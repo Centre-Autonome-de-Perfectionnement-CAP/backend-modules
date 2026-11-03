@@ -266,7 +266,7 @@ class LibraryService
     /** Nouveau lien de partage : l'ancien ne fonctionne plus. */
     public function renewLink(LibraryWork $work): LibraryWork
     {
-        $work->fill(['share_token' => Str::random(32)])->save();
+        $work->fill(['share_token' => Str::random(16)])->save();
 
         return $work;
     }
@@ -430,7 +430,7 @@ class LibraryService
     {
         return new LibraryWork([
             'kind' => $kind, 'source_type' => $sourceType, 'source_id' => $sourceId, 'status' => $status,
-            'share_token' => Str::random(32), 'created_by' => $by?->id,
+            'share_token' => Str::random(16), 'created_by' => $by?->id,
         ]);
     }
 
@@ -493,7 +493,9 @@ class LibraryService
 
     private function keep(LibraryWork $work, string $content): string
     {
-        $path = self::DIR . '/' . Str::lower(Str::random(24)) . '.pdf';
+        // Rangé par type et par année : bibliotheque/memoire/2026/memoire-20261103-142530-ab12cd.pdf
+        $kind = preg_replace('/[^a-z_]/', '', (string) $work->kind) ?: 'travail';
+        $path = self::DIR . "/{$kind}/" . now()->format('Y') . "/{$kind}-" . now()->format('Ymd-His') . '-' . Str::lower(Str::random(6)) . '.pdf';
         Storage::disk(self::DISK)->put($path, $content);
 
         return $path;

@@ -608,9 +608,28 @@ class StageRequestService
 
     private function notifyNote(StageRequest $req, string $kind, ?string $motif = null): void
     {
-        $note  = $req->notes()->reorder('version', 'desc')->first();
+        $note = $req->notes()->reorder('version', 'desc')->first();
+        $this->sendNote($req, $note, $kind, $motif, $note ? $this->notePdfFile($note) : null);
+    }
+
+    /**
+     * Renvoie une note de service au stagiaire (message puis PDF), par exemple
+     * si le premier envoi n'a pas abouti. Sans PDF, rien n'est renvoyé.
+     */
+    public function resendNote(StageRequest $req, StageNote $note): StageRequest
+    {
+        $file = $this->notePdfFile($note);
+        if (!$file) {
+            throw new BusinessException('La note de service n\'a pas pu être préparée. Réessayez dans un instant.', 'STAGE_NOTE_PDF', 503);
+        }
+        $this->sendNote($req, $note, $note->kind === 'rectificative' ? 'rectificative' : 'initiale', $note->motif, $file);
+
+        return $req;
+    }
+
+    private function sendNote(StageRequest $req, ?StageNote $note, string $kind, ?string $motif, ?array $file): void
+    {
         $terms = $this->currentTerms($req);
-        $file  = $note ? $this->notePdfFile($note) : null;
 
         if ($kind === 'rectificative') {
             $this->notifier->toDemandeur(
@@ -654,7 +673,9 @@ class StageRequestService
     {
         try {
             $pdf  = app(StagePdfService::class)->note($note);
-            $path = 'stages/notes/' . preg_replace('/[^A-Za-z0-9-]/', '-', $note->number) . '.pdf';
+            // Dans le dossier du stagiaire : stages/STG-…/notes/note-001-26.pdf
+            $reference = StageRequest::whereKey($note->stage_request_id)->value('reference');
+            $path = "stages/{$reference}/notes/note-" . preg_replace('/[^A-Za-z0-9-]/', '-', $note->number) . '.pdf';
             Storage::disk(self::DISK)->put($path, $pdf['content']);
 
             return ['disk' => self::DISK, 'path' => $path, 'name' => $pdf['name'], 'caption' => 'Note de service n° ' . $note->number];

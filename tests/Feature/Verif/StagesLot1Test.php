@@ -256,7 +256,7 @@ class StagesLot1Test extends TestCase
         $note = $req->fresh()->notes()->first();
         Queue::assertPushed(SendNotificationJob::class, fn ($j) => $j->channel === 'whatsapp_file' && str_ends_with($j->payload['path'], '.pdf'));
         $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['channel'] === 'email' && str_contains($m['text'], '[PJ:Note de service ' . $note->number)));
-        $this->assertTrue(\Illuminate\Support\Facades\Storage::disk('local')->exists('stages/notes/' . $note->number . '.pdf'));
+        $this->assertTrue(\Illuminate\Support\Facades\Storage::disk('local')->exists("stages/{$req->reference}/notes/note-" . preg_replace('/[^A-Za-z0-9-]/', '-', $note->number) . '.pdf'));
     }
 
     public function test_proposal_identical_to_request_issues_note_directly(): void

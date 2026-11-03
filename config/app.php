@@ -68,7 +68,9 @@ return [
     |
     */
 
-    'debug' => (bool) env('APP_DEBUG', false),
+    // Jamais en production, même si APP_DEBUG y est resté à true : les pages
+    // d'erreur afficheraient chemins, requêtes et extraits de code.
+    'debug' => (bool) env('APP_DEBUG', false) && env('APP_ENV') !== 'production',
 
     /*
     |--------------------------------------------------------------------------

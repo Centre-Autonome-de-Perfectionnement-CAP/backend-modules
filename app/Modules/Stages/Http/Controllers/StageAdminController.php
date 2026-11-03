@@ -162,6 +162,20 @@ class StageAdminController extends Controller
         );
     }
 
+    /** Renvoi d'une note de service au stagiaire (responsable de division). */
+    public function resendNote(Request $request, int $id, int $noteId): JsonResponse
+    {
+        if (!StageAccess::isLead($request->user())) {
+            return $this->errorResponse('Seul le responsable de division peut renvoyer une note de service.', 403, 'STAGE_LEAD_ONLY');
+        }
+        $note = \App\Modules\Stages\Models\StageNote::where('stage_request_id', $id)->findOrFail($noteId);
+
+        return $this->act(
+            fn () => $this->service->resendNote($this->findOrFail((string) $id), $note),
+            fn () => "Note de service n° {$note->number} renvoyée au stagiaire.",
+        );
+    }
+
     public function getSettings(): JsonResponse
     {
         return $this->successResponse($this->settingsPayload($this->settings->all()));
@@ -238,6 +252,7 @@ class StageAdminController extends Controller
             'final_report_open_days'   => ['sometimes', 'integer', 'min:3', 'max:60'],
             'final_correction_days'    => ['sometimes', 'integer', 'min:0', 'max:365'],
             'seuil_assiduite'          => ['sometimes', 'integer', 'min:50', 'max:100'],
+            'wa_group_auto'            => ['sometimes', 'boolean'],
             'attestation_structure'    => ['sometimes', 'string', 'min:5', 'max:200'],
             'numero_suffixe'           => ['sometimes', 'string', 'min:2', 'max:40', 'regex:/^[A-Za-z0-9\/\-_. ]+$/'],
             'note_numero_suffixe'      => ['sometimes', 'string', 'min:2', 'max:40', 'regex:/^[A-Za-z0-9\/\-_. ]+$/'],

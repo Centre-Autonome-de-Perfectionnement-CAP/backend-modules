@@ -370,11 +370,11 @@ class ReportService
     // RAPPELS (tâche quotidienne)
     // ════════════════════════════════════════════════════════════════════
 
-    /** @return array{opened: int, closing: int, digest: int} */
+    /** @return array{opened: int, mid: int, closing: int, late: int, digest: int} */
     public function tick(?CarbonImmutable $today = null, bool $reminders = true, bool $digest = true): array
     {
         $today ??= BusinessHours::today();
-        $stats = ['opened' => 0, 'closing' => 0, 'digest' => 0];
+        $stats = ['opened' => 0, 'mid' => 0, 'closing' => 0, 'late' => 0, 'digest' => 0];
 
         $interns = !$reminders ? collect() : StageRequest::where('status', StageStatus::ACCEPTED)->whereNotNull('activated_at')
             ->where('date_fin', '>=', $today->subDays(10)->toDateString())->get();
@@ -386,12 +386,12 @@ class ReportService
                     if (in_array($p['key'], $reports, true)) {
                         continue;
                     }
-                    if ($p['opens'] === $today->toDateString() && $this->notice($req, $p['key'], 'open')) {
-                        $this->remindIntern($req, $p, false);
-                        $stats['opened']++;
-                    } elseif ($p['closes'] === $today->toDateString() && $p['opens'] < $p['closes'] && $this->notice($req, $p['key'], 'closing')) {
-                        $this->remindIntern($req, $p, true);
-                        $stats['closing']++;
+                    // Rappels dans la période imposée : ouverture, mi-parcours
+                    // (rapport final), dernier jour, puis retard (une fois).
+                    $type = $this->reminderDue($p, $today);
+                    if ($type && $this->notice($req, $p['key'], $type)) {
+                        $this->remindIntern($req, $p, $type);
+                        $stats[$type === 'open' ? 'opened' : ($type === 'closing' ? 'closing' : $type)]++;
                     }
                 }
             } catch (\Throwable $e) {
@@ -557,15 +557,36 @@ class ReportService
         };
     }
 
-    private function remindIntern(StageRequest $req, array $p, bool $closing): void
+    /** Rappel à faire aujourd'hui pour cette période (rapport non déposé), ou null. */
+    private function reminderDue(array $p, CarbonImmutable $today): ?string
     {
+        $d = $today->toDateString();
+        $closes = CarbonImmutable::parse($p['closes']);
+
+        return match (true) {
+            $p['opens'] === $d => 'open',
+            $p['closes'] === $d && $p['opens'] < $p['closes'] => 'closing',
+            $p['kind'] === 'final' && $closes->subDays(7)->toDateString() === $d && $p['opens'] < $d => 'mid',
+            ReportPlan::addWorkingDays($closes, 1)->toDateString() === $d => 'late',
+            default => null,
+        };
+    }
+
+    private function remindIntern(StageRequest $req, array $p, string $type): void
+    {
+        $final = $p['kind'] === 'final';
+        [$title, $text] = match ($type) {
+            'closing' => ['Dernier jour pour votre rapport', 'Vous n\'avez pas encore déposé ce rapport : aujourd\'hui est le dernier jour du délai.'],
+            'mid'     => ['Rapport final : plus que 7 jours', 'Votre stage se termine dans 7 jours. Déposez votre rapport final en PDF depuis votre espace stagiaire.'],
+            'late'    => ['Rapport en retard', 'Le délai de ce rapport est passé et il n\'a pas été déposé. Déposez-le dès que possible : il sera accepté, mais marqué en retard.'],
+            default   => [$final ? 'Rapport final à déposer' : 'Rapport à déposer', 'Le dépôt de votre rapport est ouvert. Déposez-le en PDF depuis votre espace stagiaire.'],
+        };
+
         $this->notifier->toDemandeur(
             $req,
-            $closing ? 'Dernier jour pour votre rapport' : ($p['kind'] === 'final' ? 'Rapport final à déposer' : 'Rapport à déposer'),
-            [$closing
-                ? 'Vous n\'avez pas encore déposé ce rapport : aujourd\'hui est le dernier jour du délai.'
-                : 'Le dépôt de votre rapport est ouvert. Déposez-le en PDF depuis votre espace stagiaire.'],
-            ['Rapport' => $p['label'], 'À déposer avant le' => $this->requests->frDate($p['closes'])],
+            $title,
+            [$text],
+            ['Rapport' => $p['label'], ($type === 'late' ? 'Délai dépassé le' : 'À déposer avant le') => $this->requests->frDate($p['closes'])],
             ctaLabel: 'Déposer mon rapport', ctaUrl: $this->notifier->spaceUrl('/rapports'), context: 'stage-rapport-rappel',
         );
     }

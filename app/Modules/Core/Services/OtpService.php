@@ -11,12 +11,12 @@ class OtpService
     /**
      * Durée de validité du code OTP en minutes
      */
-    private const OTP_TTL_MINUTES = 15;
+    private const OTP_TTL_MINUTES = \App\Modules\Core\Support\OtpTtl::MINUTES;
 
     /**
      * Durée de validité du jeton de vérification en minutes
      */
-    private const TOKEN_TTL_MINUTES = 30;
+    private const TOKEN_TTL_MINUTES = \App\Modules\Core\Support\OtpTtl::MINUTES;
 
     /**
      * Génère et envoie un code OTP à 6 chiffres par email
