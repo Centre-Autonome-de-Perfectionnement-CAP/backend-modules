@@ -297,7 +297,7 @@ class StagesLot5Test extends TestCase
         $this->getJson('/api/stagiaire/attestation', $h)->assertOk()->assertJsonPath('data.can_request', true);
     }
 
-    public function test_reminders_first_then_mondays_only(): void
+    public function test_reminders_every_working_day_until_ready_by_last_day(): void
     {
         [$req] = $this->intern('2026-11-02', '2026-11-27');
         $this->lead();
@@ -306,16 +306,18 @@ class StagesLot5Test extends TestCase
         $this->attend($req, '2026-11-02', '2026-11-27');
         $this->finalReport($req);
 
-        $this->at('2026-11-23 08:15');
+        $this->at('2026-11-20 08:15'); // J-7 : préparée
         $svc->tick();
         $a = StageAttestation::where('stage_request_id', $req->id)->firstOrFail();
-        $this->assertNull($a->fresh()->reminded_at, 'pas de relance avant la fin du stage');
+        $this->assertNull($a->fresh()->reminded_at, 'pas de relance le jour de la préparation');
 
-        $this->at('2026-11-27 08:15');
+        $this->at('2026-11-23 08:15'); // lundi : relance
         $this->assertSame(1, $svc->tick()['reminded']);
-        $this->at('2026-11-30 08:15'); // lundi
+        $this->assertSame(0, $svc->tick()['reminded'], 'une seule relance par jour');
+        Queue::assertPushed(SendNotificationJob::class, fn ($j) => str_contains((string) ($j->payload['message'] ?? ''), 'au plus tard le vendredi 27 novembre 2026'));
+        $this->at('2026-11-24 08:15'); // et chaque jour ouvré
         $this->assertSame(1, $svc->tick()['reminded']);
-        $this->at('2026-12-01 08:15');
+        $this->at('2026-11-28 08:15'); // samedi : rien
         $this->assertSame(0, $svc->tick()['reminded']);
     }
 
@@ -327,19 +329,26 @@ class StagesLot5Test extends TestCase
         DB::table('stage_supervisions')->insert(['stage_request_id' => $req->id, 'user_id' => $sup->id, 'created_at' => now()]);
         $svc = app(AttestationService::class);
         $this->attend($req, '2026-11-02', '2026-11-27'); // assiduité ok, rapport final absent
+        $blocked = fn () => collect($this->sent)->filter(fn ($m) => $m['to'] === $req->whatsapp && str_contains($m['text'], 'Rapprochez-vous'))->count();
 
         $this->at('2026-11-20 08:15');
         $svc->tick(); // préparation (J-7)
-        $this->at('2026-11-27 08:15');
+        $this->at('2026-11-23 08:15');
         $this->assertSame(1, $svc->tick()['reminded']);
-        // Conditions non remplies : le superviseur est relancé aussi, le stagiaire pas encore
+        // Le superviseur est relancé aussi ; le stagiaire pas encore
         Queue::assertPushed(SendNotificationJob::class, fn ($j) => str_ends_with((string) ($j->payload['phone'] ?? ''), substr($sup->phone, -8))
             && str_contains((string) $j->payload['message'], 'Rapport final pas encore validé'));
-        $this->assertFalse(collect($this->sent)->contains(fn ($m) => $m['to'] === $req->whatsapp && str_contains($m['text'], 'Rapprochez-vous')));
+        $this->assertSame(0, $blocked());
 
-        // Rien n'a bougé au lundi suivant : le stagiaire est informé
-        $this->at('2026-11-30 08:15');
-        $this->assertSame(1, $svc->tick()['reminded']);
-        $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['to'] === $req->whatsapp && str_contains($m['text'], 'Rapprochez-vous de votre superviseur')));
+        // J-3 ouvrés (mardi 24) puis le dernier jour : le stagiaire est prévenu
+        $this->at('2026-11-24 08:15');
+        $svc->tick();
+        $this->assertSame(1, $blocked());
+        $this->at('2026-11-25 08:15');
+        $svc->tick();
+        $this->assertSame(1, $blocked());
+        $this->at('2026-11-27 08:15');
+        $svc->tick();
+        $this->assertSame(2, $blocked());
     }
 }

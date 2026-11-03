@@ -579,7 +579,9 @@ class ReportService
             'closing' => ['Dernier jour pour votre rapport', 'Vous n\'avez pas encore déposé ce rapport : aujourd\'hui est le dernier jour du délai.'],
             'mid'     => ['Rapport final : plus que 7 jours', 'Votre stage se termine dans 7 jours. Déposez votre rapport final en PDF depuis votre espace stagiaire.'],
             'late'    => ['Rapport en retard', 'Le délai de ce rapport est passé et il n\'a pas été déposé. Déposez-le dès que possible : il sera accepté, mais marqué en retard.'],
-            default   => [$final ? 'Rapport final à déposer' : 'Rapport à déposer', 'Le dépôt de votre rapport est ouvert. Déposez-le en PDF depuis votre espace stagiaire.'],
+            default   => $final
+                ? ['Rapport final à déposer', 'Le dépôt de votre rapport final est ouvert. Déposez-le en PDF depuis votre espace stagiaire, assez tôt pour qu\'il soit validé avant la fin de votre stage.']
+                : ['Rapport à déposer aujourd\'hui', 'C\'est aujourd\'hui le jour du dépôt de votre rapport. Déposez-le en PDF depuis votre espace stagiaire.'],
         };
 
         $this->notifier->toDemandeur(

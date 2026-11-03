@@ -29,7 +29,9 @@ use Illuminate\Support\Facades\Storage;
  *  - attestation exceptionnelle : le responsable, avec son mot de passe et
  *    un motif, passe outre les conditions ;
  *  - après son stage, le stagiaire peut en demander une (motif) ;
- *  - relances : responsable / secrétariat, puis chaque lundi.
+ *  - relances chaque jour ouvré (responsable et superviseurs, puis secrétariat) :
+ *    validée et imprimée au plus tard le dernier jour du stage ; stagiaire
+ *    prévenu à J-3 ouvrés et le dernier jour si les conditions manquent.
  */
 class AttestationService
 {
@@ -470,31 +472,42 @@ class AttestationService
             }
         }
 
-        // Relances : une première fois, puis chaque lundi.
+        // Relances chaque jour ouvré, de la préparation jusqu'à l'impression :
+        // l'attestation doit être validée et imprimée au plus tard le dernier
+        // jour du stage, pas au-delà.
         $pending = StageAttestation::with('stage')->whereIn('status', ['a_valider', 'a_imprimer'])->get();
         foreach ($pending as $a) {
             try {
                 if (!$this->dueForReminder($a, $today)) {
                     continue;
                 }
+                $deadline = $this->deadline($a);
+                $when = !$deadline ? 'dès que possible'
+                    : ($today->toDateString() > $deadline->toDateString()
+                        ? 'en retard : elle devait être prête le ' . $this->requests->frDate($deadline->toDateString())
+                        : 'au plus tard le ' . $this->requests->frDate($deadline->toDateString()) . ', dernier jour du stage');
+
                 if ($a->status === 'a_valider') {
                     // Conditions remplies ou non, le responsable et les
                     // superviseurs du stagiaire sont relancés : c'est à eux
                     // de valider, ou d'aider le stagiaire à remplir les conditions.
                     $elig = $this->eligibility($a->stage);
-                    $this->notifier->toFollowers($a->stage, 'Attestation de stage en attente', [
+                    $this->notifier->toFollowers($a->stage, 'Attestation de stage à valider', [
+                        "L'attestation doit être validée et imprimée {$when}.",
                         $elig['eligible']
-                            ? 'Les conditions sont remplies : l\'attestation attend la validation du responsable de division.'
+                            ? 'Les conditions sont remplies : elle attend la validation du responsable de division.'
                             : 'Les conditions ne sont pas encore remplies : ' . implode(' ', $elig['missing']) . ' Accompagnez le stagiaire pour qu\'il les remplisse, ou établissez une attestation exceptionnelle (responsable).',
                     ], ['Stagiaire' => $a->stage->fullName(), 'Fin du stage' => $this->requests->frDate($a->stage->date_fin)],
                         'stage-attestation-relance', $this->staffUrl($a));
 
-                    // Rien n'a bougé depuis la relance précédente : le stagiaire est informé.
-                    if ($a->reminded_at) {
-                        $this->remindIntern($a, $elig);
+                    // Conditions non remplies : le stagiaire est prévenu à 3 jours
+                    // ouvrés de la fin, puis le dernier jour, pour qu'il agisse à temps.
+                    if (!$elig['eligible'] && $deadline && in_array($this->workingDaysBetween($today, $deadline), [0, 3], true)
+                        && $today->toDateString() <= $deadline->toDateString()) {
+                        $this->remindIntern($a, $elig, $deadline);
                     }
                 } else {
-                    $this->notifySecretariat($a, 'Rappel : attestation de stage à imprimer');
+                    $this->notifySecretariat($a, 'Attestation de stage à imprimer', $when);
                 }
                 $a->forceFill(['reminded_at' => now()])->save();
                 $stats['reminded']++;
@@ -652,23 +665,33 @@ class AttestationService
         ])->save();
     }
 
+    /** Une relance par jour ouvré, à partir du jour ouvré qui suit la préparation (ou la validation). */
     private function dueForReminder(StageAttestation $a, CarbonImmutable $today): bool
     {
         if ($today->isWeekend()) {
             return false;
         }
-        if ($a->reminded_at) {
-            return $today->isMonday()
-                && CarbonImmutable::parse($a->reminded_at)->setTimezone(BusinessHours::TZ)->toDateString() < $today->toDateString();
+        $local = fn ($t) => CarbonImmutable::parse($t)->setTimezone(BusinessHours::TZ)->toDateString();
+        if ($a->reminded_at && $local($a->reminded_at) >= $today->toDateString()) {
+            return false;
         }
-        if ($a->status === 'a_imprimer') {
-            // Deux jours ouvrés après la validation.
-            $since = CarbonImmutable::parse($a->validated_at ?? $a->updated_at)->setTimezone(BusinessHours::TZ)->startOfDay();
+        $since = $a->status === 'a_imprimer' ? ($a->validated_at ?? $a->updated_at) : $a->created_at;
 
-            return $this->workingDaysBetween($since, $today) >= 2;
+        return $local($since) < $today->toDateString();
+    }
+
+    /** Date limite : dernier jour ouvré du stage (aucune pour une demande faite après le stage). */
+    private function deadline(StageAttestation $a): ?CarbonImmutable
+    {
+        if ($a->kind === 'demande' || !$a->stage->date_fin) {
+            return null;
         }
-        // À valider : à partir du dernier jour du stage.
-        return $a->stage->date_fin && $today->toDateString() >= $a->stage->date_fin->toDateString();
+        $d = CarbonImmutable::parse($a->stage->date_fin->toDateString(), BusinessHours::TZ);
+        while ($d->isWeekend()) {
+            $d = $d->subDay();
+        }
+
+        return $d;
     }
 
     private function workingDaysBetween(CarbonImmutable $from, CarbonImmutable $to): int
@@ -717,17 +740,17 @@ class AttestationService
         }
     }
 
-    /** Attestation bloquée : le stagiaire sait ce qui manque et vers qui se tourner. */
-    private function remindIntern(StageAttestation $a, array $elig): void
+    /** Attestation bloquée : le stagiaire sait ce qui manque et vers qui se tourner, avant la fin. */
+    private function remindIntern(StageAttestation $a, array $elig, CarbonImmutable $deadline): void
     {
         $this->notifier->toDemandeur(
             $a->stage,
             'Votre attestation de stage',
-            $elig['eligible']
-                ? ['Votre attestation de stage est prête mais attend encore la validation du responsable de division.',
-                   'Rapprochez-vous de votre superviseur ou du responsable de division.']
-                : ['Votre attestation de stage ne peut pas encore être délivrée : ' . implode(' ', $elig['missing']),
-                   'Rapprochez-vous de votre superviseur ou du responsable de division pour savoir comment la débloquer.'],
+            [
+                'Votre attestation de stage ne peut pas encore être délivrée : ' . implode(' ', $elig['missing']),
+                'Elle doit être prête le ' . $this->requests->frDate($deadline->toDateString()) . ', dernier jour de votre stage. '
+                . 'Rapprochez-vous dès maintenant de votre superviseur ou du responsable de division.',
+            ],
             ['Assiduité' => $elig['taux'] !== null ? "{$elig['taux']} % (minimum {$elig['seuil']} %)" : '-', 'Rapport final' => $elig['final_validated'] ? 'validé' : 'pas encore validé'],
             ctaLabel: 'Mon espace stagiaire',
             ctaUrl: $this->notifier->spaceUrl('/stage'),
@@ -735,7 +758,7 @@ class AttestationService
         );
     }
 
-    private function notifySecretariat(StageAttestation $a, string $title): void
+    private function notifySecretariat(StageAttestation $a, string $title, ?string $when = null): void
     {
         $recipients = StageAccess::secretaries();
         if ($recipients->isEmpty()) {
@@ -743,7 +766,7 @@ class AttestationService
             return;
         }
         $this->notifier->toStaff($recipients, $title, [
-            'Une attestation de stage validée est à imprimer, puis à remettre au stagiaire.',
+            'Une attestation de stage validée est à imprimer, puis à remettre au stagiaire' . ($when ? " ({$when})" : '') . '.',
         ], ['Stagiaire' => $a->stage->fullName(), 'Type' => self::KIND_LABELS[$a->kind] ?? $a->kind],
             "stage-attestation-secretariat:{$a->stage->reference}", $this->staffUrl($a), $a->stage->reference);
     }
