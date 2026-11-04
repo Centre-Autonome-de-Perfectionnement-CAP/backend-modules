@@ -43,7 +43,7 @@ class PendingStudentController extends Controller
     ) {
         $this->middleware('auth:sanctum');
         $this->restrictToRoles(self::ALLOWED_ROLES, only: [
-            'destroy', 'updateStatus', 'updateLevel',
+            'destroy', 'updateStatus', 'updateLevel', 'resendConfirmation',
         ]);
     }
 
@@ -512,5 +512,17 @@ class PendingStudentController extends Controller
             new PendingStudentResource($updatedStudent),
             "Dossier transféré avec succès vers la Vague {$request->input('to_wave')}."
         );
+    }
+
+    /**
+     * Renvoyer la fiche de confirmation (email + WhatsApp, PDF régénéré) au
+     * candidat : pour ceux qui ne l'ont pas reçue à la soumission.
+     */
+    public function resendConfirmation(PendingStudent $pendingStudent, \App\Modules\Inscription\Services\DossierSubmissionService $submission): JsonResponse
+    {
+        $pendingStudent->loadMissing(['personalInformation', 'department.cycle', 'academicYear']);
+        $submission->resendConfirmation($pendingStudent);
+
+        return $this->successResponse(null, 'Fiche de confirmation renvoyée par email et WhatsApp à ' . trim(($pendingStudent->personalInformation?->first_names ?? '') . ' ' . ($pendingStudent->personalInformation?->last_name ?? '')) . '.');
     }
 }

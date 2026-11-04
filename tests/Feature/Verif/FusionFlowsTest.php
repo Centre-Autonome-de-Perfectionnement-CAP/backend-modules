@@ -57,6 +57,27 @@ class FusionFlowsTest extends TestCase
             ->filter(fn ($j) => $j->channel === $channel)->values();
     }
 
+    public function test_resend_confirmation_sends_mail_then_whatsapp_with_regenerated_pdf(): void
+    {
+        Bus::fake();
+        $r = $this->regularStudent();
+        DB::table('pending_students')->where('id', $r['ps'])->update(['status' => 'pending', 'level' => '1', 'documents' => json_encode(['acte_naissance' => 1])]);
+        $code = DB::table('pending_students')->where('id', $r['ps'])->value('tracking_code');
+        \Illuminate\Support\Facades\Storage::disk('local')->delete("inscriptions/fiches-confirmation/fiche_confirmation_{$code}.pdf");
+
+        // Réservé au personnel autorisé
+        $this->postJson("/api/inscription/pending-students/{$r['ps']}/renvoyer-fiche")->assertStatus(401);
+        $this->actingAs(\App\Models\User::find($this->secId), 'sanctum')
+            ->postJson("/api/inscription/pending-students/{$r['ps']}/renvoyer-fiche")->assertOk();
+
+        $this->assertTrue(\Illuminate\Support\Facades\Storage::disk('local')->exists("inscriptions/fiches-confirmation/fiche_confirmation_{$code}.pdf"));
+        $this->assertStringStartsWith('%PDF', \Illuminate\Support\Facades\Storage::disk('local')->get("inscriptions/fiches-confirmation/fiche_confirmation_{$code}.pdf"));
+        $this->assertCount(1, $this->jobs('mailable'));
+        $wa = $this->jobs('whatsapp_file');
+        $this->assertCount(1, $wa);
+        $this->assertStringContainsString('incident technique', json_encode($wa->first()->payload, JSON_UNESCAPED_UNICODE));
+    }
+
     public function test_api_validation_errors_are_json_without_accept_header(): void
     {
         $r = $this->call('POST', '/api/contact/contact', ['name' => 'A']);
