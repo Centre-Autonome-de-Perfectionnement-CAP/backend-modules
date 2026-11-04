@@ -2,10 +2,14 @@
 
 namespace App\Modules\Inscription\Services;
 
+use App\Exceptions\BusinessException;
+use App\Modules\Finance\Models\Transaction;
 use App\Modules\Inscription\Models\PendingStudent;
-use Exception;
+use App\Modules\Inscription\Models\PersonalInformation;
+use App\Modules\Stockage\Models\File;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class PendingStudentService
@@ -203,28 +207,71 @@ class PendingStudentService
     }
 
     /**
-     * Supprimer un étudiant en attente
+     * Suppression définitive d'un dossier : le dossier, ses pièces (fichiers
+     * compris), sa fiche de confirmation et, si plus aucun autre dossier ne
+     * l'utilise, la fiche d'identité du candidat. Refusée pour un dossier déjà
+     * rattaché à un étudiant inscrit ou portant un paiement : ce serait effacer
+     * un parcours ou une trace financière.
      */
-    public function delete(PendingStudent $pendingStudent): bool
+    public function delete(PendingStudent $pendingStudent): void
     {
-        try {
-            $pendingStudent->delete();
-
-            Log::info('Étudiant en attente supprimé', [
-                'pending_student_id' => $pendingStudent->id,
-                'tracking_code' => $pendingStudent->tracking_code,
-            ]);
-
-            return true;
-        } catch (Exception $e) {
-            Log::error('Erreur lors de la suppression de l\'étudiant en attente', [
-                'pending_student_id' => $pendingStudent->id,
-                'tracking_code' => $pendingStudent->tracking_code,
-                'error' => $e->getMessage(),
-            ]);
-
-            throw $e;
+        if ($pendingStudent->studentPendingStudents()->exists()) {
+            throw new BusinessException(
+                'Ce dossier est rattaché à un étudiant inscrit : il ne peut pas être supprimé.',
+                'DOSSIER_LIE_ETUDIANT', 409
+            );
         }
+        if (Transaction::where('pending_student_id', $pendingStudent->id)->exists()) {
+            throw new BusinessException(
+                'Ce dossier porte un paiement enregistré : il ne peut pas être supprimé.',
+                'DOSSIER_LIE_PAIEMENT', 409
+            );
+        }
+
+        $disk = [];
+        DB::transaction(function () use ($pendingStudent, &$disk) {
+            $ids = array_filter(array_map('intval', array_values($pendingStudent->documents)));
+            $files = File::withTrashed()->where(function ($q) use ($pendingStudent, $ids) {
+                $q->whereIn('id', $ids ?: [0])->orWhere(function ($r) use ($pendingStudent) {
+                    $r->where('module_name', 'inscription')->where('module_resource_type', 'pending_student')
+                      ->where('module_resource_id', $pendingStudent->id);
+                });
+            })->get();
+            foreach ($files as $file) {
+                if ($file->disk && $file->disk !== 'external' && $file->extension !== 'url' && $file->path) {
+                    $disk[] = [$file->disk, $file->path];
+                }
+                $file->forceDelete();
+            }
+            if ($pendingStudent->tracking_code) {
+                $disk[] = ['local', 'inscriptions/fiches-confirmation/fiche_confirmation_' . $pendingStudent->tracking_code . '.pdf'];
+            }
+
+            $personId = $pendingStudent->personal_information_id;
+            $pendingStudent->forceDelete();
+
+            $person = $personId ? PersonalInformation::find($personId) : null;
+            if ($person && !PendingStudent::withTrashed()->where('personal_information_id', $personId)->exists()) {
+                $person->tokens()->delete();
+                $person->delete();
+            }
+        });
+
+        // Fichiers retirés du disque une fois la base à jour (une annulation
+        // ne laisse jamais un dossier sans ses pièces).
+        foreach ($disk as [$name, $path]) {
+            try {
+                Storage::disk($name)->delete($path);
+            } catch (\Throwable $e) {
+                Log::warning('Suppression de dossier : fichier non retiré du disque', ['path' => $path, 'error' => $e->getMessage()]);
+            }
+        }
+
+        Log::info('Dossier supprimé définitivement', [
+            'pending_student_id' => $pendingStudent->id,
+            'tracking_code' => $pendingStudent->tracking_code,
+            'by' => auth()->id(),
+        ]);
     }
 
     /**
