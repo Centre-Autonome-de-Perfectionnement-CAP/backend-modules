@@ -78,6 +78,35 @@ class FusionFlowsTest extends TestCase
         $this->assertStringContainsString('incident technique', json_encode($wa->first()->payload, JSON_UNESCAPED_UNICODE));
     }
 
+    public function test_delete_dossier_removes_everything_and_protects_registered_or_paid(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public_files');
+        $r = $this->regularStudent();
+        $sec = \App\Models\User::find($this->secId);
+
+        // Dossier rattaché à un étudiant inscrit : refusé, rien ne bouge
+        $this->deleteJson("/api/inscription/pending-students/{$r['ps']}")->assertStatus(401);
+        $this->actingAs($sec, 'sanctum')->deleteJson("/api/inscription/pending-students/{$r['ps']}")
+            ->assertStatus(409)->assertJsonPath('success', false);
+        $this->assertDatabaseHas('pending_students', ['id' => $r['ps'], 'deleted_at' => null]);
+
+        // Dossier en attente avec pièce et fiche : tout part
+        $pi = DB::table('personal_information')->insertGetId(['uuid' => Str::uuid(), 'last_name' => 'SOSSA', 'first_names' => 'Ines', 'email' => 'ines@example.org', 'created_at' => now(), 'updated_at' => now()]);
+        \Illuminate\Support\Facades\Storage::disk('public_files')->put('dossiers/Licence/acte.pdf', '%PDF-1.4');
+        $file = DB::table('files')->insertGetId(['uuid' => Str::uuid(), 'original_name' => 'acte.pdf', 'stored_name' => 'acte.pdf', 'file_path' => 'dossiers/Licence/acte.pdf', 'disk' => 'public_files', 'mime_type' => 'application/pdf', 'size' => 8, 'extension' => 'pdf', 'created_at' => now(), 'updated_at' => now()]);
+        $code = 'CAP-DEL' . rand(100, 999);
+        $ps = DB::table('pending_students')->insertGetId(['uuid' => Str::uuid(), 'tracking_code' => $code, 'personal_information_id' => $pi, 'academic_year_id' => $r['ay'], 'department_id' => $this->deptLp, 'status' => 'pending', 'documents' => json_encode(['Acte de naissance' => $file]), 'created_at' => now(), 'updated_at' => now()]);
+        $fiche = "inscriptions/fiches-confirmation/fiche_confirmation_{$code}.pdf";
+        \Illuminate\Support\Facades\Storage::disk('local')->put($fiche, '%PDF-1.4');
+
+        $this->deleteJson("/api/inscription/pending-students/{$ps}")->assertOk();
+        $this->assertDatabaseMissing('pending_students', ['id' => $ps]);
+        $this->assertDatabaseMissing('files', ['id' => $file]);
+        $this->assertDatabaseMissing('personal_information', ['id' => $pi]);
+        $this->assertFalse(\Illuminate\Support\Facades\Storage::disk('public_files')->exists('dossiers/Licence/acte.pdf'));
+        $this->assertFalse(\Illuminate\Support\Facades\Storage::disk('local')->exists($fiche));
+    }
+
     public function test_api_validation_errors_are_json_without_accept_header(): void
     {
         $r = $this->call('POST', '/api/contact/contact', ['name' => 'A']);

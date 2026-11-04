@@ -228,6 +228,7 @@ class PendingStudentController extends Controller
      *     ),
      *     @OA\Response(response=401, description="Non authentifié"),
      *     @OA\Response(response=404, description="Étudiant non trouvé"),
+     *     @OA\Response(response=409, description="Dossier rattaché à un étudiant inscrit ou à un paiement"),
      *     @OA\Response(response=422, description="Données invalides"),
      *     @OA\Response(response=500, description="Erreur serveur")
      * )
@@ -310,8 +311,8 @@ class PendingStudentController extends Controller
     /**
      * @OA\Delete(
      *     path="/api/pending-students/{pendingStudent}",
-     *     summary="Supprimer un étudiant en attente",
-     *     description="Supprime un étudiant en attente",
+     *     summary="Supprimer définitivement un dossier",
+     *     description="Supprime le dossier, ses pièces et sa fiche de confirmation (refusé si le dossier est rattaché à un étudiant inscrit ou à un paiement)",
      *     operationId="deletePendingStudent",
      *     tags={"Pending Students"},
      *     security={{"sanctum": {}}},
@@ -327,11 +328,12 @@ class PendingStudentController extends Controller
      *         description="Étudiant supprimé avec succès",
      *         @OA\JsonContent(
      *             @OA\Property(property="success", type="boolean", example=true),
-     *             @OA\Property(property="message", type="string", example="Étudiant en attente supprimé avec succès.")
+     *             @OA\Property(property="message", type="string", example="Dossier supprimé définitivement.")
      *         )
      *     ),
      *     @OA\Response(response=401, description="Non authentifié"),
      *     @OA\Response(response=404, description="Étudiant non trouvé"),
+     *     @OA\Response(response=409, description="Dossier rattaché à un étudiant inscrit ou à un paiement"),
      *     @OA\Response(response=500, description="Erreur serveur")
      * )
      */
@@ -339,7 +341,7 @@ class PendingStudentController extends Controller
     {
         $this->pendingStudentService->delete($pendingStudent);
 
-        return $this->deletedResponse('Étudiant en attente supprimé avec succès');
+        return $this->deletedResponse('Dossier supprimé définitivement.');
     }
 
     /**
@@ -395,6 +397,7 @@ class PendingStudentController extends Controller
      *         )
      *     ),
      *     @OA\Response(response=404, description="Étudiant non trouvé"),
+     *     @OA\Response(response=409, description="Dossier rattaché à un étudiant inscrit ou à un paiement"),
      *     @OA\Response(response=422, description="Données invalides"),
      *     @OA\Response(response=500, description="Erreur serveur")
      * )
