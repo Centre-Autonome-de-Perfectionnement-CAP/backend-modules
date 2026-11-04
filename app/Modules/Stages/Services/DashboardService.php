@@ -127,7 +127,7 @@ class DashboardService
         $seuil = (int) $this->settings->get('seuil_assiduite');
 
         return $stages->map(function (StageRequest $req) use ($base, $att, $soon, $t, $seuil) {
-            $summary = $req->activated_at ? $this->attendance->report($req)['summary'] : null;
+            $summary = $req->activated_at ? $this->attendance->report($req, null, false)['summary'] : null;
             $reports = $req->activated_at ? $this->reports->overview($req)['stats'] : null;
             $a = $att[$req->id] ?? null;
 

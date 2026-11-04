@@ -156,7 +156,8 @@ class AttendanceService
      *
      * @return array{days: array, summary: array}
      */
-    public function report(StageRequest $req, ?CarbonImmutable $until = null): array
+    /** @param bool $withDays false : seulement le résumé (tableau de bord, attestation), bien plus rapide. */
+    public function report(StageRequest $req, ?CarbonImmutable $until = null, bool $withDays = true): array
     {
         $start = $this->startDay($req);
         // Stagiaire arrivé avant le système : les présences ne comptent qu'à
@@ -180,6 +181,11 @@ class AttendanceService
             ->get()->groupBy(fn ($p) => $p->day->toDateString());
         [$justified, $partial] = $this->permissions($req, $start, $end);
 
+        // Calculés une fois (et non pour chaque jour) : horaires en minutes, heure actuelle.
+        $hm = array_map(fn (CarbonImmutable $x) => $x->hour * 60 + $x->minute, $this->hours($req, $today));
+        $todayKey = $today->toDateString();
+        $nowMin = ($n = CarbonImmutable::now(BusinessHours::TZ))->hour * 60 + $n->minute;
+
         $days = [];
         $t = ['worked' => 0, 'present' => 0, 'half' => 0, 'absent' => 0, 'justified' => 0, 'due' => 0, 'done' => 0,
             'late' => 0, 'late_ok' => 0, 'late_min' => 0, 'early' => 0, 'early_ok' => 0, 'early_min' => 0];
@@ -189,11 +195,10 @@ class AttendanceService
             }
             $key  = $d->toDateString();
             $p    = ($punches[$key] ?? collect())->keyBy('kind');
-            $h    = $this->hours($req, $d);
             // La journée en cours ne compte qu'une fois l'heure de sortie passée.
-            $isToday = $key === $today->toDateString() && CarbonImmutable::now(BusinessHours::TZ)->lessThan($h['sortie']);
+            $isToday = $key === $todayKey && $nowMin < $hm['sortie'];
             $value = $this->dayValue($p);
-            $time  = $this->dayTime($p, $h, $partial[$key] ?? []);
+            $time  = $this->dayTime($p, $hm, $partial[$key] ?? []);
 
             if (isset($justified[$key]) && $value < 1) {
                 $status = 'justified';
@@ -223,6 +228,9 @@ class AttendanceService
                 }
             }
 
+            if (!$withDays) {
+                continue;
+            }
             $days[] = [
                 'day'    => $key,
                 'status' => $status,
@@ -276,11 +284,11 @@ class AttendanceService
      * @param  array<string, array{type: string, time: ?string}>  $perms permissions partielles du jour
      * @return array{due: int, present: int, late: array, early: array}
      */
+    /** @param array{arrivee: int, pause_debut: int, pause_fin: int, sortie: int} $h horaires en minutes depuis minuit */
     private function dayTime($p, array $h, array $perms): array
     {
-        $min = fn (CarbonImmutable $x) => $x->hour * 60 + $x->minute;
-        $at  = fn (string $k) => isset($p[$k]) && $p[$k]->at ? $min(CarbonImmutable::instance($p[$k]->at)->setTimezone(BusinessHours::TZ)) : null;
-        [$arr, $pd, $pf, $so] = [$min($h['arrivee']), $min($h['pause_debut']), $min($h['pause_fin']), $min($h['sortie'])];
+        $at  = fn (string $k) => isset($p[$k]) && $p[$k]->at ? self::localMinutes($p[$k]->at) : null;
+        [$arr, $pd, $pf, $so] = [$h['arrivee'], $h['pause_debut'], $h['pause_fin'], $h['sortie']];
         $work = [[$arr, $pd], [$pf, $so]];
 
         // Pointages ramenés à l'heure prévue dans la tolérance.
@@ -485,6 +493,16 @@ class AttendanceService
     }
 
     /** @return array<string, CarbonImmutable> */
+    /** Minutes depuis minuit, heure du lieu de stage (sans recréer de date : appelé pour chaque pointage). */
+    private static function localMinutes(\DateTimeInterface $at): int
+    {
+        static $tz = null;
+        $tz ??= new \DateTimeZone(BusinessHours::TZ);
+        $local = $at->getTimestamp() + $tz->getOffset($at);
+
+        return intdiv((($local % 86400) + 86400) % 86400, 60);
+    }
+
     private function hours(StageRequest $req, CarbonImmutable $day): array
     {
         $h = $req->horaires ?: $this->settings->get('default_horaires');
