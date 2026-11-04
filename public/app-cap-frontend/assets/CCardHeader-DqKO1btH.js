@@ -1,1 +1,0 @@
-import{r as m,am as o,R as l,an as p,ao as e}from"./index-BUg242pS.js";const s=m.forwardRef((a,r)=>{var{children:t,as:c="div",className:d}=a,n=o(a,["children","as","className"]);return l.createElement(c,Object.assign({className:p("card-header",d)},n,{ref:r}),t)});s.propTypes={as:e.elementType,children:e.node,className:e.string};s.displayName="CCardHeader";export{s as C};
