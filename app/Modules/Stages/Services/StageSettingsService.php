@@ -94,7 +94,27 @@ class StageSettingsService
         'wa_group_auto',
     ];
 
+    /**
+     * Réglages déjà lus, gardés quelques secondes en mémoire : un écran qui
+     * lit un réglage par stagiaire (tableau de bord) n'interroge pas le cache
+     * des centaines de fois. Courte durée : un processus qui dure (file
+     * d'attente) voit vite une modification.
+     */
+    private ?array $memo = null;
+    private float $memoAt = 0;
+    private const MEMO_SECONDS = 10;
+
     public function all(): array
+    {
+        if ($this->memo !== null && microtime(true) - $this->memoAt < self::MEMO_SECONDS) {
+            return $this->memo;
+        }
+        $this->memoAt = microtime(true);
+
+        return $this->memo = $this->load();
+    }
+
+    private function load(): array
     {
         $stored = Cache::remember(self::CACHE_KEY, 300, function () {
             return DB::table('stage_settings')->pluck('value', 'key')
@@ -137,6 +157,7 @@ class StageSettingsService
             $this->write($key, $value, $userId);
         }
         Cache::forget(self::CACHE_KEY);
+        $this->memo = null;
 
         return $this->all();
     }
@@ -149,6 +170,7 @@ class StageSettingsService
         }
         $this->write($key, $value, $userId);
         Cache::forget(self::CACHE_KEY);
+        $this->memo = null;
     }
 
     private function write(string $key, mixed $value, ?int $userId): void

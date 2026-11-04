@@ -203,7 +203,7 @@ class InternSpaceController extends Controller
             'webauthn'    => ['enrolled' => (bool) $device, 'rp_id' => $this->webauthn->rpId()],
             'device'      => $device ? ['label' => $device->device_label, 'since' => \Carbon\Carbon::parse($device->created_at)->toIso8601String()] : null,
             'today'       => $this->attendance->today($req),
-            'summary'     => $this->attendance->report($req)['summary'],
+            'summary'     => $this->attendance->report($req, null, false)['summary'],
             'position_checked' => (bool) $this->settings->get('lieu_position'),
         ]);
     }

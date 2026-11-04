@@ -100,7 +100,7 @@ class AttestationService
 
     public function eligibility(StageRequest $req): array
     {
-        $summary = $this->attendance->report($req)['summary'];
+        $summary = $this->attendance->report($req, null, false)['summary'];
         $seuil   = (int) $this->settings->get('seuil_assiduite');
         $taux    = $summary['taux'];
         $final   = $this->reports->finalValidated($req);
