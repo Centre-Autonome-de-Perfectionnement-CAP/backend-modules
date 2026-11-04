@@ -211,53 +211,9 @@ class DossierSubmissionService
 
             // Génération de la fiche de confirmation et envoi par email
             try {
-                $submissionDatetime = now()->format('d/m/Y à H:i');
                 $academicYear = AcademicYear::findOrFail($request->academic_year_id);
-                
-                // Préparer les données pour le PDF
-                $pdfData = [
-                    'tracking_code' => $pendingStudent->tracking_code,
-                    'submission_datetime' => $submissionDatetime,
-                    'last_name' => $personalInformation->last_name,
-                    'first_names' => $personalInformation->first_names,
-                    'email' => $personalInformation->email,
-                    'contacts' => $personalInformation->contacts,
-                    'birth_date' => $personalInformation->birth_date ? date('d/m/Y', strtotime($personalInformation->birth_date)) : null,
-                    'birth_place' => $personalInformation->birth_place,
-                    'gender' => $personalInformation->gender,
-                    'cycle_name' => $cycleName,
-                    'department' => $department->name,
-                    'study_level' => $request->study_level,
-                    'academic_year' => $academicYear->academic_year,
-                    'documents' => array_keys($documents),
-                ];
-
-                // Générer le PDF
-                // Fiche persistée sur le disque privé "local" : l'email et le
-                // WhatsApp partent en file et la joignent après la réponse HTTP.
-                $pdfFileName = 'fiche_confirmation_' . $pendingStudent->tracking_code . '.pdf';
-                $pdfRelPath = 'inscriptions/fiches-confirmation/' . $pdfFileName;
-                $pdfPath = Storage::disk('local')->path($pdfRelPath);
-
-                if (!is_dir(dirname($pdfPath))) {
-                    mkdir(dirname($pdfPath), 0755, true);
-                }
-
-                $this->pdfService->saveWithTemplate('fiche-confirmation-inscription', $pdfData, $pdfPath);
-
-                // Préparer les données pour l'email
-                $mailData = [
-                    'department' => $department->name,
-                    'academic_year' => $academicYear->academic_year,
-                    'tracking_code' => $pendingStudent->tracking_code,
-                    'study_level' => $request->study_level,
-                    'first_names' => $personalInformation->first_names,
-                    'last_name' => $personalInformation->last_name,
-                    'email' => $personalInformation->email,
-                    'contacts' => $personalInformation->contacts,
-                    'cycle_name' => $cycleName,
-                    'submission_datetime' => $submissionDatetime,
-                ];
+                [$pdfRelPath] = $this->confirmationFile($pendingStudent, $personalInformation, now()->format('d/m/Y à H:i'));
+                $mailData = $this->confirmationMailData($pendingStudent, $personalInformation, now()->format('d/m/Y à H:i'));
 
                 // Email (fiche jointe) + WhatsApp (fiche PDF) : asynchrones,
                 // indépendants, publiés après le COMMIT.
@@ -1072,49 +1028,9 @@ class DossierSubmissionService
 
             // 5. Régénérer la fiche PDF mise à jour et envoyer l'email de confirmation
             try {
-                $submissionDatetime = now()->format('d/m/Y à H:i');
-                $academicYear = $pendingStudent->academicYear ?? AcademicYear::find($pendingStudent->academic_year_id);
-                $department = $pendingStudent->department ?? Department::find($pendingStudent->department_id);
-                $cycleName = $department?->cycle?->name ?? 'Licence';
-
-                $pdfData = [
-                    'tracking_code' => $pendingStudent->tracking_code,
-                    'submission_datetime' => $submissionDatetime . ' (Mise à jour)',
-                    'last_name' => $personalInfo->last_name,
-                    'first_names' => $personalInfo->first_names,
-                    'email' => $personalInfo->email,
-                    'contacts' => $personalInfo->contacts,
-                    'birth_date' => $personalInfo->birth_date ? date('d/m/Y', strtotime($personalInfo->birth_date)) : null,
-                    'birth_place' => $personalInfo->birth_place,
-                    'gender' => $personalInfo->gender,
-                    'cycle_name' => $cycleName,
-                    'department' => $department?->name,
-                    'study_level' => $pendingStudent->level,
-                    'academic_year' => $academicYear?->academic_year,
-                    'documents' => array_keys($documents),
-                ];
-
-                $pdfFileName = 'fiche_confirmation_' . $pendingStudent->tracking_code . '.pdf';
-                $pdfRelPath = 'inscriptions/fiches-confirmation/' . $pdfFileName;
-                $pdfPath = Storage::disk('local')->path($pdfRelPath);
-                if (!is_dir(dirname($pdfPath))) {
-                    mkdir(dirname($pdfPath), 0755, true);
-                }
-
-                $this->pdfService->saveWithTemplate('fiche-confirmation-inscription', $pdfData, $pdfPath);
-
-                $mailData = [
-                    'department' => $department?->name ?? 'EPAC',
-                    'academic_year' => $academicYear?->academic_year ?? '',
-                    'tracking_code' => $pendingStudent->tracking_code,
-                    'study_level' => $pendingStudent->level,
-                    'first_names' => $personalInfo->first_names,
-                    'last_name' => $personalInfo->last_name,
-                    'email' => $personalInfo->email,
-                    'contacts' => $personalInfo->contacts,
-                    'cycle_name' => $cycleName,
-                    'submission_datetime' => $submissionDatetime . ' (Mise à jour)',
-                ];
+                $label = now()->format('d/m/Y à H:i') . ' (Mise à jour)';
+                [$pdfRelPath] = $this->confirmationFile($pendingStudent, $personalInfo, $label);
+                $mailData = $this->confirmationMailData($pendingStudent, $personalInfo, $label);
 
                 // Email (fiche jointe) + WhatsApp (fiche PDF) asynchrones.
                 $notifier = app(\App\Modules\Core\Services\Notifier::class);
@@ -1310,6 +1226,114 @@ class DossierSubmissionService
                 ];
             })
             ->toArray();
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // FICHE DE CONFIRMATION
+    // ════════════════════════════════════════════════════════════════════
+
+    /**
+     * Renvoie la fiche de confirmation (PDF régénéré) par email et WhatsApp :
+     * message d'abord, puis la fiche. Pour les candidats qui ne l'ont pas
+     * reçue (période où l'email partait sans la pièce jointe).
+     */
+    public function resendConfirmation(PendingStudent $pendingStudent): void
+    {
+        $pi = $pendingStudent->personalInformation;
+        if (!$pi || (!$pi->email && !$pi->contacts)) {
+            throw new BusinessException('Ce dossier n\'a ni email ni numéro : la fiche ne peut pas être envoyée.', 'NO_CONTACT', 422);
+        }
+
+        $date = $pendingStudent->created_at?->timezone(config('app.timezone'))->format('d/m/Y à H:i') ?? now()->format('d/m/Y à H:i');
+        try {
+            [$pdfRelPath] = $this->confirmationFile($pendingStudent, $pi, $date);
+        } catch (\Throwable $e) {
+            Log::error('Fiche de confirmation non régénérée (renvoi)', ['tracking_code' => $pendingStudent->tracking_code, 'error' => $e->getMessage()]);
+            throw new BusinessException('La fiche de confirmation n\'a pas pu être préparée. Réessayez dans un instant.', 'FICHE_PDF', 503);
+        }
+
+        $notifier = app(\App\Modules\Core\Services\Notifier::class);
+        if ($pi->email) {
+            $notifier->mailable($pi->email, new DossierSubmissionWithAttachment(
+                $this->confirmationMailData($pendingStudent, $pi, $date) + ['resend' => true], $pdfRelPath,
+            ));
+        }
+        $notifier->whatsappFile(
+            $notifier->phoneFromContacts($pi->contacts),
+            'local',
+            $pdfRelPath,
+            'Fiche_Confirmation_Inscription_' . $pendingStudent->tracking_code . '.pdf',
+            \App\Modules\Core\Support\WhatsAppText::compose('Votre fiche de confirmation', [
+                'Bonjour ' . trim($pi->first_names . ' ' . $pi->last_name) . ',',
+                'Suite à un incident technique, la fiche de confirmation de votre dossier de candidature ne vous a peut-être pas été transmise. La voici.',
+                \App\Modules\Core\Support\WhatsAppText::fields([
+                    'Filière'       => $pendingStudent->department?->name,
+                    'Année'         => $pendingStudent->academicYear?->academic_year,
+                    'Code de suivi' => $pendingStudent->tracking_code,
+                ]),
+                'Imprimez la fiche ci-jointe et joignez-la à votre dossier physique. Merci de votre compréhension.',
+            ]),
+            "inscription-fiche-renvoi:{$pendingStudent->tracking_code}",
+            'Inscription',
+        );
+    }
+
+    /**
+     * Fiche de confirmation (PDF) écrite sur le disque privé « local ».
+     *
+     * @return array{0: string} chemin relatif au disque « local »
+     */
+    private function confirmationFile(PendingStudent $ps, PersonalInformation $pi, string $datetimeLabel): array
+    {
+        $department = $ps->department ?? Department::find($ps->department_id);
+        $academicYear = $ps->academicYear ?? AcademicYear::find($ps->academic_year_id);
+
+        $pdfRelPath = 'inscriptions/fiches-confirmation/fiche_confirmation_' . $ps->tracking_code . '.pdf';
+        $pdfPath = Storage::disk('local')->path($pdfRelPath);
+        if (!is_dir(dirname($pdfPath))) {
+            mkdir(dirname($pdfPath), 0755, true);
+        }
+
+        $this->pdfService->saveWithTemplate('fiche-confirmation-inscription', [
+            'tracking_code' => $ps->tracking_code,
+            'submission_datetime' => $datetimeLabel,
+            'last_name' => $pi->last_name,
+            'first_names' => $pi->first_names,
+            'email' => $pi->email,
+            'contacts' => $pi->contacts,
+            'birth_date' => $pi->birth_date ? date('d/m/Y', strtotime($pi->birth_date)) : null,
+            'birth_place' => $pi->birth_place,
+            'gender' => $pi->gender,
+            'cycle_name' => $department?->cycle?->name ?? 'Licence',
+            'department' => $department?->name,
+            'study_level' => $ps->level,
+            'academic_year' => $academicYear?->academic_year,
+            'documents' => array_keys(is_array($ps->documents) ? $ps->documents : []),
+        ], $pdfPath);
+
+        if (!is_file($pdfPath) || filesize($pdfPath) === 0) {
+            throw new \RuntimeException('Fiche de confirmation vide ou absente après génération');
+        }
+
+        return [$pdfRelPath];
+    }
+
+    private function confirmationMailData(PendingStudent $ps, PersonalInformation $pi, string $datetimeLabel): array
+    {
+        $department = $ps->department ?? Department::find($ps->department_id);
+
+        return [
+            'department' => $department?->name ?? 'EPAC',
+            'academic_year' => ($ps->academicYear ?? AcademicYear::find($ps->academic_year_id))?->academic_year ?? '',
+            'tracking_code' => $ps->tracking_code,
+            'study_level' => $ps->level,
+            'first_names' => $pi->first_names,
+            'last_name' => $pi->last_name,
+            'email' => $pi->email,
+            'contacts' => $pi->contacts,
+            'cycle_name' => $department?->cycle?->name ?? 'Licence',
+            'submission_datetime' => $datetimeLabel,
+        ];
     }
 }
 

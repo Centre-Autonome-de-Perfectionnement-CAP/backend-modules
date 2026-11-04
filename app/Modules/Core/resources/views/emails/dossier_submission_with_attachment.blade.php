@@ -10,7 +10,11 @@
 @section('content')
     <p>Bonjour <strong>{{ $first_names }} {{ $last_name }}</strong>,</p>
     
+    @if(!empty($resend))
+    <p>Suite à un incident technique, la fiche de confirmation de votre dossier d'inscription en ligne (soumis le <strong>{{ $submission_datetime }}</strong>) ne vous a peut-être pas été transmise. Vous la trouverez <strong>en pièce jointe</strong> de ce message. Merci de votre compréhension.</p>
+    @else
     <p>Nous accusons réception de votre dossier d'inscription en ligne soumis le <strong>{{ $submission_datetime }}</strong>.</p>
+    @endif
 
     <div style="background: #e8f5e9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0;">
         <p style="margin: 0;"><strong>Code de suivi :</strong> <span style="font-size: 14pt; color: #2e7d32;">{{ $tracking_code }}</span></p>

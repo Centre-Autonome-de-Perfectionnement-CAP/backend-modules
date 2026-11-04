@@ -33,6 +33,7 @@ Route::prefix('inscription')->group(function () {
             Route::patch('/{pendingStudent}/level', [PendingStudentController::class, 'updateLevel']);
             Route::patch('/{pendingStudent}/pieces/rename', [PendingStudentController::class, 'renamePiece']);
             Route::patch('/{pendingStudent}/transfer-wave', [PendingStudentController::class, 'transferWave']);
+            Route::post('/{pendingStudent}/renvoyer-fiche', [PendingStudentController::class, 'resendConfirmation'])->middleware('throttle:20,1');
         });
         Route::post('/', [PendingStudentController::class, 'store']);
         Route::post('/{pendingStudent}/documents', [PendingStudentController::class, 'submitDocuments']);

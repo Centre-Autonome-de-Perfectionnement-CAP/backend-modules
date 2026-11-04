@@ -28,7 +28,9 @@ class DossierSubmissionWithAttachment extends Mailable
             ? $this->pdfPath
             : \Illuminate\Support\Facades\Storage::disk('local')->path($this->pdfPath);
 
-        $mail = $this->subject('Confirmation de soumission - Fiche à joindre au dossier physique')
+        $mail = $this->subject(!empty($this->mailData['resend'])
+                ? 'Votre fiche de confirmation de candidature - ' . $this->mailData['tracking_code']
+                : 'Confirmation de soumission - Fiche à joindre au dossier physique')
             ->view('core::emails.dossier_submission_with_attachment');
 
         if (is_file($absolute)) {
@@ -53,6 +55,7 @@ class DossierSubmissionWithAttachment extends Mailable
                 'contacts' => $this->mailData['contacts'],
                 'cycle_name' => $this->mailData['cycle_name'],
                 'submission_datetime' => $this->mailData['submission_datetime'],
+                'resend' => !empty($this->mailData['resend']),
             ]);
     }
 }
