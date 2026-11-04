@@ -38,8 +38,9 @@ class InternWebAuthnService
 
     private function lib(): WebAuthn
     {
-        // Attestation « none » : on ne vérifie pas le modèle de l'appareil,
-        // seulement la possession de la clé (aucun certificat requis).
+        // On ne vérifie pas le modèle de l'appareil, seulement la possession de
+        // la clé (attestation « none », voir createArgs). Tous les formats
+        // restent lisibles pour les navigateurs qui en envoient une quand même.
         return new WebAuthn('CAP-EPAC', $this->rpId(), ['none', 'packed', 'android-key', 'android-safetynet', 'apple', 'tpm', 'fido-u2f'], true);
     }
 
@@ -270,6 +271,10 @@ class InternWebAuthnService
             'required',
             false, // authentificateur intégré au téléphone uniquement
         );
+        // Attestation « none » : sans elle, la bibliothèque demande « indirect »,
+        // et des téléphones Android non certifiés par Google (ou dont le
+        // certificat ne se vérifie pas) sont refusés alors que la clé est bonne.
+        $args->publicKey->attestation = 'none';
         // Encodé : le cache « database » n'accepte pas le binaire brut.
         Cache::put($cacheKey, base64_encode($lib->getChallenge()->getBinaryString()), self::CHALLENGE_TTL_SEC);
 
@@ -291,6 +296,7 @@ class InternWebAuthnService
                 true,   // vérification de l'utilisateur (empreinte / code) exigée
                 true,
                 false,
+                false,  // pas d'exigence de certification Google (attestation non demandée)
             );
         } catch (WebAuthnException $e) {
             Log::info('[Stages] Enregistrement WebAuthn refusé', ['error' => $e->getMessage()]);

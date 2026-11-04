@@ -186,6 +186,7 @@ class StagesLot3Test extends TestCase
     private function enroll(array $h): void
     {
         $opts = $this->postJson('/api/stagiaire/empreinte/options', [], $h)->assertOk()->json('data.publicKey');
+        $this->assertSame('none', $opts['attestation'], 'aucune attestation demandée : les Android non certifiés passent');
         $this->postJson('/api/stagiaire/empreinte', $this->attestation($opts) + ['label' => 'Téléphone de test'], $h)->assertOk();
     }
 
