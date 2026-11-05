@@ -4,6 +4,7 @@ namespace App\Modules\Stages\Services;
 
 use App\Exceptions\BusinessException;
 use App\Modules\Stages\Models\StageAttendance;
+use App\Modules\Stages\Models\StageHistory;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Support\BusinessHours;
 use App\Modules\Stages\Support\Geo;
@@ -17,10 +18,13 @@ use Illuminate\Support\Facades\DB;
  * pause → fin de pause) → sortie. La pause est facultative.
  *  - arrivée : ouverte 1 h avant l'heure prévue ; en retard au-delà de
  *    15 min après l'heure prévue ;
- *  - début de pause : ouvert 15 min avant l'heure prévue ;
+ *  - début de pause : ouvert 1 h avant l'heure prévue ;
  *  - fin de pause : en retard au-delà de 15 min après l'heure prévue ;
  *  - sortie : possible à tout moment après l'arrivée ; avant l'heure
- *    prévue moins 15 min, elle est marquée « sortie anticipée ».
+ *    prévue moins 15 min, elle est marquée « sortie anticipée » et doit
+ *    être confirmée (elle termine la journée). Une sortie anticipée pointée
+ *    par erreur à l'heure de la pause (aucune pause pointée) peut être
+ *    rattrapée : le « retour de pause » la transforme en départ en pause.
  * Heure du serveur uniquement. Aucun pointage le week-end, ni avant le
  * début ni après la fin du stage.
  *
@@ -44,7 +48,7 @@ class AttendanceService
     ];
     public const TOLERANCE_MIN = 15;
     private const ARRIVAL_OPENS_BEFORE_MIN = 60;
-    private const PAUSE_OPENS_BEFORE_MIN = 15;
+    private const PAUSE_OPENS_BEFORE_MIN = 60;
     /** Types de permission qui justifient une journée entière. */
     public const JUSTIFYING_TYPES = ['absence', 'maladie', 'evenement_familial', 'autre'];
     /** Permissions d'une partie de journée (heure annoncée : time_from). */
@@ -75,7 +79,9 @@ class AttendanceService
                 'at' => $done[$k]->at?->toIso8601String(),
                 'late_minutes' => $done[$k]->late_minutes, 'early' => $done[$k]->early,
             ])->values()->all(),
-            'next'      => array_map(fn ($k) => ['kind' => $k, 'label' => self::LABELS[$k]], $state['kinds']),
+            // « early » : une sortie maintenant serait anticipée (à confirmer).
+            'next'      => array_map(fn ($k) => ['kind' => $k, 'label' => self::LABELS[$k],
+                'early' => $k === 'sortie' && $this->lateness($req, 'sortie', $now, 'pointage')[1]], $state['kinds']),
             'message'   => $state['message'],
             'horaires'  => $req->horaires,
         ];
@@ -85,14 +91,15 @@ class AttendanceService
      * Enregistre un pointage (après vérification de l'empreinte par
      * l'appelant). Refus = exception explicite, aucun enregistrement.
      */
-    public function punch(StageRequest $req, string $kind, ?array $position, string $source = 'pointage', ?CarbonImmutable $now = null): StageAttendance
+    /** @param bool $earlyConfirmed false : une sortie anticipée est refusée (le stagiaire doit la confirmer). */
+    public function punch(StageRequest $req, string $kind, ?array $position, string $source = 'pointage', ?CarbonImmutable $now = null, bool $earlyConfirmed = true): StageAttendance
     {
         $now  = ($now ?? CarbonImmutable::now())->setTimezone(BusinessHours::TZ);
         $day  = $now->startOfDay();
 
         $failReason = null;
         try {
-            return $this->record($req, $kind, $position, $source, $now, $day, $failReason);
+            return $this->record($req, $kind, $position, $source, $now, $day, $failReason, $earlyConfirmed);
         } catch (BusinessException $e) {
             // Tentative refusée : seule la raison est gardée (diagnostic), hors transaction.
             if ($failReason !== null && $source === 'pointage') {
@@ -102,9 +109,9 @@ class AttendanceService
         }
     }
 
-    private function record(StageRequest $req, string $kind, ?array $position, string $source, CarbonImmutable $now, CarbonImmutable $day, ?string &$failReason): StageAttendance
+    private function record(StageRequest $req, string $kind, ?array $position, string $source, CarbonImmutable $now, CarbonImmutable $day, ?string &$failReason, bool $earlyConfirmed): StageAttendance
     {
-        return DB::transaction(function () use ($req, $kind, $position, $source, $now, $day, &$failReason) {
+        return DB::transaction(function () use ($req, $kind, $position, $source, $now, $day, &$failReason, $earlyConfirmed) {
             // Verrou par stagiaire : deux pointages simultanés ne passent pas.
             StageRequest::whereKey($req->id)->lockForUpdate()->first();
             $done  = $this->dayPunches($req, $day);
@@ -128,6 +135,25 @@ class AttendanceService
             }
 
             [$late, $early] = $this->lateness($req, $kind, $now, $source);
+            if ($early && !$earlyConfirmed) {
+                $failReason = 'early_unconfirmed';
+                throw new BusinessException('Cette sortie est anticipée et termine votre journée : confirmez-la. Pour la pause, utilisez « Départ en pause ». '
+                    . 'Si ce message revient, fermez puis rouvrez l\'application pour la mettre à jour.', 'STAGE_PUNCH_CONFIRM_EARLY', 422);
+            }
+
+            // Sortie anticipée pointée par erreur à la place du départ en pause :
+            // le retour de pause la requalifie en départ en pause.
+            // Seule correction permise d'un pointage, tracée dans l'historique.
+            if ($kind === 'pause_fin' && $this->mistakenPauseExit($req, $done)) {
+                $exit = $done['sortie'];
+                DB::table('stage_attendances')->where('id', $exit->id)->update(['kind' => 'pause_debut', 'early' => false]);
+                StageHistory::create([
+                    'stage_request_id' => $req->id, 'action' => 'punch_corrected', 'actor' => 'demandeur',
+                    'comment' => 'Sortie anticipée de ' . CarbonImmutable::parse($exit->at)->setTimezone(BusinessHours::TZ)->format('H\hi')
+                        . ' requalifiée en départ en pause (retour de pause pointé).',
+                    'meta' => ['attendance_id' => $exit->id, 'day' => $day->toDateString()],
+                ]);
+            }
 
             return StageAttendance::create([
                 'stage_request_id' => $req->id,
@@ -451,6 +477,12 @@ class AttendanceService
             return ['kinds' => [], 'message' => 'Pas de pointage le week-end.'];
         }
         if (isset($done['sortie'])) {
+            if ($this->mistakenPauseExit($req, $done)) {
+                return ['kinds' => ['pause_fin'], 'message' => 'Sortie anticipée pointée à '
+                    . $done['sortie']->at->setTimezone(BusinessHours::TZ)->format('H\hi')
+                    . ' : si c\'était votre départ en pause, pointez votre retour de pause, elle sera corrigée.'];
+            }
+
             return ['kinds' => [], 'message' => 'Journée terminée. À demain !'];
         }
 
@@ -473,6 +505,24 @@ class AttendanceService
         $kinds[] = 'sortie';
 
         return ['kinds' => $kinds, 'message' => null];
+    }
+
+    /**
+     * Sortie anticipée pointée autour de l'heure de la pause (d'1 h avant le
+     * début de la pause jusqu'à la fin de la pause), sans aucune pause
+     * pointée : très probablement un départ en pause pointé sur le mauvais bouton.
+     */
+    private function mistakenPauseExit(StageRequest $req, array $done): bool
+    {
+        $exit = $done['sortie'] ?? null;
+        if (!$exit || !$exit->early || isset($done['pause_debut']) || isset($done['pause_fin'])) {
+            return false;
+        }
+        $at = CarbonImmutable::parse($exit->at)->setTimezone(BusinessHours::TZ);
+        $h  = $this->hours($req, $at->startOfDay());
+
+        return $at->greaterThanOrEqualTo($h['pause_debut']->subMinutes(self::PAUSE_OPENS_BEFORE_MIN))
+            && $at->lessThan($h['pause_fin']);
     }
 
     /** @return array{0: int, 1: bool} minutes de retard, sortie anticipée */

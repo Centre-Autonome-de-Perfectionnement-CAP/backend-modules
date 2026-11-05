@@ -286,6 +286,7 @@ class InternSpaceController extends Controller
     {
         $data = $request->validate([
             'kind'                       => ['required', Rule::in(AttendanceService::KINDS)],
+            'confirm_early'              => ['sometimes', 'boolean'],
             'webauthn'                   => ['required', 'array'],
             'webauthn.id'                => ['required', 'string', 'max:1024'],
             'webauthn.clientDataJSON'    => ['required', 'string', 'max:20000'],
@@ -301,7 +302,7 @@ class InternSpaceController extends Controller
                 $this->attendance->fail($account->stage, 'webauthn');
                 throw $e;
             }
-            $p = $this->attendance->punch($account->stage, $data['kind'], $data['position']);
+            $p = $this->attendance->punch($account->stage, $data['kind'], $data['position'], earlyConfirmed: (bool) ($data['confirm_early'] ?? false));
             $msg = 'Pointage « ' . AttendanceService::LABELS[$p->kind] . ' » enregistré à ' . $p->at->setTimezone(BusinessHours::TZ)->format('H\hi')
                 . ($p->late_minutes ? " (retard de {$p->late_minutes} min)" : '')
                 . ($p->early ? ' (sortie anticipée)' : '') . '.';
