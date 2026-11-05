@@ -219,14 +219,61 @@ class StagesLot3Test extends TestCase
         ];
     }
 
-    private function punch(array $h, string $kind, int $counter, ?array $pos = null)
+    private function punch(array $h, string $kind, int $counter, ?array $pos = null, bool $confirmEarly = true)
     {
         return $this->postJson('/api/stagiaire/pointage', [
             'kind' => $kind, 'position' => $pos ?? $this->pos(), 'webauthn' => $this->assertion($h, $counter),
+            'confirm_early' => $confirmEarly,
         ], $h);
     }
 
     // ── Tests ───────────────────────────────────────────────────────────
+
+    public function test_pause_button_opens_an_hour_before_and_early_exit_needs_confirmation(): void
+    {
+        [$req, $h] = $this->readyIntern('2026-11-02');
+        $this->at('2026-11-03 08:00');
+        $this->punch($h, 'arrivee', 1)->assertStatus(201);
+
+        // 12h05 : le départ en pause est déjà proposé, la sortie est marquée anticipée
+        $this->at('2026-11-03 12:05');
+        $next = collect($this->getJson('/api/stagiaire/moi', $h)->json('data.today.next'))->keyBy('kind');
+        $this->assertTrue($next->has('pause_debut'));
+        $this->assertTrue($next['sortie']['early']);
+
+        // Sortie anticipée non confirmée : refusée, rien d'enregistré
+        $this->punch($h, 'sortie', 2, null, false)->assertStatus(422)->assertJsonPath('error_code', 'STAGE_PUNCH_CONFIRM_EARLY');
+        $this->assertFalse(StageAttendance::where('stage_request_id', $req->id)->where('kind', 'sortie')->exists());
+    }
+
+    public function test_early_exit_at_pause_time_is_fixed_by_pause_return(): void
+    {
+        [$req, $h] = $this->readyIntern('2026-11-02');
+        $this->at('2026-11-03 08:00');
+        $this->punch($h, 'arrivee', 1)->assertStatus(201);
+        $this->at('2026-11-03 12:58');
+        $this->punch($h, 'sortie', 2)->assertStatus(201); // mauvais bouton
+
+        $this->at('2026-11-03 15:02');
+        $today = $this->getJson('/api/stagiaire/moi', $h)->json('data.today');
+        $this->assertSame(['pause_fin'], array_column($today['next'], 'kind'));
+        $this->punch($h, 'pause_fin', 3)->assertStatus(201);
+        $this->at('2026-11-03 18:00');
+        $this->punch($h, 'sortie', 4)->assertStatus(201);
+
+        $rows = StageAttendance::where('stage_request_id', $req->id)->where('day', '2026-11-03')->get()->keyBy('kind');
+        $this->assertEqualsCanonicalizing(['arrivee', 'pause_debut', 'pause_fin', 'sortie'], $rows->keys()->all());
+        $this->assertFalse((bool) $rows['pause_debut']->early);
+        $this->assertSame('12:58', $rows['pause_debut']->at->setTimezone('Africa/Porto-Novo')->format('H:i'));
+        $this->assertTrue(\App\Modules\Stages\Models\StageHistory::where('stage_request_id', $req->id)->where('action', 'punch_corrected')->exists());
+
+        // Une vraie sortie anticipée l'après-midi reste une sortie
+        $this->at('2026-11-04 08:00');
+        $this->punch($h, 'arrivee', 5)->assertStatus(201);
+        $this->at('2026-11-04 16:30');
+        $this->punch($h, 'sortie', 6)->assertStatus(201);
+        $this->assertSame([], $this->getJson('/api/stagiaire/moi', $h)->json('data.today.next'));
+    }
 
     public function test_activation_link_reminders_and_withdrawal(): void
     {
