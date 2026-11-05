@@ -18,6 +18,7 @@ use App\Modules\Stages\Services\ReportService;
 use App\Modules\Stages\Services\AttestationService;
 use App\Modules\Stages\Models\StageReport;
 use Illuminate\Support\Facades\Storage;
+use App\Modules\Stages\Services\StageEndService;
 use App\Modules\Stages\Services\StageRequestService;
 use App\Modules\Stages\Services\StageSettingsService;
 use App\Modules\Stages\Support\BusinessHours;
@@ -25,6 +26,7 @@ use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use App\Support\UploadLimit;
@@ -148,6 +150,31 @@ class InternSpaceController extends Controller
         $this->auth->close($request->header(InternAuthService::HEADER));
 
         return $this->successResponse(null, 'Déconnecté.');
+    }
+
+    /**
+     * Le stagiaire met fin à son stage (immédiat ; annulable 48 h par son
+     * superviseur ou le responsable). Mot de passe redemandé : action lourde.
+     */
+    public function endStage(Request $request, StageEndService $end): JsonResponse
+    {
+        $data = $request->validate([
+            'password' => ['required', 'string', 'max:255'],
+            'motif'    => ['nullable', 'string', 'max:1000'],
+        ], ['password.required' => 'Saisissez votre mot de passe pour confirmer.']);
+        $account = $this->account($request);
+        if (!Hash::check($data['password'], $account->password)) {
+            return $this->errorResponse('Mot de passe incorrect.', 422, 'STAGE_END_PASSWORD');
+        }
+
+        try {
+            $end->desist($account->stage, isset($data['motif']) ? strip_tags($data['motif']) : null);
+        } catch (BusinessException $e) {
+            return $this->errorResponse($e->getMessage(), $e->getStatusCode(), $e->getErrorCode());
+        }
+        $this->auth->close($request->header(InternAuthService::HEADER));
+
+        return $this->successResponse(null, 'Votre stage est clos. Vous avez reçu la note de désistement sur WhatsApp et par email.');
     }
 
     public function resetCode(Request $request): JsonResponse

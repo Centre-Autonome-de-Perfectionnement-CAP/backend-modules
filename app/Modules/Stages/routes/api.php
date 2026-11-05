@@ -110,6 +110,10 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         Route::get('demandes-stagiaires/{id}/piece', [InternFollowController::class, 'requestFile'])->whereNumber('id');
         Route::get('stagiaires/{id}/rapports', [ReportController::class, 'forIntern'])->whereNumber('id');
         Route::get('stagiaires/{id}/attestation', [AttestationController::class, 'forStage'])->whereNumber('id');
+        Route::middleware('throttle:20,1')->group(function () {
+            Route::post('demandes/{id}/fin', [StageAdminController::class, 'endStage'])->whereNumber('id');
+            Route::post('demandes/{id}/fin/annuler', [StageAdminController::class, 'undoEnd'])->whereNumber('id');
+        });
         Route::get('tableau-de-bord', [DashboardController::class, 'overview']);
         Route::get('suivi', [DashboardController::class, 'follow']);
         Route::middleware('throttle:10,1')->group(function () {
@@ -160,6 +164,7 @@ Route::prefix('api/stagiaire')->middleware('api')->group(function () {
 
     Route::middleware([AuthenticateIntern::class, 'throttle:stages-intern'])->group(function () {
         Route::post('deconnexion', [InternSpaceController::class, 'logout']);
+        Route::post('fin-de-stage', [InternSpaceController::class, 'endStage'])->middleware('throttle:stages-intern-write');
         Route::get('moi', [InternSpaceController::class, 'me']);
         Route::post('reglement', [InternSpaceController::class, 'acceptReglement']);
         Route::post('empreinte/options', [InternSpaceController::class, 'webauthnRegisterOptions']);

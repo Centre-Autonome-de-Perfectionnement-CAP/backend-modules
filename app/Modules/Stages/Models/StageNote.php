@@ -19,6 +19,12 @@ class StageNote extends Model
      */
     public const NUMBER_PATTERN = '/^(\d{3,})-(\d{2})$/';
 
+    /** Notes qui fixent les conditions du stage (série versionnée). */
+    public const TERMS_KINDS = ['initiale', 'rectificative'];
+
+    /** Notes de fin anticipée (désistement, révocation), version 0. */
+    public const END_KINDS = ['desistement', 'revocation'];
+
     /** Numéro suivant de l'année (à appeler dans une transaction). */
     public static function nextNumber(string $yy): string
     {

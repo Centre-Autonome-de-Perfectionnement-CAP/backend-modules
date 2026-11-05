@@ -6,6 +6,7 @@ use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Services\NoteSignatureService;
+use App\Modules\Stages\Services\StageEndService;
 use App\Modules\Stages\Services\StageRequestService;
 use App\Modules\Stages\Services\StageNotifier;
 use App\Modules\Stages\Services\StageSettingsService;
@@ -37,7 +38,7 @@ class StageAdminController extends Controller
     public function index(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'status'   => ['nullable', Rule::in(array_merge(array_keys(StageStatus::LABELS), ['all', 'to_handle']))],
+            'status'   => ['nullable', Rule::in(array_merge(array_keys(StageStatus::LABELS), ['all', 'to_handle', 'ended']))],
             'q'        => ['nullable', 'string', 'max:100'],
             'page'     => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
@@ -47,6 +48,8 @@ class StageAdminController extends Controller
         $status = $data['status'] ?? 'to_handle';
         if ($status === 'to_handle') {
             $query->whereIn('status', [StageStatus::SUBMITTED, StageStatus::COUNTER_PROPOSED]);
+        } elseif ($status === 'ended') {
+            $query->whereIn('status', StageStatus::ENDED);
         } elseif ($status !== 'all') {
             $query->where('status', $status);
         }
@@ -71,7 +74,8 @@ class StageAdminController extends Controller
                 'total' => $page->total(), 'per_page' => $page->perPage(),
                 'current_page' => $page->currentPage(), 'last_page' => $page->lastPage(),
             ],
-            'counts'  => array_merge(array_fill_keys(array_keys(StageStatus::LABELS), 0), $counts->map(fn ($n) => (int) $n)->all()),
+            'counts'  => array_merge(array_fill_keys(array_keys(StageStatus::LABELS), 0), $counts->map(fn ($n) => (int) $n)->all(),
+                ['ended' => (int) $counts->only(StageStatus::ENDED)->sum()]),
             'labels'  => StageStatus::LABELS,
         ]);
     }
@@ -174,6 +178,48 @@ class StageAdminController extends Controller
             fn () => $this->service->resendNote($this->findOrFail((string) $id), $note),
             fn () => "Note de service n° {$note->number} renvoyée au stagiaire.",
         );
+    }
+
+    /**
+     * Fin anticipée : désistement constaté ou révocation (superviseurs du
+     * stagiaire et responsable de division ; les droits sont vérifiés par le service).
+     */
+    public function endStage(Request $request, int $id, StageEndService $end): JsonResponse
+    {
+        $data = $request->validate([
+            'type'       => ['required', Rule::in(['desistement', 'revocation'])],
+            'motif_type' => ['required_if:type,revocation', 'nullable', Rule::in(array_keys(StageEndService::REVOKE_MOTIFS))],
+            'motif'      => ['required_if:type,revocation', 'nullable', 'string', 'max:1000'],
+        ], [
+            'motif_type.required_if' => 'Choisissez le motif de la révocation.',
+            'motif.required_if'      => 'Précisez le motif de la révocation.',
+        ]);
+        $req   = $this->findOrFail((string) $id);
+        $motif = isset($data['motif']) ? $this->cleanText($data['motif']) : null;
+
+        try {
+            $req = $data['type'] === 'revocation'
+                ? $end->revoke($req, $request->user(), $data['motif_type'], (string) $motif)
+                : $end->recordDesist($req, $request->user(), $motif);
+        } catch (BusinessException $e) {
+            return $this->errorResponse($e->getMessage(), $e->getStatusCode(), $e->getErrorCode());
+        }
+
+        return $this->successResponse($this->detail($req->fresh()), $data['type'] === 'revocation'
+            ? 'Stage révoqué. Le stagiaire a reçu la note de révocation.'
+            : 'Désistement enregistré. Le stagiaire a reçu la note de désistement.');
+    }
+
+    /** Annulation d'une fin de stage (erreur), dans les 48 h. */
+    public function undoEnd(Request $request, int $id, StageEndService $end): JsonResponse
+    {
+        try {
+            $req = $end->undo($this->findOrFail((string) $id), $request->user());
+        } catch (BusinessException $e) {
+            return $this->errorResponse($e->getMessage(), $e->getStatusCode(), $e->getErrorCode());
+        }
+
+        return $this->successResponse($this->detail($req->fresh()), 'Fin de stage annulée : le stage reprend et le stagiaire a été prévenu.');
     }
 
     public function getSettings(): JsonResponse
@@ -435,6 +481,7 @@ class StageAdminController extends Controller
             ])->values(),
             'notes'           => $r->notes->map(fn ($n) => [
                 'id' => $n->id, 'number' => $n->number, 'kind' => $n->kind, 'version' => $n->version,
+                'cancelled_at' => $n->snapshot['annulee_at'] ?? null,
                 'motif' => $n->motif, 'issued_by' => $n->issued_by ? ($names[$n->issued_by] ?? null) : null,
                 'issued_at' => $n->issued_at?->toIso8601String(), 'has_pdf' => (bool) $n->pdf_path,
             ])->values(),
@@ -448,6 +495,7 @@ class StageAdminController extends Controller
                 ? app(\App\Modules\Stages\Services\DashboardService::class)->rows(collect([$r]), request()->user())->first()
                 : null,
             'me'              => SupervisionController::me(request()->user()),
+            'fin'             => app(StageEndService::class)->state($r, request()->user()),
             // Demande en binôme : décidée pour les deux à la fois.
             'pair'            => ($partner = app(\App\Modules\Stages\Services\BinomeService::class)->requestPartner($r)) ? [
                 'team_id' => $r->team_id, 'reference' => $partner->reference,
