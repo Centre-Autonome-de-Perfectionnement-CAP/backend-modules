@@ -575,7 +575,7 @@ class StageRequestService
 
     private function issueNote(StageRequest $req, string $kind, ?string $motif, ?int $by, ?CarbonImmutable $declaredAt = null): StageNote
     {
-        $previous = StageNote::where('stage_request_id', $req->id)->orderByDesc('version')->lockForUpdate()->first();
+        $previous = StageNote::where('stage_request_id', $req->id)->whereIn('kind', StageNote::TERMS_KINDS)->orderByDesc('version')->lockForUpdate()->first();
         $number   = StageNote::nextNumber(($declaredAt ?? BusinessHours::today())->format('y'));
 
         if ($kind === 'initiale' || !$previous) {
@@ -608,7 +608,7 @@ class StageRequestService
 
     private function notifyNote(StageRequest $req, string $kind, ?string $motif = null): void
     {
-        $note = $req->notes()->reorder('version', 'desc')->first();
+        $note = $req->notes()->whereIn('kind', StageNote::TERMS_KINDS)->reorder('version', 'desc')->first();
         $this->sendNote($req, $note, $kind, $motif, $note ? $this->notePdfFile($note) : null);
     }
 
@@ -618,6 +618,9 @@ class StageRequestService
      */
     public function resendNote(StageRequest $req, StageNote $note): StageRequest
     {
+        if ($req->status !== StageStatus::ACCEPTED || !in_array($note->kind, StageNote::TERMS_KINDS, true)) {
+            throw new BusinessException('Cette note ne peut plus être renvoyée : le stage n\'est plus en cours.', 'STAGE_NOTE_CLOSED', 409);
+        }
         $file = $this->notePdfFile($note);
         if (!$file) {
             throw new BusinessException('La note de service n\'a pas pu être préparée. Réessayez dans un instant.', 'STAGE_NOTE_PDF', 503);

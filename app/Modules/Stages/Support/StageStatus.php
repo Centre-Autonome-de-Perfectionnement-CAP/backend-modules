@@ -17,6 +17,12 @@ final class StageStatus
     public const EXPIRED = 'expired';
     /** Le stagiaire ne s'est jamais présenté (lien d'activation non utilisé). */
     public const WITHDRAWN = 'withdrawn';
+    /** Stage commencé, arrêté par le stagiaire depuis son espace. */
+    public const DESISTED = 'desiste';
+    /** Le stagiaire est parti sans le signaler : constaté par l'équipe. */
+    public const DESIST_FOUND = 'desiste_constate';
+    /** Fin du stage par décision (superviseur ou responsable de division). */
+    public const REVOKED = 'revoque';
 
     public const LABELS = [
         self::SUBMITTED        => 'Nouvelle demande',
@@ -26,6 +32,9 @@ final class StageStatus
         self::REJECTED         => 'Non retenue',
         self::EXPIRED          => 'Expirée (sans réponse)',
         self::WITHDRAWN        => 'Désistement (jamais présenté)',
+        self::DESISTED         => 'Désistement du stagiaire',
+        self::DESIST_FOUND     => 'Désistement constaté',
+        self::REVOKED          => 'Révocation',
     ];
 
     /** Libellés côté demandeur. */
@@ -37,7 +46,13 @@ final class StageStatus
         self::REJECTED         => 'Non retenue',
         self::EXPIRED          => 'Expirée',
         self::WITHDRAWN        => 'Close (stage non commencé)',
+        self::DESISTED         => 'Stage clos (désistement)',
+        self::DESIST_FOUND     => 'Stage clos (désistement)',
+        self::REVOKED          => 'Stage clos (révocation)',
     ];
+
+    /** Stage arrêté avant son terme (note de fin émise, annulable 48 h). */
+    public const ENDED = [self::DESISTED, self::DESIST_FOUND, self::REVOKED];
 
     /** Une demande « active » bloque un nouveau dépôt avec le même contact. */
     public const ACTIVE = [self::SUBMITTED, self::PROPOSAL_SENT, self::COUNTER_PROPOSED];

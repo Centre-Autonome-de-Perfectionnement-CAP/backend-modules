@@ -272,7 +272,11 @@ class AttestationService
 
         $a = DB::transaction(function () use ($req, $by, $motif) {
             $stage = StageRequest::whereKey($req->id)->lockForUpdate()->first();
-            $this->assertStarted($stage);
+            // Après un désistement, seule une attestation exceptionnelle (période
+            // réellement effectuée) reste possible ; jamais après une révocation.
+            if (!in_array($stage?->status, [StageStatus::DESISTED, StageStatus::DESIST_FOUND], true) || !$stage->activated_at) {
+                $this->assertStarted($stage);
+            }
             $open = StageAttestation::where('stage_request_id', $stage->id)->whereIn('status', self::OPEN)->lockForUpdate()->first();
             if ($open && $open->status !== 'a_valider') {
                 throw new BusinessException('Une attestation est déjà validée pour ce stagiaire.', 'STAGE_ATT_OPEN', 409);

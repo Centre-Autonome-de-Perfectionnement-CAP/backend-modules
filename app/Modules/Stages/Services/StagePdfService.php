@@ -6,6 +6,7 @@ use App\Modules\Stages\Models\StageAttestation;
 use App\Modules\Stages\Models\StageNote;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Support\BusinessHours;
+use App\Modules\Stages\Support\StageStatus;
 use App\Modules\Core\Support\PdfFonts;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonImmutable;
@@ -66,6 +67,9 @@ class StagePdfService
     /** @return array{name: string, content: string} */
     public function note(StageNote $note): array
     {
+        if (in_array($note->kind, StageNote::END_KINDS, true)) {
+            return $this->endNote($note);
+        }
         $req  = StageRequest::findOrFail($note->stage_request_id);
         $s    = $note->snapshot ?? [];
         $masculin = ($s['civilite'] ?? $req->civilite) === 'M.';
@@ -73,7 +77,7 @@ class StagePdfService
             ? StageNote::where('stage_request_id', $req->id)->where('kind', 'initiale')->first()
             : null;
         $previous = $note->kind === 'rectificative'
-            ? StageNote::where('stage_request_id', $req->id)->where('version', '<', $note->version)->orderByDesc('version')->first()
+            ? StageNote::where('stage_request_id', $req->id)->whereIn('kind', StageNote::TERMS_KINDS)->where('version', '<', $note->version)->orderByDesc('version')->first()
             : null;
         $issued = CarbonImmutable::parse($note->issued_at)->setTimezone(BusinessHours::TZ);
         $ref    = fn (StageNote $n) => $n->reference((string) $this->settings->get('note_numero_suffixe'), (string) $this->settings->get('numero_suffixe'));
@@ -110,6 +114,55 @@ class StagePdfService
 
         return [
             'name'    => 'Note de service ' . str_replace('/', '-', $note->number) . ' - ' . preg_replace('/[^A-Za-z0-9-]+/', '-', $this->ascii(($s['nom'] ?? $req->nom))) . '.pdf',
+            'content' => $this->render($html),
+        ];
+    }
+
+    /**
+     * Note de désistement ou de révocation (fin anticipée du stage).
+     *
+     * @return array{name: string, content: string}
+     */
+    public function endNote(StageNote $note): array
+    {
+        $s = $note->snapshot ?? [];
+        $masculin = ($s['civilite'] ?? '') === 'M.';
+        $revocation = $note->kind === 'revocation';
+        $issued = CarbonImmutable::parse($note->issued_at)->setTimezone(BusinessHours::TZ);
+        $motifs = StageEndService::REVOKE_MOTIFS;
+
+        $html = view('stages::pdfs.fin', [
+            'revocation' => $revocation,
+            'constate'   => ($s['type'] ?? null) === StageStatus::DESIST_FOUND,
+            'd'          => [
+                'appel'      => $masculin ? 'Monsieur' : (($s['civilite'] ?? '') === 'Mme' ? 'Madame' : 'Mademoiselle'),
+                'masculin'   => $masculin,
+                'nom'        => mb_strtoupper($s['nom'] ?? ''),
+                'prenoms'    => $s['prenoms'] ?? '',
+                'reference'  => $s['reference'] ?? '',
+                'formation'  => $s['formation'] ?? null,
+                'etablissement' => $s['etablissement'] ?? null,
+                'debut'      => $this->longDate($s['date_debut'] ?? null, false),
+                'fin_prevue' => $this->longDate($s['date_fin_prevue'] ?? null, false),
+                'dernier'    => !empty($s['dernier_jour']) ? $this->longDate($s['dernier_jour'], false) : null,
+                'effet'      => $this->longDate($s['date_effet'] ?? null, false),
+                'absences'   => $s['jours_absence'] ?? null,
+                'motif_type' => isset($s['motif_type']) ? ($motifs[$s['motif_type']] ?? null) : null,
+                'motif'      => $s['motif'] ?? null,
+            ],
+            'reference' => $note->reference((string) $this->settings->get('note_numero_suffixe'), (string) $this->settings->get('numero_suffixe')),
+            'ville'     => $this->settings->get('pdf_ville'),
+            'date'      => $issued->format('d/m/Y'),
+            'signataire_titre' => $this->settings->get('note_signataire_titre'),
+            'signataire_nom'   => $this->settings->get('note_signataire_nom'),
+            'signature' => $this->signature->forPdf(),
+            'signature_box' => ['w' => NoteSignatureService::BOX_W_MM, 'h' => NoteSignatureService::BOX_H_MM],
+            'footer'    => $this->settings->get('pdf_pied_de_page'),
+        ])->render();
+
+        return [
+            'name'    => ($revocation ? 'Note de revocation ' : 'Note de desistement ') . str_replace('/', '-', $note->number) . ' - '
+                . preg_replace('/[^A-Za-z0-9-]+/', '-', $this->ascii($s['nom'] ?? '')) . '.pdf',
             'content' => $this->render($html),
         ];
     }
