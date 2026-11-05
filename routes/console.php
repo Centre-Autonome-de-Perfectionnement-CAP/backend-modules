@@ -45,6 +45,11 @@ Schedule::command('stages:process-attestations')
     ->timezone('Africa/Porto-Novo')
     ->withoutOverlapping(30);
 
+// Stages : messagerie (rappels WhatsApp groupés, effacement après 7 jours).
+Schedule::command('stages:process-chat')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(10);
+
 Schedule::command('stages:sync-whatsapp-group')
     ->dailyAt('10:30')
     ->timezone('Africa/Porto-Novo')

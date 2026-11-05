@@ -1,0 +1,44 @@
+# TEMPORAIRE - à supprimer une fois la migration passée en production.
+# Après chaque déploiement de main (ou à la demande), passe UNIQUEMENT la
+# migration de la messagerie de stage (--path) : aucune autre migration en
+# attente n'est touchée. Sans effet si elle est déjà passée.
+name: Migration temporaire - messagerie de stage
+
+on:
+  workflow_run:
+    workflows: ["Deploy to VPS"]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add VPS to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Migration de la messagerie
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          ssh $SSH_USER@$SSH_HOST << 'ENDSSH'
+            set -e
+            cd /var/www/laravel-app/current
+            MIGRATION="app/Modules/Stages/database/migrations/2026_11_05_000000_create_stage_chat_tables.php"
+            if [ ! -f "$MIGRATION" ]; then
+              echo "Migration absente de la version déployée : rien à faire."
+              exit 0
+            fi
+            php artisan migrate:status --path="$MIGRATION" --no-ansi || true
+            php artisan migrate --force --path="$MIGRATION" --no-interaction
+            php artisan migrate:status --path="$MIGRATION" --no-ansi
+          ENDSSH

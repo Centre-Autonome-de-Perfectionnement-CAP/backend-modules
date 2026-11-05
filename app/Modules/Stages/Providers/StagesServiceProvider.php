@@ -9,6 +9,7 @@ use App\Modules\Stages\Console\Commands\ProcessStageReports;
 use App\Modules\Stages\Services\ReportService;
 use App\Modules\Stages\Services\AttestationService;
 use App\Modules\Stages\Console\Commands\ProcessStageAttestations;
+use App\Modules\Stages\Console\Commands\ProcessStageChat;
 use App\Modules\Stages\Services\AttendanceService;
 use App\Modules\Stages\Services\InternActivationService;
 use App\Modules\Stages\Services\InternAuthService;
@@ -99,9 +100,10 @@ class StagesServiceProvider extends ServiceProvider
         RateLimiter::for('stages-intern', fn (Request $r) => Limit::perMinute(120)->by($intern($r)));
         RateLimiter::for('stages-intern-medium', fn (Request $r) => Limit::perMinute(20)->by($intern($r)));
         RateLimiter::for('stages-intern-write', fn (Request $r) => Limit::perMinute(10)->by($intern($r)));
+        RateLimiter::for('stages-intern-chat', fn (Request $r) => Limit::perMinute(30)->by($intern($r)));
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ProcessStageDeadlines::class, SyncStageWhatsAppGroup::class, ProcessStageActivations::class, ProcessStageReports::class, ProcessStageAttestations::class]);
+            $this->commands([ProcessStageDeadlines::class, SyncStageWhatsAppGroup::class, ProcessStageActivations::class, ProcessStageReports::class, ProcessStageAttestations::class, ProcessStageChat::class]);
         }
     }
 }
