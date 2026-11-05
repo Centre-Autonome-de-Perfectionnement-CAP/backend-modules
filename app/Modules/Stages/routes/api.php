@@ -11,6 +11,7 @@ use App\Modules\Stages\Http\Controllers\DashboardController;
 use App\Modules\Stages\Http\Controllers\Public\InternSpaceController;
 use App\Modules\Stages\Http\Middleware\AuthenticateIntern;
 use App\Modules\Stages\Http\Controllers\StageAdminController;
+use App\Modules\Stages\Http\Controllers\StageChatController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -114,6 +115,9 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
             Route::post('demandes/{id}/fin', [StageAdminController::class, 'endStage'])->whereNumber('id');
             Route::post('demandes/{id}/fin/annuler', [StageAdminController::class, 'undoEnd'])->whereNumber('id');
         });
+        Route::get('messages', [StageChatController::class, 'index'])->middleware('throttle:120,1');
+        Route::get('messages/{channel}', [StageChatController::class, 'show'])->where('channel', StageChatController::CHANNEL)->middleware('throttle:120,1');
+        Route::post('messages/{channel}', [StageChatController::class, 'store'])->where('channel', StageChatController::CHANNEL)->middleware('throttle:30,1');
         Route::get('tableau-de-bord', [DashboardController::class, 'overview']);
         Route::get('suivi', [DashboardController::class, 'follow']);
         Route::middleware('throttle:10,1')->group(function () {
@@ -165,6 +169,9 @@ Route::prefix('api/stagiaire')->middleware('api')->group(function () {
     Route::middleware([AuthenticateIntern::class, 'throttle:stages-intern'])->group(function () {
         Route::post('deconnexion', [InternSpaceController::class, 'logout']);
         Route::post('fin-de-stage', [InternSpaceController::class, 'endStage'])->middleware('throttle:stages-intern-write');
+        Route::get('messages', [StageChatController::class, 'index']);
+        Route::get('messages/{channel}', [StageChatController::class, 'show'])->where('channel', StageChatController::CHANNEL);
+        Route::post('messages/{channel}', [StageChatController::class, 'store'])->where('channel', StageChatController::CHANNEL)->middleware('throttle:stages-intern-chat');
         Route::get('moi', [InternSpaceController::class, 'me']);
         Route::post('reglement', [InternSpaceController::class, 'acceptReglement']);
         Route::post('empreinte/options', [InternSpaceController::class, 'webauthnRegisterOptions']);
