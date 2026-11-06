@@ -460,6 +460,7 @@ class InternSpaceController extends Controller
             'period_key' => ['required', 'string', 'max:20', 'regex:/^(FINAL|J\d{4}-\d{2}-\d{2}|S\d{4}-W\d{2}|M\d{4}-\d{2})$/'],
             'fichier'    => ['required', 'file', 'mimes:pdf', UploadLimit::rule(UploadLimit::REPORT_KB)],
             'note'       => ['nullable', 'string', 'max:1000'],
+            'pour_binome' => ['nullable', 'boolean'],
             // Rapport final présenté comme rapport de fin de formation (bibliothèque)
             'fin_formation'            => ['nullable', 'boolean'],
             'theme'                    => ['exclude_unless:fin_formation,1', 'required', 'string', 'min:5', 'max:300'],
@@ -480,13 +481,17 @@ class InternSpaceController extends Controller
         $note = isset($data['note']) ? (trim(strip_tags($data['note'])) ?: null) : null;
 
         return $this->guard(function () use ($data, $note, $request) {
-            $r = $this->reports->submit($this->ready($request)->stage, $data['period_key'], $request->file('fichier'), $note);
+            $r = $this->reports->submit($this->ready($request)->stage, $data['period_key'], $request->file('fichier'), $note,
+                (bool) ($data['pour_binome'] ?? true));
             if (!empty($data['fin_formation'])) {
                 $this->library->proposeFromReport($r->load('stage'), array_map(fn ($v) => is_string($v) ? (trim(strip_tags($v)) ?: null) : $v, $data));
             }
 
+            $pair = $r->pair_report_id ? $this->reports->twinOf($r->load('stage')) : null;
+
             return $this->successResponse($this->reports->detail($r->load('stage'), false),
-                $r->late ? 'Rapport déposé (hors délai).' : 'Rapport déposé. Votre superviseur en est informé.', 201);
+                ($r->late ? 'Rapport déposé (hors délai).' : 'Rapport déposé. Votre superviseur en est informé.')
+                . ($pair ? ' Il vaut aussi pour ' . $pair->stage->fullName() . '.' : ''), 201);
         });
     }
 
