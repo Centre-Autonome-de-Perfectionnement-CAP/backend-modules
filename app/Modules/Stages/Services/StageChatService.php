@@ -11,20 +11,24 @@ use App\Modules\Stages\Support\BusinessHours;
 use App\Modules\Stages\Support\StageAccess;
 use App\Modules\Stages\Support\StageStatus;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
- * Messagerie de stage : texte seulement, éphémère (7 jours).
+ * Messagerie de stage : texte et pièces jointes (PDF, Word, ZIP, images),
+ * réponse à un message, « vu par » ; tout est éphémère (7 jours), fichiers compris.
  *
  * Discussions :
  *  - « general » : stagiaires en cours + équipe (responsables, superviseurs) ;
  *  - « groupe-{id} » : un superviseur et ses stagiaires en cours, visible par
  *    eux seuls.
  *
- * Rappel WhatsApp : un seul par rafale (10 min après le premier message non
+ * Rappel WhatsApp : un seul par rafale (5 min après le premier message non
  * lu), plus rien tant que la discussion n'a pas été ouverte, pas si la
  * personne est en train de lire, au plus 2 par jour et par discussion,
  * jamais entre 21 h et 7 h.
@@ -34,8 +38,17 @@ class StageChatService
     public const GENERAL = 'general';
     public const KEEP_DAYS = 7;
     public const MAX_LENGTH = 2000;
+    public const MAX_FILES = 3;
+    public const MAX_FILE_KB = 5120;
+    /** Extensions acceptées (vérifiées aussi par type réel). */
+    public const FILE_TYPES = ['pdf', 'doc', 'docx', 'zip', 'jpg', 'jpeg', 'png', 'webp'];
+    public const FILE_MIMES = [
+        'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/zip', 'application/x-zip-compressed', 'image/jpeg', 'image/png', 'image/webp',
+    ];
+    private const DISK = 'local';
     private const PAGE = 50;
-    private const BURST_MINUTES = 10;
+    private const BURST_MINUTES = 5;
     private const READING_MINUTES = 2;
     private const MAX_REMINDERS_PER_DAY = 2;
     private const QUIET = [21, 7]; // de 21 h à 7 h : aucun rappel
@@ -49,12 +62,13 @@ class StageChatService
     public function ready(): bool
     {
         // Mémorisé seulement une fois prêt : la messagerie s'ouvre dès la migration passée.
-        if (Cache::get('stage-chat-ready')) {
+        if (Cache::get('stage-chat-ready-2')) {
             return true;
         }
-        $ready = Schema::hasTable('stage_chat_messages') && Schema::hasTable('stage_chat_reads');
+        $ready = Schema::hasTable('stage_chat_messages') && Schema::hasTable('stage_chat_reads')
+            && Schema::hasTable('stage_chat_files') && Schema::hasColumn('stage_chat_messages', 'reply_to_id');
         if ($ready) {
-            Cache::put('stage-chat-ready', true, 3600);
+            Cache::put('stage-chat-ready-2', true, 3600);
         }
 
         return $ready;
@@ -123,7 +137,7 @@ class StageChatService
             $names = $last ? $this->names(collect([$last])) : [];
             $items[] = $this->describe($ch, $who) + [
                 'last'   => $last ? [
-                    'body'  => mb_strimwidth($last->body, 0, 90, '…'),
+                    'body'  => $last->body !== '' ? mb_strimwidth($last->body, 0, 90, '…') : 'Pièce jointe',
                     'at'    => CarbonImmutable::parse($last->created_at)->toIso8601String(),
                     'who'   => $this->isMine($last, $who) ? 'Vous' : $this->shortName($names[$this->key($last)]['name'] ?? ''),
                 ] : null,
@@ -163,6 +177,13 @@ class StageChatService
         $this->markRead($channel, $who, $maxId);
 
         $mineLast = $rows->filter(fn ($m) => $this->isMine($m, $who))->last();
+        $files = DB::table('stage_chat_files')->whereIn('message_id', $rows->pluck('id')->all() ?: [0])
+            ->orderBy('id')->get(['id', 'message_id', 'name', 'mime', 'size'])->groupBy('message_id');
+        $replyIds = $rows->pluck('reply_to_id')->filter()->unique()->values();
+        $replies = $replyIds->isEmpty() ? collect() : DB::table('stage_chat_messages')->where('channel', $channel)
+            ->whereIn('id', $replyIds)->get()->keyBy('id');
+        $replyNames = $this->names($replies->values());
+        $replyFiles = $replyIds->isEmpty() ? collect() : DB::table('stage_chat_files')->whereIn('message_id', $replyIds)->pluck('message_id')->flip();
 
         return [
             'channel'  => $this->describe($channel, $who),
@@ -172,35 +193,101 @@ class StageChatService
                 'at'     => CarbonImmutable::parse($m->created_at)->toIso8601String(),
                 'mine'   => $this->isMine($m, $who),
                 'sender' => $names[$this->key($m)] ?? ['key' => $this->key($m), 'name' => 'Ancien participant', 'role' => null],
+                'files'  => ($files[$m->id] ?? collect())->map(fn ($f) => [
+                    'id' => (int) $f->id, 'name' => $f->name, 'mime' => $f->mime, 'size' => (int) $f->size,
+                    'image' => str_starts_with($f->mime, 'image/'),
+                ])->values(),
+                // Message cité : null s'il n'y en a pas ; « deleted » s'il a été effacé (7 jours).
+                'reply'  => $m->reply_to_id ? (isset($replies[$m->reply_to_id]) ? [
+                    'id'   => (int) $m->reply_to_id,
+                    'name' => $this->isMine($replies[$m->reply_to_id], $who) ? 'Vous'
+                        : ($replyNames[$this->key($replies[$m->reply_to_id])]['name'] ?? 'Ancien participant'),
+                    'body' => $replies[$m->reply_to_id]->body !== '' ? mb_strimwidth($replies[$m->reply_to_id]->body, 0, 120, '…')
+                        : (isset($replyFiles[$m->reply_to_id]) ? 'Pièce jointe' : ''),
+                ] : ['id' => (int) $m->reply_to_id, 'deleted' => true]) : null,
             ])->values(),
             // Séparateur « nouveaux messages » à l'ouverture.
             'first_unread_id' => $firstUnread ? (int) $firstUnread->id : null,
             'has_more' => !$after && $rows->isNotEmpty()
                 && DB::table('stage_chat_messages')->where('channel', $channel)->where('id', '<', $rows->first()->id)->exists(),
             // « Vu par » : pour mon dernier message affiché.
-            'seen'     => $mineLast ? [
-                'id'    => (int) $mineLast->id,
-                'count' => DB::table('stage_chat_reads')->where('channel', $channel)->where('last_read_id', '>=', $mineLast->id)
-                    ->where(fn ($q) => $q->where('reader_type', '!=', $who['type'])->orWhere('reader_id', '!=', $who['id']))->count(),
-            ] : null,
+            'seen'     => $mineLast ? ['id' => (int) $mineLast->id, 'by' => $this->seenBy($channel, (int) $mineLast->id, $who)] : null,
             'keep_days' => self::KEEP_DAYS,
         ];
     }
 
-    public function post(string $channel, array $who, string $body): array
+    /** @param UploadedFile[] $files (validés par le contrôleur : types, taille, nombre) */
+    public function post(string $channel, array $who, string $body, array $files = [], ?int $replyTo = null): array
     {
         $this->assertAccess($channel, $who);
         $body = $this->clean($body);
-        if ($body === '') {
-            throw new BusinessException('Écrivez un message.', 'STAGE_CHAT_EMPTY', 422);
+        if ($body === '' && !$files) {
+            throw new BusinessException('Écrivez un message ou joignez un fichier.', 'STAGE_CHAT_EMPTY', 422);
+        }
+        if ($replyTo && !DB::table('stage_chat_messages')->where('channel', $channel)->where('id', $replyTo)->exists()) {
+            $replyTo = null; // message cité effacé entre-temps : on envoie sans citation
         }
 
-        $id = DB::table('stage_chat_messages')->insertGetId([
-            'channel' => $channel, 'sender_type' => $who['type'], 'sender_id' => $who['id'], 'body' => $body, 'created_at' => now(),
-        ]);
+        $stored = [];
+        try {
+            $id = DB::transaction(function () use ($channel, $who, $body, $files, $replyTo, &$stored) {
+                $id = DB::table('stage_chat_messages')->insertGetId([
+                    'channel' => $channel, 'sender_type' => $who['type'], 'sender_id' => $who['id'], 'body' => $body,
+                    'reply_to_id' => $replyTo, 'created_at' => now(),
+                ]);
+                foreach ($files as $file) {
+                    $ext  = strtolower($file->getClientOriginalExtension() ?: $file->extension());
+                    $path = $file->storeAs('stages/messagerie/' . now()->format('Ymd'), Str::random(24) . '.' . $ext, self::DISK);
+                    $stored[] = $path;
+                    DB::table('stage_chat_files')->insert([
+                        'message_id' => $id, 'path' => $path, 'mime' => (string) $file->getMimeType(), 'size' => (int) $file->getSize(),
+                        'name' => mb_substr(preg_replace('/[^\pL\pN ._()-]+/u', '_', $file->getClientOriginalName()) ?: "fichier.{$ext}", 0, 150),
+                        'created_at' => now(),
+                    ]);
+                }
+
+                return $id;
+            });
+        } catch (\Throwable $e) {
+            Storage::disk(self::DISK)->delete($stored);
+            throw $e;
+        }
         $this->markRead($channel, $who, $id);
 
         return ['id' => $id];
+    }
+
+    /** Pièce jointe d'une discussion accessible à $who. */
+    public function file(string $channel, array $who, int $fileId): object
+    {
+        $this->assertAccess($channel, $who);
+        $file = DB::table('stage_chat_files as f')->join('stage_chat_messages as m', 'm.id', '=', 'f.message_id')
+            ->where('m.channel', $channel)->where('f.id', $fileId)->first(['f.*']);
+        if (!$file || !Storage::disk(self::DISK)->exists($file->path)) {
+            throw new BusinessException('Ce fichier n\'est plus disponible (les messages s\'effacent après ' . self::KEEP_DAYS . ' jours).', 'STAGE_CHAT_FILE_GONE', 404);
+        }
+
+        return $file;
+    }
+
+    public function disk(): \Illuminate\Contracts\Filesystem\Filesystem
+    {
+        return Storage::disk(self::DISK);
+    }
+
+    /** Qui a lu jusqu'à ce message (hors moi), avec l'heure de lecture. */
+    private function seenBy(string $channel, int $messageId, array $who): array
+    {
+        $reads = DB::table('stage_chat_reads')->where('channel', $channel)->where('last_read_id', '>=', $messageId)
+            ->where(fn ($q) => $q->where('reader_type', '!=', $who['type'])->orWhere('reader_id', '!=', $who['id']))
+            ->orderBy('read_at')->get(['reader_type', 'reader_id', 'read_at']);
+        $names = $this->names($reads->map(fn ($r) => (object) ['sender_type' => $r->reader_type, 'sender_id' => $r->reader_id]));
+
+        return $reads->map(fn ($r) => [
+            'key'  => "{$r->reader_type}-{$r->reader_id}",
+            'name' => $names["{$r->reader_type}-{$r->reader_id}"]['name'] ?? 'Ancien participant',
+            'at'   => $r->read_at ? CarbonImmutable::parse($r->read_at)->toIso8601String() : null,
+        ])->values()->all();
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -211,7 +298,14 @@ class StageChatService
     public function tick(?CarbonImmutable $now = null): array
     {
         $now ??= CarbonImmutable::now();
-        $deleted = DB::table('stage_chat_messages')->where('created_at', '<', $now->subDays(self::KEEP_DAYS))->delete();
+        // Fichiers d'abord (disque puis base), messages ensuite.
+        $old = DB::table('stage_chat_messages')->where('created_at', '<', $now->subDays(self::KEEP_DAYS))->pluck('id');
+        foreach ($old->chunk(500) as $ids) {
+            $files = DB::table('stage_chat_files')->whereIn('message_id', $ids)->get(['id', 'path']);
+            $this->disk()->delete($files->pluck('path')->all());
+            DB::table('stage_chat_files')->whereIn('id', $files->pluck('id'))->delete();
+        }
+        $deleted = DB::table('stage_chat_messages')->whereIn('id', $old->all() ?: [0])->delete();
         // Lecteurs sans discussion active depuis 7 jours : rien à garder.
         DB::table('stage_chat_reads')->where('updated_at', '<', $now->subDays(self::KEEP_DAYS + 1))->delete();
 
@@ -388,9 +482,11 @@ class StageChatService
     private function markRead(string $channel, array $who, int $maxId): void
     {
         $row = DB::table('stage_chat_reads')->where(['channel' => $channel, 'reader_type' => $who['type'], 'reader_id' => $who['id']])->first();
+        $advanced = $maxId > (int) ($row->last_read_id ?? 0);
         DB::table('stage_chat_reads')->updateOrInsert(
             ['channel' => $channel, 'reader_type' => $who['type'], 'reader_id' => $who['id']],
-            ['last_read_id' => max($maxId, (int) ($row->last_read_id ?? 0)), 'seen_at' => now(), 'updated_at' => now()],
+            ['last_read_id' => max($maxId, (int) ($row->last_read_id ?? 0)), 'seen_at' => now(), 'updated_at' => now()]
+                + ($advanced ? ['read_at' => now()] : []),
         );
     }
 
