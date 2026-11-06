@@ -9,6 +9,7 @@ use App\Modules\Stages\Services\StageChatService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Messagerie de stage, pour le personnel (progiciel) et pour les stagiaires
@@ -40,10 +41,41 @@ class StageChatController extends Controller
 
     public function store(Request $request, string $channel): JsonResponse
     {
-        $data = $request->validate(['body' => ['required', 'string', 'max:' . (StageChatService::MAX_LENGTH + 500)]],
-            ['body.required' => 'Écrivez un message.']);
+        $data = $request->validate([
+            'body'     => ['nullable', 'string', 'max:' . (StageChatService::MAX_LENGTH + 500)],
+            'reply_to' => ['nullable', 'integer', 'min:1'],
+            'files'    => ['nullable', 'array', 'max:' . StageChatService::MAX_FILES],
+            'files.*'  => ['file', 'max:' . StageChatService::MAX_FILE_KB,
+                'mimes:' . implode(',', StageChatService::FILE_TYPES), 'mimetypes:' . implode(',', StageChatService::FILE_MIMES)],
+        ], [
+            'files.max'         => 'Trois fichiers au plus par message.',
+            'files.*.max'       => 'Un fichier dépasse 5 Mo.',
+            'files.*.mimes'     => 'Fichiers acceptés : PDF, Word, ZIP et images.',
+            'files.*.mimetypes' => 'Fichiers acceptés : PDF, Word, ZIP et images.',
+        ]);
 
-        return $this->guard(fn () => $this->chat->post($channel, $this->who($request), $data['body']));
+        return $this->guard(fn () => $this->chat->post($channel, $this->who($request), (string) ($data['body'] ?? ''),
+            $request->file('files', []), $data['reply_to'] ?? null));
+    }
+
+    /** Pièce jointe : aperçu dans la page pour une image, téléchargement sinon. */
+    public function file(Request $request, string $channel, int $file): JsonResponse|StreamedResponse
+    {
+        if (!$this->chat->ready()) {
+            return $this->errorResponse('La messagerie sera bientôt disponible.', 503, 'STAGE_CHAT_NOT_READY');
+        }
+        try {
+            $f = $this->chat->file($channel, $this->who($request), $file);
+        } catch (BusinessException $e) {
+            return $this->errorResponse($e->getMessage(), $e->getStatusCode(), $e->getErrorCode());
+        }
+        $inline = str_starts_with($f->mime, 'image/');
+
+        return $this->chat->disk()->response($f->path, $f->name, [
+            'Content-Type' => $f->mime,
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, max-age=3600',
+        ], $inline ? 'inline' : 'attachment');
     }
 
     /** Personnel connecté, ou stagiaire (session de l'espace stagiaire). */

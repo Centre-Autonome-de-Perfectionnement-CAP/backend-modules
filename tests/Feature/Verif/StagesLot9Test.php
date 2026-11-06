@@ -157,7 +157,8 @@ class StagesLot9Test extends TestCase
         $this->assertSame('Superviseur', $r->json('data.messages.0.sender.role'));
         $this->getJson('/api/stagiaire/messages', $ha)->assertJsonPath('data.unread', 1);
 
-        $this->actingAs($sup, 'sanctum')->getJson("/api/stages/admin/messages/{$ch}")->assertJsonPath('data.seen.count', 1)
+        $this->actingAs($sup, 'sanctum')->getJson("/api/stages/admin/messages/{$ch}")->assertJsonCount(1, 'data.seen.by')
+            ->assertJsonPath('data.seen.by.0.key', "intern-{$a->id}")
             ->assertJsonPath('data.messages.0.mine', true);
         $this->actingAs($lead, 'sanctum')->getJson('/api/stages/admin/messages/general')->assertOk()
             ->assertJsonPath('data.messages.0.body', 'Salut tout le monde');
@@ -176,9 +177,9 @@ class StagesLot9Test extends TestCase
         $chat = app(StageChatService::class);
         $toA = fn () => collect($this->sent)->filter(fn ($s) => $s['to'] === $a->whatsapp)->values();
 
-        $this->at('2026-11-20 09:05'); $chat->tick();
-        $this->assertCount(0, $toA(), 'rafale en cours : on attend 10 minutes');
-        $this->at('2026-11-20 09:12'); $chat->tick();
+        $this->at('2026-11-20 09:03'); $chat->tick();
+        $this->assertCount(0, $toA(), 'rafale en cours : on attend 5 minutes');
+        $this->at('2026-11-20 09:06'); $chat->tick();
         $this->at('2026-11-20 09:30'); $chat->tick();
         $this->assertCount(1, $toA(), 'un seul rappel pour la rafale');
         $this->assertStringContainsString('5 nouveaux messages', $toA()[0]['text']);
@@ -199,6 +200,59 @@ class StagesLot9Test extends TestCase
         $this->assertCount(2, $toA());
         $this->at('2026-11-21 07:10'); $chat->tick();
         $this->assertCount(3, $toA());
+    }
+
+    public function test_files_reply_and_seen_by(): void
+    {
+        $this->at('2026-11-20 09:00');
+        [$a, $ha] = $this->intern();
+        [$b, $hb] = $this->intern();
+        $sup = $this->user('superviseur');
+        $this->supervise($a, $sup);
+        $this->supervise($b, $sup);
+        $ch = "groupe-{$sup->id}";
+
+        // Pièces jointes : types et taille contrôlés, 3 au plus
+        $this->actingAs($sup, 'sanctum')->post("/api/stages/admin/messages/{$ch}", [
+            'files' => [UploadedFile::fake()->create('virus.exe', 10, 'application/octet-stream')],
+        ], ['Accept' => 'application/json'])->assertStatus(422);
+        $this->actingAs($sup, 'sanctum')->post("/api/stages/admin/messages/{$ch}", [
+            'files' => [UploadedFile::fake()->create('gros.pdf', 6000, 'application/pdf')],
+        ], ['Accept' => 'application/json'])->assertStatus(422);
+        $msg = $this->actingAs($sup, 'sanctum')->post("/api/stages/admin/messages/{$ch}", [
+            'body' => 'Voici le modèle',
+            'files' => [UploadedFile::fake()->create('modele.pdf', 80, 'application/pdf'), UploadedFile::fake()->image('capture.png', 40, 40)],
+        ], ['Accept' => 'application/json'])->assertOk()->json('data.id');
+
+        // Réponse à ce message, sans texte mais avec un fichier
+        $this->post("/api/stagiaire/messages/{$ch}", ['reply_to' => $msg, 'body' => 'Merci, bien reçu'], $ha + ['Accept' => 'application/json'])->assertOk();
+
+        $t = $this->getJson("/api/stagiaire/messages/{$ch}", $hb)->assertOk()->json('data');
+        $this->assertCount(2, $t['messages'][0]['files']);
+        $this->assertTrue($t['messages'][0]['files'][1]['image']);
+        $this->assertSame(['id' => $msg, 'name' => $sup->first_name . ' ' . $sup->last_name, 'body' => 'Voici le modèle'], $t['messages'][1]['reply']);
+
+        // Téléchargement : membres du groupe seulement
+        $fileId = $t['messages'][0]['files'][0]['id'];
+        $this->get("/api/stagiaire/messages/{$ch}/fichiers/{$fileId}", $hb)->assertOk();
+        $this->get("/api/stagiaire/messages/general/fichiers/{$fileId}", $hb)->assertStatus(404);
+        [, $hc] = $this->intern();
+        $this->get("/api/stagiaire/messages/{$ch}/fichiers/{$fileId}", $hc)->assertStatus(403);
+
+        // Vu par : les deux stagiaires, avec l'heure
+        $by = $this->actingAs($sup, 'sanctum')->getJson("/api/stages/admin/messages/{$ch}")->json('data');
+        $this->assertSame($msg, $by['seen']['id']);
+        $this->assertEqualsCanonicalizing(["intern-{$a->id}", "intern-{$b->id}"], array_column($by['seen']['by'], 'key'));
+        $this->assertNotNull($by['seen']['by'][0]['at']);
+
+        // Effacement à 7 jours : fichiers du disque compris
+        $paths = DB::table('stage_chat_files')->pluck('path');
+        $this->at('2026-11-28 09:00');
+        app(StageChatService::class)->tick();
+        $this->assertSame(0, DB::table('stage_chat_files')->count());
+        foreach ($paths as $p) {
+            Storage::disk('local')->assertMissing($p);
+        }
     }
 
     public function test_messages_are_deleted_after_seven_days_and_ended_intern_loses_access(): void

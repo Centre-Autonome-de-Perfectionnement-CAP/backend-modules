@@ -1,8 +1,8 @@
-# TEMPORAIRE - à supprimer une fois la migration passée en production.
-# Après chaque déploiement de main (ou à la demande), passe UNIQUEMENT la
-# migration de la messagerie de stage (--path) : aucune autre migration en
-# attente n'est touchée. Sans effet si elle est déjà passée.
-name: Migration temporaire - messagerie de stage
+# TEMPORAIRE - à supprimer une fois ces migrations passées en production.
+# Après chaque déploiement de main (ou à la demande), passe UNIQUEMENT les
+# migrations listées ci-dessous (--path) : aucune autre migration en
+# attente n'est touchée. Sans effet sur celles déjà passées.
+name: Migration temporaire - module Stages
 
 on:
   workflow_run:
@@ -33,12 +33,14 @@ jobs:
           ssh $SSH_USER@$SSH_HOST << 'ENDSSH'
             set -e
             cd /var/www/laravel-app/current
-            MIGRATION="app/Modules/Stages/database/migrations/2026_11_05_000000_create_stage_chat_tables.php"
-            if [ ! -f "$MIGRATION" ]; then
-              echo "Migration absente de la version déployée : rien à faire."
-              exit 0
-            fi
-            php artisan migrate:status --path="$MIGRATION" --no-ansi || true
-            php artisan migrate --force --path="$MIGRATION" --no-interaction
-            php artisan migrate:status --path="$MIGRATION" --no-ansi
+            for MIGRATION in \
+              app/Modules/Stages/database/migrations/2026_11_05_000000_create_stage_chat_tables.php \
+              app/Modules/Stages/database/migrations/2026_11_06_000000_extend_stage_chat_tables.php; do
+              if [ ! -f "$MIGRATION" ]; then
+                echo "Absente de la version déployée : $MIGRATION"
+                continue
+              fi
+              php artisan migrate --force --path="$MIGRATION" --no-interaction
+              php artisan migrate:status --path="$MIGRATION" --no-ansi
+            done
           ENDSSH

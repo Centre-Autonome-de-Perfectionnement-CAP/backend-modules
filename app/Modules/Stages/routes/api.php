@@ -118,6 +118,7 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         Route::get('messages', [StageChatController::class, 'index'])->middleware('throttle:120,1');
         Route::get('messages/{channel}', [StageChatController::class, 'show'])->where('channel', StageChatController::CHANNEL)->middleware('throttle:120,1');
         Route::post('messages/{channel}', [StageChatController::class, 'store'])->where('channel', StageChatController::CHANNEL)->middleware('throttle:30,1');
+        Route::get('messages/{channel}/fichiers/{file}', [StageChatController::class, 'file'])->where('channel', StageChatController::CHANNEL)->whereNumber('file')->middleware('throttle:120,1');
         Route::get('tableau-de-bord', [DashboardController::class, 'overview']);
         Route::get('suivi', [DashboardController::class, 'follow']);
         Route::middleware('throttle:10,1')->group(function () {
@@ -172,6 +173,7 @@ Route::prefix('api/stagiaire')->middleware('api')->group(function () {
         Route::get('messages', [StageChatController::class, 'index']);
         Route::get('messages/{channel}', [StageChatController::class, 'show'])->where('channel', StageChatController::CHANNEL);
         Route::post('messages/{channel}', [StageChatController::class, 'store'])->where('channel', StageChatController::CHANNEL)->middleware('throttle:stages-intern-chat');
+        Route::get('messages/{channel}/fichiers/{file}', [StageChatController::class, 'file'])->where('channel', StageChatController::CHANNEL)->whereNumber('file');
         Route::get('moi', [InternSpaceController::class, 'me']);
         Route::post('reglement', [InternSpaceController::class, 'acceptReglement']);
         Route::post('empreinte/options', [InternSpaceController::class, 'webauthnRegisterOptions']);
