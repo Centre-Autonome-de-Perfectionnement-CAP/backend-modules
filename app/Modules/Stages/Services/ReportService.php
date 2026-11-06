@@ -43,6 +43,9 @@ class ReportService
         'rejected'            => 'À corriger',
     ];
 
+    /** Commentaires : un message par rafale, 10 minutes après le premier. */
+    private const COMMENT_BURST_MINUTES = 10;
+
     public function __construct(
         private readonly StageNotifier $notifier,
         private readonly StageSettingsService $settings,
@@ -334,6 +337,7 @@ class ReportService
                 $this->staffUrl($report),
             );
         }
+        $this->announcePeriod($report, array_filter([$req->id, $partner?->id]));
         if ($partner) {
             $this->notifier->toDemandeur($partner, 'Rapport déposé pour votre binôme', [
                 $req->fullName() . ' a déposé le rapport pour vous deux. Vous le retrouvez dans vos rapports ; les commentaires et la décision du superviseur valent pour vous deux.',
@@ -344,49 +348,183 @@ class ReportService
         return $report->fresh();
     }
 
+    /**
+     * Premier rapport déposé pour une période (journalière, hebdomadaire ou
+     * mensuelle) : tous les stagiaires et le personnel sont invités, une
+     * seule fois, à consulter les rapports et à les commenter.
+     */
+    private function announcePeriod(StageReport $report, array $except): void
+    {
+        if ($report->kind === 'final' || $report->current_version !== 1 || !$this->notifier->digestReady()) {
+            return;
+        }
+        try {
+            if (!DB::table('stage_report_broadcasts')->insertOrIgnore(['period_key' => $report->period_key, 'created_at' => now()])) {
+                return; // période déjà annoncée
+            }
+            // « Rapport de la semaine du 2 novembre » → « de la semaine du 2 novembre »
+            $period = preg_replace('/^Rapport /u', '', $this->labelFor($report));
+            $this->notifier->toEveryone('Période de consultation des rapports', [
+                "La période de consultation des rapports {$period} est ouverte : les premiers rapports sont déposés.",
+                'Consultez les rapports de chacun et commentez-les sur la plateforme. Faites diligence et restez attentifs aux échanges.',
+            ], $this->notifier->spaceUrl('/rapports/tous'), rtrim((string) config('app.url'), '/') . '/services/stages/rapports',
+                'stage-rapports-consultation', $except);
+        } catch (\Throwable $e) {
+            Log::error('[Stages] Annonce de la période de rapports impossible', ['period' => $report->period_key, 'error' => $e->getMessage()]);
+        }
+    }
+
     // ════════════════════════════════════════════════════════════════════
     // COMMENTAIRES ET DÉCISIONS
     // ════════════════════════════════════════════════════════════════════
 
     /**
-     * Commentaire. Rapport de binôme : le message figure sur les deux
-     * rapports et les deux stagiaires sont prévenus.
+     * Commentaire du personnel, du stagiaire ou d'un autre stagiaire (les
+     * rapports sont ouverts à tous). Rapport de binôme : le message figure
+     * sur les deux rapports. Les concernés sont prévenus par rafale de
+     * 10 minutes (voir flushComments()).
      */
-    public function comment(StageReport $report, string $body, ?User $staff): void
+    public function comment(StageReport $report, string $body, ?User $staff, ?StageRequest $intern = null): void
     {
         $body = trim(strip_tags($body));
         if ($body === '') {
             throw new BusinessException('Le commentaire est vide.', 'STAGE_REPORT_EMPTY_COMMENT', 422);
         }
-        $req = $report->stage;
+        $author = $staff ? null : ($intern ?? $report->stage);
+        if ($author && $author->id !== $report->stage_request_id && !$this->pairingReady()) {
+            throw new BusinessException('Les commentaires sur les rapports des autres stagiaires ne sont pas encore disponibles.', 'STAGE_REPORT_COMMENT_UNAVAILABLE', 409);
+        }
         $twin = $this->twinOf($report);
-        DB::transaction(function () use ($report, $twin, $body, $staff, $req) {
+        $id = DB::transaction(function () use ($report, $twin, $body, $staff, $author) {
+            $ids = [];
             foreach (array_filter([$report, $twin]) as $r) {
-                DB::table('stage_report_comments')->insert([
+                $ids[] = DB::table('stage_report_comments')->insertGetId([
                     'report_id' => $r->id, 'version' => $r->current_version,
                     'author' => $staff ? 'staff' : 'stagiaire', 'user_id' => $staff?->id, 'body' => $body, 'created_at' => now(),
-                ] + (!$staff && $this->pairingReady() ? ['stage_request_id' => $req->id] : []));
+                ] + ($author && $this->pairingReady() ? ['stage_request_id' => $author->id] : []));
             }
+
+            return $ids[0];
         });
 
-        if ($staff) {
-            foreach (array_filter([$report, $twin]) as $r) {
-                $this->notifier->toDemandeur($r->stage, 'Commentaire sur votre rapport', [
-                    trim($staff->first_name . ' ' . $staff->last_name) . ' a commenté ' . ($twin ? 'le rapport de votre binôme.' : 'votre rapport.'),
-                ], ['Rapport' => $this->labelFor($r)], highlight: $body, highlightTitle: 'Commentaire',
-                    ctaLabel: 'Ouvrir mes rapports', ctaUrl: $this->notifier->spaceUrl('/rapports'), context: 'stage-rapport-commentaire');
+        if ($this->notifier->digestReady()) {
+            try {
+                DB::table('stage_digest_items')->insert(['kind' => 'report_comment', 'report_id' => $report->id, 'comment_id' => $id, 'created_at' => now()]);
+
+                return;
+            } catch (\Throwable $e) {
+                Log::warning('[Stages] Commentaire non mis en attente : envoi direct', ['error' => $e->getMessage()]);
             }
-        } else {
-            $this->notifier->toFollowers($twin ? [$req, $twin->stage] : $req, 'Réponse du stagiaire', [
-                'Le stagiaire a répondu sur son rapport.',
-            ], ['Stagiaire' => $req->fullName(), 'Binôme' => $twin?->stage->fullName(), 'Rapport' => $this->labelFor($report), 'Message' => $body],
-                'stage-rapport', $this->staffUrl($report));
+        }
+        $this->notifyComments($report, $this->commentRows([$id]));
+    }
+
+    /** Supprime un commentaire : son auteur, ou le personnel. */
+    public function deleteComment(StageReport $report, int $commentId, ?User $staff, ?StageRequest $intern = null): void
+    {
+        $c = DB::table('stage_report_comments')->where('report_id', $report->id)->where('id', $commentId)->first();
+        if (!$c) {
+            throw new BusinessException('Ce commentaire n\'existe plus.', 'STAGE_REPORT_COMMENT_NOT_FOUND', 404);
+        }
+        $ownerOf = (int) ($c->stage_request_id ?? 0) ?: $report->stage_request_id;
+        if (!$staff && !($c->author === 'stagiaire' && $intern && $ownerOf === $intern->id)) {
+            throw new BusinessException('Vous ne pouvez supprimer que vos propres commentaires.', 'STAGE_REPORT_COMMENT_FORBIDDEN', 403);
+        }
+        $twin = $this->twinOf($report);
+        DB::transaction(function () use ($c, $twin) {
+            DB::table('stage_report_comments')->where('id', $c->id)->delete();
+            // Copie sur le rapport du binôme
             if ($twin) {
-                $this->notifier->toDemandeur($twin->stage, 'Message sur votre rapport de binôme', [
-                    $req->fullName() . ' a écrit sur votre rapport commun.',
-                ], ['Rapport' => $this->labelFor($twin)], highlight: $body, highlightTitle: 'Message',
-                    ctaLabel: 'Ouvrir mes rapports', ctaUrl: $this->notifier->spaceUrl('/rapports'), context: 'stage-rapport-commentaire');
+                DB::table('stage_report_comments')->where('report_id', $twin->id)->where('author', $c->author)
+                    ->where('user_id', $c->user_id)->where('body', $c->body)->where('created_at', $c->created_at)
+                    ->when(isset($c->stage_request_id), fn ($q) => $q->where('stage_request_id', $c->stage_request_id))
+                    ->limit(1)->delete();
             }
+            if ($this->notifier->digestReady()) {
+                DB::table('stage_digest_items')->where('kind', 'report_comment')->where('comment_id', $c->id)->delete();
+            }
+        });
+    }
+
+    /**
+     * Commentaires en attente : un message par rapport, quand la rafale a
+     * commencé il y a 10 minutes au moins (tâche toutes les 5 minutes).
+     */
+    public function flushComments(?CarbonImmutable $now = null): int
+    {
+        if (!$this->notifier->digestReady()) {
+            return 0;
+        }
+        $now ??= CarbonImmutable::now();
+        $items = DB::table('stage_digest_items')->where('kind', 'report_comment')->orderBy('id')->get();
+        $sent = 0;
+        foreach ($items->groupBy('report_id') as $reportId => $group) {
+            if (CarbonImmutable::parse($group->first()->created_at)->gt($now->subMinutes(self::COMMENT_BURST_MINUTES))) {
+                continue; // rafale en cours
+            }
+            try {
+                $report = StageReport::with('stage')->find($reportId);
+                $rows = $this->commentRows($group->pluck('comment_id')->all());
+                if ($report && $rows->isNotEmpty()) {
+                    $this->notifyComments($report, $rows);
+                    $sent++;
+                }
+            } catch (\Throwable $e) {
+                Log::error('[Stages] Commentaires de rapport non signalés', ['report_id' => $reportId, 'error' => $e->getMessage()]);
+            }
+            DB::table('stage_digest_items')->whereIn('id', $group->pluck('id'))->delete();
+        }
+
+        return $sent;
+    }
+
+    /** Commentaires (encore présents) avec le nom de leur auteur. */
+    private function commentRows(array $ids): Collection
+    {
+        $rows = DB::table('stage_report_comments as c')->leftJoin('users as u', 'u.id', '=', 'c.user_id')
+            ->whereIn('c.id', $ids)->orderBy('c.id')->get(['c.*', 'u.first_name', 'u.last_name']);
+        $names = StageRequest::whereIn('id', $rows->pluck('stage_request_id')->filter()->unique())->get()
+            ->mapWithKeys(fn ($r) => [$r->id => $r->fullName()]);
+
+        return $rows->map(function ($c) use ($names) {
+            $c->name = $c->author === 'staff' ? trim($c->first_name . ' ' . $c->last_name)
+                : ($names[$c->stage_request_id ?? 0] ?? null);
+
+            return $c;
+        });
+    }
+
+    /**
+     * Prévient les concernés : le ou les stagiaires du rapport (sauf pour
+     * leurs propres messages) et leurs superviseurs (messages des stagiaires).
+     */
+    private function notifyComments(StageReport $report, Collection $rows): void
+    {
+        $twin = $this->twinOf($report);
+        $owners = array_values(array_filter([$report->stage, $twin?->stage]));
+        $label = $this->labelFor($report);
+        $text = fn (Collection $list) => $list->take(5)->map(fn ($c) => ($c->name ?: 'Stagiaire') . ' : ' . mb_strimwidth($c->body, 0, 300, '…'))->implode("\n\n")
+            . ($list->count() > 5 ? "\n\n… et " . ($list->count() - 5) . ' autre(s)' : '');
+
+        foreach ($owners as $owner) {
+            $others = $rows->reject(fn ($c) => $c->author === 'stagiaire' && (int) ($c->stage_request_id ?? $report->stage_request_id) === $owner->id);
+            if ($others->isEmpty()) {
+                continue;
+            }
+            $n = $others->count();
+            $this->notifier->toDemandeur($owner, $n > 1 ? 'Nouveaux commentaires sur votre rapport' : 'Commentaire sur votre rapport', [
+                ($n > 1 ? "{$n} nouveaux commentaires" : 'Un nouveau commentaire') . ' sur ' . ($twin ? 'le rapport de votre binôme' : 'votre rapport') . " « {$label} ».",
+            ], [], highlight: $text($others), highlightTitle: $n > 1 ? 'Commentaires' : 'Commentaire',
+                ctaLabel: 'Ouvrir mes rapports', ctaUrl: $this->notifier->spaceUrl('/rapports'), context: 'stage-rapport-commentaire');
+        }
+
+        $fromInterns = $rows->where('author', 'stagiaire');
+        if ($fromInterns->isNotEmpty() && $owners) {
+            $n = $fromInterns->count();
+            $this->notifier->toFollowers($owners, $n > 1 ? 'Commentaires de stagiaires sur un rapport' : 'Commentaire d\'un stagiaire sur un rapport', [
+                ($n > 1 ? "{$n} commentaires" : 'Un commentaire') . " sur « {$label} ».",
+                $text($fromInterns),
+            ], ['Stagiaire' => collect($owners)->map->fullName()->implode(' et ')], 'stage-rapport', $this->staffUrl($report));
         }
     }
 
@@ -443,9 +581,8 @@ class ReportService
             );
         }
         if (!$lead) {
-            $this->notifier->toManagers($req, 'Action d\'un superviseur', [
-                "{$who} (superviseur) a " . ($decision === 'approved' ? 'validé' : 'demandé la correction d\'') . 'un rapport. Vous pouvez confirmer ou revenir sur cette décision.',
-            ], ['Stagiaire' => $req->fullName(), 'Binôme' => $twin?->stage->fullName(), 'Rapport' => $this->labelFor($report)], 'stage-superviseur');
+            $this->notifier->supervisorAction($by, ($decision === 'approved' ? 'a validé' : 'a demandé la correction du')
+                . ' « ' . $this->labelFor($report) . ' » de ' . $req->fullName() . ($twin ? ' et ' . $twin->stage->fullName() : ''), $req);
         }
         if ($report->kind === 'final' && !$before && $this->isValidated($report->fresh())) {
             Log::info('[Stages] Rapport final validé', ['reference' => $req->reference]);
@@ -458,8 +595,14 @@ class ReportService
     // LECTURE
     // ════════════════════════════════════════════════════════════════════
 
-    public function detail(StageReport $report, bool $forStaff): array
+    /**
+     * Détail d'un rapport. $viewer : stagiaire qui consulte (le sien, celui
+     * de son binôme ou celui d'un autre : les rapports sont ouverts à tous).
+     */
+    public function detail(StageReport $report, bool $forStaff, ?StageRequest $viewer = null): array
     {
+        $viewerId = $forStaff ? null : ($viewer?->id ?? $report->stage_request_id);
+        $twin = $this->twinOf($report);
         $pairing = $this->pairingReady();
         $comments = DB::table('stage_report_comments as c')->leftJoin('users as u', 'u.id', '=', 'c.user_id')
             ->where('c.report_id', $report->id)->orderBy('c.id')
@@ -474,6 +617,9 @@ class ReportService
             ->get(['r.id', 'r.version', 'r.role', 'r.decision', 'r.comment', 'r.created_at', 'u.first_name', 'u.last_name']);
 
         return $this->summary($report) + [
+            // Vue stagiaire : son rapport (ou celui de son binôme) ou celui d'un autre
+            'mine'   => $forStaff ? null : in_array($viewerId, array_filter([$ownerId, $twin?->stage_request_id]), true),
+            'author' => $forStaff ? null : $report->stage->fullName(),
             'stage' => $forStaff ? [
                 'id' => $report->stage->id, 'reference' => $report->stage->reference,
                 'nom_complet' => trim($report->stage->civilite . ' ' . $report->stage->fullName()),
@@ -485,9 +631,10 @@ class ReportService
             ])->values(),
             'comments' => $comments->map(fn ($c) => [
                 'id' => $c->id, 'version' => $c->version, 'author' => $c->author,
-                'mine' => $c->author === 'stagiaire' && (empty($c->stage_request_id) || (int) $c->stage_request_id === $ownerId),
+                'mine' => !$forStaff && $c->author === 'stagiaire' && ((int) ($c->stage_request_id ?? 0) ?: $ownerId) === $viewerId,
+                'can_delete' => $forStaff || ($c->author === 'stagiaire' && ((int) ($c->stage_request_id ?? 0) ?: $ownerId) === $viewerId),
                 'name' => $c->author === 'staff' ? trim($c->first_name . ' ' . $c->last_name)
-                    : (!empty($c->stage_request_id) ? ($interns[$c->stage_request_id] ?? 'Stagiaire') : 'Stagiaire'),
+                    : ($interns[$c->stage_request_id ?? 0] ?? $report->stage->fullName()),
                 'body' => $c->body, 'at' => CarbonImmutable::parse($c->created_at)->toIso8601String(),
             ])->values(),
             'reviews' => $reviews->map(fn ($r) => [
@@ -555,6 +702,38 @@ class ReportService
         return $rows->map(fn ($r) => $this->summary($r) + [
             'stage' => ['id' => $r->stage->id, 'reference' => $r->stage->reference, 'nom_complet' => trim($r->stage->civilite . ' ' . $r->stage->fullName())],
         ]);
+    }
+
+    /**
+     * Rapports de tous, pour l'espace stagiaire : les stagiaires en cours
+     * (une puce par personne) et les rapports de la personne choisie, ou les
+     * derniers déposés.
+     */
+    public function board(?int $personId): array
+    {
+        $today = BusinessHours::today()->toDateString();
+        $people = StageRequest::where('status', StageStatus::ACCEPTED)->whereNotNull('activated_at')
+            ->where('date_fin', '>=', $today)->orderBy('nom')->orderBy('prenoms')->get();
+        $counts = StageReport::whereIn('stage_request_id', $people->pluck('id'))
+            ->selectRaw('stage_request_id, count(*) as n')->groupBy('stage_request_id')->pluck('n', 'stage_request_id');
+
+        $q = StageReport::with('stage')->orderByDesc('submitted_at')->orderByDesc('id');
+        $q = $personId ? $q->where('stage_request_id', $personId) : $q->whereIn('stage_request_id', $people->pluck('id'))->limit(60);
+        $rows = $q->get();
+        if (!$personId) {
+            // Rapport de binôme : une seule carte pour les deux.
+            $ids = $rows->pluck('id')->flip();
+            $rows = $rows->reject(fn ($r) => $r->pair_report_id && isset($ids[$r->pair_report_id]) && $r->id > $r->pair_report_id && $this->twinOf($r));
+        }
+        $comments = DB::table('stage_report_comments')->whereIn('report_id', $rows->pluck('id'))
+            ->selectRaw('report_id, count(*) as n')->groupBy('report_id')->pluck('n', 'report_id');
+
+        return [
+            'people'  => $people->map(fn ($r) => ['id' => $r->id, 'name' => $r->fullName(), 'reports' => (int) ($counts[$r->id] ?? 0)])->values(),
+            'reports' => $rows->map(fn ($r) => $this->summary($r) + [
+                'author' => $r->stage->fullName(), 'author_id' => $r->stage_request_id, 'comments' => (int) ($comments[$r->id] ?? 0),
+            ])->values(),
+        ];
     }
 
     public function filePath(StageReport $report, int $version): ?string

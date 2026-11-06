@@ -106,9 +106,7 @@ class InternFollowController extends Controller
         ], [], ctaLabel: 'Ouvrir mon espace', ctaUrl: $this->notifier->spaceUrl(), context: 'stage-appareil');
 
         if (!StageAccess::isLead($request->user())) {
-            $who = trim($request->user()->first_name . ' ' . $request->user()->last_name);
-            $this->notifier->toManagers($req, 'Action d\'un superviseur', ["{$who} (superviseur) a réinitialisé le téléphone de stage du stagiaire."],
-                ['Stagiaire' => $req->fullName()], 'stage-superviseur');
+            $this->notifier->supervisorAction($request->user(), 'a réinitialisé le téléphone de stage de ' . $req->fullName(), $req);
         }
 
         return $this->successResponse(null, 'Téléphone de stage réinitialisé. Le stagiaire a été prévenu.');

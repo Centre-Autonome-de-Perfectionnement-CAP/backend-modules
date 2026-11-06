@@ -120,12 +120,7 @@ class SupervisionService
         }
         $this->notifyLink($changed, $supervisor, $name, $action === 'add', $by);
         if (!StageAccess::isLead($by)) {
-            $this->notifier->toManagersGeneric(
-                'Action d\'un superviseur',
-                [$this->who($by) . ($action === 'add' ? ' s\'est attribué ' : ' s\'est retiré de ') . $changed->count() . ' stagiaire(s).'],
-                ['Stagiaires' => $changed->map->fullName()->implode(', ')],
-                'stage-superviseur',
-            );
+            $this->notifier->supervisorAction($by, ($action === 'add' ? 's\'est attribué ' : 's\'est retiré de ') . $changed->map->fullName()->implode(', '));
         }
 
         return $changed->count();
@@ -206,11 +201,6 @@ class SupervisionService
             $interns->count() === 1 ? $this->notifier->staffUrl($interns->first()) : null,
             $interns->count() === 1 ? $interns->first()->reference : null,
         );
-    }
-
-    private function who(User $u): string
-    {
-        return trim(($u->first_name ?? '') . ' ' . ($u->last_name ?? '')) . ' (superviseur)';
     }
 
     private function log(StageRequest $req, string $action, User $by, ?string $comment): void

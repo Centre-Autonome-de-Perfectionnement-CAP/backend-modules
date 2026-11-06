@@ -36,7 +36,9 @@ jobs:
             for MIGRATION in \
               app/Modules/Stages/database/migrations/2026_11_05_000000_create_stage_chat_tables.php \
               app/Modules/Stages/database/migrations/2026_11_06_000000_extend_stage_chat_tables.php \
-              app/Modules/Stages/database/migrations/2026_11_06_000001_add_stage_report_pairing.php; do
+              app/Modules/Stages/database/migrations/2026_11_06_000001_add_stage_report_pairing.php \
+              app/Modules/Stages/database/migrations/2026_11_06_000002_create_stage_notice_tables.php \
+              app/Modules/Stages/database/migrations/2026_11_06_000003_add_stage_chat_edited_at.php; do
               if [ ! -f "$MIGRATION" ]; then
                 echo "Absente de la version déployée : $MIGRATION"
                 continue

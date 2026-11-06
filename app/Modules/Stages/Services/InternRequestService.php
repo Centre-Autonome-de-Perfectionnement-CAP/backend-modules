@@ -170,10 +170,7 @@ class InternRequestService
         );
 
         if (!StageAccess::isLead($by)) {
-            $who = trim(($by->first_name ?? '') . ' ' . ($by->last_name ?? ''));
-            $this->notifier->toManagers($req, 'Action d\'un superviseur', [
-                "{$who} (superviseur) a " . ($decision === 'approved' ? 'accepté' : 'refusé') . " une demande du stagiaire.",
-            ], ['Demande' => $label, 'Stagiaire' => $req->fullName()], 'stage-superviseur');
+            $this->notifier->supervisorAction($by, 'a ' . ($decision === 'approved' ? 'accepté' : 'refusé') . ' la demande de ' . $req->fullName() . " ({$label})", $req);
         }
 
         return $item->fresh();

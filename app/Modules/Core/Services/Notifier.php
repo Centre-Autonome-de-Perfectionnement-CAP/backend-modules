@@ -94,16 +94,31 @@ class Notifier
         ], false);
     }
 
-    /** Message WhatsApp texte. */
-    public function whatsapp(?string $phone, string $message, string $context, string $module, bool $bulk = false): void
-    {
+    /**
+     * Message WhatsApp texte.
+     *
+     * @param array $fallbackEmail email de secours (champs du canal 'email') : envoyé à la
+     *                             place si le numéro manque ou si le WhatsApp échoue
+     * @param \DateTimeInterface|null $at envoi différé (ex. pas de message la nuit)
+     */
+    public function whatsapp(
+        ?string $phone, string $message, string $context, string $module, bool $bulk = false,
+        array $fallbackEmail = [], ?\DateTimeInterface $at = null,
+    ): void {
+        $fallback = $this->isEmail($fallbackEmail['to'] ?? null)
+            ? ['channel' => 'email', 'payload' => ['to' => trim($fallbackEmail['to'])] + $fallbackEmail]
+            : null;
+
         if (!$this->hasPhone($phone)) {
+            if ($fallback) {
+                $this->dispatch('email', $fallback['payload'], $bulk, $at);
+            }
             return;
         }
 
         $this->dispatch('whatsapp', [
             'phone' => $phone, 'message' => $message, 'context' => $context, 'module' => $module,
-        ], $bulk);
+        ] + ($fallback ? ['fallback' => $fallback] : []), $bulk, $at);
     }
 
     /** Fichier WhatsApp (le fichier doit rester sur le disque jusqu'à l'envoi). */
@@ -145,9 +160,14 @@ class Notifier
 
     // ── Interne ──────────────────────────────────────────────────────────────
 
-    private function dispatch(string $channel, array $payload, bool $bulk): void
+    private function dispatch(string $channel, array $payload, bool $bulk, ?\DateTimeInterface $at = null): void
     {
         try {
+            if ($at !== null && $at > now()) {
+                // Envoi différé (heure choisie) : toujours par la file.
+                SendNotificationJob::dispatch($channel, $payload)->delay($at);
+                return;
+            }
             if (!$bulk) {
                 // Transactionnel : part juste après la réponse, sans worker.
                 SendNotificationJob::send($channel, $payload);

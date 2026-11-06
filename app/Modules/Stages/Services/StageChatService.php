@@ -28,7 +28,7 @@ use Illuminate\Support\Str;
  *  - « groupe-{id} » : un superviseur et ses stagiaires en cours, visible par
  *    eux seuls.
  *
- * Rappel WhatsApp : un seul par rafale (5 min après le premier message non
+ * Rappel WhatsApp : un seul par rafale (10 min après le premier message non
  * lu), plus rien tant que la discussion n'a pas été ouverte, pas si la
  * personne est en train de lire, au plus 2 par jour et par discussion,
  * jamais entre 21 h et 7 h.
@@ -48,8 +48,9 @@ class StageChatService
     ];
     private const DISK = 'local';
     private const PAGE = 50;
-    private const BURST_MINUTES = 5;
+    private const BURST_MINUTES = 10;
     private const READING_MINUTES = 2;
+    private const EDIT_SYNC_MINUTES = 2;
     private const MAX_REMINDERS_PER_DAY = 2;
     private const QUIET = [21, 7]; // de 21 h à 7 h : aucun rappel
 
@@ -192,6 +193,7 @@ class StageChatService
                 'body'   => $m->body,
                 'at'     => CarbonImmutable::parse($m->created_at)->toIso8601String(),
                 'mine'   => $this->isMine($m, $who),
+                'edited' => !empty($m->edited_at),
                 'sender' => $names[$this->key($m)] ?? ['key' => $this->key($m), 'name' => 'Ancien participant', 'role' => null],
                 'files'  => ($files[$m->id] ?? collect())->map(fn ($f) => [
                     'id' => (int) $f->id, 'name' => $f->name, 'mime' => $f->mime, 'size' => (int) $f->size,
@@ -213,7 +215,49 @@ class StageChatService
             // « Vu par » : pour mon dernier message affiché.
             'seen'     => $mineLast ? ['id' => (int) $mineLast->id, 'by' => $this->seenBy($channel, (int) $mineLast->id, $who)] : null,
             'keep_days' => self::KEEP_DAYS,
+            // Messages déjà affichés, modifiés récemment (actualisation en cours de lecture).
+            'edits'    => $after && $this->editReady() ? DB::table('stage_chat_messages')->where('channel', $channel)
+                ->where('id', '<=', $after)->where('edited_at', '>=', now()->subMinutes(self::EDIT_SYNC_MINUTES))
+                ->get(['id', 'body'])->map(fn ($m) => ['id' => (int) $m->id, 'body' => $m->body])->values() : [],
         ];
+    }
+
+    /** Modification d'un message par son auteur. */
+    public function edit(string $channel, array $who, int $id, string $body): array
+    {
+        $this->assertAccess($channel, $who);
+        if (!$this->editReady()) {
+            throw new BusinessException('La modification des messages sera bientôt disponible.', 'STAGE_CHAT_EDIT_NOT_READY', 409);
+        }
+        $m = DB::table('stage_chat_messages')->where('channel', $channel)->where('id', $id)->first();
+        if (!$m) {
+            throw new BusinessException('Ce message n\'existe plus.', 'STAGE_CHAT_NOT_FOUND', 404);
+        }
+        if (!$this->isMine($m, $who)) {
+            throw new BusinessException('Vous ne pouvez modifier que vos propres messages.', 'STAGE_CHAT_FORBIDDEN', 403);
+        }
+        $body = $this->clean($body);
+        if ($body === '' && !DB::table('stage_chat_files')->where('message_id', $id)->exists()) {
+            throw new BusinessException('Le message ne peut pas être vide.', 'STAGE_CHAT_EMPTY', 422);
+        }
+        if ($body !== $m->body) {
+            DB::table('stage_chat_messages')->where('id', $id)->update(['body' => $body, 'edited_at' => now()]);
+        }
+
+        return ['id' => $id, 'body' => $body, 'edited' => $body !== $m->body || !empty($m->edited_at)];
+    }
+
+    private function editReady(): bool
+    {
+        if (Cache::get('stage-chat-edit-ready')) {
+            return true;
+        }
+        $ok = Schema::hasColumn('stage_chat_messages', 'edited_at');
+        if ($ok) {
+            Cache::put('stage-chat-edit-ready', true, 3600);
+        }
+
+        return $ok;
     }
 
     /** @param UploadedFile[] $files (validés par le contrôleur : types, taille, nombre) */
