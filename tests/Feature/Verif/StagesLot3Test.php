@@ -235,15 +235,24 @@ class StagesLot3Test extends TestCase
         $this->at('2026-11-03 08:00');
         $this->punch($h, 'arrivee', 1)->assertStatus(201);
 
-        // 12h05 : le départ en pause est déjà proposé, la sortie est marquée anticipée
+        // Ordre imposé : le matin, pas de sortie ; le départ en pause ouvre 1 h avant
+        $this->at('2026-11-03 11:30');
+        $this->assertSame([], $this->getJson('/api/stagiaire/moi', $h)->json('data.today.next'));
+        $this->punch($h, 'sortie', 2)->assertStatus(422)->assertJsonPath('error_code', 'STAGE_PUNCH_NOT_ALLOWED');
         $this->at('2026-11-03 12:05');
-        $next = collect($this->getJson('/api/stagiaire/moi', $h)->json('data.today.next'))->keyBy('kind');
-        $this->assertTrue($next->has('pause_debut'));
-        $this->assertTrue($next['sortie']['early']);
+        $this->assertSame(['pause_debut'], array_column($this->getJson('/api/stagiaire/moi', $h)->json('data.today.next'), 'kind'));
+        $this->punch($h, 'pause_debut', 3)->assertStatus(201);
+        $this->at('2026-11-03 14:50');
+        $this->assertSame(['pause_fin'], array_column($this->getJson('/api/stagiaire/moi', $h)->json('data.today.next'), 'kind'));
+        $this->punch($h, 'pause_fin', 4)->assertStatus(201);
 
-        // Sortie anticipée non confirmée : refusée, rien d'enregistré
-        $this->punch($h, 'sortie', 2, null, false)->assertStatus(422)->assertJsonPath('error_code', 'STAGE_PUNCH_CONFIRM_EARLY');
+        // L'après-midi : sortie anticipée signalée, refusée sans confirmation
+        $this->at('2026-11-03 16:00');
+        $next = $this->getJson('/api/stagiaire/moi', $h)->json('data.today.next');
+        $this->assertSame([['kind' => 'sortie', 'label' => 'Sortie', 'early' => true]], $next);
+        $this->punch($h, 'sortie', 5, null, false)->assertStatus(422)->assertJsonPath('error_code', 'STAGE_PUNCH_CONFIRM_EARLY');
         $this->assertFalse(StageAttendance::where('stage_request_id', $req->id)->where('kind', 'sortie')->exists());
+        $this->punch($h, 'sortie', 6)->assertStatus(201);
     }
 
     public function test_early_exit_at_pause_time_is_fixed_by_pause_return(): void
@@ -251,8 +260,9 @@ class StagesLot3Test extends TestCase
         [$req, $h] = $this->readyIntern('2026-11-02');
         $this->at('2026-11-03 08:00');
         $this->punch($h, 'arrivee', 1)->assertStatus(201);
-        $this->at('2026-11-03 12:58');
-        $this->punch($h, 'sortie', 2)->assertStatus(201); // mauvais bouton
+        // Sortie pointée sur le mauvais bouton avant la mise en ligne de l'ordre imposé
+        DB::table('stage_attendances')->insert(['stage_request_id' => $req->id, 'day' => '2026-11-03', 'kind' => 'sortie',
+            'at' => CarbonImmutable::parse('2026-11-03 12:58', 'Africa/Porto-Novo')->utc(), 'early' => true, 'created_at' => now()]);
 
         $this->at('2026-11-03 15:02');
         $today = $this->getJson('/api/stagiaire/moi', $h)->json('data.today');
@@ -267,12 +277,7 @@ class StagesLot3Test extends TestCase
         $this->assertSame('12:58', $rows['pause_debut']->at->setTimezone('Africa/Porto-Novo')->format('H:i'));
         $this->assertTrue(\App\Modules\Stages\Models\StageHistory::where('stage_request_id', $req->id)->where('action', 'punch_corrected')->exists());
 
-        // Une vraie sortie anticipée l'après-midi reste une sortie
-        $this->at('2026-11-04 08:00');
-        $this->punch($h, 'arrivee', 5)->assertStatus(201);
-        $this->at('2026-11-04 16:30');
-        $this->punch($h, 'sortie', 6)->assertStatus(201);
-        $this->assertSame([], $this->getJson('/api/stagiaire/moi', $h)->json('data.today.next'));
+
     }
 
     public function test_activation_link_reminders_and_withdrawal(): void
@@ -432,12 +437,14 @@ class StagesLot3Test extends TestCase
     public function test_attendance_report_and_permissions(): void
     {
         [$req, $h] = $this->readyIntern('2026-11-02');
-        // lundi : activation (arrivée) + sortie → présent
+        // lundi : activation (arrivée), pause, sortie → présent
+        $this->at('2026-11-02 13:00'); $this->punch($h, 'pause_debut', 1)->assertStatus(201);
+        $this->at('2026-11-02 15:00'); $this->punch($h, 'pause_fin', 11)->assertStatus(201);
         $this->at('2026-11-02 18:00');
-        $this->punch($h, 'sortie', 1)->assertStatus(201);
+        $this->punch($h, 'sortie', 12)->assertStatus(201);
         // mardi : matinée seulement → demi-journée
-        $this->at('2026-11-03 08:00'); $this->punch($h, 'arrivee', 2)->assertStatus(201);
-        $this->at('2026-11-03 13:00'); $this->punch($h, 'pause_debut', 3)->assertStatus(201);
+        $this->at('2026-11-03 08:00'); $this->punch($h, 'arrivee', 13)->assertStatus(201);
+        $this->at('2026-11-03 13:00'); $this->punch($h, 'pause_debut', 14)->assertStatus(201);
         // mercredi : absent, justifié par une permission ; jeudi : absent
         $this->at('2026-11-06 09:00');
         $sup  = $this->user('superviseur');
@@ -486,6 +493,8 @@ class StagesLot3Test extends TestCase
             if ($date !== '2026-11-02') {
                 $this->at("{$date} {$in}"); $this->punch($h, 'arrivee', ++$n)->assertStatus(201);
             }
+            $this->at("{$date} 13:00"); $this->punch($h, 'pause_debut', ++$n)->assertStatus(201);
+            $this->at("{$date} 15:00"); $this->punch($h, 'pause_fin', ++$n)->assertStatus(201);
             $this->at("{$date} {$out}"); $this->punch($h, 'sortie', ++$n)->assertStatus(201);
         };
         $day('2026-11-02', '', '18:00');      // lundi : activation (jamais en retard), journée complète

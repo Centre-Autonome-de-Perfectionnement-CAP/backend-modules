@@ -20,9 +20,9 @@ use Illuminate\Support\Facades\DB;
  *    15 min après l'heure prévue ;
  *  - début de pause : ouvert 1 h avant l'heure prévue ;
  *  - fin de pause : en retard au-delà de 15 min après l'heure prévue ;
- *  - sortie : possible à tout moment après l'arrivée ; avant l'heure
- *    prévue moins 15 min, elle est marquée « sortie anticipée » et doit
- *    être confirmée (elle termine la journée). Une sortie anticipée pointée
+ *  - ordre imposé : arrivée, départ en pause, retour de pause, sortie ;
+ *  - sortie : après le retour de pause ; avant l'heure prévue moins 15 min,
+ *    elle est marquée « sortie anticipée » et doit être confirmée. Une sortie anticipée pointée
  *    par erreur à l'heure de la pause (aucune pause pointée) peut être
  *    rattrapée : le « retour de pause » la transforme en départ en pause.
  * Heure du serveur uniquement. Aucun pointage le week-end, ni avant le
@@ -494,17 +494,19 @@ class AttendanceService
                 : ['kinds' => ['arrivee'], 'message' => null];
         }
 
-        $kinds = [];
-        if (!isset($done['pause_debut']) && !isset($done['pause_fin'])
-            && $now->greaterThanOrEqualTo($h['pause_debut']->subMinutes(self::PAUSE_OPENS_BEFORE_MIN))) {
-            $kinds[] = 'pause_debut';
-        }
-        if (isset($done['pause_debut']) && !isset($done['pause_fin'])) {
-            $kinds[] = 'pause_fin';
-        }
-        $kinds[] = 'sortie';
+        // Ordre imposé : arrivée, départ en pause, retour de pause, sortie.
+        if (!isset($done['pause_debut'])) {
+            $opens = $h['pause_debut']->subMinutes(self::PAUSE_OPENS_BEFORE_MIN);
 
-        return ['kinds' => $kinds, 'message' => null];
+            return $now->lessThan($opens)
+                ? ['kinds' => [], 'message' => 'Prochain pointage : départ en pause, à partir de ' . $opens->format('H\hi') . '.']
+                : ['kinds' => ['pause_debut'], 'message' => null];
+        }
+        if (!isset($done['pause_fin'])) {
+            return ['kinds' => ['pause_fin'], 'message' => null];
+        }
+
+        return ['kinds' => ['sortie'], 'message' => null];
     }
 
     /**
