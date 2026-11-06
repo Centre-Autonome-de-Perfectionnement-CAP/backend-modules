@@ -84,7 +84,7 @@ class DashboardService
                 'sans_superviseur' => $lead ? $accepted()->where('date_fin', '>=', $t)->whereNotIn('id', DB::table('stage_supervisions')->select('stage_request_id'))->count() : null,
             ],
             'a_faire'       => [
-                'rapports'      => $reportScope->count(),
+                'rapports'      => $this->reports->countDistinct($reportScope),
                 'demandes_stagiaires' => $requestScope->count(),
                 'attestations'  => $lead
                     ? StageAttestation::where('status', 'a_valider')->count()

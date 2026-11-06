@@ -35,7 +35,8 @@ jobs:
             cd /var/www/laravel-app/current
             for MIGRATION in \
               app/Modules/Stages/database/migrations/2026_11_05_000000_create_stage_chat_tables.php \
-              app/Modules/Stages/database/migrations/2026_11_06_000000_extend_stage_chat_tables.php; do
+              app/Modules/Stages/database/migrations/2026_11_06_000000_extend_stage_chat_tables.php \
+              app/Modules/Stages/database/migrations/2026_11_06_000001_add_stage_report_pairing.php; do
               if [ ! -f "$MIGRATION" ]; then
                 echo "Absente de la version déployée : $MIGRATION"
                 continue

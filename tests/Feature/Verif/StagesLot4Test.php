@@ -214,6 +214,70 @@ class StagesLot4Test extends TestCase
         $this->assertTrue(collect($this->sent)->contains(fn ($s) => str_contains($s['text'], 'Rapport validé')));
     }
 
+    public function test_pair_report_shared_between_binome(): void
+    {
+        [$a, $ha] = $this->intern();
+        [$b, $hb] = $this->intern();
+        $b->update(['nom' => 'DOSSOU', 'prenoms' => 'Ines']);
+        $team = DB::table('stage_teams')->insertGetId(['name' => 'Binôme test', 'created_at' => now(), 'updated_at' => now()]);
+        $a->update(['team_id' => $team]);
+        $b->update(['team_id' => $team]);
+        $lead = $this->lead();
+        $sup = $this->user('superviseur');
+        DB::table('stage_supervisions')->insert(['stage_request_id' => $a->id, 'user_id' => $sup->id, 'created_at' => now()]);
+        DB::table('stage_supervisions')->insert(['stage_request_id' => $b->id, 'user_id' => $sup->id, 'created_at' => now()]);
+
+        $this->at('2026-11-06 16:00');
+        $this->assertStringContainsString('Ines', (string) $this->getJson('/api/stagiaire/rapports', $ha)->json('data.binome.name'));
+
+        // Dépôt pour le binôme (case cochée par défaut)
+        $idA = $this->post('/api/stagiaire/rapports', ['period_key' => 'S2026-W45', 'fichier' => $this->pdf()], $ha)
+            ->assertStatus(201)->json('data.id');
+        $twin = StageReport::where('stage_request_id', $b->id)->where('period_key', 'S2026-W45')->first();
+        $this->assertNotNull($twin);
+        $this->assertSame([$twin->id, $idA], [StageReport::find($idA)->pair_report_id, $twin->pair_report_id]);
+        $this->assertTrue(collect($this->sent)->contains(fn ($s) => str_contains($s['text'], 'Rapport déposé pour votre binôme')));
+        $sideB = $this->getJson("/api/stagiaire/rapports/{$twin->id}", $hb)->assertOk()->json('data');
+        $this->assertSame(1, $sideB['current_version']);
+        $this->assertNotNull($sideB['binome']['deposited_by']);
+        $this->assertNotNull($sideB['versions'][0]['by']);
+        $this->getJson("/api/stagiaire/rapports/{$twin->id}/versions/1", $hb)->assertOk()->assertJsonStructure(['content']);
+
+        // Le personnel voit une seule ligne ; commentaire et décision valent pour les deux
+        $this->actingAs($sup, 'sanctum');
+        $list = $this->getJson('/api/stages/admin/rapports?mine=1')->assertOk();
+        $this->assertCount(1, $list->json('data'));
+        $this->assertSame(1, $list->json('to_review'));
+        $this->postJson("/api/stages/admin/rapports/{$idA}/commentaires", ['body' => 'Ajoutez le planning'])->assertOk();
+        $this->postJson("/api/stages/admin/rapports/{$idA}/decision", ['decision' => 'rejected', 'comment' => 'Trop court'])->assertOk();
+        $this->assertSame('supervisor_rejected', $twin->fresh()->status);
+        $this->assertSame(['Ajoutez le planning'], array_column($this->getJson("/api/stagiaire/rapports/{$twin->id}", $hb)->json('data.comments'), 'body'));
+
+        // Le binôme dépose la correction : elle vaut pour les deux
+        $this->post('/api/stagiaire/rapports', ['period_key' => 'S2026-W45', 'fichier' => $this->pdf()], $hb)->assertStatus(201);
+        $this->assertSame([2, 'submitted'], [StageReport::find($idA)->current_version, StageReport::find($idA)->status]);
+        $this->postJson("/api/stagiaire/rapports/{$twin->id}/commentaires", ['body' => 'Planning ajouté'], $hb)->assertOk();
+        $c = $this->getJson("/api/stagiaire/rapports/{$idA}", $ha)->json('data.comments');
+        $this->assertSame(['DOSSOU Ines', false], [end($c)['name'], end($c)['mine']]);
+        $this->actingAs($lead, 'sanctum')->postJson("/api/stages/admin/rapports/{$twin->id}/decision", ['decision' => 'approved'])->assertOk();
+        $this->assertSame(['approved', 2], [StageReport::find($idA)->status, StageReport::find($idA)->official_version]);
+        $this->post('/api/stagiaire/rapports', ['period_key' => 'S2026-W45', 'fichier' => $this->pdf()], $ha)
+            ->assertStatus(409)->assertJsonPath('error_code', 'STAGE_REPORT_LOCKED');
+
+        // Le binôme a déjà déposé le sien : pas de dépôt commun, sauf case décochée
+        $this->at('2026-11-13 16:00');
+        $this->post('/api/stagiaire/rapports', ['period_key' => 'S2026-W46', 'fichier' => $this->pdf(), 'pour_binome' => '0'], $hb)
+            ->assertStatus(201)->assertJsonPath('data.binome', null);
+        $this->post('/api/stagiaire/rapports', ['period_key' => 'S2026-W46', 'fichier' => $this->pdf()], $ha)
+            ->assertStatus(409)->assertJsonPath('error_code', 'STAGE_REPORT_PAIR_EXISTS');
+        $this->post('/api/stagiaire/rapports', ['period_key' => 'S2026-W46', 'fichier' => $this->pdf(), 'pour_binome' => '0'], $ha)
+            ->assertStatus(201)->assertJsonPath('data.binome', null);
+
+        // Binôme dissous : chacun reprend son rapport, sans lien actif
+        $b->update(['team_id' => null]);
+        $this->assertNull($this->getJson("/api/stagiaire/rapports/{$idA}", $ha)->json('data.binome'));
+    }
+
     public function test_final_report_validation_flag(): void
     {
         [$req, $h] = $this->intern();
