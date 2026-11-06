@@ -44,9 +44,9 @@ class StagesLot4Test extends TestCase
         $test = $this;
         $this->app->instance(Notifier::class, new class($test) extends Notifier {
             public function __construct(private $test) {}
-            public function whatsapp(?string $phone, string $message, string $context, string $module, bool $bulk = false): void
+            public function whatsapp(?string $phone, string $message, string $context, string $module, bool $bulk = false, array $fallbackEmail = [], ?\DateTimeInterface $at = null): void
             {
-                $this->test->record('whatsapp', $phone, $message);
+                $this->test->record('whatsapp', $phone, $message, $at, $fallbackEmail['to'] ?? null);
             }
             public function email(?string $to, string $subject, string $view, array $vars = [], array $attachments = [], ?string $toName = null, array $cc = [], bool $bulk = false): void
             {
@@ -62,9 +62,9 @@ class StagesLot4Test extends TestCase
         parent::tearDown();
     }
 
-    public function record(string $channel, ?string $to, string $text): void
+    public function record(string $channel, ?string $to, string $text, ?\DateTimeInterface $at = null, ?string $fallback = null): void
     {
-        $this->sent[] = ['channel' => $channel, 'to' => $to, 'text' => $text];
+        $this->sent[] = ['channel' => $channel, 'to' => $to, 'text' => $text, 'at' => $at, 'fallback' => $fallback];
     }
 
     private function at(string $local): void
@@ -166,9 +166,10 @@ class StagesLot4Test extends TestCase
         $this->assertSame('deposited', $states['S2026-W45']);
         $this->assertSame('upcoming', $states['S2026-W47'], 'semaine en cours : dépôt ouvert le vendredi');
 
-        // Un autre stagiaire ne voit pas ce rapport
+        // Rapports ouverts à tous : un autre stagiaire le lit, sans pouvoir y déposer
         [, $other] = $this->intern();
-        $this->getJson("/api/stagiaire/rapports/{$id}", $other)->assertStatus(404);
+        $this->getJson("/api/stagiaire/rapports/{$id}", $other)->assertOk()->assertJsonPath('data.mine', false);
+        $this->getJson('/api/stagiaire/rapports/999999', $other)->assertStatus(404);
     }
 
     private function lead(): User
@@ -278,6 +279,69 @@ class StagesLot4Test extends TestCase
         $this->assertNull($this->getJson("/api/stagiaire/rapports/{$idA}", $ha)->json('data.binome'));
     }
 
+    public function test_reports_open_to_all_comments_grouped_and_period_announced(): void
+    {
+        [$a, $ha] = $this->intern();
+        [$b, $hb] = $this->intern();
+        $b->update(['nom' => 'DOSSOU', 'prenoms' => 'Ines']);
+        [$c] = $this->intern();
+        $sup = $this->user('superviseur');
+        DB::table('stage_supervisions')->insert(['stage_request_id' => $a->id, 'user_id' => $sup->id, 'created_at' => now()]);
+        $lead = $this->lead();
+
+        // Premier dépôt de la période : annonce à tous (une seule fois), pas à l'auteur
+        $this->at('2026-11-06 16:00');
+        Queue::fake();
+        $id = $this->post('/api/stagiaire/rapports', ['period_key' => 'S2026-W45', 'fichier' => $this->pdf()], $ha)->assertStatus(201)->json('data.id');
+        $notice = fn () => collect($this->sent)->filter(fn ($s) => str_contains($s['text'], 'Période de consultation des rapports'));
+        $this->assertEqualsCanonicalizing([$b->whatsapp, $c->whatsapp], $notice()->pluck('to')->all());
+        $this->assertStringContainsString('de la semaine du 2 novembre', $notice()->first()['text']);
+        $this->assertSame($b->email, $notice()->firstWhere('to', $b->whatsapp)['fallback'], 'email de secours');
+        Queue::assertPushed(SendNotificationJob::class, fn ($job) => str_contains(json_encode($job->payload, JSON_UNESCAPED_UNICODE), 'Période de consultation'));
+        $this->post('/api/stagiaire/rapports', ['period_key' => 'S2026-W45', 'fichier' => $this->pdf()], $hb)->assertStatus(201);
+        $this->assertCount(2, $notice(), 'période déjà annoncée');
+
+        // Rapports de tous : une puce par stagiaire, les rapports de la personne choisie
+        $board = $this->getJson('/api/stagiaire/rapports/tous', $hb)->assertOk()->json('data');
+        $this->assertSame(1, collect($board['people'])->firstWhere('id', $a->id)['reports']);
+        $this->assertSame([$id], array_column($this->getJson("/api/stagiaire/rapports/tous?stagiaire={$a->id}", $hb)->json('data.reports'), 'id'));
+
+        // Un autre stagiaire commente : rien tout de suite, un message par rafale de 10 minutes
+        $this->sent = [];
+        $this->postJson("/api/stagiaire/rapports/{$id}/commentaires", ['body' => 'Bon travail sur la sauvegarde'], $hb)->assertOk();
+        $cid = $this->postJson("/api/stagiaire/rapports/{$id}/commentaires", ['body' => 'Et la partie réseau ?'], $hb)->assertOk()->json('data.comments.1.id');
+        $this->actingAs($sup, 'sanctum')->postJson("/api/stages/admin/rapports/{$id}/commentaires", ['body' => 'Ajoutez le schéma'])->assertOk();
+        $reports = app(ReportService::class);
+        $this->at('2026-11-06 16:05');
+        $this->assertSame(0, $reports->flushComments());
+        $this->assertSame([], $this->sent);
+        $this->at('2026-11-06 16:11');
+        $this->artisan('stages:process-reports --comments')->assertSuccessful();
+        $toA = collect($this->sent)->where('to', $a->whatsapp)->values();
+        $this->assertCount(1, $toA);
+        $this->assertStringContainsString('3 nouveaux commentaires', $toA[0]['text']);
+        $this->assertStringContainsString('DOSSOU Ines : Bon travail', $toA[0]['text']);
+        $this->assertSame(0, DB::table('stage_digest_items')->count());
+
+        // Côté auteur du commentaire : « mine » et suppression ; pas les autres
+        $d = $this->getJson("/api/stagiaire/rapports/{$id}", $hb)->assertOk()->json('data');
+        $this->assertSame([false, true, true, false], [$d['mine'], $d['comments'][0]['mine'], $d['comments'][0]['can_delete'], $d['comments'][2]['can_delete']]);
+        $this->deleteJson("/api/stagiaire/rapports/{$id}/commentaires/{$cid}", [], $ha)->assertStatus(403);
+        $this->deleteJson("/api/stagiaire/rapports/{$id}/commentaires/{$cid}", [], $hb)->assertOk();
+        $first = $d['comments'][0]['id'];
+        $this->actingAs($lead, 'sanctum')->deleteJson("/api/stages/admin/rapports/{$id}/commentaires/{$first}")->assertOk();
+        $this->assertSame(['Ajoutez le schéma'], array_column($this->getJson("/api/stagiaire/rapports/{$id}", $ha)->json('data.comments'), 'body'));
+
+        // La nuit, les messages aux stagiaires attendent 7h
+        $this->at('2026-11-06 22:30');
+        $this->sent = [];
+        $this->actingAs($sup, 'sanctum')->postJson("/api/stages/admin/rapports/{$id}/decision", ['decision' => 'approved'])->assertOk();
+        $msg = collect($this->sent)->firstWhere('to', $a->whatsapp);
+        $this->assertSame('2026-11-07 07:00', CarbonImmutable::instance($msg['at'])->setTimezone(BusinessHours::TZ)->format('Y-m-d H:i'));
+        $this->assertSame($a->email, $msg['fallback']);
+        $this->assertFalse(collect($this->sent)->contains('channel', 'email'), 'WhatsApp seul, email en secours');
+    }
+
     public function test_final_report_validation_flag(): void
     {
         [$req, $h] = $this->intern();
@@ -363,7 +427,8 @@ class StagesLot4Test extends TestCase
         $this->at('2026-11-10 12:00');
         Queue::fake();
         $this->post('/api/stagiaire/rapports', ['period_key' => 'J2026-11-10', 'fichier' => $this->pdf()], $h2)->assertStatus(201);
-        Queue::assertNothingPushed(); // pas de message par dépôt journalier
+        // Pas de message au superviseur par dépôt journalier (seule l'annonce de la période part)
+        Queue::assertNotPushed(SendNotificationJob::class, fn ($job) => str_contains(json_encode($job->payload, JSON_UNESCAPED_UNICODE), 'Rapport déposé'));
         $this->at('2026-11-10 17:45');
         $this->artisan('stages:process-reports --digest')->assertSuccessful();
         Queue::assertPushed(SendNotificationJob::class, fn ($j) => str_contains(json_encode($j->payload, JSON_UNESCAPED_UNICODE), 'Rapports journaliers'));

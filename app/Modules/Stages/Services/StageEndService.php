@@ -111,7 +111,7 @@ class StageEndService
             'La fin de votre stage a été annulée : votre stage continue normalement.',
             'Vous pouvez de nouveau vous connecter à votre espace stagiaire et pointer.',
         ], ['Référence' => $done->reference, 'Fin prévue' => $this->requests->frDate($done->date_fin)],
-            ctaLabel: 'Ouvrir mon espace stagiaire', ctaUrl: $this->notifier->spaceUrl(), context: 'stage-fin-annulee');
+            ctaLabel: 'Ouvrir mon espace stagiaire', ctaUrl: $this->notifier->spaceUrl(), context: 'stage-fin-annulee', official: true);
         $this->notifier->toFollowers($done, 'Fin de stage annulée', [
             'La fin de stage enregistrée pour ce stagiaire a été annulée : le stage reprend.',
         ], ['Référence' => $done->reference, 'Stagiaire' => $done->fullName()], 'stage-fin-annulee');

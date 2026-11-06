@@ -27,8 +27,8 @@ Schedule::command('stages:process-activations')
     ->everyFifteenMinutes()
     ->withoutOverlapping(15);
 
-// Stages : rapports (rappels aux stagiaires à 9h - le vendredi pour les rapports hebdomadaires -, récapitulatif des
-// rapports journaliers au responsable en fin de journée ouvrée).
+// Stages : rapports (rappels aux stagiaires à 9h - le vendredi pour les rapports hebdomadaires -, récapitulatifs
+// de fin de journée ouvrée au personnel : rapports journaliers, actions des superviseurs).
 Schedule::command('stages:process-reports')
     ->dailyAt('09:00')
     ->timezone('Africa/Porto-Novo')
@@ -37,6 +37,10 @@ Schedule::command('stages:process-reports --digest')
     ->weekdays()
     ->dailyAt('17:45')
     ->timezone('Africa/Porto-Novo');
+// Stages : commentaires de rapports, un message par rafale de 10 minutes.
+Schedule::command('stages:process-reports --comments')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(10);
 
 // Stages : attestations (préparation à J-7, relances), jours ouvrés.
 Schedule::command('stages:process-attestations')

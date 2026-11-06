@@ -34,7 +34,7 @@ class StagesLot2Test extends TestCase
         $test = $this;
         $this->app->instance(Notifier::class, new class($test) extends Notifier {
             public function __construct(private $test) {}
-            public function whatsapp(?string $phone, string $message, string $context, string $module, bool $bulk = false): void
+            public function whatsapp(?string $phone, string $message, string $context, string $module, bool $bulk = false, array $fallbackEmail = [], ?\DateTimeInterface $at = null): void
             {
                 $this->test->record('whatsapp', $phone, $message);
             }
@@ -186,7 +186,8 @@ class StagesLot2Test extends TestCase
             ->assertStatus(422);
         $this->postJson('/api/stages/admin/stagiaires/superviseur', ['stage_ids' => [$a->id], 'supervisor_id' => $sup->id, 'action' => 'add'])
             ->assertOk()->assertJsonPath('data.changed', 1);
-        Queue::assertPushed(SendNotificationJob::class, fn ($job) => str_contains(json_encode($job->payload), 'superviseur'));
+        // Action mise de côté pour le récapitulatif de fin de journée des responsables
+        $this->assertStringContainsString('attribué', (string) DB::table('stage_digest_items')->where('kind', 'superviseur')->value('line'));
 
         $list = $this->getJson('/api/stages/admin/suivi?scope=mine')->assertOk()->json();
         $this->assertSame([$a->id], array_column($list['data'], 'id'));
@@ -218,7 +219,10 @@ class StagesLot2Test extends TestCase
 
         Queue::fake();
         $this->actingAs($sup, 'sanctum')->postJson("/api/stages/admin/demandes/{$req->id}/rejet", ['motif' => 'Complet'])->assertOk();
-        Queue::assertPushed(SendNotificationJob::class, fn ($job) => str_contains(json_encode($job->payload, JSON_UNESCAPED_UNICODE), 'Action d'));
+        $this->assertSame(1, DB::table('stage_digest_items')->where('kind', 'superviseur')->count());
+        $this->assertSame(1, app(\App\Modules\Stages\Services\StageNotifier::class)->sendSupervisorDigest());
+        Queue::assertPushed(SendNotificationJob::class, fn ($job) => str_contains(json_encode($job->payload, JSON_UNESCAPED_UNICODE), 'Actions des superviseurs aujourd'));
+        $this->assertSame(0, DB::table('stage_digest_items')->count());
     }
 
     // ── Binômes ─────────────────────────────────────────────────────────

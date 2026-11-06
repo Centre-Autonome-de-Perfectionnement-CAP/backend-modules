@@ -68,7 +68,19 @@ class ReportController extends Controller
         return $this->guard(function () use ($report, $data, $request) {
             $this->reports->comment($report, $data['body'], $request->user());
 
-            return $this->successResponse($this->reports->detail($report->fresh('stage'), true), 'Commentaire envoyé au stagiaire.');
+            return $this->successResponse($this->reports->detail($report->fresh('stage'), true), 'Commentaire envoyé.');
+        });
+    }
+
+    /** Le personnel peut retirer tout commentaire (abus). */
+    public function deleteComment(Request $request, int $id, int $comment): JsonResponse
+    {
+        $report = StageReport::with('stage')->findOrFail($id);
+
+        return $this->guard(function () use ($report, $comment, $request) {
+            $this->reports->deleteComment($report, $comment, $request->user());
+
+            return $this->successResponse($this->reports->detail($report->fresh('stage'), true), 'Commentaire supprimé.');
         });
     }
 

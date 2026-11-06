@@ -356,10 +356,8 @@ class StageAdminController extends Controller
         // Action d'un superviseur : le responsable de division en est informé.
         $user = request()->user();
         if ($user && !StageAccess::isLead($user)) {
-            $who = trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''));
-            $this->notifier->toManagers($req, 'Action d\'un superviseur', [
-                "{$who} (superviseur) a agi sur cette demande de stage : {$text}",
-            ], ['Référence' => $req->reference, 'Demandeur' => $req->fullName(), 'Statut' => StageStatus::label($req->status)], 'stage-superviseur');
+            $this->notifier->supervisorAction($user, 'a traité la demande de stage de ' . $req->fullName() . " ({$req->reference}) : " . rtrim($text, '.')
+                . ' - statut : ' . mb_strtolower(StageStatus::label($req->status)), $req);
         }
 
         return $this->successResponse($this->detail($req->fresh()), $text);

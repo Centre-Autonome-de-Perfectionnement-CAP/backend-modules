@@ -24,7 +24,9 @@ use Illuminate\Support\Facades\Storage;
  *   'email'          → { to, to_name?, cc?: [], subject, view, vars, attachments?: [{disk, path, name}] }
  *   'mailable'       → { to, cc?: [], mailable: Mailable, after_sent?: [{channel, payload}] }
  *                      (after_sent : publiés UNIQUEMENT si l'email est accepté par le SMTP)
- *   'whatsapp'       → { phone, message, context, module? }
+ *   'whatsapp'       → { phone, message, context, module?, fallback?: {channel, payload} }
+ *                      (fallback : envoi de secours, ex. un email, si le WhatsApp
+ *                      échoue définitivement ou après FALLBACK_AFTER essais ratés)
  *   'whatsapp_file'  → { phone, disk, path, file_name, caption?, context, module? }
  *                      (caption : envoyé en message à part, AVANT le fichier)
  *
@@ -59,6 +61,9 @@ class SendNotificationJob implements ShouldQueue
 
     /** Backoff progressif entre deux tentatives (secondes). */
     private const BACKOFF = [15, 30, 60, 120, 300, 600];
+
+    /** WhatsApp avec envoi de secours : essais ratés avant de basculer (~2 min). */
+    private const FALLBACK_AFTER = 3;
 
     /** Vrai quand une partie de l'envoi est déjà faite (voir handleWhatsAppFile). */
     private bool $payloadChanged = false;
@@ -257,7 +262,9 @@ class SendNotificationJob implements ShouldQueue
         $p = $this->payload;
 
         if (!$bridge->isConnected()) {
-            $this->retryLater('Bridge WhatsApp déconnecté');
+            if (!$this->fallbackDue()) {
+                $this->retryLater('Bridge WhatsApp déconnecté');
+            }
             return;
         }
 
@@ -329,7 +336,9 @@ class SendNotificationJob implements ShouldQueue
         }
 
         if ($res['retryable']) {
-            $this->retryLater("{$label} : échec transitoire ({$res['error']})");
+            if (!$this->fallbackDue()) {
+                $this->retryLater("{$label} : échec transitoire ({$res['error']})");
+            }
             return;
         }
 
@@ -337,6 +346,50 @@ class SendNotificationJob implements ShouldQueue
             'to' => $p['phone'] ?? null, 'ctx' => $p['context'] ?? '',
             'http' => $res['http'], 'error' => $res['error'],
         ]);
+        $this->sendFallback();
+    }
+
+    /**
+     * WhatsApp avec envoi de secours : compte l'essai raté et, au-delà de
+     * FALLBACK_AFTER, envoie le secours à la place (vrai = WhatsApp abandonné).
+     * Sans secours : faux, les nouveaux essais suivent leur cours.
+     */
+    private function fallbackDue(): bool
+    {
+        if (empty($this->payload['fallback'])) {
+            return false;
+        }
+        $tries = (int) ($this->payload['wa_tries'] ?? 0) + 1;
+        if ($tries >= self::FALLBACK_AFTER) {
+            $this->sendFallback();
+
+            return true;
+        }
+        // Le compteur voyage avec le nouvel essai.
+        $this->payload['wa_tries'] = $tries;
+        $this->payloadChanged = true;
+
+        return false;
+    }
+
+    /** Publie l'envoi de secours une seule fois. */
+    private function sendFallback(): void
+    {
+        $fallback = $this->payload['fallback'] ?? null;
+        if (empty($fallback['channel']) || empty($fallback['payload'])) {
+            return;
+        }
+        unset($this->payload['fallback']);
+        Log::info('[SendNotificationJob] WhatsApp en échec : envoi de secours', [
+            'to' => $this->payload['phone'] ?? null, 'ctx' => $this->payload['context'] ?? '', 'channel' => $fallback['channel'],
+        ]);
+        try {
+            $this->isImmediate()
+                ? static::sendNow($fallback['channel'], $fallback['payload'])
+                : static::dispatch($fallback['channel'], $fallback['payload']);
+        } catch (\Throwable $e) {
+            Log::error('[SendNotificationJob] Envoi de secours non publié', ['error' => $e->getMessage()]);
+        }
     }
 
     private function retryLater(string $reason): void
@@ -367,6 +420,8 @@ class SendNotificationJob implements ShouldQueue
 
     public function failed(?\Throwable $e): void
     {
+        $this->sendFallback();
+
         Log::error('[SendNotificationJob] Notification abandonnée', [
             'channel' => $this->channel,
             'to'      => $this->payload['phone'] ?? ($this->payload['to'] ?? null),

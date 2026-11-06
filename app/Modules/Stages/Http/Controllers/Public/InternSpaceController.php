@@ -495,26 +495,48 @@ class InternSpaceController extends Controller
         });
     }
 
+    /** Rapports de tous (une puce par stagiaire en cours). */
+    public function reportsBoard(Request $request): JsonResponse
+    {
+        $data = $request->validate(['stagiaire' => ['nullable', 'integer', 'min:1']]);
+        $this->ready($request);
+
+        return $this->successResponse($this->reports->board(isset($data['stagiaire']) ? (int) $data['stagiaire'] : null));
+    }
+
     public function reportShow(Request $request, int $id): JsonResponse
     {
-        return $this->successResponse($this->reports->detail($this->ownReport($request, $id), false));
+        return $this->successResponse($this->reports->detail($this->anyReport($request, $id), false, $this->account($request)->stage));
     }
 
     public function reportComment(Request $request, int $id): JsonResponse
     {
         $data = $request->validate(['body' => ['required', 'string', 'max:2000']]);
-        $report = $this->ownReport($request, $id);
+        $report = $this->anyReport($request, $id);
+        $me = $this->account($request)->stage;
 
-        return $this->guard(function () use ($report, $data) {
-            $this->reports->comment($report, $data['body'], null);
+        return $this->guard(function () use ($report, $data, $me) {
+            $this->reports->comment($report, $data['body'], null, $me);
 
-            return $this->successResponse($this->reports->detail($report->fresh('stage'), false), 'Message envoyé.');
+            return $this->successResponse($this->reports->detail($report->fresh('stage'), false, $me), 'Message envoyé.');
+        });
+    }
+
+    public function reportCommentDelete(Request $request, int $id, int $comment): JsonResponse
+    {
+        $report = $this->anyReport($request, $id);
+        $me = $this->account($request)->stage;
+
+        return $this->guard(function () use ($report, $comment, $me) {
+            $this->reports->deleteComment($report, $comment, null, $me);
+
+            return $this->successResponse($this->reports->detail($report->fresh('stage'), false, $me), 'Commentaire supprimé.');
         });
     }
 
     public function reportFile(Request $request, int $id, int $version): JsonResponse
     {
-        $report = $this->ownReport($request, $id);
+        $report = $this->anyReport($request, $id);
         $path = $this->reports->filePath($report, $version);
         if (!$path) {
             return $this->errorResponse('Fichier introuvable.', 404, 'STAGE_FILE_NOT_FOUND');
@@ -528,11 +550,15 @@ class InternSpaceController extends Controller
 
     // ── Interne ─────────────────────────────────────────────────────────
 
-    private function ownReport(Request $request, int $id): StageReport
+    /** Les rapports sont ouverts à tous les stagiaires (lecture et commentaires). */
+    private function anyReport(Request $request, int $id): StageReport
     {
-        $report = StageReport::with('stage')->where('id', $id)->where('stage_request_id', $this->account($request)->stage_request_id)->first();
-        if (!$report) {
+        $report = StageReport::with('stage')->find($id);
+        if (!$report || !$report->stage) {
             abort(404);
+        }
+        if ($report->stage_request_id !== $this->account($request)->stage_request_id) {
+            $this->ready($request);
         }
 
         return $report;

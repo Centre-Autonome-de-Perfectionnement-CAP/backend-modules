@@ -251,7 +251,7 @@ class InternActivationService
         $this->notifier->toDemandeur($req, 'Stage annulé', [
             "Vous n'avez pas confirmé votre présence dans le délai prévu : votre stage a été annulé et la place libérée.",
             'Si c\'est une erreur, contactez rapidement le CAP-EPAC.',
-        ], ['Référence' => $req->reference], context: 'stage-desistement');
+        ], ['Référence' => $req->reference], context: 'stage-desistement', official: true);
         $this->binomes->release($req, 'Désistement (présence jamais confirmée)');
         $this->notifier->toFollowers($req, 'Désistement d\'un stagiaire', [
             'Le stagiaire n\'a jamais confirmé sa présence : le stage a été annulé automatiquement et la place est libérée.',

@@ -40,7 +40,7 @@ class StagesLot1Test extends TestCase
         $test = $this;
         $this->app->instance(Notifier::class, new class($test) extends Notifier {
             public function __construct(private $test) {}
-            public function whatsapp(?string $phone, string $message, string $context, string $module, bool $bulk = false): void
+            public function whatsapp(?string $phone, string $message, string $context, string $module, bool $bulk = false, array $fallbackEmail = [], ?\DateTimeInterface $at = null): void
             {
                 $this->test->record('whatsapp', $phone, $message);
             }
@@ -434,6 +434,6 @@ class StagesLot1Test extends TestCase
         $this->artisan('stages:process-deadlines')->assertSuccessful();
         $this->assertSame(['expired', 'accepted'], [$a->fresh()->status, $b->fresh()->status]);
         $this->assertNull($b->fresh()->team_id);
-        $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['to'] === $b->email && str_contains($m['text'], 'ne poursuit pas')));
+        $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['to'] === $b->whatsapp && str_contains($m['text'], 'ne poursuit pas')));
     }
 }

@@ -118,6 +118,7 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         Route::get('messages', [StageChatController::class, 'index'])->middleware('throttle:120,1');
         Route::get('messages/{channel}', [StageChatController::class, 'show'])->where('channel', StageChatController::CHANNEL)->middleware('throttle:120,1');
         Route::post('messages/{channel}', [StageChatController::class, 'store'])->where('channel', StageChatController::CHANNEL)->middleware('throttle:30,1');
+        Route::patch('messages/{channel}/{message}', [StageChatController::class, 'update'])->where('channel', StageChatController::CHANNEL)->whereNumber('message')->middleware('throttle:30,1');
         Route::get('messages/{channel}/fichiers/{file}', [StageChatController::class, 'file'])->where('channel', StageChatController::CHANNEL)->whereNumber('file')->middleware('throttle:120,1');
         Route::get('tableau-de-bord', [DashboardController::class, 'overview']);
         Route::get('suivi', [DashboardController::class, 'follow']);
@@ -129,6 +130,7 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         Route::get('rapports/{id}', [ReportController::class, 'show'])->whereNumber('id');
         Route::get('rapports/{id}/versions/{version}', [ReportController::class, 'file'])->whereNumber(['id', 'version']);
         Route::post('rapports/{id}/commentaires', [ReportController::class, 'comment'])->whereNumber('id')->middleware('throttle:30,1');
+        Route::delete('rapports/{id}/commentaires/{comment}', [ReportController::class, 'deleteComment'])->whereNumber(['id', 'comment'])->middleware('throttle:30,1');
         Route::post('rapports/{id}/decision', [ReportController::class, 'decide'])->whereNumber('id')->middleware('throttle:30,1');
         Route::get('equipes', [SupervisionController::class, 'teams']);
         Route::middleware('throttle:30,1')->group(function () {
@@ -173,6 +175,7 @@ Route::prefix('api/stagiaire')->middleware('api')->group(function () {
         Route::get('messages', [StageChatController::class, 'index']);
         Route::get('messages/{channel}', [StageChatController::class, 'show'])->where('channel', StageChatController::CHANNEL);
         Route::post('messages/{channel}', [StageChatController::class, 'store'])->where('channel', StageChatController::CHANNEL)->middleware('throttle:stages-intern-chat');
+        Route::patch('messages/{channel}/{message}', [StageChatController::class, 'update'])->where('channel', StageChatController::CHANNEL)->whereNumber('message')->middleware('throttle:stages-intern-chat');
         Route::get('messages/{channel}/fichiers/{file}', [StageChatController::class, 'file'])->where('channel', StageChatController::CHANNEL)->whereNumber('file');
         Route::get('moi', [InternSpaceController::class, 'me']);
         Route::post('reglement', [InternSpaceController::class, 'acceptReglement']);
@@ -185,9 +188,11 @@ Route::prefix('api/stagiaire')->middleware('api')->group(function () {
         Route::post('demandes', [InternSpaceController::class, 'requestsStore'])->middleware('throttle:stages-intern-write');
         Route::delete('demandes/{id}', [InternSpaceController::class, 'requestsCancel'])->whereNumber('id');
         Route::get('rapports', [InternSpaceController::class, 'reportsIndex']);
+        Route::get('rapports/tous', [InternSpaceController::class, 'reportsBoard']);
         Route::post('rapports', [InternSpaceController::class, 'reportsStore'])->middleware('throttle:stages-intern-write');
         Route::get('rapports/{id}', [InternSpaceController::class, 'reportShow'])->whereNumber('id');
         Route::post('rapports/{id}/commentaires', [InternSpaceController::class, 'reportComment'])->whereNumber('id')->middleware('throttle:stages-intern-medium');
+        Route::delete('rapports/{id}/commentaires/{comment}', [InternSpaceController::class, 'reportCommentDelete'])->whereNumber(['id', 'comment'])->middleware('throttle:stages-intern-medium');
         Route::get('rapports/{id}/versions/{version}', [InternSpaceController::class, 'reportFile'])->whereNumber(['id', 'version']);
         Route::get('notes/{id}/pdf', [InternSpaceController::class, 'notePdf'])->whereNumber('id')->middleware('throttle:stages-intern-medium');
         Route::get('attestation', [InternSpaceController::class, 'attestation']);

@@ -18,7 +18,7 @@
         <tr><td style="padding:12px 28px 4px;">
           <p style="margin:0 0 14px;font-weight:600;">{{ $greeting }}</p>
           @foreach ($paragraphs as $p)
-            <p style="margin:0 0 14px;color:#334155;">{{ $p }}</p>
+            <p style="margin:0 0 14px;color:#334155;white-space:pre-line;">{{ $p }}</p>
           @endforeach
         </td></tr>
 

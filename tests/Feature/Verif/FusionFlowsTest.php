@@ -418,6 +418,32 @@ class FusionFlowsTest extends TestCase
         \Illuminate\Support\Facades\Queue::assertPushed(SendNotificationJob::class, 1);
     }
 
+    public function test_whatsapp_falls_back_to_email_after_failures(): void
+    {
+        config(['queue.default' => 'database']);
+        \Illuminate\Support\Facades\Queue::fake();
+        Mail::fake();
+        $email = ['to' => 'a@example.org', 'subject' => 'S', 'view' => 'core::emails.notification', 'vars' => ['title' => 'T', 'body' => 'B']];
+        $wa = ['phone' => '0197000001', 'message' => 'x', 'context' => 't', 'module' => 'Stages', 'fallback' => ['channel' => 'email', 'payload' => $email]];
+
+        // 1er et 2e échecs : nouvel essai WhatsApp, le compteur suit
+        $this->fakeBridge(false);
+        SendNotificationJob::sendNow('whatsapp', $wa);
+        \Illuminate\Support\Facades\Queue::assertPushed(SendNotificationJob::class, fn ($j) => $j->channel === 'whatsapp' && ($j->payload['wa_tries'] ?? 0) === 1);
+
+        // 3e échec : l'email part à la place, plus de WhatsApp
+        \Illuminate\Support\Facades\Queue::fake();
+        \Illuminate\Support\Facades\Log::spy();
+        SendNotificationJob::sendNow('whatsapp', ['wa_tries' => 2] + $wa);
+        \Illuminate\Support\Facades\Queue::assertNotPushed(SendNotificationJob::class, fn ($j) => $j->channel === 'whatsapp');
+        \Illuminate\Support\Facades\Log::shouldHaveReceived('info')->with('[SendNotificationJob] WhatsApp en échec : envoi de secours', \Mockery::any())->once();
+
+        // Sans numéro : l'email de secours part directement
+        \Illuminate\Support\Facades\Queue::fake();
+        app(\App\Modules\Core\Services\Notifier::class)->whatsapp(null, 'x', 't', 'Stages', fallbackEmail: $email);
+        \Illuminate\Support\Facades\Queue::assertPushed(SendNotificationJob::class, fn ($j) => $j->channel === 'email' && $j->payload['to'] === 'a@example.org');
+    }
+
     public function test_payment_validation_notifies_email_and_whatsapp(): void
     {
         Bus::fake([SendNotificationJob::class, \App\Modules\Demandes\Jobs\SendNotificationJob::class]);

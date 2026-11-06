@@ -42,7 +42,7 @@ class StagesLot9Test extends TestCase
         $test = $this;
         $this->app->instance(Notifier::class, new class($test) extends Notifier {
             public function __construct(private $test) {}
-            public function whatsapp(?string $phone, string $message, string $context, string $module, bool $bulk = false): void
+            public function whatsapp(?string $phone, string $message, string $context, string $module, bool $bulk = false, array $fallbackEmail = [], ?\DateTimeInterface $at = null): void
             {
                 $this->test->record('whatsapp', $phone, $message);
             }
@@ -178,8 +178,9 @@ class StagesLot9Test extends TestCase
         $toA = fn () => collect($this->sent)->filter(fn ($s) => $s['to'] === $a->whatsapp)->values();
 
         $this->at('2026-11-20 09:03'); $chat->tick();
-        $this->assertCount(0, $toA(), 'rafale en cours : on attend 5 minutes');
-        $this->at('2026-11-20 09:06'); $chat->tick();
+        $this->assertCount(0, $toA(), 'rafale en cours : on attend 10 minutes');
+        $this->at('2026-11-20 09:08'); $chat->tick();
+        $this->assertCount(0, $toA(), 'moins de 10 minutes');
         $this->at('2026-11-20 09:30'); $chat->tick();
         $this->assertCount(1, $toA(), 'un seul rappel pour la rafale');
         $this->assertStringContainsString('5 nouveaux messages', $toA()[0]['text']);
@@ -200,6 +201,30 @@ class StagesLot9Test extends TestCase
         $this->assertCount(2, $toA());
         $this->at('2026-11-21 07:10'); $chat->tick();
         $this->assertCount(3, $toA());
+    }
+
+    public function test_author_edits_own_message(): void
+    {
+        $this->at('2026-11-20 09:00');
+        [$a, $ha] = $this->intern();
+        [$b, $hb] = $this->intern();
+        $sup = $this->user('superviseur');
+        $this->supervise($a, $sup);
+        $this->supervise($b, $sup);
+        $ch = "groupe-{$sup->id}";
+
+        $id = $this->postJson("/api/stagiaire/messages/{$ch}", ['body' => 'Réunion à 10h'], $ha)->assertOk()->json('data.id');
+        $last = $this->getJson("/api/stagiaire/messages/{$ch}", $hb)->assertOk()->json('data.messages.0.id');
+
+        $this->patchJson("/api/stagiaire/messages/{$ch}/{$id}", ['body' => 'Coucou'], $hb)->assertStatus(403);
+        $this->patchJson("/api/stagiaire/messages/{$ch}/{$id}", ['body' => '  '], $ha)->assertStatus(422);
+        $this->patchJson("/api/stagiaire/messages/{$ch}/{$id}", ['body' => 'Réunion à 11h'], $ha)->assertOk()->assertJsonPath('data.edited', true);
+
+        // Le binôme qui lit déjà la discussion reçoit la modification à l'actualisation
+        $this->assertSame([['id' => $id, 'body' => 'Réunion à 11h']], $this->getJson("/api/stagiaire/messages/{$ch}?after={$last}", $hb)->json('data.edits'));
+        $m = $this->getJson("/api/stagiaire/messages/{$ch}", $hb)->json('data.messages.0');
+        $this->assertSame(['Réunion à 11h', true], [$m['body'], $m['edited']]);
+        $this->actingAs($sup, 'sanctum')->patchJson("/api/stages/admin/messages/{$ch}/{$id}", ['body' => 'x'])->assertStatus(403);
     }
 
     public function test_files_reply_and_seen_by(): void

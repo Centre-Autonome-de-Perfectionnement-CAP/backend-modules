@@ -2,14 +2,18 @@
 
 namespace App\Modules\Stages\Services;
 
+use App\Models\User;
 use App\Modules\Core\Jobs\SendNotificationJob;
 use App\Modules\Core\Services\Notifier;
 use App\Modules\Core\Support\WhatsAppText;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Support\BusinessHours;
 use App\Modules\Stages\Support\StageAccess;
+use App\Modules\Stages\Support\StageStatus;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Notifications du module Stages (email + WhatsApp).
@@ -28,6 +32,12 @@ class StageNotifier
      * @param string[]             $paragraphs
      * @param array<string,mixed>  $fields
      */
+    /**
+     * Message à un demandeur ou stagiaire : WhatsApp seul (l'email part à la
+     * place si le numéro manque ou si le WhatsApp échoue), jamais la nuit.
+     * Document joint ou message officiel ($official : révocation, fin de
+     * stage…) : WhatsApp et email.
+     */
     public function toDemandeur(
         StageRequest $req,
         string $title,
@@ -39,8 +49,28 @@ class StageNotifier
         ?string $ctaUrl = null,
         string $context = 'stage',
         ?array $file = null,
+        bool $official = false,
     ): void {
         $greeting = 'Bonjour ' . trim($req->civilite . ' ' . $req->fullName()) . ',';
+        $at = BusinessHours::nextInternSlot();
+        $email = [
+            'to'      => $req->email,
+            'to_name' => $req->fullName(),
+            'subject' => "{$title} - {$req->reference}",
+            'view'    => 'stages::emails.message',
+            'vars'    => [
+                'title'          => $title,
+                'greeting'       => $greeting,
+                'paragraphs'     => $paragraphs,
+                'fields'         => $fields,
+                'highlight'      => $highlight,
+                'highlightTitle' => $highlightTitle,
+                'ctaLabel'       => $ctaLabel,
+                'ctaUrl'         => $ctaUrl,
+            ],
+            'attachments' => $file ? [['disk' => $file['disk'], 'path' => $file['path'], 'name' => $file['name']]] : [],
+        ];
+        $both = $official || $file !== null;
 
         $this->notifier->whatsapp(
             $req->whatsapp,
@@ -53,6 +83,8 @@ class StageNotifier
             ]),
             "{$context}:{$req->reference}",
             self::MODULE,
+            fallbackEmail: $both ? [] : $email,
+            at: $at,
         );
 
         // Document joint (ex. note de service en PDF) : envoyé juste après le message.
@@ -63,23 +95,12 @@ class StageNotifier
             );
         }
 
-        $this->notifier->email(
-            $req->email,
-            "{$title} - {$req->reference}",
-            'stages::emails.message',
-            [
-                'title'          => $title,
-                'greeting'       => $greeting,
-                'paragraphs'     => $paragraphs,
-                'fields'         => $fields,
-                'highlight'      => $highlight,
-                'highlightTitle' => $highlightTitle,
-                'ctaLabel'       => $ctaLabel,
-                'ctaUrl'         => $ctaUrl,
-            ],
-            attachments: $file ? [['disk' => $file['disk'], 'path' => $file['path'], 'name' => $file['name']]] : [],
-            toName: $req->fullName(),
-        );
+        if ($both) {
+            $this->notifier->email(
+                $email['to'], $email['subject'], $email['view'], $email['vars'],
+                attachments: $email['attachments'], toName: $email['to_name'],
+            );
+        }
     }
 
     /**
@@ -160,6 +181,19 @@ class StageNotifier
         foreach ($managers as $m) {
             $greeting = 'Bonjour ' . trim(($m->first_name ?? '') . ' ' . ($m->last_name ?? '')) . ',';
 
+            // WhatsApp seul ; l'email part à la place si le numéro manque ou si le WhatsApp échoue.
+            $email = !empty($m->email) && filter_var($m->email, FILTER_VALIDATE_EMAIL) ? [
+                'to'      => $m->email,
+                'to_name' => trim(($m->first_name ?? '') . ' ' . ($m->last_name ?? '')),
+                'subject' => $subject,
+                'view'    => 'stages::emails.message',
+                'vars'    => [
+                    'title' => $title, 'greeting' => $greeting, 'paragraphs' => $paragraphs,
+                    'fields' => $fields, 'highlight' => null, 'highlightTitle' => null,
+                    'ctaLabel' => 'Ouvrir', 'ctaUrl' => $url,
+                ],
+            ] : null;
+
             if (!empty($m->phone)) {
                 $this->send('whatsapp', [
                     'phone'   => $m->phone,
@@ -171,23 +205,101 @@ class StageNotifier
                     ]),
                     'context' => $context,
                     'module'  => self::MODULE,
-                ], $slot);
-            }
-
-            if (!empty($m->email) && filter_var($m->email, FILTER_VALIDATE_EMAIL)) {
-                $this->send('email', [
-                    'to'      => $m->email,
-                    'to_name' => trim(($m->first_name ?? '') . ' ' . ($m->last_name ?? '')),
-                    'subject' => $subject,
-                    'view'    => 'stages::emails.message',
-                    'vars'    => [
-                        'title' => $title, 'greeting' => $greeting, 'paragraphs' => $paragraphs,
-                        'fields' => $fields, 'highlight' => null, 'highlightTitle' => null,
-                        'ctaLabel' => 'Ouvrir', 'ctaUrl' => $url,
-                    ],
-                ], $slot);
+                ] + ($email ? ['fallback' => ['channel' => 'email', 'payload' => $email]] : []), $slot);
+            } elseif ($email) {
+                $this->send('email', $email, $slot);
             }
         }
+    }
+
+    // ── Récapitulatifs et annonces ───────────────────────────────────────
+
+    /** Tables des notifications regroupées présentes (migration passée) ? */
+    public function digestReady(): bool
+    {
+        if (Cache::get('stage-digest-ready')) {
+            return true;
+        }
+        $ok = Schema::hasTable('stage_digest_items') && Schema::hasTable('stage_report_broadcasts');
+        if ($ok) {
+            Cache::put('stage-digest-ready', true, 3600);
+        }
+
+        return $ok;
+    }
+
+    /**
+     * Action d'un superviseur (« a validé le rapport de … ») : mise de côté
+     * pour le récapitulatif de 17h45 aux responsables, qui peuvent revenir
+     * sur chaque décision depuis la plateforme.
+     */
+    public function supervisorAction(User $by, string $what, ?StageRequest $req = null): void
+    {
+        $line = trim(($by->first_name ?? '') . ' ' . ($by->last_name ?? '')) . ' ' . $what;
+        if ($this->digestReady()) {
+            try {
+                DB::table('stage_digest_items')->insert(['kind' => 'superviseur', 'line' => mb_substr($line, 0, 500), 'created_at' => now()]);
+
+                return;
+            } catch (\Throwable $e) {
+                Log::warning('[Stages] Action de superviseur non mise de côté : envoi direct', ['error' => $e->getMessage()]);
+            }
+        }
+        $this->toManagersGeneric('Action d\'un superviseur', [$line . '. Vous pouvez confirmer ou revenir sur cette décision.'], [],
+            'stage-superviseur' . ($req ? ":{$req->reference}" : ''), $req ? $this->staffUrl($req) : null, $req?->reference);
+    }
+
+    /** Récapitulatif des actions des superviseurs (17h45, jours ouvrés). */
+    public function sendSupervisorDigest(): int
+    {
+        if (!$this->digestReady()) {
+            return 0;
+        }
+        $items = DB::table('stage_digest_items')->where('kind', 'superviseur')->orderBy('id')->get(['id', 'line']);
+        if ($items->isEmpty()) {
+            return 0;
+        }
+        $n = $items->count();
+        $this->toManagersGeneric(
+            "Actions des superviseurs aujourd'hui ({$n})",
+            [$items->map(fn ($i) => '- ' . $i->line)->implode("\n"), 'Vous pouvez revenir sur chacune de ces décisions depuis la plateforme.'],
+            [], 'stage-superviseur-recap', rtrim((string) config('app.url'), '/') . '/services/stages',
+        );
+        DB::table('stage_digest_items')->whereIn('id', $items->pluck('id'))->delete();
+
+        return $n;
+    }
+
+    /**
+     * Annonce à tous les stagiaires en cours et à tout le personnel du
+     * module (WhatsApp cadencé ; email de secours ; jamais la nuit pour les
+     * stagiaires, heures ouvrées pour le personnel).
+     *
+     * @param int[] $exceptInterns stagiaires déjà prévenus autrement
+     */
+    public function toEveryone(string $title, array $paragraphs, string $internUrl, string $staffUrl, string $context, array $exceptInterns = []): int
+    {
+        $today = BusinessHours::today()->toDateString();
+        $interns = StageRequest::where('status', StageStatus::ACCEPTED)->whereNotNull('activated_at')
+            ->where('date_fin', '>=', $today)->whereNotIn('id', $exceptInterns)->get();
+        $at = BusinessHours::nextInternSlot();
+        foreach ($interns as $r) {
+            $greeting = 'Bonjour ' . trim($r->civilite . ' ' . $r->fullName()) . ',';
+            $this->notifier->whatsapp(
+                $r->whatsapp,
+                WhatsAppText::compose($title, [$greeting, implode("\n\n", $paragraphs), "Ouvrir :\n{$internUrl}"]),
+                "{$context}:{$r->reference}", self::MODULE, true,
+                fallbackEmail: [
+                    'to' => $r->email, 'to_name' => $r->fullName(), 'subject' => $title, 'view' => 'stages::emails.message',
+                    'vars' => ['title' => $title, 'greeting' => $greeting, 'paragraphs' => $paragraphs, 'fields' => [],
+                        'highlight' => null, 'highlightTitle' => null, 'ctaLabel' => 'Ouvrir', 'ctaUrl' => $internUrl],
+                ],
+                at: $at,
+            );
+        }
+        $this->toStaff(StageAccess::managers()->concat(StageAccess::supervisors()), $title, $paragraphs, [], $context, $staffUrl);
+
+        return $interns->count();
     }
 
     public function suiviUrl(StageRequest $req): string

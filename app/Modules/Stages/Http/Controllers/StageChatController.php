@@ -58,6 +58,13 @@ class StageChatController extends Controller
             $request->file('files', []), $data['reply_to'] ?? null));
     }
 
+    public function update(Request $request, string $channel, int $message): JsonResponse
+    {
+        $data = $request->validate(['body' => ['nullable', 'string', 'max:' . (StageChatService::MAX_LENGTH + 500)]]);
+
+        return $this->guard(fn () => $this->chat->edit($channel, $this->who($request), $message, (string) ($data['body'] ?? '')));
+    }
+
     /** Pièce jointe : aperçu dans la page pour une image, téléchargement sinon. */
     public function file(Request $request, string $channel, int $file): JsonResponse|StreamedResponse
     {

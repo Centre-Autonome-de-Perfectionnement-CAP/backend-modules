@@ -336,7 +336,7 @@ class AttestationService
                 ['Votre attestation de stage est prête. Vous pouvez la retirer au secrétariat du CAP-EPAC, aux heures d\'ouverture, muni(e) d\'une pièce d\'identité.'],
                 ($a->numero ? ['Attestation n°' => $a->numero] : []) + (!empty($c['date_debut']) && !empty($c['date_fin'])
                     ? ['Stage' => 'Du ' . $this->requests->frDate($c['date_debut']) . ' au ' . $this->requests->frDate($c['date_fin'])] : []),
-                context: 'stage-attestation-prete',
+                context: 'stage-attestation-prete', official: true,
             );
         }
 
