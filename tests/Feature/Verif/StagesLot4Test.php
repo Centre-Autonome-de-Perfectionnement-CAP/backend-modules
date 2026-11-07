@@ -11,6 +11,7 @@ use App\Modules\Stages\Models\StageReportVersion;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Services\ReportService;
 use App\Modules\Stages\Services\StageSettingsService;
+use App\Modules\Stages\Services\TaskService;
 use App\Modules\Stages\Support\BusinessHours;
 use App\Modules\Stages\Support\ReportPlan;
 use Carbon\Carbon;
@@ -24,7 +25,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
-/** Module Stages - Lot 4 : rapports périodiques et final. */
+/** Module Stages - Lot 4 : rapports périodiques et final, espace tâches. */
 class StagesLot4Test extends TestCase
 {
     use InternDevice;
@@ -351,6 +352,77 @@ class StagesLot4Test extends TestCase
         $this->assertSame('2026-11-07 07:00', CarbonImmutable::instance($msg['at'])->setTimezone(BusinessHours::TZ)->format('Y-m-d H:i'));
         $this->assertSame($a->email, $msg['fallback']);
         $this->assertFalse(collect($this->sent)->contains('channel', 'email'), 'WhatsApp seul, email en secours');
+    }
+
+    public function test_tasks_submit_review_publish_and_remind(): void
+    {
+        [$a, $ha] = $this->intern();
+        [$b, $hb] = $this->intern();
+        [$c, $hc] = $this->intern();
+        $b->update(['nom' => 'DOSSOU', 'prenoms' => 'Ines']);
+        $team = DB::table('stage_teams')->insertGetId(['name' => 'Binôme', 'created_at' => now(), 'updated_at' => now()]);
+        $a->update(['team_id' => $team]);
+        $b->update(['team_id' => $team]);
+        $sup = $this->user('superviseur');
+        DB::table('stage_supervisions')->insert(['stage_request_id' => $a->id, 'user_id' => $sup->id, 'created_at' => now()]);
+        $this->at('2026-11-09 10:00');
+
+        // Le superviseur confie une tâche au binôme ; les deux sont prévenus
+        $this->actingAs($sup, 'sanctum');
+        $this->assertSame('DOSSOU Ines', collect($this->getJson('/api/stages/admin/taches')->assertOk()->json('data.interns'))->firstWhere('id', $a->id)['binome']);
+        $this->postJson('/api/stages/admin/taches', ['title' => 'Hier', 'stage_request_id' => $a->id, 'due_date' => '2026-11-01'])->assertStatus(422);
+        $id = $this->postJson('/api/stages/admin/taches', ['title' => 'Maquette de la page d\'accueil', 'instructions' => 'Version téléphone et ordinateur.',
+            'stage_request_id' => $a->id, 'pour_binome' => true, 'due_date' => '2026-11-13'])->assertStatus(201)->json('data.id');
+        $this->assertSame(2, collect($this->sent)->filter(fn ($s) => str_contains($s['text'], 'Nouvelle tâche'))->count());
+
+        // Visible du binôme, pas d'un autre stagiaire
+        $this->assertSame([$id], array_column($this->getJson('/api/stagiaire/taches', $hb)->json('data.tasks'), 'id'));
+        $this->getJson("/api/stagiaire/taches/{$id}", $hc)->assertStatus(404);
+
+        // Remise : fichier non accepté, lien invalide, puis remise correcte
+        $this->post("/api/stagiaire/taches/{$id}/remise", ['files' => [UploadedFile::fake()->create('virus.exe', 10)]], $ha)->assertStatus(422);
+        $this->post("/api/stagiaire/taches/{$id}/remise", ['links' => ['javascript:alert(1)']], $ha)->assertStatus(422);
+        $this->post("/api/stagiaire/taches/{$id}/remise", ['files' => [UploadedFile::fake()->create('trop.pdf', 21000, 'application/pdf')]], $ha)->assertStatus(422);
+        $d = $this->post("/api/stagiaire/taches/{$id}/remise", ['files' => [$this->pdf()], 'links' => ['https://figma.com/x'], 'message' => 'Voici la v1'], $ha)
+            ->assertOk()->json('data');
+        $this->assertSame(['submitted', 1, 2], [$d['status'], $d['version'], count($d['items'])]);
+        $first = $d['items'][0]['id'];
+        $this->assertCount(1, Storage::disk('local')->allFiles("stages/taches/{$id}"));
+        $this->getJson("/api/stagiaire/taches/{$id}/fichiers/{$first}?from=0&size=10", $hb)->assertOk()->assertJsonStructure(['name', 'total', 'content']);
+
+        // À revoir (commentaire obligatoire), puis nouvelle remise : seule la dernière est gardée
+        $this->actingAs($sup, 'sanctum')->postJson("/api/stages/admin/taches/{$id}/decision", ['decision' => 'revision'])->assertStatus(422);
+        $this->postJson("/api/stages/admin/taches/{$id}/publication", ['public' => true])->assertStatus(409);
+        $this->postJson("/api/stages/admin/taches/{$id}/decision", ['decision' => 'revision', 'comment' => 'Revoir le menu'])->assertOk();
+        $this->assertSame('revision', $this->getJson("/api/stagiaire/taches/{$id}", $hb)->json('data.status'));
+        $d = $this->post("/api/stagiaire/taches/{$id}/remise", ['files' => [$this->pdf()]], $hb)->assertOk()->json('data');
+        $this->assertSame([2, 1], [$d['version'], count($d['items'])]);
+        $this->assertCount(1, Storage::disk('local')->allFiles("stages/taches/{$id}"));
+        $this->getJson("/api/stagiaire/taches/{$id}/fichiers/{$first}", $ha)->assertStatus(404);
+
+        // Validé puis rendu public : visible de tous, annoncé une fois le soir
+        $this->actingAs($sup, 'sanctum')->postJson("/api/stages/admin/taches/{$id}/decision", ['decision' => 'validated'])->assertOk();
+        $this->post("/api/stagiaire/taches/{$id}/remise", ['files' => [$this->pdf()]], $ha)->assertStatus(409);
+        $this->postJson("/api/stages/admin/taches/{$id}/publication", ['public' => true])->assertOk()->assertJsonPath('data.published', true);
+        $this->assertSame([$id], array_column($this->getJson('/api/stagiaire/taches/publies', $hc)->json('data'), 'id'));
+        $this->getJson("/api/stagiaire/taches/{$id}", $hc)->assertOk()->assertJsonPath('data.can_submit', false);
+        $this->sent = [];
+        $this->at('2026-11-09 17:45');
+        $this->artisan('stages:process-reports --digest')->assertSuccessful();
+        $this->assertTrue(collect($this->sent)->contains(fn ($s) => $s['to'] === $c->whatsapp && str_contains($s['text'], 'Nouveau travail publié')));
+        $this->assertSame(0, app(TaskService::class)->announcePublished(), 'annoncé une seule fois');
+
+        // Tâche créée par le stagiaire : supprimable avant remise ; rappel la veille de l'échéance
+        $own = $this->postJson('/api/stagiaire/taches', ['title' => 'Lire la doc Sanctum', 'due_date' => '2026-11-11'], $hc)->assertStatus(201)->json('data');
+        $this->assertSame([true, 'intern'], [$own['can_delete'], $own['created_by']['type']]);
+        $this->postJson('/api/stagiaire/taches', ['title' => 'x', 'stage_request_id' => $a->id], $hc)->assertStatus(422);
+        $this->deleteJson("/api/stagiaire/taches/{$id}", [], $ha)->assertStatus(403);
+        $this->sent = [];
+        $this->at('2026-11-10 09:00');
+        $this->artisan('stages:process-reports')->assertSuccessful();
+        $this->assertTrue(collect($this->sent)->contains(fn ($s) => $s['to'] === $c->whatsapp && str_contains($s['text'], 'Tâche à rendre demain')));
+        $this->assertSame(0, app(TaskService::class)->remindDue(CarbonImmutable::parse('2026-11-10')), 'un seul rappel');
+        $this->deleteJson("/api/stagiaire/taches/{$own['id']}", [], $hc)->assertOk();
     }
 
     public function test_final_report_validation_flag(): void
