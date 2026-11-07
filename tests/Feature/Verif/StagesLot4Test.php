@@ -264,6 +264,15 @@ class StagesLot4Test extends TestCase
         $this->assertSame(['DOSSOU Ines', false], [end($c)['name'], end($c)['mine']]);
         $this->actingAs($lead, 'sanctum')->postJson("/api/stages/admin/rapports/{$twin->id}/decision", ['decision' => 'approved'])->assertOk();
         $this->assertSame(['approved', 2], [StageReport::find($idA)->status, StageReport::find($idA)->official_version]);
+        // Validé : les versions précédentes (et leurs fichiers) sont supprimées, des deux côtés
+        $this->assertSame([[2], [2]], [
+            StageReportVersion::where('report_id', $idA)->pluck('version')->all(),
+            StageReportVersion::where('report_id', $twin->id)->pluck('version')->all(),
+        ]);
+        // v1 (déposée par Koffi) effacée ; v2 (déposée par Ines) gardée, commune aux deux rapports
+        $this->assertSame([0, 1], [count(Storage::disk('local')->allFiles("stages/{$a->reference}/rapports")),
+            count(Storage::disk('local')->allFiles("stages/{$b->reference}/rapports"))]);
+        $this->getJson("/api/stagiaire/rapports/{$idA}/versions/1", $ha)->assertStatus(404);
         $this->post('/api/stagiaire/rapports', ['period_key' => 'S2026-W45', 'fichier' => $this->pdf()], $ha)
             ->assertStatus(409)->assertJsonPath('error_code', 'STAGE_REPORT_LOCKED');
 
