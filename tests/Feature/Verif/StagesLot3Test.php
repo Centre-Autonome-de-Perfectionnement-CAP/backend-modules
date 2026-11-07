@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Core\Jobs\SendNotificationJob;
 use App\Modules\Core\Services\Notifier;
 use App\Modules\Stages\Models\StageAttendance;
+use App\Modules\Stages\Models\StageHistory;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Services\StageSettingsService;
 use App\Modules\Stages\Support\BusinessHours;
@@ -304,6 +305,43 @@ class StagesLot3Test extends TestCase
         $this->at('2026-11-05 10:30');
         $this->artisan('stages:process-activations')->assertSuccessful();
         $this->assertSame('withdrawn', $req->fresh()->status);
+    }
+
+    public function test_activation_deadline_counts_working_days_spares_attempts_and_can_be_reinstated(): void
+    {
+        // Début un jeudi : le week-end ne compte pas et rien n'est annulé le samedi.
+        $req = $this->intern('2026-11-05', '2027-01-31');
+        $tried = $this->intern('2026-11-05', '2027-01-31');
+        $this->at('2026-11-05 10:30');
+        $this->artisan('stages:process-activations')->assertSuccessful();
+        // Le second essaie d'enregistrer son téléphone (l'empreinte échoue ensuite chez lui)
+        $this->postJson('/api/stagiaire/activation/appareil', ['token' => $this->linkToken()])->assertOk();
+
+        $this->at('2026-11-07 18:00'); // samedi
+        $this->artisan('stages:process-activations')->assertSuccessful();
+        $this->at('2026-11-09 10:30'); // lundi : 2 jours ouvrés
+        $this->artisan('stages:process-activations')->assertSuccessful();
+        $this->assertSame(['accepted', 'accepted'], [$req->fresh()->status, $tried->fresh()->status]);
+
+        $this->sent = [];
+        $this->at('2026-11-10 10:30'); // mardi : 3 jours ouvrés
+        $this->artisan('stages:process-activations')->assertSuccessful();
+        $this->assertSame('withdrawn', $req->fresh()->status);
+        // A essayé : pas d'annulation, personnel alerté (une fois par jour)
+        $this->assertSame('accepted', $tried->fresh()->status);
+        $this->assertFalse(collect($this->sent)->contains(fn ($m) => $m['to'] === $tried->whatsapp && str_contains($m['text'], 'Stage annulé')));
+        $this->artisan('stages:process-activations')->assertSuccessful();
+        $this->assertSame(1, StageHistory::where('stage_request_id', $tried->id)->where('action', 'activation_stuck')->count());
+
+        // Rétabli par le responsable : nouveau lien, le délai repart
+        $lead = $this->user('responsable-division', 'formation_continue');
+        $this->actingAs($lead, 'sanctum')->postJson("/api/stages/admin/demandes/{$req->id}/retablir")->assertOk();
+        $this->assertSame('accepted', $req->fresh()->status);
+        $this->assertTrue(collect($this->sent)->contains(fn ($m) => $m['to'] === $req->whatsapp && str_contains($m['text'], '/activer/')));
+        $this->postJson("/api/stages/admin/demandes/{$req->id}/retablir")->assertStatus(409);
+        $this->at('2026-11-11 10:30');
+        $this->artisan('stages:process-activations')->assertSuccessful();
+        $this->assertSame('accepted', $req->fresh()->status, 'nouveau délai à partir du jour où il est rétabli');
     }
 
     public function test_no_presence_without_configured_place(): void

@@ -115,6 +115,7 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         Route::middleware('throttle:20,1')->group(function () {
             Route::post('demandes/{id}/fin', [StageAdminController::class, 'endStage'])->whereNumber('id');
             Route::post('demandes/{id}/fin/annuler', [StageAdminController::class, 'undoEnd'])->whereNumber('id');
+            Route::post('demandes/{id}/retablir', [StageAdminController::class, 'reinstate'])->whereNumber('id');
         });
         Route::get('messages', [StageChatController::class, 'index'])->middleware('throttle:120,1');
         Route::get('messages/{channel}', [StageChatController::class, 'show'])->where('channel', StageChatController::CHANNEL)->middleware('throttle:120,1');
