@@ -565,6 +565,9 @@ class ReportService
                 $this->history($r->stage, 'report_' . $decision, $by, $this->labelFor($r) . ($comment ? " : {$comment}" : ''));
             }
         });
+        foreach ($both as $r) {
+            $this->pruneOldVersions($r);
+        }
 
         $req = $report->stage;
         $who = trim($by->first_name . ' ' . $by->last_name);
@@ -736,6 +739,39 @@ class ReportService
         ];
     }
 
+    /**
+     * Rapport validé : les versions déposées avant la version validée sont
+     * supprimées (fichiers compris) pour libérer de la place sur le serveur.
+     * Restent la version validée et, le cas échéant, une version corrigée
+     * déposée après. Un fichier partagé avec le rapport du binôme n'est
+     * effacé que lorsque plus aucune version ne l'utilise.
+     */
+    public function pruneOldVersions(StageReport $r): int
+    {
+        if (!$r->official_version) {
+            return 0;
+        }
+        $old = StageReportVersion::where('report_id', $r->id)->where('version', '<', $r->official_version)->get(['id', 'file_path']);
+        if ($old->isEmpty()) {
+            return 0;
+        }
+        try {
+            StageReportVersion::whereIn('id', $old->pluck('id'))->delete();
+            $disk = Storage::disk(StageRequestService::DISK);
+            foreach ($old->pluck('file_path')->unique() as $path) {
+                if (!StageReportVersion::where('file_path', $path)->exists()) {
+                    $disk->delete($path);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('[Stages] Anciennes versions de rapport non supprimées', ['report_id' => $r->id, 'error' => $e->getMessage()]);
+
+            return 0;
+        }
+
+        return $old->count();
+    }
+
     public function filePath(StageReport $report, int $version): ?string
     {
         $v = StageReportVersion::where('report_id', $report->id)->where('version', $version)->first();
@@ -752,6 +788,14 @@ class ReportService
     {
         $today ??= BusinessHours::today();
         $stats = ['opened' => 0, 'mid' => 0, 'closing' => 0, 'late' => 0, 'digest' => 0];
+
+        // Rapports déjà validés qui gardent d'anciennes versions (avant cette règle).
+        if ($reminders) {
+            $ids = StageReportVersion::query()->join('stage_reports as r', 'r.id', '=', 'stage_report_versions.report_id')
+                ->whereNotNull('r.official_version')->whereColumn('stage_report_versions.version', '<', 'r.official_version')
+                ->distinct()->limit(200)->pluck('stage_report_versions.report_id');
+            StageReport::whereIn('id', $ids)->get()->each(fn ($r) => $this->pruneOldVersions($r));
+        }
 
         $interns = !$reminders ? collect() : StageRequest::where('status', StageStatus::ACCEPTED)->whereNotNull('activated_at')
             ->where('date_fin', '>=', $today->subDays(10)->toDateString())->get();
@@ -873,6 +917,7 @@ class ReportService
             $this->history($report->stage, 'report_correction_' . $decision, $by,
                 $this->labelFor($report) . ' - version corrigée après soutenance' . ($comment ? " : {$comment}" : ''));
         });
+        $this->pruneOldVersions($report);
 
         $req = $report->stage;
         $who = trim($by->first_name . ' ' . $by->last_name);
