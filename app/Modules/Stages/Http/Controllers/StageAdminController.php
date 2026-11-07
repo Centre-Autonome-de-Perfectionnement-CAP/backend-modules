@@ -6,6 +6,7 @@ use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Modules\Core\Support\FilePreview;
 use App\Modules\Stages\Models\StageRequest;
+use App\Modules\Stages\Services\InternActivationService;
 use App\Modules\Stages\Services\NoteSignatureService;
 use App\Modules\Stages\Services\StageEndService;
 use App\Modules\Stages\Services\StageRequestService;
@@ -219,6 +220,18 @@ class StageAdminController extends Controller
         }
 
         return $this->successResponse($this->detail($req->fresh()), 'Fin de stage annulée : le stage reprend et le stagiaire a été prévenu.');
+    }
+
+    /** Stage annulé faute de confirmation de présence, rétabli (nouveau lien envoyé). */
+    public function reinstate(Request $request, int $id, InternActivationService $activation): JsonResponse
+    {
+        try {
+            $req = $activation->reinstate($this->findOrFail((string) $id), $request->user());
+        } catch (BusinessException $e) {
+            return $this->errorResponse($e->getMessage(), $e->getStatusCode(), $e->getErrorCode());
+        }
+
+        return $this->successResponse($this->detail($req->fresh()), 'Stage rétabli : un nouveau lien de confirmation a été envoyé au stagiaire.');
     }
 
     public function getSettings(): JsonResponse
