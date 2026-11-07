@@ -4,6 +4,7 @@ namespace App\Modules\Stages\Http\Controllers;
 
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
+use App\Modules\Core\Support\FilePreview;
 use App\Modules\Stages\Models\StageReport;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Services\ReportService;
@@ -45,7 +46,7 @@ class ReportController extends Controller
         return $this->successResponse($this->reports->overview(StageRequest::findOrFail($id)));
     }
 
-    public function file(int $id, int $version): JsonResponse
+    public function file(Request $request, int $id, int $version): JsonResponse
     {
         $report = StageReport::with('stage')->findOrFail($id);
         $path = $this->reports->filePath($report, $version);
@@ -53,11 +54,10 @@ class ReportController extends Controller
             return $this->errorResponse('Fichier introuvable.', 404, 'STAGE_FILE_NOT_FOUND');
         }
 
-        return response()->json([
-            'name' => "{$this->reports->labelFor($report)} - {$report->stage->reference} - v{$version}.pdf",
-            'mime' => 'application/pdf',
-            'content' => base64_encode(Storage::disk(StageRequestService::DISK)->get($path)),
-        ])->header('Cache-Control', 'private, no-store');
+        // JSON base64, entier ou par tranches (?from=) pour l'affichage progressif.
+        return response()->json(FilePreview::payload($request, Storage::disk(StageRequestService::DISK), $path,
+            "{$this->reports->labelFor($report)} - {$report->stage->reference} - v{$version}.pdf", 'application/pdf'))
+            ->header('Cache-Control', 'private, no-store');
     }
 
     public function comment(Request $request, int $id): JsonResponse

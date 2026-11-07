@@ -333,7 +333,10 @@ class StagesLot1Test extends TestCase
         $this->assertNotEmpty($detail['default_rejection_reason']);
 
         $this->getJson("/api/stages/admin/demandes/{$req->id}/pieces/cv?format=json")
-            ->assertOk()->assertHeader('Cache-Control', 'no-store, private')->assertJsonStructure(['name', 'mime', 'content']);
+            ->assertOk()->assertHeader('Cache-Control', 'no-store, private')->assertJsonStructure(['name', 'mime', 'total', 'content']);
+        $part = $this->getJson("/api/stages/admin/demandes/{$req->id}/pieces/cv?format=json&from=0&size=3")->assertOk()->json();
+        $this->assertSame(min(3, $part['total']), strlen(base64_decode($part['content'])));
+        $this->assertSame(0, $part['from']);
         $this->getJson("/api/stages/admin/demandes/{$req->id}/pieces/inconnue")->assertStatus(404);
     }
 
