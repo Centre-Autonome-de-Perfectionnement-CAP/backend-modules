@@ -189,6 +189,8 @@ class StagesLot4Test extends TestCase
 
         $this->actingAs($sup, 'sanctum');
         $this->assertSame([$id], array_column($this->getJson('/api/stages/admin/rapports?mine=1')->assertOk()->json('data'), 'id'));
+        $this->getJson("/api/stages/admin/rapports/{$id}/versions/1?from=0&size=1024")->assertOk()
+            ->assertJsonStructure(['name', 'mime', 'total', 'from', 'content'])->assertJsonPath('mime', 'application/pdf');
         $this->postJson("/api/stages/admin/rapports/{$id}/decision", ['decision' => 'rejected'])->assertStatus(422);
         $this->postJson("/api/stages/admin/rapports/{$id}/commentaires", ['body' => 'Ajoute le schéma réseau'])->assertOk();
         $this->postJson("/api/stages/admin/rapports/{$id}/decision", ['decision' => 'approved'])->assertOk()

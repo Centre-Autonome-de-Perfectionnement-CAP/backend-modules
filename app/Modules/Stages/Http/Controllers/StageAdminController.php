@@ -4,6 +4,7 @@ namespace App\Modules\Stages\Http\Controllers;
 
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
+use App\Modules\Core\Support\FilePreview;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Services\NoteSignatureService;
 use App\Modules\Stages\Services\StageEndService;
@@ -87,7 +88,7 @@ class StageAdminController extends Controller
         return $this->successResponse($this->detail($req));
     }
 
-    /** Pièce du demandeur : flux inline, ou JSON base64 (?format=json) pour le visualiseur. */
+    /** Pièce du demandeur : flux inline, ou JSON base64 (?format=json, par tranches avec ?from=) pour le visualiseur. */
     public function file(Request $request, string $id, string $key)
     {
         if (!array_key_exists($key, StageRequestService::FILE_KEYS)) {
@@ -104,9 +105,7 @@ class StageAdminController extends Controller
         $name = StageRequestService::FILE_KEYS[$key] . ' - ' . $req->reference . '.' . pathinfo($path, PATHINFO_EXTENSION);
 
         if ($request->query('format') === 'json') {
-            return response()->json([
-                'name' => $name, 'mime' => $mime, 'content' => base64_encode($disk->get($path)),
-            ])->header('Cache-Control', 'private, no-store');
+            return response()->json(FilePreview::payload($request, $disk, $path, $name, $mime))->header('Cache-Control', 'private, no-store');
         }
 
         return response($disk->get($path), 200, [

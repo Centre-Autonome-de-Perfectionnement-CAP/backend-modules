@@ -3,6 +3,7 @@
 namespace App\Modules\Demandes\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Core\Support\FilePreview;
 use App\Modules\Demandes\Http\Resources\DocumentRequestListResource;
 use App\Modules\Demandes\Models\DocumentRequest;
 use App\Modules\Demandes\Services\DocumentRequestQueryService;
@@ -146,15 +147,11 @@ class DocumentRequestController extends Controller
         // même chargée en arrière-plan : le fichier se télécharge au lieu de
         // s'afficher, et le visualiseur reste vide. Une réponse JSON n'est
         // jamais interceptée.
+        // Avec ?from= : une tranche seulement (affichage progressif des PDF).
         if ($request->query('format') === 'json') {
-            $disk = Storage::disk('public');
             return response()->json([
                 'success' => true,
-                'data'    => [
-                    'name'    => $displayName,
-                    'mime'    => $disk->mimeType($path) ?: 'application/octet-stream',
-                    'content' => base64_encode($disk->get($path)),
-                ],
+                'data'    => FilePreview::payload($request, Storage::disk('public'), $path, $displayName),
             ])->header('Cache-Control', 'private, no-store');
         }
 

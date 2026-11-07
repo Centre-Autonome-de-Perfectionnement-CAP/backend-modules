@@ -128,6 +128,12 @@ class FileCommentsTest extends TestCase
         $json = $this->getJson($url . '?format=json')->assertOk()->json('data');
         $this->assertSame("%PDF-1.4 test", base64_decode($json['content']));
         $this->assertNotEmpty($json['mime']);
+        $this->assertSame(13, $json['total']);
+
+        // Par tranches (affichage progressif) : contenu exact, taille totale, fin de fichier
+        $part = $this->getJson($url . '?format=json&from=5&size=4')->assertOk()->json('data');
+        $this->assertSame(['1.4 ', 13, 5], [base64_decode($part['content']), $part['total'], $part['from']]);
+        $this->assertSame('', base64_decode($this->getJson($url . '?format=json&from=99&size=4')->json('data.content')));
 
         // Sans le paramètre : comportement inchangé (fichier brut)
         $this->get($url)->assertOk()->assertHeader('content-disposition');
