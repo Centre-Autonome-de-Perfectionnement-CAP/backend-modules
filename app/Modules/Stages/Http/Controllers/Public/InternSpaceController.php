@@ -12,6 +12,7 @@ use App\Modules\Stages\Services\BinomeService;
 use App\Modules\Stages\Services\AttendanceService;
 use App\Modules\Stages\Services\InternActivationService;
 use App\Modules\Stages\Services\InternAuthService;
+use App\Modules\Stages\Services\InternCodeService;
 use App\Modules\Stages\Services\InternRequestService;
 use App\Modules\Stages\Services\InternWebAuthnService;
 use App\Modules\Stages\Services\ReportService;
@@ -39,6 +40,12 @@ class InternSpaceController extends Controller
 {
     use ApiResponse;
 
+    private const CODE_RULE = ['string', 'regex:/^\d{6}$/'];
+    private const CODE_MESSAGES = [
+        'code.required_without' => 'Saisissez le code reçu.',
+        'code.regex'            => 'Le code compte 6 chiffres.',
+    ];
+
     private const POSITION_RULES = [
         'position'          => ['required', 'array'],
         'position.lat'      => ['required', 'numeric', 'between:-90,90'],
@@ -58,6 +65,7 @@ class InternSpaceController extends Controller
         private readonly AttestationService $attestations,
         private readonly BinomeService $binomes,
         private readonly LibraryService $library,
+        private readonly InternCodeService $codes,
     ) {}
 
     // ── Activation (lien du premier jour) ───────────────────────────────
@@ -89,25 +97,36 @@ class InternSpaceController extends Controller
         ));
     }
 
+    /** Mode code (téléphone sans empreinte) : code de confirmation envoyé au stagiaire. */
+    public function activationCode(Request $request): JsonResponse
+    {
+        $data = $request->validate(['token' => \App\Modules\Core\Support\LinkToken::RULE]);
+
+        return $this->guard(fn () => $this->codeSent(
+            $this->activation->sendCode($data['token'], InternAuthService::deviceHash($request)),
+        ));
+    }
+
     public function activate(Request $request): JsonResponse
     {
         $data = $request->validate([
             'token'    => \App\Modules\Core\Support\LinkToken::RULE,
             'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
             'reglement_version'          => ['required', 'integer'],
-            'webauthn'                   => ['required', 'array'],
-            'webauthn.clientDataJSON'    => ['required', 'string', 'max:20000'],
-            'webauthn.attestationObject' => ['required', 'string', 'max:20000'],
+            'webauthn'                   => ['required_without:code', 'array'],
+            'webauthn.clientDataJSON'    => ['required_with:webauthn', 'string', 'max:20000'],
+            'webauthn.attestationObject' => ['required_with:webauthn', 'string', 'max:20000'],
+            'code'                       => ['required_without:webauthn', 'prohibits:webauthn', ...self::CODE_RULE],
             'label'                      => ['nullable', 'string', 'max:120'],
         ] + self::POSITION_RULES, [
             'password.confirmed' => 'Les deux mots de passe ne correspondent pas.',
-            'webauthn.required'  => 'Enregistrez votre téléphone de stage (empreinte) pour confirmer votre présence.',
-        ]);
+            'webauthn.required_without' => 'Enregistrez votre téléphone de stage (empreinte ou code) pour confirmer votre présence.',
+        ] + self::CODE_MESSAGES);
 
         return $this->guard(function () use ($data, $request) {
             $account = $this->activation->activate(
                 $data['token'], $data['position'], $data['password'], (int) $data['reglement_version'],
-                $data['webauthn'], $data['label'] ?? null, InternAuthService::deviceHash($request),
+                $data['webauthn'] ?? null, $data['label'] ?? null, InternAuthService::deviceHash($request), $data['code'] ?? null,
             );
 
             return $this->successResponse(['token' => $this->auth->open($account, $request)], 'Présence confirmée. Bienvenue !', 201);
@@ -227,7 +246,8 @@ class InternSpaceController extends Controller
                 'text'     => $this->settings->reglementFor($req),
                 'accepted' => (int) $account->reglement_version === $version,
             ] : null,
-            'webauthn'    => ['enrolled' => (bool) $device, 'rp_id' => $this->webauthn->rpId()],
+            'webauthn'    => ['enrolled' => (bool) $device, 'rp_id' => $this->webauthn->rpId(),
+                'mode' => $device ? (InternWebAuthnService::isCode($device) ? 'code' : 'empreinte') : null],
             'device'      => $device ? ['label' => $device->device_label, 'since' => \Carbon\Carbon::parse($device->created_at)->toIso8601String()] : null,
             'today'       => $this->attendance->today($req),
             'summary'     => $this->attendance->report($req, null, false)['summary'],
@@ -275,11 +295,54 @@ class InternSpaceController extends Controller
         });
     }
 
+    /**
+     * Mode code : un nouveau code à chaque demande, pour enregistrer le
+     * téléphone (aucun téléphone de stage) ou pour pointer (téléphone en mode code).
+     */
+    public function code(Request $request): JsonResponse
+    {
+        return $this->guard(function () use ($request) {
+            $account = $this->ready($request);
+            $device  = $this->webauthn->device($account->id);
+            $hash    = InternAuthService::deviceHash($request);
+            if ($device && !InternWebAuthnService::isCode($device)) {
+                throw new BusinessException('Votre téléphone de stage pointe avec l\'empreinte.', 'STAGE_CODE_NOT_ALLOWED', 422);
+            }
+            $device ? $this->webauthn->verifyCodeDevice($account, $hash) : $this->webauthn->assertDeviceFree($hash, $account->id);
+
+            return $this->codeSent($this->codes->send($this->codeScope($account), $account->stage, $hash,
+                $device ? 'pointer' : 'enregistrer votre téléphone de stage'));
+        });
+    }
+
+    /** Enregistrement du téléphone de stage en mode code (après une réinitialisation). */
+    public function codeRegister(Request $request): JsonResponse
+    {
+        $data = $request->validate(['code' => ['required', ...self::CODE_RULE], 'label' => ['nullable', 'string', 'max:120']], self::CODE_MESSAGES);
+
+        return $this->guard(function () use ($data, $request) {
+            $account = $this->ready($request);
+            $hash = InternAuthService::deviceHash($request);
+            if ($this->webauthn->hasCredential($account)) {
+                throw new BusinessException('Un téléphone de stage est déjà enregistré pour votre compte. Pour en changer, demandez la réinitialisation à votre superviseur.', 'STAGE_WEBAUTHN_EXISTS', 409);
+            }
+            $this->codes->check($this->codeScope($account), $data['code'], $hash);
+            $this->webauthn->storeCode($account->id, $data['label'] ?? null, $hash);
+            $this->codes->forget($this->codeScope($account));
+
+            return $this->successResponse(null, 'Téléphone de stage enregistré. Pour pointer, vous demanderez un code à chaque fois.');
+        });
+    }
+
     public function punchOptions(Request $request): JsonResponse
     {
-        return $this->guard(fn () => $this->successResponse(
-            $this->webauthn->assertionOptions($this->ready($request), $this->sessionKey($request)),
-        ));
+        return $this->guard(function () use ($request) {
+            $account = $this->ready($request);
+
+            return $this->successResponse(InternWebAuthnService::isCode($this->webauthn->device($account->id))
+                ? ['mode' => 'code']
+                : $this->webauthn->assertionOptions($account, $this->sessionKey($request)));
+        });
     }
 
     public function punch(Request $request): JsonResponse
@@ -287,22 +350,34 @@ class InternSpaceController extends Controller
         $data = $request->validate([
             'kind'                       => ['required', Rule::in(AttendanceService::KINDS)],
             'confirm_early'              => ['sometimes', 'boolean'],
-            'webauthn'                   => ['required', 'array'],
-            'webauthn.id'                => ['required', 'string', 'max:1024'],
-            'webauthn.clientDataJSON'    => ['required', 'string', 'max:20000'],
-            'webauthn.authenticatorData' => ['required', 'string', 'max:20000'],
-            'webauthn.signature'         => ['required', 'string', 'max:20000'],
-        ] + self::POSITION_RULES);
+            'webauthn'                   => ['required_without:code', 'array'],
+            'webauthn.id'                => ['required_with:webauthn', 'string', 'max:1024'],
+            'webauthn.clientDataJSON'    => ['required_with:webauthn', 'string', 'max:20000'],
+            'webauthn.authenticatorData' => ['required_with:webauthn', 'string', 'max:20000'],
+            'webauthn.signature'         => ['required_with:webauthn', 'string', 'max:20000'],
+            'code'                       => ['required_without:webauthn', 'prohibits:webauthn', ...self::CODE_RULE],
+        ] + self::POSITION_RULES, self::CODE_MESSAGES);
 
         return $this->guard(function () use ($data, $request) {
             $account = $this->ready($request);
+            $hash = InternAuthService::deviceHash($request);
+            $byCode = isset($data['code']);
             try {
-                $this->webauthn->verify($account, $this->sessionKey($request), $data['webauthn'], InternAuthService::deviceHash($request));
+                if ($byCode) {
+                    $this->webauthn->verifyCodeDevice($account, $hash);
+                    $this->codes->check($this->codeScope($account), $data['code'], $hash);
+                } else {
+                    $this->webauthn->verify($account, $this->sessionKey($request), $data['webauthn'], $hash);
+                }
             } catch (BusinessException $e) {
-                $this->attendance->fail($account->stage, 'webauthn');
+                $this->attendance->fail($account->stage, $byCode ? 'code' : 'webauthn');
                 throw $e;
             }
-            $p = $this->attendance->punch($account->stage, $data['kind'], $data['position'], earlyConfirmed: (bool) ($data['confirm_early'] ?? false));
+            $p = $this->attendance->punch($account->stage, $data['kind'], $data['position'], $byCode ? 'code' : 'pointage',
+                earlyConfirmed: (bool) ($data['confirm_early'] ?? false));
+            if ($byCode) {
+                $this->codes->forget($this->codeScope($account)); // présence confirmée : le code ne vaut plus
+            }
             $msg = 'Pointage « ' . AttendanceService::LABELS[$p->kind] . ' » enregistré à ' . $p->at->setTimezone(BusinessHours::TZ)->format('H\hi')
                 . ($p->late_minutes ? " (retard de {$p->late_minutes} min)" : '')
                 . ($p->early ? ' (sortie anticipée)' : '') . '.';
@@ -585,6 +660,17 @@ class InternSpaceController extends Controller
     private function reglementApplies(\App\Modules\Stages\Models\StageRequest $req): bool
     {
         return !$req->date_fin || $req->date_fin->toDateString() >= BusinessHours::today()->toDateString();
+    }
+
+    private function codeScope(StageInternAccount $account): string
+    {
+        return 'acct:' . $account->id;
+    }
+
+    /** @param array{expires_minutes: int, retry_in: int, to: string} $sent */
+    private function codeSent(array $sent): JsonResponse
+    {
+        return $this->successResponse($sent, "Code envoyé sur {$sent['to']}. Valable {$sent['expires_minutes']} minutes.");
     }
 
     private function sessionKey(Request $request): string

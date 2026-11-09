@@ -28,6 +28,7 @@ use lbuchs\WebAuthn\WebAuthnException;
 class InternWebAuthnService
 {
     private const CHALLENGE_TTL_SEC = 180;
+    private const CODE_PREFIX = 'code:';
 
     public function rpId(): string
     {
@@ -53,6 +54,48 @@ class InternWebAuthnService
     public function hasCredential(StageInternAccount $account): bool
     {
         return $this->device($account->id) !== null;
+    }
+
+    /**
+     * Téléphone de stage en « mode code » : il ne sait pas utiliser
+     * l'empreinte ; chaque confirmation se fait avec un code à usage unique
+     * envoyé au stagiaire et saisi sur ce téléphone (InternCodeService).
+     */
+    public static function isCode(?object $cred): bool
+    {
+        return $cred !== null && str_starts_with((string) $cred->credential_id, self::CODE_PREFIX);
+    }
+
+    /** Enregistre le téléphone en mode code (code déjà vérifié par l'appelant). */
+    public function storeCode(int $accountId, ?string $label, string $deviceHash): void
+    {
+        $this->assertDeviceFree($deviceHash, $accountId);
+        if (DB::table('stage_webauthn_credentials')->where('account_id', $accountId)->whereNull('revoked_at')->exists()) {
+            throw new BusinessException('Un téléphone de stage est déjà enregistré pour votre compte.', 'STAGE_WEBAUTHN_EXISTS', 409);
+        }
+        DB::table('stage_webauthn_credentials')->insert([
+            'account_id'    => $accountId,
+            'credential_id' => self::CODE_PREFIX . Str::random(40),
+            'public_key'    => 'code',
+            'sign_count'    => 0,
+            'device_label'  => mb_substr(trim('Code WhatsApp' . ($label ? ' · ' . strip_tags($label) : '')), 0, 120),
+            'device_hash'   => $deviceHash,
+            'created_at'    => now(),
+            'updated_at'    => now(),
+        ]);
+    }
+
+    /** Confirmation par code réussie : le téléphone doit être le téléphone de stage. */
+    public function verifyCodeDevice(StageInternAccount $account, string $deviceHash): void
+    {
+        $cred = $this->device($account->id);
+        if (!self::isCode($cred)) {
+            throw new BusinessException('Votre téléphone de stage pointe avec l\'empreinte.', 'STAGE_CODE_NOT_ALLOWED', 422);
+        }
+        if (!$this->matches($cred, $deviceHash)) {
+            throw new BusinessException('Ce téléphone n\'est pas votre téléphone de stage.', 'STAGE_WEBAUTHN_UNKNOWN_DEVICE', 422);
+        }
+        DB::table('stage_webauthn_credentials')->where('id', $cred->id)->update(['last_used_at' => now(), 'updated_at' => now()]);
     }
 
     /** Enregistrement depuis l'espace (après une réinitialisation). */
@@ -189,7 +232,7 @@ class InternWebAuthnService
     public function assertionOptions(StageInternAccount $account, string $sessionKey): array
     {
         $ids = DB::table('stage_webauthn_credentials')->where('account_id', $account->id)->whereNull('revoked_at')
-            ->pluck('credential_id')->map(fn ($id) => $this->unb64url($id))->all();
+            ->where('credential_id', 'not like', self::CODE_PREFIX . '%')->pluck('credential_id')->map(fn ($id) => $this->unb64url($id))->all();
         if (!$ids) {
             throw new BusinessException('Enregistrez d\'abord votre téléphone de stage pour pouvoir pointer.', 'STAGE_WEBAUTHN_MISSING', 409);
         }

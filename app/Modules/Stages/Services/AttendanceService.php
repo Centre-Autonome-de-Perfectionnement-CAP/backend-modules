@@ -54,7 +54,94 @@ class AttendanceService
     /** Permissions d'une partie de journée (heure annoncée : time_from). */
     private const PARTIAL_TYPES = ['retard', 'sortie_anticipee'];
 
+    /** Source des journées marquées présentes par le personnel (période manquée, voir regularize()). */
+    public const REGULARIZED = 'regularisation';
+
     public function __construct(private readonly StageSettingsService $settings) {}
+
+    /**
+     * Période manquée : jours ouvrés entre le début prévu et la prise de
+     * service enregistrée (stagiaire qui n'a pas pu activer son espace à
+     * temps, faute d'empreinte…). Vide si rien n'est à régulariser.
+     *
+     * @return list<string> jours (AAAA-MM-JJ)
+     */
+    public function missedDays(StageRequest $req): array
+    {
+        if (!$req->date_debut || !$req->date_debut_reelle || !$req->activated_at) {
+            return [];
+        }
+        $from  = CarbonImmutable::parse($req->date_debut->toDateString(), BusinessHours::TZ);
+        if ($req->attendance_from) {
+            $from = $from->max(CarbonImmutable::parse($req->attendance_from->toDateString(), BusinessHours::TZ));
+        }
+        $until = CarbonImmutable::parse($req->date_debut_reelle->toDateString(), BusinessHours::TZ);
+        if ($req->date_fin) {
+            $until = $until->min(CarbonImmutable::parse($req->date_fin->toDateString(), BusinessHours::TZ)->addDay());
+        }
+        $taken = StageAttendance::where('stage_request_id', $req->id)
+            ->whereBetween('day', [$from->toDateString(), $until->toDateString()])->pluck('day')
+            ->map(fn ($d) => $d->toDateString())->flip();
+
+        $days = [];
+        for ($d = $from; $d->lessThan($until); $d = $d->addDay()) {
+            if (!$d->isWeekend() && !isset($taken[$d->toDateString()])) {
+                $days[] = $d->toDateString();
+            }
+        }
+
+        return $days;
+    }
+
+    /**
+     * Régularise la période manquée : les jours cochés comptent comme des
+     * journées complètes (arrivée et sortie aux heures prévues, marquées
+     * « régularisé ») ; les autres sont des absences. Le stage est alors
+     * considéré comme commencé à la date prévue.
+     *
+     * @param  list<string>  $present  jours présents (parmi missedDays())
+     * @return array{present: int, absent: int}
+     */
+    public function regularize(StageRequest $req, array $present, \App\Models\User $by): array
+    {
+        return DB::transaction(function () use ($req, $present, $by) {
+            $locked = StageRequest::whereKey($req->id)->lockForUpdate()->first();
+            $missed = $this->missedDays($locked);
+            if (!$missed) {
+                throw new BusinessException('Il n\'y a plus de période à régulariser pour ce stagiaire.', 'STAGE_REGULARIZE_NOTHING', 409);
+            }
+            $present = array_values(array_unique($present));
+            if (array_diff($present, $missed)) {
+                throw new BusinessException('Certains jours ne font pas partie de la période à régulariser. Rechargez la page.', 'STAGE_REGULARIZE_DAYS', 422);
+            }
+            sort($present);
+
+            foreach ($present as $key) {
+                $h = $this->hours($locked, CarbonImmutable::parse($key, BusinessHours::TZ));
+                foreach (['arrivee', 'sortie'] as $kind) {
+                    StageAttendance::create([
+                        'stage_request_id' => $locked->id, 'day' => $key, 'kind' => $kind, 'at' => $h[$kind]->utc(),
+                        'late_minutes' => 0, 'early' => false, 'position_checked' => false, 'source' => self::REGULARIZED,
+                    ]);
+                }
+            }
+            $first = $missed[0];
+            $last  = end($missed);
+            $locked->forceFill(['date_debut_reelle' => $locked->date_debut->toDateString()])->save();
+
+            $fr = fn (string $d) => CarbonImmutable::parse($d)->locale('fr')->isoFormat('D MMMM YYYY');
+            $absent = count($missed) - count($present);
+            StageHistory::create([
+                'stage_request_id' => $locked->id, 'action' => 'attendance_regularized', 'from_status' => $locked->status,
+                'to_status' => $locked->status, 'actor' => 'staff', 'user_id' => $by->id,
+                'comment' => 'Période du ' . $fr($first) . ' au ' . $fr($last) . ' régularisée par ' . trim($by->first_name . ' ' . $by->last_name)
+                    . ' : ' . count($present) . ' jour(s) présent(s), ' . $absent . ' absence(s)',
+                'meta' => ['from' => $first, 'to' => $last, 'present' => $present],
+            ]);
+
+            return ['present' => count($present), 'absent' => $absent];
+        });
+    }
 
     /** Premier jour effectif du stage. */
     public function startDay(StageRequest $req): ?CarbonImmutable
@@ -102,7 +189,7 @@ class AttendanceService
             return $this->record($req, $kind, $position, $source, $now, $day, $failReason, $earlyConfirmed);
         } catch (BusinessException $e) {
             // Tentative refusée : seule la raison est gardée (diagnostic), hors transaction.
-            if ($failReason !== null && $source === 'pointage') {
+            if ($failReason !== null && $source !== 'activation') {
                 $this->fail($req, $failReason);
             }
             throw $e;
@@ -269,7 +356,9 @@ class AttendanceService
                 'punches' => collect(self::KINDS)->mapWithKeys(fn ($k) => [$k => isset($p[$k]) ? [
                     'at' => $p[$k]->at?->toIso8601String(), 'late_minutes' => $p[$k]->late_minutes,
                     'early' => $p[$k]->early, 'distance_m' => $p[$k]->distance_m,
+                    'code' => $p[$k]->source === 'code',
                 ] : null])->all(),
+                'regularise' => isset($p['arrivee']) && $p['arrivee']->source === self::REGULARIZED,
             ];
         }
 
