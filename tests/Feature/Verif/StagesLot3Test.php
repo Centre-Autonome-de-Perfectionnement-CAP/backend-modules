@@ -690,4 +690,128 @@ class StagesLot3Test extends TestCase
             'confirmation' => $confirm['confirmation'], 'webauthn' => $this->sign($confirm['publicKey']['challenge'], 9, openssl_pkey_new(['curve_name' => 'prime256v1', 'private_key_type' => OPENSSL_KEYTYPE_EC])),
         ], $old)->assertStatus(403);
     }
+
+    /** Dernier code de confirmation reçu sur WhatsApp. */
+    private function lastCode(StageRequest $req): string
+    {
+        $msg = collect($this->sent)->last(fn ($m) => $m['to'] === $req->whatsapp && str_contains($m['text'], 'Code de confirmation'));
+        preg_match('/\*(\d{6})\*/', $msg['text'] ?? '', $m);
+
+        return $m[1] ?? '';
+    }
+
+    public function test_phone_without_fingerprint_confirms_and_punches_with_a_code(): void
+    {
+        $this->setPlace();
+        $req = $this->intern('2026-11-02', '2027-01-29');
+        $this->at('2026-11-02 10:05');
+        $this->artisan('stages:process-activations')->assertSuccessful();
+        $token = $this->linkToken();
+        $info = $this->getJson("/api/stagiaire/activation?token={$token}")->assertOk();
+        $activate = fn (array $extra) => $this->postJson('/api/stagiaire/activation', [
+            'token' => $token, 'position' => $this->pos(), 'password' => 'Stage2026', 'password_confirmation' => 'Stage2026',
+            'reglement_version' => $info->json('data.reglement.version'), 'label' => 'Itel A70',
+        ] + $extra);
+
+        // Arrivé le mercredi, sans empreinte : code demandé, un par minute au plus
+        $this->at('2026-11-04 08:30');
+        $this->postJson('/api/stagiaire/activation/code', ['token' => $token])->assertOk()->assertJsonPath('data.expires_minutes', 5);
+        $code = $this->lastCode($req);
+        $this->assertMatchesRegularExpression('/^\d{6}$/', $code);
+        $this->postJson('/api/stagiaire/activation/code', ['token' => $token])->assertStatus(429)->assertJsonPath('error_code', 'STAGE_CODE_WAIT');
+        $activate([])->assertStatus(422)->assertJsonValidationErrors('webauthn');
+        $wrong = $code === '000000' ? '111111' : '000000';
+        $activate(['code' => $wrong])->assertStatus(422)->assertJsonPath('error_code', 'STAGE_CODE_BAD');
+        // Code lié au téléphone qui l'a demandé
+        $this->postJson('/api/stagiaire/activation', [
+            'token' => $token, 'position' => $this->pos(), 'password' => 'Stage2026', 'password_confirmation' => 'Stage2026',
+            'reglement_version' => $info->json('data.reglement.version'), 'code' => $code,
+        ], ['X-Stagiaire-Appareil' => 'autre-telephone-qui-essaie-0123456789'])->assertStatus(422)->assertJsonPath('error_code', 'STAGE_CODE_DEVICE');
+        $h = ['X-Stagiaire-Token' => $activate(['code' => $code])->assertStatus(201)->json('data.token')];
+
+        $me = $this->getJson('/api/stagiaire/moi', $h)->assertOk()->json('data');
+        $this->assertSame('code', $me['webauthn']['mode']);
+        $this->assertStringContainsString('Code WhatsApp', DB::table('stage_webauthn_credentials')->where('device_hash', $this->deviceHash())->value('device_label'));
+        $this->assertSame('2026-11-04', $req->fresh()->date_debut_reelle->toDateString());
+
+        // Pointage : un code demandé à chaque fois, qui expire dès que la présence est confirmée
+        $this->at('2026-11-04 12:30');
+        $this->postJson('/api/stagiaire/pointage/options', [], $h)->assertOk()->assertJsonPath('data.mode', 'code');
+        $this->postJson('/api/stagiaire/pointage', ['kind' => 'pause_debut', 'position' => $this->pos(), 'code' => '123456'], $h)
+            ->assertStatus(422)->assertJsonPath('error_code', 'STAGE_CODE_EXPIRED');
+        $this->postJson('/api/stagiaire/code', [], $h)->assertOk();
+        $code = $this->lastCode($req);
+        // Hors zone : refusé, le code reste valable
+        $this->postJson('/api/stagiaire/pointage', ['kind' => 'pause_debut', 'position' => $this->pos(0.3), 'code' => $code], $h)
+            ->assertStatus(422)->assertJsonPath('error_code', 'STAGE_PUNCH_POSITION');
+        $this->postJson('/api/stagiaire/pointage', ['kind' => 'pause_debut', 'position' => $this->pos(), 'code' => $code], $h)->assertStatus(201);
+        $this->assertSame('code', StageAttendance::where('stage_request_id', $req->id)->where('kind', 'pause_debut')->value('source'));
+        $this->at('2026-11-04 15:00');
+        $this->postJson('/api/stagiaire/pointage', ['kind' => 'pause_fin', 'position' => $this->pos(), 'code' => $code], $h)
+            ->assertStatus(422)->assertJsonPath('error_code', 'STAGE_CODE_EXPIRED');
+
+        // Trois erreurs annulent le code
+        $this->postJson('/api/stagiaire/code', [], $h)->assertOk();
+        $code = $this->lastCode($req);
+        $bad = $code === '000000' ? '111111' : '000000';
+        foreach (['STAGE_CODE_BAD', 'STAGE_CODE_BAD', 'STAGE_CODE_EXPIRED', 'STAGE_CODE_EXPIRED'] as $i => $err) {
+            $this->postJson('/api/stagiaire/pointage', ['kind' => 'pause_fin', 'position' => $this->pos(), 'code' => $i === 3 ? $code : $bad], $h)
+                ->assertStatus(422)->assertJsonPath('error_code', $err);
+        }
+        // Un téléphone en mode code ne pointe pas avec l'empreinte, et l'espace ne s'ouvre pas ailleurs
+        $other = ['X-Stagiaire-Appareil' => 'telephone-d-un-camarade-0123456789abcd'];
+        $this->postJson('/api/stagiaire/connexion', ['identifiant' => $req->reference, 'password' => 'Stage2026'], $other)
+            ->assertStatus(403)->assertJsonPath('error_code', 'STAGE_DEVICE_OTHER');
+
+        // Le responsable régularise la période manquée (lundi présent, mardi absent)
+        $lead = $this->user('responsable-division', 'formation_continue');
+        $presence = $this->actingAs($lead, 'sanctum')->getJson("/api/stages/admin/stagiaires/{$req->id}/presence")->assertOk()->json('data');
+        $this->assertSame(['2026-11-02', '2026-11-03'], $presence['regularisation']['days']);
+        $this->assertSame('code', $presence['account']['devices'][0]['mode']);
+        $this->postJson("/api/stages/admin/stagiaires/{$req->id}/presence/regulariser", ['present' => ['2026-11-09']])
+            ->assertStatus(422)->assertJsonPath('error_code', 'STAGE_REGULARIZE_DAYS');
+        $this->postJson("/api/stages/admin/stagiaires/{$req->id}/presence/regulariser", ['present' => ['2026-11-02']])
+            ->assertOk()->assertJsonPath('data.present', 1)->assertJsonPath('data.absent', 1);
+        $this->postJson("/api/stages/admin/stagiaires/{$req->id}/presence/regulariser", ['present' => []])->assertStatus(409);
+
+        $this->at('2026-11-04 19:00');
+        $presence = $this->getJson("/api/stages/admin/stagiaires/{$req->id}/presence")->assertOk()->json('data');
+        $this->assertSame([], $presence['regularisation']['days']);
+        $this->assertStringContainsString('régularisée par Test', $presence['regularisation']['done']);
+        $this->assertNull($presence['shift'], 'stage compté depuis le début prévu');
+        $days = collect($presence['days'])->keyBy('day');
+        $this->assertSame('present', $days['2026-11-02']['status']);
+        $this->assertTrue($days['2026-11-02']['regularise']);
+        $this->assertSame('absent', $days['2026-11-03']['status']);
+        $this->assertTrue($days['2026-11-04']['punches']['pause_debut']['code']);
+        $this->assertSame(1, $presence['summary']['absences']);
+        $this->assertSame(3, $presence['summary']['jours_ouvres']);
+    }
+
+    public function test_fingerprint_phone_cannot_switch_to_codes(): void
+    {
+        [, $h] = $this->readyIntern('2026-11-02');
+        $this->getJson('/api/stagiaire/moi', $h)->assertJsonPath('data.webauthn.mode', 'empreinte');
+        $this->postJson('/api/stagiaire/code', [], $h)->assertStatus(422)->assertJsonPath('error_code', 'STAGE_CODE_NOT_ALLOWED');
+        $this->postJson('/api/stagiaire/pointage', ['kind' => 'sortie', 'position' => $this->pos(), 'code' => '123456'], $h)
+            ->assertStatus(422)->assertJsonPath('error_code', 'STAGE_CODE_NOT_ALLOWED');
+    }
+
+    public function test_device_reset_then_new_phone_registered_with_a_code(): void
+    {
+        [$req, $h] = $this->readyIntern('2026-11-02');
+        $this->actingAs($this->user('superviseur'), 'sanctum')
+            ->postJson("/api/stages/admin/stagiaires/{$req->id}/appareil/reinitialiser")->assertOk();
+        $this->at('2026-11-03 08:00');
+        $new = ['X-Stagiaire-Appareil' => 'nouveau-telephone-sans-empreinte-0123'];
+        $h = $new + ['X-Stagiaire-Token' => $this->postJson('/api/stagiaire/connexion', ['identifiant' => $req->reference, 'password' => 'Stage2026'], $new)
+            ->assertOk()->json('data.token')];
+        $this->postJson('/api/stagiaire/code', [], $h)->assertOk();
+        $this->postJson('/api/stagiaire/empreinte/code', ['code' => $this->lastCode($req), 'label' => 'Tecno'], $h)->assertOk();
+        $this->getJson('/api/stagiaire/moi', $h)->assertJsonPath('data.webauthn.mode', 'code');
+        $this->postJson('/api/stagiaire/empreinte/code', ['code' => '123456'], $h)->assertStatus(409);
+        $this->at('2026-11-03 08:02');
+        $this->postJson('/api/stagiaire/code', [], $h)->assertOk();
+        $this->postJson('/api/stagiaire/pointage', ['kind' => 'arrivee', 'position' => $this->pos(), 'code' => $this->lastCode($req)], $h)->assertStatus(201);
+    }
 }

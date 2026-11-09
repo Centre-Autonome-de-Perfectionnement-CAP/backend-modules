@@ -54,7 +54,12 @@ class InternFollowController extends Controller
                 'reglement_accepted_at' => $account->reglement_accepted_at?->toIso8601String(),
                 'reglement_version'     => $account->reglement_version,
                 'devices' => DB::table('stage_webauthn_credentials')->where('account_id', $account->id)->orderByDesc('id')
-                    ->get(['id', 'device_label', 'created_at', 'last_used_at', 'revoked_at'])->values(),
+                    ->get(['id', 'credential_id', 'device_label', 'created_at', 'last_used_at', 'revoked_at'])
+                    ->map(fn ($d) => [
+                        'id' => $d->id, 'device_label' => $d->device_label, 'created_at' => $d->created_at,
+                        'last_used_at' => $d->last_used_at, 'revoked_at' => $d->revoked_at,
+                        'mode' => InternWebAuthnService::isCode($d) ? 'code' : 'empreinte',
+                    ])->values(),
             ] : null,
             'activation' => [
                 'sent_at'   => $req->activation_sent_at?->toIso8601String(),
@@ -69,6 +74,12 @@ class InternFollowController extends Controller
                     || StageHistory::where('stage_request_id', $req->id)->where('action', 'rectified')
                         ->where('created_at', '>=', $req->activated_at)->exists(),
             ] : null,
+            // Période manquée avant la prise de service (à régulariser), et dernière régularisation faite.
+            'regularisation' => [
+                'days' => $this->attendance->missedDays($req),
+                'done' => StageHistory::where('stage_request_id', $req->id)->where('action', 'attendance_regularized')
+                    ->latest('id')->value('comment'),
+            ],
             'today'    => $req->date_debut ? $this->attendance->today($req) : null,
             'summary'  => $report['summary'],
             'seuil'    => (int) app(\App\Modules\Stages\Services\StageSettingsService::class)->get('seuil_assiduite'),
@@ -110,6 +121,30 @@ class InternFollowController extends Controller
         }
 
         return $this->successResponse(null, 'Téléphone de stage réinitialisé. Le stagiaire a été prévenu.');
+    }
+
+    /**
+     * Régularise la période manquée (stagiaire qui n'a pas pu confirmer sa
+     * présence à temps) : jours cochés présents, les autres absents.
+     */
+    public function regularize(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'present'   => ['present', 'array', 'max:400'],
+            'present.*' => ['date_format:Y-m-d'],
+        ]);
+        $req = StageRequest::findOrFail($id);
+
+        try {
+            $r = $this->attendance->regularize($req, $data['present'] ?? [], $request->user());
+        } catch (BusinessException $e) {
+            return $this->errorResponse($e->getMessage(), $e->getStatusCode(), $e->getErrorCode());
+        }
+        if (!StageAccess::isLead($request->user())) {
+            $this->notifier->supervisorAction($request->user(), 'a régularisé la période manquée de ' . $req->fullName(), $req);
+        }
+
+        return $this->successResponse($r, "Période régularisée : {$r['present']} jour(s) présent(s), {$r['absent']} absence(s).");
     }
 
     public function requestsIndex(Request $request): JsonResponse

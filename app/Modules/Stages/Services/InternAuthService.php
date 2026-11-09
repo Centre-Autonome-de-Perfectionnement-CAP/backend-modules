@@ -62,6 +62,10 @@ class InternAuthService
         if (!$device || $this->devices->matches($device, $deviceHash)) {
             return;
         }
+        // Mode code : pas d'empreinte pour reconnaître une autre application du téléphone.
+        if (InternWebAuthnService::isCode($device)) {
+            $this->refuseDevice($account);
+        }
 
         throw new DeviceConfirmationRequired($this->devices->confirmationOptions($account));
     }

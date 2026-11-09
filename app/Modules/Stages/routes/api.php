@@ -107,6 +107,7 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         Route::get('superviseurs', [SupervisionController::class, 'supervisors']);
         Route::get('stagiaires/{id}/presence', [InternFollowController::class, 'presence'])->whereNumber('id');
         Route::post('stagiaires/{id}/appareil/reinitialiser', [InternFollowController::class, 'resetDevice'])->whereNumber('id')->middleware('throttle:20,1');
+        Route::post('stagiaires/{id}/presence/regulariser', [InternFollowController::class, 'regularize'])->whereNumber('id')->middleware('throttle:20,1');
         Route::get('demandes-stagiaires', [InternFollowController::class, 'requestsIndex']);
         Route::post('demandes-stagiaires/{id}/decision', [InternFollowController::class, 'decide'])->whereNumber('id')->middleware('throttle:60,1');
         Route::get('demandes-stagiaires/{id}/piece', [InternFollowController::class, 'requestFile'])->whereNumber('id');
@@ -174,6 +175,7 @@ Route::prefix('api/stagiaire')->middleware('api')->group(function () {
     Route::middleware('throttle:stages-intern-auth')->group(function () {
         Route::get('activation', [InternSpaceController::class, 'activationInfo']);
         Route::post('activation/appareil', [InternSpaceController::class, 'activationDevice']);
+        Route::post('activation/code', [InternSpaceController::class, 'activationCode']);
         Route::post('activation', [InternSpaceController::class, 'activate']);
         Route::post('connexion', [InternSpaceController::class, 'login']);
         Route::post('connexion/appareil', [InternSpaceController::class, 'confirmDevice']);
@@ -193,6 +195,8 @@ Route::prefix('api/stagiaire')->middleware('api')->group(function () {
         Route::post('reglement', [InternSpaceController::class, 'acceptReglement']);
         Route::post('empreinte/options', [InternSpaceController::class, 'webauthnRegisterOptions']);
         Route::post('empreinte', [InternSpaceController::class, 'webauthnRegister']);
+        Route::post('code', [InternSpaceController::class, 'code'])->middleware('throttle:stages-intern-medium');
+        Route::post('empreinte/code', [InternSpaceController::class, 'codeRegister'])->middleware('throttle:stages-intern-medium');
         Route::post('pointage/options', [InternSpaceController::class, 'punchOptions'])->middleware('throttle:stages-intern-medium');
         Route::post('pointage', [InternSpaceController::class, 'punch'])->middleware('throttle:stages-intern-medium');
         Route::get('presences', [InternSpaceController::class, 'attendance']);

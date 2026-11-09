@@ -33,6 +33,7 @@ class InternActivationService
         private readonly AttendanceService $attendance,
         private readonly StageRequestService $requests,
         private readonly InternWebAuthnService $devices,
+        private readonly InternCodeService $codes,
     ) {}
 
     /** @return array{sent: int, reminded: int, withdrawn: int} */
@@ -109,6 +110,21 @@ class InternActivationService
         return $this->devices->activationOptions($req, $token, $deviceHash);
     }
 
+    /** Mode code (téléphone sans empreinte) : code de confirmation de présence. */
+    public function sendCode(string $token, string $deviceHash): array
+    {
+        $req = $this->openableRequest($token);
+        $this->noteAttempt($req);
+        $this->devices->assertDeviceFree($deviceHash, null);
+
+        return $this->codes->send($this->codeScope($token), $req, $deviceHash, 'confirmer votre présence');
+    }
+
+    private function codeScope(string $token): string
+    {
+        return 'act:' . hash('sha256', $token);
+    }
+
     /**
      * Rétablit un stage annulé faute de confirmation de présence : le
      * stagiaire reçoit un nouveau lien et dispose à nouveau du délai prévu.
@@ -148,13 +164,20 @@ class InternActivationService
      */
     public function activate(
         string $token, array $position, string $password, int $reglementVersion,
-        array $webauthn, ?string $deviceLabel, string $deviceHash,
+        ?array $webauthn, ?string $deviceLabel, string $deviceHash, ?string $code = null,
     ): StageInternAccount {
         $req = $this->openableRequest($token);
         if ($reglementVersion !== (int) $this->settings->get('reglement_version')) {
             throw new BusinessException('Le règlement a été mis à jour. Relisez-le puis recommencez.', 'STAGE_REGLEMENT_OUTDATED', 409);
         }
-        $credential = $this->devices->verifyActivation($token, $webauthn, $deviceHash);
+        // Empreinte, ou code à usage unique pour un téléphone qui ne la gère pas.
+        if ($webauthn !== null) {
+            $credential = $this->devices->verifyActivation($token, $webauthn, $deviceHash);
+        } else {
+            $this->codes->check($this->codeScope($token), (string) $code, $deviceHash);
+            $this->devices->assertDeviceFree($deviceHash, null);
+            $credential = null;
+        }
         $today = CarbonImmutable::now(BusinessHours::TZ)->startOfDay();
 
         $account = DB::transaction(function () use ($req, $position, $password, $today, $reglementVersion, $credential, $deviceLabel, $deviceHash) {
@@ -174,18 +197,24 @@ class InternActivationService
 
             $account = StageInternAccount::create(['stage_request_id' => $locked->id, 'password' => $password]);
             $account->forceFill(['reglement_version' => $reglementVersion, 'reglement_accepted_at' => now()])->save();
-            $this->devices->store($account->id, $credential, $deviceLabel, $deviceHash);
+            $credential
+                ? $this->devices->store($account->id, $credential, $deviceLabel, $deviceHash)
+                : $this->devices->storeCode($account->id, $deviceLabel, $deviceHash);
 
             StageHistory::create([
                 'stage_request_id' => $locked->id, 'action' => 'activated',
                 'from_status' => $locked->status, 'to_status' => $locked->status, 'actor' => 'demandeur',
                 'comment' => 'Présence confirmée - prise de service le ' . $today->locale('fr')->isoFormat('dddd D MMMM YYYY')
-                    . " ; règlement (version {$reglementVersion}) accepté et téléphone de stage enregistré",
+                    . " ; règlement (version {$reglementVersion}) accepté et téléphone de stage enregistré"
+                    . ($credential ? '' : ' (confirmation par code : le téléphone ne gère pas l\'empreinte)'),
             ]);
 
             return $account;
         });
 
+        if (!$credential) {
+            $this->codes->forget($this->codeScope($token));
+        }
         $req->refresh();
         $planned = $req->date_debut->toDateString();
         $real    = $req->date_debut_reelle->toDateString();
@@ -206,7 +235,8 @@ class InternActivationService
             $req, 'Bienvenue au CAP-EPAC',
             [
                 'Votre présence est confirmée et votre espace stagiaire est activé.',
-                'Le téléphone utilisé aujourd\'hui est votre téléphone de stage : c\'est le seul qui ouvre votre espace et qui pointe, avec votre empreinte. Pour en changer, adressez-vous à votre superviseur.',
+                'Le téléphone utilisé aujourd\'hui est votre téléphone de stage : c\'est le seul qui ouvre votre espace et qui pointe, '
+                    . ($credential ? 'avec votre empreinte.' : 'avec un code que vous demandez à chaque pointage.') . ' Pour en changer, adressez-vous à votre superviseur.',
             ],
             ['Identifiant' => $req->reference],
             ctaLabel: 'Ouvrir mon espace stagiaire',
