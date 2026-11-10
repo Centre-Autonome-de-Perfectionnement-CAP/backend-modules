@@ -5,6 +5,7 @@ namespace App\Modules\Stages\Services;
 use App\Exceptions\BusinessException;
 use App\Models\User;
 use App\Modules\Stages\Models\StageRequest;
+use App\Modules\Stages\Support\StageAccess;
 use App\Modules\Stages\Support\BusinessHours;
 use App\Modules\Stages\Support\StageStatus;
 use Carbon\CarbonImmutable;
@@ -40,17 +41,23 @@ class TaskService
     public const STATUS_LABELS = ['todo' => 'À faire', 'submitted' => 'Remis', 'revision' => 'À revoir', 'validated' => 'Validé'];
     private const DISK = 'local';
 
+    /** Rôle d'un stagiaire sur une tâche. */
+    public const OWNER  = 'owner';   // tâche confiée (lui et son binôme)
+    public const WORKER = 'worker';  // invité pour y travailler
+    public const VIEWER = 'viewer';  // invité pour voir
+
     public function __construct(private readonly StageNotifier $notifier) {}
 
     /** Tables présentes (migration passée) ? */
     public function ready(): bool
     {
-        if (Cache::get('stage-tasks-ready')) {
+        if (Cache::get('stage-tasks-ready-2')) {
             return true;
         }
-        $ok = Schema::hasTable('stage_tasks') && Schema::hasTable('stage_task_members') && Schema::hasTable('stage_task_items');
+        $ok = Schema::hasTable('stage_tasks') && Schema::hasTable('stage_task_items') && Schema::hasTable('stage_task_staff')
+            && Schema::hasColumn('stage_task_members', 'role');
         if ($ok) {
-            Cache::put('stage-tasks-ready', true, 3600);
+            Cache::put('stage-tasks-ready-2', true, 3600);
         }
 
         return $ok;
@@ -60,17 +67,18 @@ class TaskService
     // LECTURE
     // ════════════════════════════════════════════════════════════════════
 
-    /** Tâches d'un stagiaire (les siennes et celles de son binôme). */
+    /** Tâches d'un stagiaire : les siennes, celles de son binôme et celles où il est invité. */
     public function forIntern(StageRequest $req): Collection
     {
         $this->assertReady();
-        $ids = DB::table('stage_task_members')->where('stage_request_id', $req->id)->pluck('task_id');
+        $roles = DB::table('stage_task_members')->where('stage_request_id', $req->id)->pluck('role', 'task_id');
 
-        return $this->summaries(DB::table('stage_tasks')->whereIn('id', $ids)->orderByRaw("status = 'validated'")
-            ->orderByRaw('due_date is null')->orderBy('due_date')->orderByDesc('id')->get());
+        return $this->summaries(DB::table('stage_tasks')->whereIn('id', $roles->keys())->orderByRaw("status = 'validated'")
+            ->orderByRaw('due_date is null')->orderBy('due_date')->orderByDesc('id')->get())
+            ->map(fn ($t) => $t + ['my_role' => $roles[$t['id']]]);
     }
 
-    /** Progiciel : toutes les tâches, ou celles des stagiaires suivis ($mine). */
+    /** Progiciel : toutes les tâches, ou celles des stagiaires suivis et celles où il est invité ($mine). */
     public function forStaff(?User $mine, string $status = 'all'): Collection
     {
         $this->assertReady();
@@ -81,7 +89,8 @@ class TaskService
         }
         if ($mine) {
             $followed = DB::table('stage_supervisions')->where('user_id', $mine->id)->pluck('stage_request_id');
-            $q->whereIn('id', DB::table('stage_task_members')->whereIn('stage_request_id', $followed)->select('task_id'));
+            $q->where(fn ($w) => $w->whereIn('id', DB::table('stage_task_members')->whereIn('stage_request_id', $followed)->where('role', self::OWNER)->select('task_id'))
+                ->orWhereIn('id', DB::table('stage_task_staff')->where('user_id', $mine->id)->select('task_id')));
         }
 
         return $this->summaries($q->limit(300)->get());
@@ -106,21 +115,45 @@ class TaskService
         return $t;
     }
 
-    /** Le stagiaire peut-il voir la tâche ? (la sienne, celle de son binôme, ou un travail publié) */
+    /** Le stagiaire peut-il voir la tâche ? (la sienne, celle de son binôme, une invitation, ou un travail publié) */
     public function internCanSee(object $task, StageRequest $req): bool
     {
-        return $task->published_at !== null || $this->isMember($task, $req);
+        return $task->published_at !== null || $this->role($task, $req) !== null;
     }
 
-    public function isMember(object $task, StageRequest $req): bool
+    /** Rôle du stagiaire sur la tâche (null : aucun). */
+    public function role(object $task, StageRequest $req): ?string
     {
-        return DB::table('stage_task_members')->where('task_id', $task->id)->where('stage_request_id', $req->id)->exists();
+        return DB::table('stage_task_members')->where('task_id', $task->id)->where('stage_request_id', $req->id)->value('role');
+    }
+
+    /** Peut remettre le travail : tâche confiée ou invité pour y travailler. */
+    public function canWork(object $task, StageRequest $req): bool
+    {
+        return in_array($this->role($task, $req), [self::OWNER, self::WORKER], true);
+    }
+
+    /**
+     * Le membre du personnel a-t-il la main sur la tâche (revue, publication,
+     * invitations, suppression) ? Responsables, auteur de la tâche,
+     * superviseurs des stagiaires concernés, et invités avec plein pouvoir.
+     * Les autres la voient seulement.
+     */
+    public function manages(object $task, User $user): bool
+    {
+        return StageAccess::isLead($user)
+            || ($task->created_by_type === 'staff' && (int) $task->created_by_id === (int) $user->id)
+            || DB::table('stage_supervisions')->where('user_id', $user->id)->whereIn('stage_request_id',
+                DB::table('stage_task_members')->where('task_id', $task->id)->where('role', self::OWNER)->select('stage_request_id'))->exists()
+            || DB::table('stage_task_staff')->where('task_id', $task->id)->where('user_id', $user->id)->where('full_power', true)->exists();
     }
 
     /** Détail ; $viewer : stagiaire qui consulte (null : personnel). */
     public function detail(object $task, ?StageRequest $viewer, ?User $staff = null): array
     {
-        $member = $viewer && $this->isMember($task, $viewer);
+        $role = $viewer ? $this->role($task, $viewer) : null;
+        $member = in_array($role, [self::OWNER, self::WORKER], true);
+        $manages = $staff !== null && $this->manages($task, $staff);
         $items = DB::table('stage_task_items')->where('task_id', $task->id)->orderBy('id')->get();
         $summary = $this->summaries(collect([$task]))->first();
 
@@ -134,12 +167,132 @@ class TaskService
                 'id' => (int) $i->id, 'kind' => $i->kind, 'name' => $i->name, 'url' => $i->url,
                 'mime' => $i->mime, 'size' => (int) $i->size,
             ])->values(),
+            'invited'     => $this->invited($task),
             'mine'        => $member,
+            'my_role'     => $role,
             'can_submit'  => $member && $task->status !== 'validated',
-            'can_delete'  => $staff !== null || ($member && $task->created_by_type === 'intern' && (int) $task->version === 0),
-            'can_review'  => $staff !== null && $task->status === 'submitted',
-            'can_publish' => $staff !== null && $task->status === 'validated',
+            'can_delete'  => $manages || ($role === self::OWNER && $task->created_by_type === 'intern' && (int) $task->version === 0),
+            'can_review'  => $manages && $task->status === 'submitted',
+            'can_publish' => $manages && $task->status === 'validated',
+            // Inviter : le personnel qui a la main (qui règle aussi « compte pour lui » et le plein pouvoir), ou le stagiaire titulaire.
+            'can_invite'  => $manages || $role === self::OWNER,
+            'can_grant'   => $manages,
         ];
+    }
+
+    /** Invités de la tâche (stagiaires et personnel). */
+    private function invited(object $task): array
+    {
+        $interns = DB::table('stage_task_members')->where('task_id', $task->id)->where('role', '!=', self::OWNER)->orderBy('id')->get();
+        $people = StageRequest::whereIn('id', $interns->pluck('stage_request_id'))->get()->keyBy('id');
+        $staff = DB::table('stage_task_staff as s')->join('users as u', 'u.id', '=', 's.user_id')->where('s.task_id', $task->id)
+            ->orderBy('s.id')->get(['s.user_id', 's.full_power', 's.invited_by', 'u.first_name', 'u.last_name']);
+
+        return [
+            ...$interns->map(fn ($m) => [
+                'type' => 'intern', 'id' => (int) $m->stage_request_id, 'name' => $people[$m->stage_request_id]?->fullName() ?? 'Stagiaire',
+                'role' => $m->role, 'counts' => (bool) $m->counts, 'invited_by' => $m->invited_by,
+            ])->all(),
+            ...$staff->map(fn ($u) => [
+                'type' => 'staff', 'id' => (int) $u->user_id, 'name' => trim($u->first_name . ' ' . $u->last_name),
+                'full_power' => (bool) $u->full_power, 'invited_by' => $u->invited_by,
+            ])->all(),
+        ];
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // INVITATIONS
+    // ════════════════════════════════════════════════════════════════════
+
+    /**
+     * Invite un stagiaire (pour voir, ou pour y travailler, en comptant ou
+     * non pour lui) ou un membre du personnel (pour voir, ou avec plein
+     * pouvoir). Le personnel qui a la main règle tout ; le stagiaire
+     * titulaire invite pour voir ou pour travailler, sans que cela compte.
+     * Une nouvelle invitation de la même personne met à jour ses droits.
+     *
+     * @param array{type: string, id: int, role?: ?string, counts?: ?bool, full_power?: ?bool} $who
+     */
+    public function invite(object $task, array $who, ?StageRequest $intern, ?User $staff): void
+    {
+        $grant = $this->assertCanInvite($task, $intern, $staff);
+        $by = $staff ? trim($staff->first_name . ' ' . $staff->last_name) : $intern->fullName();
+
+        if ($who['type'] === 'intern') {
+            $req = StageRequest::where('id', $who['id'])->where('status', StageStatus::ACCEPTED)->first();
+            if (!$req) {
+                throw new BusinessException('Ce stagiaire n\'est plus en stage.', 'STAGE_TASK_INVITE_INTERN', 422);
+            }
+            $current = $this->role($task, $req);
+            if ($current === self::OWNER) {
+                throw new BusinessException('La tâche lui est déjà confiée.', 'STAGE_TASK_INVITE_OWNER', 409);
+            }
+            $role = ($who['role'] ?? null) === self::WORKER ? self::WORKER : self::VIEWER;
+            $counts = $grant && $role === self::WORKER && !empty($who['counts']);
+            DB::table('stage_task_members')->updateOrInsert(['task_id' => $task->id, 'stage_request_id' => $req->id],
+                ['role' => $role, 'counts' => $counts, 'invited_by' => $current ? DB::raw('invited_by') : $by]);
+            if (!$current) {
+                $this->notifier->toDemandeur($req, 'Invitation sur une tâche', [
+                    "{$by} vous invite sur une tâche, " . ($role === self::WORKER ? 'pour y travailler.' : 'pour la consulter.'),
+                ], ['Tâche' => $task->title, 'Échéance' => $task->due_date ? $this->frDate($task->due_date) : null],
+                    ctaLabel: 'Ouvrir la tâche', ctaUrl: $this->notifier->spaceUrl("/taches/{$task->id}"), context: 'stage-tache');
+            }
+
+            return;
+        }
+
+        $user = User::find($who['id']);
+        if (!$user || !StageAccess::canManage($user)) {
+            throw new BusinessException('Seul le personnel des stages peut être invité.', 'STAGE_TASK_INVITE_STAFF', 422);
+        }
+        $existing = DB::table('stage_task_staff')->where('task_id', $task->id)->where('user_id', $user->id)->first();
+        DB::table('stage_task_staff')->updateOrInsert(['task_id' => $task->id, 'user_id' => $user->id], [
+            'full_power' => $grant && !empty($who['full_power']), 'invited_by' => $existing?->invited_by ?? $by,
+        ]);
+        if (!$existing) {
+            $this->notifier->toStaff(collect([$user]), 'Invitation sur une tâche', [
+                "{$by} vous invite sur la tâche « {$task->title} »" . ($grant && !empty($who['full_power']) ? ', avec plein pouvoir (revue et publication).' : ', pour la suivre.'),
+            ], ['Stagiaire(s)' => $this->members($task)->map->fullName()->implode(', ')], 'stage-tache', $this->staffUrl($task));
+        }
+    }
+
+    /** Retire une invitation. */
+    public function uninvite(object $task, string $type, int $id, ?StageRequest $intern, ?User $staff): void
+    {
+        $this->assertCanInvite($task, $intern, $staff);
+        $type === 'intern'
+            ? DB::table('stage_task_members')->where('task_id', $task->id)->where('stage_request_id', $id)->where('role', '!=', self::OWNER)->delete()
+            : DB::table('stage_task_staff')->where('task_id', $task->id)->where('user_id', $id)->delete();
+    }
+
+    /** Peut inviter ? Renvoie vrai si l'auteur peut aussi accorder « compte pour lui » et le plein pouvoir. */
+    private function assertCanInvite(object $task, ?StageRequest $intern, ?User $staff): bool
+    {
+        if ($staff && $this->manages($task, $staff)) {
+            return true;
+        }
+        if ($intern && $this->role($task, $intern) === self::OWNER) {
+            return false;
+        }
+        throw new BusinessException('Seuls le stagiaire titulaire et ses superviseurs peuvent inviter sur cette tâche.', 'STAGE_TASK_FORBIDDEN', 403);
+    }
+
+    /** Personnes qu'on peut inviter : stagiaires en stage (les siens d'abord pour un superviseur) et personnel des stages. */
+    public function invitables(?StageRequest $intern, ?User $staff): array
+    {
+        $followed = $staff ? DB::table('stage_supervisions')->where('user_id', $staff->id)->pluck('stage_request_id')->flip() : collect();
+        $interns = StageRequest::where('status', StageStatus::ACCEPTED)->whereNotNull('activated_at')
+            ->where('date_fin', '>=', BusinessHours::today()->toDateString())
+            ->when($intern, fn ($q) => $q->where('id', '!=', $intern->id))
+            ->orderBy('nom')->orderBy('prenoms')->get()
+            ->map(fn ($r) => ['id' => $r->id, 'name' => $r->fullName(), 'mine' => isset($followed[$r->id])])
+            ->sortBy(fn ($r) => $r['mine'] ? 0 : 1)->values();
+        $people = StageAccess::managers()->concat(StageAccess::supervisors())->unique('id')
+            ->reject(fn ($u) => $staff && (int) $u->id === (int) $staff->id)
+            ->map(fn ($u) => ['id' => (int) $u->id, 'name' => trim($u->first_name . ' ' . $u->last_name)])
+            ->sortBy('name')->values();
+
+        return ['interns' => $interns, 'staff' => $people];
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -175,7 +328,7 @@ class TaskService
                 'created_by_type' => $staff ? 'staff' : 'intern', 'created_by_id' => $staff?->id ?? $for->id,
                 'status' => 'todo', 'created_at' => now(), 'updated_at' => now(),
             ]);
-            DB::table('stage_task_members')->insert($members->map(fn ($m) => ['task_id' => $id, 'stage_request_id' => $m->id])->all());
+            DB::table('stage_task_members')->insert($members->map(fn ($m) => ['task_id' => $id, 'stage_request_id' => $m->id, 'role' => self::OWNER])->all());
 
             return $id;
         });
@@ -194,16 +347,18 @@ class TaskService
         return $task;
     }
 
-    /** Suppression : le personnel, ou le stagiaire pour une tâche qu'il a créée et pas encore remise. */
+    /** Suppression : le personnel qui a la main, ou le stagiaire pour une tâche qu'il a créée et pas encore remise. */
     public function delete(object $task, ?StageRequest $intern, ?User $staff): void
     {
-        if (!$staff && !($intern && $this->isMember($task, $intern) && $task->created_by_type === 'intern' && (int) $task->version === 0)) {
+        if (!($staff && $this->manages($task, $staff))
+            && !($intern && $this->role($task, $intern) === self::OWNER && $task->created_by_type === 'intern' && (int) $task->version === 0)) {
             throw new BusinessException('Vous ne pouvez supprimer que vos propres tâches, avant toute remise.', 'STAGE_TASK_FORBIDDEN', 403);
         }
         $paths = DB::table('stage_task_items')->where('task_id', $task->id)->whereNotNull('path')->pluck('path');
         DB::transaction(function () use ($task) {
             DB::table('stage_task_items')->where('task_id', $task->id)->delete();
             DB::table('stage_task_members')->where('task_id', $task->id)->delete();
+            DB::table('stage_task_staff')->where('task_id', $task->id)->delete();
             DB::table('stage_tasks')->where('id', $task->id)->delete();
         });
         $this->deleteFiles($paths);
@@ -221,8 +376,8 @@ class TaskService
      */
     public function submit(object $task, StageRequest $by, array $files, array $links, ?string $message): object
     {
-        if (!$this->isMember($task, $by)) {
-            throw new BusinessException('Cette tâche ne vous est pas confiée.', 'STAGE_TASK_FORBIDDEN', 403);
+        if (!$this->canWork($task, $by)) {
+            throw new BusinessException('Vous êtes invité pour consulter cette tâche, pas pour la remettre.', 'STAGE_TASK_FORBIDDEN', 403);
         }
         if ($task->status === 'validated') {
             throw new BusinessException('Ce travail est déjà validé.', 'STAGE_TASK_VALIDATED', 409);
@@ -276,9 +431,9 @@ class TaskService
         $task = $this->find($task->id);
         $members = $this->members($task);
         $this->notifier->toFollowers($members->all(), 'Travail remis', [
-            $by->fullName() . ' a remis son travail' . ($task->version > 1 ? ' (nouvelle version).' : '.'),
+            $by->fullName() . ' a remis le travail' . ($task->version > 1 ? ' (nouvelle version).' : '.'),
         ], ['Tâche' => $task->title, 'Stagiaire(s)' => $members->map->fullName()->implode(', '), 'Version' => (string) $task->version,
-            'Message' => $task->message], 'stage-tache', $this->staffUrl($task));
+            'Message' => $task->message], 'stage-tache', $this->staffUrl($task), $this->invitedStaff($task));
 
         return $task;
     }
@@ -286,6 +441,7 @@ class TaskService
     /** Revue : « validated » ou « revision » (à revoir, avec un commentaire). */
     public function review(object $task, User $by, string $decision, ?string $comment): object
     {
+        $this->assertManages($task, $by);
         if ($task->status !== 'submitted') {
             throw new BusinessException('Ce travail n\'attend pas de revue.', 'STAGE_TASK_NOT_SUBMITTED', 409);
         }
@@ -298,7 +454,7 @@ class TaskService
         ]);
         $task = $this->find($task->id);
         $who = trim($by->first_name . ' ' . $by->last_name);
-        foreach ($this->members($task) as $m) {
+        foreach ($this->members($task, true) as $m) {
             $this->notifier->toDemandeur($m, $decision === 'validated' ? 'Travail validé' : 'Travail à revoir', [
                 $decision === 'validated' ? "{$who} a validé votre travail." : "{$who} vous demande de revoir votre travail et de le remettre.",
             ], ['Tâche' => $task->title], highlight: $comment, highlightTitle: 'Commentaire',
@@ -311,6 +467,7 @@ class TaskService
     /** Publication d'un travail validé (ou retrait). L'annonce part dans le récapitulatif du jour. */
     public function publish(object $task, User $by, bool $public): object
     {
+        $this->assertManages($task, $by);
         if ($public && $task->status !== 'validated') {
             throw new BusinessException('Seul un travail validé peut être rendu public.', 'STAGE_TASK_NOT_VALIDATED', 409);
         }
@@ -351,7 +508,7 @@ class TaskService
         $tasks = DB::table('stage_tasks')->whereIn('status', ['todo', 'revision'])->where('due_date', $tomorrow)->whereNull('reminded_on')->get();
         foreach ($tasks as $t) {
             DB::table('stage_tasks')->where('id', $t->id)->update(['reminded_on' => $tomorrow]);
-            foreach ($this->members($t) as $m) {
+            foreach ($this->members($t, true) as $m) {
                 $this->notifier->toDemandeur($m, 'Tâche à rendre demain', [
                     'La tâche suivante est à rendre demain. Pensez à remettre votre travail sur la plateforme.',
                 ], ['Tâche' => $t->title, 'Échéance' => $this->frDate($t->due_date)],
@@ -399,7 +556,9 @@ class TaskService
             return collect();
         }
         $ids = $tasks->pluck('id');
-        $members = DB::table('stage_task_members')->whereIn('task_id', $ids)->get()->groupBy('task_id');
+        // Auteurs : stagiaire(s) à qui la tâche est confiée, et invités pour qui le travail compte.
+        $members = DB::table('stage_task_members')->whereIn('task_id', $ids)->where('counts', true)->whereIn('role', [self::OWNER, self::WORKER])
+            ->orderByRaw("role = 'worker'")->orderBy('id')->get()->groupBy('task_id');
         $people = StageRequest::whereIn('id', $members->flatten()->pluck('stage_request_id')->unique())->get()->keyBy('id');
         $items = DB::table('stage_task_items')->whereIn('task_id', $ids)->selectRaw('task_id, count(*) as n')->groupBy('task_id')->pluck('n', 'task_id');
         $staffIds = $tasks->where('created_by_type', 'staff')->pluck('created_by_id');
@@ -425,10 +584,34 @@ class TaskService
         ])->values();
     }
 
-    /** @return Collection<int, StageRequest> */
-    private function members(object $task): Collection
+    /**
+     * Auteurs de la tâche ; $workers : tous ceux qui y travaillent (invités
+     * pour travailler compris, même si le travail ne compte pas pour eux).
+     *
+     * @return Collection<int, StageRequest>
+     */
+    private function members(object $task, bool $workers = false): Collection
     {
-        return StageRequest::whereIn('id', DB::table('stage_task_members')->where('task_id', $task->id)->pluck('stage_request_id'))->get();
+        $q = DB::table('stage_task_members')->where('task_id', $task->id)->whereIn('role', [self::OWNER, self::WORKER]);
+        if (!$workers) {
+            $q->where('counts', true);
+        }
+
+        return StageRequest::whereIn('id', $q->pluck('stage_request_id'))->get();
+    }
+
+    /** Personnel invité sur la tâche (comptes actifs). */
+    private function invitedStaff(object $task): Collection
+    {
+        return DB::table('stage_task_staff as s')->join('users as u', 'u.id', '=', 's.user_id')->where('s.task_id', $task->id)
+            ->whereNull('u.deleted_at')->get(['u.id', 'u.email', 'u.phone', 'u.first_name', 'u.last_name']);
+    }
+
+    private function assertManages(object $task, User $user): void
+    {
+        if (!$this->manages($task, $user)) {
+            throw new BusinessException('Vous suivez cette tâche sans pouvoir la valider : seuls ses superviseurs le peuvent.', 'STAGE_TASK_FORBIDDEN', 403);
+        }
     }
 
     private function deleteFiles(Collection $paths): void

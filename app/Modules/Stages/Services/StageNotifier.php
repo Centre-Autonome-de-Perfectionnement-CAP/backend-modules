@@ -120,17 +120,18 @@ class StageNotifier
      * les responsables de division sont prévenus, heures ouvrées respectées.
      *
      * @param StageRequest|StageRequest[] $reqs   un stagiaire, ou les deux d'un binôme
+     * @param \Illuminate\Support\Collection|null $also autres membres du personnel à prévenir (invités…)
      * @param string[]                    $paragraphs
      * @param array<string,mixed>         $fields
      */
     public function toFollowers(
         StageRequest|array $reqs, string $title, array $paragraphs, array $fields = [],
-        string $context = 'stage-staff', ?string $url = null,
+        string $context = 'stage-staff', ?string $url = null, ?\Illuminate\Support\Collection $also = null,
     ): void {
         $reqs  = is_array($reqs) ? array_values($reqs) : [$reqs];
         $first = $reqs[0];
         $this->toStaff(
-            collect($reqs)->flatMap(fn (StageRequest $r) => $this->supervisorsOf($r))->concat(StageAccess::managers()),
+            collect($reqs)->flatMap(fn (StageRequest $r) => $this->supervisorsOf($r))->concat(StageAccess::managers())->concat($also ?? []),
             $title, $paragraphs, $fields, "{$context}:{$first->reference}", $url ?? $this->staffUrl($first), $first->reference,
         );
     }
