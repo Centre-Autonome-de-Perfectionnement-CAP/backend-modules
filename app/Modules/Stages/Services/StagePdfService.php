@@ -167,6 +167,36 @@ class StagePdfService
         ];
     }
 
+    /**
+     * Bulletin d'évaluation de stage : note retenue, note de chaque critère
+     * et appréciation du responsable (ni noms ni commentaires des superviseurs).
+     *
+     * @param array{final: float, appreciation: ?string, criteria: \Illuminate\Support\Collection} $result
+     * @return array{name: string, content: string}
+     */
+    public function evaluation(StageRequest $req, array $result, ?\App\Models\User $validator, CarbonImmutable $validatedAt): array
+    {
+        $num = fn (?float $v) => $v === null ? '-' : rtrim(rtrim(number_format($v, 2, ',', ' '), '0'), ',');
+        $html = view('stages::pdfs.evaluation', [
+            'd' => [
+                'nom_complet' => trim($req->civilite . ' ' . mb_strtoupper($req->nom) . ' ' . $req->prenoms),
+                'reference'   => $req->reference,
+                'formation'   => $req->filiere_niveau ?: null,
+                'debut'       => $this->longDate($req->date_debut_reelle ?? $req->date_debut, false),
+                'fin'         => $this->longDate($req->date_fin, false),
+            ],
+            'criteria'     => collect($result['criteria'])->map(fn ($c) => ['label' => $c['label'], 'max' => $c['max'], 'score' => $num($c['score'])])->all(),
+            'final'        => number_format($result['final'], 2, ',', ' '),
+            'appreciation' => $result['appreciation'],
+            'validateur'   => $validator ? trim($validator->first_name . ' ' . $validator->last_name) : null,
+            'ville'        => $this->settings->get('pdf_ville'),
+            'date'         => $validatedAt->setTimezone(BusinessHours::TZ)->format('d/m/Y'),
+            'footer'       => $this->settings->get('pdf_pied_de_page'),
+        ])->render();
+
+        return ['name' => "Bulletin d'evaluation de stage - {$req->reference}.pdf", 'content' => $this->render($html)];
+    }
+
     // ── Interne ──────────────────────────────────────────────────────────
 
     /** « à la Cellule informatique », « au Secrétariat », « à l'Unité… » (null si aucun service). */

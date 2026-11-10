@@ -2,15 +2,18 @@
 
 namespace App\Modules\Stages\Console\Commands;
 
+use App\Modules\Stages\Services\EvaluationService;
 use App\Modules\Stages\Services\ReportService;
+use App\Modules\Stages\Services\StageDocumentService;
 use App\Modules\Stages\Services\StageNotifier;
 use App\Modules\Stages\Services\TaskService;
 use Illuminate\Console\Command;
 
 /**
  * Rapports et tâches : rappels aux stagiaires (ouverture, dernier jour,
- * tâche à rendre demain) ; en fin de journée (--digest), récapitulatifs
- * (rapports journaliers, actions des superviseurs, travaux publiés du jour) ;
+ * tâche à rendre demain), ouverture et rappels des notes de stage ; en fin
+ * de journée (--digest), récapitulatifs (rapports journaliers, actions des
+ * superviseurs, travaux publiés et documents ajoutés du jour) ;
  * toutes les 5 minutes (--comments), commentaires de rapports regroupés par rafale.
  */
 class ProcessStageReports extends Command
@@ -21,7 +24,7 @@ class ProcessStageReports extends Command
 
     protected $description = 'Rappels de dépôt des rapports de stage et récapitulatif quotidien';
 
-    public function handle(ReportService $service, StageNotifier $notifier, TaskService $tasks): int
+    public function handle(ReportService $service, StageNotifier $notifier, TaskService $tasks, StageDocumentService $documents, EvaluationService $evaluations): int
     {
         if ($this->option('comments')) {
             $this->info('Commentaires signalés : ' . $service->flushComments());
@@ -34,8 +37,11 @@ class ProcessStageReports extends Command
         if ($digestOnly) {
             $this->info('Actions des superviseurs récapitulées : ' . $notifier->sendSupervisorDigest());
             $this->info('Travaux publiés annoncés : ' . $tasks->announcePublished());
+            $this->info('Documents annoncés : ' . $documents->announceNew());
         } else {
             $this->info('Tâches à rendre demain signalées : ' . $tasks->remindDue());
+            $e = $evaluations->tick();
+            $this->info("Notes de stage ouvertes : {$e['opened']} - rappels : {$e['reminded']}");
         }
 
         return self::SUCCESS;

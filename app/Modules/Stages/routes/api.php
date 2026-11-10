@@ -12,6 +12,7 @@ use App\Modules\Stages\Http\Controllers\Public\InternSpaceController;
 use App\Modules\Stages\Http\Middleware\AuthenticateIntern;
 use App\Modules\Stages\Http\Controllers\StageAdminController;
 use App\Modules\Stages\Http\Controllers\StageChatController;
+use App\Modules\Stages\Http\Controllers\StageFeedbackController;
 use App\Modules\Stages\Http\Controllers\StageTaskController;
 use Illuminate\Support\Facades\Route;
 
@@ -25,6 +26,7 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
     // ── Site vitrine (public) ─────────────────────────────────────────────
     Route::get('statut', [StagePublicController::class, 'status'])->middleware('throttle:stages-public-read');
     Route::post('demandes', [StagePublicController::class, 'store'])->middleware('throttle:stages-public-submit');
+    Route::get('avis-publics', [StageFeedbackController::class, 'publicSummary'])->middleware('throttle:stages-public-read');
 
     Route::prefix('suivi')->group(function () {
         Route::post('code', [StagePublicController::class, 'sendCode'])->middleware('throttle:stages-public-code');
@@ -128,6 +130,26 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         Route::get('taches/invitables', [StageTaskController::class, 'invitables']);
         Route::get('taches/{id}', [StageTaskController::class, 'show'])->whereNumber('id');
         Route::get('taches/{id}/fichiers/{item}', [StageTaskController::class, 'file'])->whereNumber(['id', 'item'])->middleware('throttle:120,1');
+
+        // Documents et références, avis, notation, évaluation des stagiaires
+        Route::get('documents', [StageFeedbackController::class, 'documents']);
+        Route::get('documents/{id}/fichier', [StageFeedbackController::class, 'documentFile'])->whereNumber('id')->middleware('throttle:120,1');
+        Route::get('avis', [StageFeedbackController::class, 'feedbackIndex']);
+        Route::get('avis/compteur', [StageFeedbackController::class, 'feedbackCount']);
+        Route::get('avis/{id}/fichier', [StageFeedbackController::class, 'feedbackFile'])->whereNumber('id');
+        Route::get('notation', [StageFeedbackController::class, 'ratings']);
+        Route::get('evaluations', [StageFeedbackController::class, 'evaluations']);
+        Route::get('evaluations/suivi', [StageFeedbackController::class, 'evaluationBoard']);
+        Route::get('evaluations/{id}/pdf', [StageFeedbackController::class, 'evaluationPdf'])->whereNumber('id');
+        Route::middleware('throttle:30,1')->group(function () {
+            Route::post('documents', [StageFeedbackController::class, 'documentStore']);
+            Route::delete('documents/{id}', [StageFeedbackController::class, 'documentDestroy'])->whereNumber('id');
+            Route::post('avis/{id}/publication', [StageFeedbackController::class, 'feedbackPublish'])->whereNumber('id');
+            Route::delete('avis/{id}', [StageFeedbackController::class, 'feedbackDestroy'])->whereNumber('id');
+            Route::post('evaluations/{id}', [StageFeedbackController::class, 'evaluationSave'])->whereNumber('id');
+            Route::post('evaluations/{id}/renvoi', [StageFeedbackController::class, 'evaluationReturn'])->whereNumber('id');
+            Route::post('evaluations/{id}/validation', [StageFeedbackController::class, 'evaluationValidate'])->whereNumber('id');
+        });
         Route::middleware('throttle:30,1')->group(function () {
             Route::post('taches', [StageTaskController::class, 'store']);
             Route::delete('taches/{id}', [StageTaskController::class, 'destroy'])->whereNumber('id');
@@ -225,6 +247,13 @@ Route::prefix('api/stagiaire')->middleware('api')->group(function () {
             Route::post('taches/{id}/invitations', [StageTaskController::class, 'invite'])->whereNumber('id');
             Route::delete('taches/{id}/invitations/{type}/{who}', [StageTaskController::class, 'uninvite'])->whereNumber(['id', 'who'])->whereIn('type', ['intern', 'staff']);
         });
+        Route::get('documents', [StageFeedbackController::class, 'documents']);
+        Route::get('documents/{id}/fichier', [StageFeedbackController::class, 'documentFile'])->whereNumber('id')->middleware('throttle:stages-intern-medium');
+        Route::post('avis', [StageFeedbackController::class, 'feedbackStore'])->middleware('throttle:stages-intern-write');
+        Route::get('notation', [StageFeedbackController::class, 'ratings']);
+        Route::post('notation', [StageFeedbackController::class, 'rate'])->middleware('throttle:stages-intern-write');
+        Route::get('evaluation', [StageFeedbackController::class, 'myEvaluation']);
+        Route::get('evaluation/pdf', [StageFeedbackController::class, 'evaluationPdf'])->middleware('throttle:stages-intern-medium');
         Route::get('notes/{id}/pdf', [InternSpaceController::class, 'notePdf'])->whereNumber('id')->middleware('throttle:stages-intern-medium');
         Route::get('attestation', [InternSpaceController::class, 'attestation']);
         Route::post('attestation', [InternSpaceController::class, 'attestationRequest'])->middleware('throttle:stages-intern-write');
