@@ -40,7 +40,8 @@ jobs:
               app/Modules/Stages/database/migrations/2026_11_06_000002_create_stage_notice_tables.php \
               app/Modules/Stages/database/migrations/2026_11_06_000003_add_stage_chat_edited_at.php \
               app/Modules/Stages/database/migrations/2026_11_07_000000_create_stage_tasks_tables.php \
-              app/Modules/Stages/database/migrations/2026_11_09_000000_add_stage_task_invitations.php; do
+              app/Modules/Stages/database/migrations/2026_11_09_000000_add_stage_task_invitations.php \
+              app/Modules/Stages/database/migrations/2026_11_10_000000_create_stage_feedback_tables.php; do
               if [ ! -f "$MIGRATION" ]; then
                 echo "Absente de la version déployée : $MIGRATION"
                 continue

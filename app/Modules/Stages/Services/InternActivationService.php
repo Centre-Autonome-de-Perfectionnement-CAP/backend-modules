@@ -381,7 +381,7 @@ class InternActivationService
     }
 
     /** Jours ouvrés (lundi - vendredi) après $from, jusqu'à $to inclus. */
-    private function workingDaysBetween(CarbonImmutable $from, CarbonImmutable $to): int
+    public function workingDaysBetween(CarbonImmutable $from, CarbonImmutable $to): int
     {
         $n = 0;
         for ($d = $from->startOfDay()->addDay(); $d->lte($to); $d = $d->addDay()) {
