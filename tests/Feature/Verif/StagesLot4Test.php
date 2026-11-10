@@ -425,6 +425,61 @@ class StagesLot4Test extends TestCase
         $this->deleteJson("/api/stagiaire/taches/{$own['id']}", [], $hc)->assertOk();
     }
 
+    public function test_task_invitations(): void
+    {
+        [$a, $ha] = $this->intern();
+        [$w, $hw] = $this->intern();
+        [$v, $hv] = $this->intern();
+        [$o, $ho] = $this->intern();
+        $sup = $this->user('superviseur');
+        $other = $this->user('superviseur');
+        $guest = $this->user('superviseur');
+        DB::table('stage_supervisions')->insert(['stage_request_id' => $a->id, 'user_id' => $sup->id, 'created_at' => now()]);
+        $this->at('2026-11-09 10:00');
+        $this->actingAs($sup, 'sanctum');
+        $id = $this->postJson('/api/stages/admin/taches', ['title' => 'API des stocks', 'stage_request_id' => $a->id])->assertStatus(201)->json('data.id');
+
+        // Ses stagiaires d'abord
+        $list = $this->getJson('/api/stages/admin/taches/invitables')->assertOk()->json('data');
+        $this->assertSame([$a->id, true], [$list['interns'][0]['id'], $list['interns'][0]['mine']]);
+        $this->assertFalse(collect($list['staff'])->contains('id', $sup->id));
+
+        // Le superviseur invite : un stagiaire pour travailler (compte pour lui), un pour voir, un collègue pour voir
+        $this->postJson("/api/stages/admin/taches/{$id}/invitations", ['type' => 'intern', 'id' => $w->id, 'role' => 'worker', 'counts' => true])->assertOk();
+        $this->postJson("/api/stages/admin/taches/{$id}/invitations", ['type' => 'intern', 'id' => $v->id, 'role' => 'viewer'])->assertOk();
+        $this->postJson("/api/stages/admin/taches/{$id}/invitations", ['type' => 'intern', 'id' => $a->id, 'role' => 'viewer'])->assertStatus(409);
+        $d = $this->postJson("/api/stages/admin/taches/{$id}/invitations", ['type' => 'staff', 'id' => $guest->id])->assertOk()->json('data');
+        $this->assertCount(3, $d['invited']);
+        $this->assertSame([$a->id, $w->id], array_column($d['members'], 'id'), 'auteurs : titulaire et invité qui compte');
+        $this->assertTrue(collect($this->sent)->contains(fn ($s) => $s['to'] === $v->whatsapp && str_contains($s['text'], 'Invitation sur une tâche')));
+
+        // Invités : l'un remet, l'autre consulte seulement ; un stagiaire extérieur ne voit rien
+        $this->getJson("/api/stagiaire/taches/{$id}", $hv)->assertOk()->assertJsonPath('data.can_submit', false)->assertJsonPath('data.my_role', 'viewer');
+        $this->post("/api/stagiaire/taches/{$id}/remise", ['links' => ['https://github.com/x']], $hv)->assertStatus(403);
+        $this->getJson("/api/stagiaire/taches/{$id}", $ho)->assertStatus(404);
+        $this->post("/api/stagiaire/taches/{$id}/remise", ['links' => ['https://github.com/x']], $hw)->assertOk();
+        $this->assertContains($id, array_column($this->getJson('/api/stagiaire/taches', $hw)->json('data.tasks'), 'id'));
+
+        // Personnel invité pour voir : la tâche est dans « mes » tâches, sans pouvoir la valider ; un autre superviseur non plus
+        $this->actingAs($guest, 'sanctum');
+        $this->assertSame([$id], array_column($this->getJson('/api/stages/admin/taches?mine=1')->json('data.tasks'), 'id'));
+        $this->getJson("/api/stages/admin/taches/{$id}")->assertOk()->assertJsonPath('data.can_review', false);
+        $this->postJson("/api/stages/admin/taches/{$id}/decision", ['decision' => 'validated'])->assertStatus(403);
+        $this->actingAs($other, 'sanctum')->postJson("/api/stages/admin/taches/{$id}/invitations", ['type' => 'staff', 'id' => $other->id, 'full_power' => true])->assertStatus(403);
+
+        // Plein pouvoir accordé : il valide
+        $this->actingAs($sup, 'sanctum')->postJson("/api/stages/admin/taches/{$id}/invitations", ['type' => 'staff', 'id' => $guest->id, 'full_power' => true])->assertOk();
+        $this->actingAs($guest, 'sanctum')->postJson("/api/stages/admin/taches/{$id}/decision", ['decision' => 'validated'])->assertOk();
+
+        // Le titulaire invite aussi, sans pouvoir faire compter le travail ; il retire une invitation
+        $d = $this->postJson("/api/stagiaire/taches/{$id}/invitations", ['type' => 'intern', 'id' => $o->id, 'role' => 'worker', 'counts' => true], $ha)->assertOk()->json('data');
+        $this->assertFalse(collect($d['invited'])->firstWhere('id', $o->id)['counts']);
+        $this->assertNotContains($o->id, array_column($d['members'], 'id'));
+        $this->postJson("/api/stagiaire/taches/{$id}/invitations", ['type' => 'intern', 'id' => $a->id], $hw)->assertStatus(403);
+        $this->deleteJson("/api/stagiaire/taches/{$id}/invitations/intern/{$v->id}", [], $ha)->assertOk();
+        $this->getJson("/api/stagiaire/taches/{$id}", $hv)->assertStatus(404);
+    }
+
     public function test_final_report_validation_flag(): void
     {
         [$req, $h] = $this->intern();

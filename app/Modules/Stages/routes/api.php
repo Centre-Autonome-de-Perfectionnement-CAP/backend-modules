@@ -125,6 +125,7 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         Route::get('messages/{channel}/fichiers/{file}', [StageChatController::class, 'file'])->where('channel', StageChatController::CHANNEL)->whereNumber('file')->middleware('throttle:120,1');
         Route::get('taches', [StageTaskController::class, 'index']);
         Route::get('taches/publies', [StageTaskController::class, 'published']);
+        Route::get('taches/invitables', [StageTaskController::class, 'invitables']);
         Route::get('taches/{id}', [StageTaskController::class, 'show'])->whereNumber('id');
         Route::get('taches/{id}/fichiers/{item}', [StageTaskController::class, 'file'])->whereNumber(['id', 'item'])->middleware('throttle:120,1');
         Route::middleware('throttle:30,1')->group(function () {
@@ -132,6 +133,8 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
             Route::delete('taches/{id}', [StageTaskController::class, 'destroy'])->whereNumber('id');
             Route::post('taches/{id}/decision', [StageTaskController::class, 'decide'])->whereNumber('id');
             Route::post('taches/{id}/publication', [StageTaskController::class, 'publish'])->whereNumber('id');
+            Route::post('taches/{id}/invitations', [StageTaskController::class, 'invite'])->whereNumber('id');
+            Route::delete('taches/{id}/invitations/{type}/{who}', [StageTaskController::class, 'uninvite'])->whereNumber(['id', 'who'])->whereIn('type', ['intern', 'staff']);
         });
         Route::get('tableau-de-bord', [DashboardController::class, 'overview']);
         Route::get('suivi', [DashboardController::class, 'follow']);
@@ -212,12 +215,15 @@ Route::prefix('api/stagiaire')->middleware('api')->group(function () {
         Route::get('rapports/{id}/versions/{version}', [InternSpaceController::class, 'reportFile'])->whereNumber(['id', 'version']);
         Route::get('taches', [StageTaskController::class, 'index']);
         Route::get('taches/publies', [StageTaskController::class, 'published']);
+        Route::get('taches/invitables', [StageTaskController::class, 'invitables']);
         Route::get('taches/{id}', [StageTaskController::class, 'show'])->whereNumber('id');
         Route::get('taches/{id}/fichiers/{item}', [StageTaskController::class, 'file'])->whereNumber(['id', 'item']);
         Route::middleware('throttle:stages-intern-write')->group(function () {
             Route::post('taches', [StageTaskController::class, 'store']);
             Route::delete('taches/{id}', [StageTaskController::class, 'destroy'])->whereNumber('id');
             Route::post('taches/{id}/remise', [StageTaskController::class, 'submit'])->whereNumber('id');
+            Route::post('taches/{id}/invitations', [StageTaskController::class, 'invite'])->whereNumber('id');
+            Route::delete('taches/{id}/invitations/{type}/{who}', [StageTaskController::class, 'uninvite'])->whereNumber(['id', 'who'])->whereIn('type', ['intern', 'staff']);
         });
         Route::get('notes/{id}/pdf', [InternSpaceController::class, 'notePdf'])->whereNumber('id')->middleware('throttle:stages-intern-medium');
         Route::get('attestation', [InternSpaceController::class, 'attestation']);

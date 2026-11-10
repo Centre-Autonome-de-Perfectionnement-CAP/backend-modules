@@ -8,7 +8,6 @@ use App\Modules\Core\Support\FilePreview;
 use App\Modules\Stages\Models\StageInternAccount;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Services\TaskService;
-use App\Modules\Stages\Support\BusinessHours;
 use App\Modules\Stages\Support\StageStatus;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -40,12 +39,49 @@ class StageTaskController extends Controller
 
             return [
                 'tasks'   => $this->tasks->forStaff(!empty($data['mine']) ? $request->user() : null, $data['status'] ?? 'all'),
-                // Stagiaires en cours, pour confier une tâche
-                'interns' => StageRequest::where('status', StageStatus::ACCEPTED)->whereNotNull('activated_at')
-                    ->where('date_fin', '>=', BusinessHours::today()->toDateString())->orderBy('nom')->orderBy('prenoms')->get()
-                    ->map(fn ($r) => ['id' => $r->id, 'name' => $r->fullName(), 'binome' => $this->partner($r)?->fullName()])->values(),
+                // Stagiaires en cours, pour confier une tâche (ceux du superviseur d'abord)
+                'interns' => $this->withPartners(collect($this->tasks->invitables(null, $request->user())['interns'])),
             ];
         });
+    }
+
+    /** Personnes qu'on peut inviter sur une tâche. */
+    public function invitables(Request $request): JsonResponse
+    {
+        return $this->guard(fn () => $this->tasks->invitables($this->intern($request), $this->intern($request) ? null : $request->user()));
+    }
+
+    /** Invite (ou met à jour les droits de) un stagiaire ou un membre du personnel. */
+    public function invite(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'type'       => ['required', Rule::in(['intern', 'staff'])],
+            'id'         => ['required', 'integer'],
+            'role'       => ['nullable', Rule::in([TaskService::VIEWER, TaskService::WORKER])],
+            'counts'     => ['nullable', 'boolean'],
+            'full_power' => ['nullable', 'boolean'],
+        ]);
+
+        return $this->guard(function () use ($request, $id, $data) {
+            $intern = $this->intern($request);
+            $staff = $intern ? null : $request->user();
+            $task = $this->visible($request, $id);
+            $this->tasks->invite($task, $data, $intern, $staff);
+
+            return $this->tasks->detail($task, $intern, $staff);
+        }, 'Invitation enregistrée.');
+    }
+
+    public function uninvite(Request $request, int $id, string $type, int $who): JsonResponse
+    {
+        return $this->guard(function () use ($request, $id, $type, $who) {
+            $intern = $this->intern($request);
+            $staff = $intern ? null : $request->user();
+            $task = $this->visible($request, $id);
+            $this->tasks->uninvite($task, $type, $who, $intern, $staff);
+
+            return $this->tasks->detail($task, $intern, $staff);
+        }, 'Invitation retirée.');
     }
 
     public function published(): JsonResponse
@@ -174,6 +210,20 @@ class StageTaskController extends Controller
         }
 
         return $task;
+    }
+
+    /** Ajoute le nom du binôme à chaque stagiaire de la liste. */
+    private function withPartners(\Illuminate\Support\Collection $interns): \Illuminate\Support\Collection
+    {
+        $reqs = StageRequest::whereIn('id', $interns->pluck('id'))->get(['id', 'team_id'])->keyBy('id');
+        $teams = StageRequest::whereIn('team_id', $reqs->pluck('team_id')->filter()->unique())->where('status', StageStatus::ACCEPTED)->get();
+
+        return $interns->map(function ($r) use ($reqs, $teams) {
+            $team = $reqs[$r['id']]->team_id ?? null;
+            $mate = $team ? $teams->first(fn ($m) => $m->team_id === $team && $m->id !== $r['id']) : null;
+
+            return $r + ['binome' => $mate?->fullName()];
+        })->values();
     }
 
     private function partner(StageRequest $req): ?StageRequest
