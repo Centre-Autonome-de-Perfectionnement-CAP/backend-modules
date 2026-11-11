@@ -4,6 +4,7 @@ namespace App\Modules\Stages\Http\Controllers;
 
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
+use App\Modules\Stages\Services\BinomeService;
 use App\Modules\Stages\Services\InternAuthService;
 use App\Modules\Stages\Services\InternInvitationService;
 use App\Modules\Stages\Services\StageSettingsService;
@@ -41,11 +42,19 @@ class InternInvitationController extends Controller
 
     public function invite(Request $request): JsonResponse
     {
-        $data = $request->validate(['numeros' => ['required', 'string', 'max:2000']]);
+        $data = $request->validate([
+            'numeros'       => ['required', 'string', 'max:2000'],
+            'binome'        => ['nullable', 'boolean'],
+            'rapport_final' => ['nullable', Rule::in(array_keys(BinomeService::FINAL_MODES))],
+        ]);
         $phones = preg_split('/[\n,;]+/', $data['numeros']) ?: [];
+        $pair = (bool) ($data['binome'] ?? false);
 
-        return $this->guard(function () use ($phones, $request) {
-            $r = $this->service->invite($phones, $request->user());
+        return $this->guard(function () use ($phones, $request, $pair, $data) {
+            $r = $this->service->invite($phones, $request->user(), $pair, $data['rapport_final'] ?? null);
+            if ($pair) {
+                return $this->successResponse($r, 'Invitation en binôme envoyée sur WhatsApp aux deux numéros. Le binôme se formera à la seconde inscription.');
+            }
             $parts = [];
             if ($r['invited']) $parts[] = count($r['invited']) . ' invitation(s) envoyée(s) sur WhatsApp';
             if ($r['already_intern']) $parts[] = count($r['already_intern']) . ' numéro(s) ont déjà un stage en cours';
@@ -87,6 +96,7 @@ class InternInvitationController extends Controller
             'phone'   => $this->service->maskPhone($inv->phone),
             'service' => $this->settings->get('default_service'),
             'today'   => BusinessHours::today()->toDateString(),
+            'binome'  => $this->service->pairInfo($inv),
         ]);
     }
 

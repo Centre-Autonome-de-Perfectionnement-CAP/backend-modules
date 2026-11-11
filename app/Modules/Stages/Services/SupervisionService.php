@@ -140,7 +140,7 @@ class SupervisionService
             ->whereIn('s.stage_request_id', $rows->pluck('id'))
             ->get(['s.stage_request_id', 'u.id', 'u.first_name', 'u.last_name'])
             ->groupBy('stage_request_id');
-        $teams = DB::table('stage_teams')->whereIn('id', $rows->pluck('team_id')->filter())->pluck('name', 'id');
+        $teams = DB::table('stage_teams')->whereIn('id', $rows->pluck('team_id')->filter())->get()->keyBy('id');
         $today = BusinessHours::today()->toDateString();
 
         return $rows->map(fn (StageRequest $r) => [
@@ -156,7 +156,8 @@ class SupervisionService
             'date_fin'    => $r->date_fin?->toDateString(),
             'phase'       => $r->date_debut?->toDateString() > $today ? 'upcoming'
                 : ($r->date_fin?->toDateString() < $today ? 'finished' : 'current'),
-            'team'        => $r->team_id ? ['id' => $r->team_id, 'name' => $teams[$r->team_id] ?? null] : null,
+            'team'        => $r->team_id ? ['id' => $r->team_id, 'name' => $teams[$r->team_id]->name ?? null,
+                'final_mode' => ($teams[$r->team_id]->final_mode ?? null) === BinomeService::FINAL_COMMUN ? BinomeService::FINAL_COMMUN : BinomeService::FINAL_INDIVIDUEL] : null,
             'supervisors' => ($sup[$r->id] ?? collect())->map(fn ($u) => [
                 'id' => $u->id, 'name' => trim($u->first_name . ' ' . $u->last_name),
             ])->values(),

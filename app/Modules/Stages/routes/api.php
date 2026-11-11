@@ -174,6 +174,7 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         Route::middleware('throttle:30,1')->group(function () {
             Route::post('equipes', [SupervisionController::class, 'saveTeam']);
             Route::delete('equipes/{id}', [SupervisionController::class, 'deleteTeam'])->whereNumber('id');
+            Route::patch('equipes/{id}/rapport-final', [SupervisionController::class, 'teamFinalMode'])->whereNumber('id');
         });
 
         Route::get('demandes', [StageAdminController::class, 'index']);

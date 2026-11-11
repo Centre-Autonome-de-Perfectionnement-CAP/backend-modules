@@ -81,6 +81,9 @@ class InternRequestService
         } else {
             $new = CarbonImmutable::parse($data['new_date_fin']);
             $end = CarbonImmutable::parse($req->date_fin->toDateString());
+            if ($end->lessThan($today)) {
+                throw new BusinessException('Votre stage est terminé : sa date de fin ne peut plus changer. Contactez le responsable de division si besoin.', 'STAGE_ENDED', 422);
+            }
             if ($kind === 'prolongation' && !$new->greaterThan($end)) {
                 throw new BusinessException('Pour une prolongation, la nouvelle date de fin doit être après la date actuelle (' . $this->requests->frDate($end) . ').', 'STAGE_EXT_DATE', 422);
             }
