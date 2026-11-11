@@ -423,7 +423,8 @@ class WorkAttestationService
             'nom'         => mb_strtoupper((string) $a->nom),
             'prenoms'     => $t($a->prenoms),
             // « du diplôme de Licence… », « du diplôme d’Ingénieur… »
-            'diplome'     => $diplome !== '' ? (preg_match('/^[aeiouyhâàéèêëîïôöûü]/iu', $diplome) ? 'd’' : 'de ') . $diplome : null,
+            'diplome'     => $diplome !== '' ? $diplome : null,
+            'diplome_de'  => preg_match('/^[aeiouyhâàéèêëîïôöûü]/iu', $diplome) ? 'd’' : 'de ',
             'nature'      => $t($a->nature) ?: null,
             'fonctions'   => $fonctions,
             'taches'      => $taches,
