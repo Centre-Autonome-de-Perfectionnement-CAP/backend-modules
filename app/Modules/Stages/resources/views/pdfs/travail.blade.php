@@ -20,6 +20,7 @@
     .pristina { font-family: 'Pristina'; font-size: 14pt; text-align: justify; line-height: 1.2; }
     .alb { font-family: 'Albertus'; font-size: 11.5pt; line-height: 1.3; text-align: justify; }
     .nom { font-size: 13pt; }
+    strong { font-weight: bold; }
     .p { margin-bottom: 2.5mm; }
     .intro { text-indent: 12.5mm; }
     ul.puces { margin: 0 0 2.5mm 8mm; padding: 0; list-style: none; }
@@ -68,15 +69,15 @@
 <p class="pristina p intro">Le Chef du Centre Autonome de Perfectionnement (C/CAP) de l’École Polytechnique d’Abomey-Calavi (EPAC), soussigné, atteste par la présente que&nbsp;:</p>
 
 <p class="alb p">
-    <span class="nom">{{ $d['civilite'] }} {{ $d['nom'] }} {{ $d['prenoms'] }}</span>@if($d['diplome']), titulaire du diplôme {{ $d['diplome'] }}@endif,
-    a exercé{{ $d['nature'] ? ', ' . $d['nature'] . ',' : '' }} {{ count($d['fonctions']) > 1 ? 'les fonctions' : 'la fonction' }} de&nbsp;:
+    <strong class="nom">{{ $d['civilite'] }} {{ $d['nom'] }} {{ $d['prenoms'] }}</strong>@if($d['diplome']), titulaire du diplôme {{ $d['diplome_de'] }}<strong>{{ $d['diplome'] }}</strong>@endif,
+    a exercé@if($d['nature']), <strong>{{ $d['nature'] }}</strong>,@endif {{ count($d['fonctions']) > 1 ? 'les fonctions' : 'la fonction' }} de&nbsp;:
 </p>
 <ul class="puces">
-    @foreach($d['fonctions'] as $f)<li><span class="b">-</span>{{ $f }}</li>@endforeach
+    @foreach($d['fonctions'] as $f)<li><span class="b">-</span><strong>{{ $f }}</strong></li>@endforeach
 </ul>
 
 <p class="alb p">
-    au sein du Centre Autonome de Perfectionnement (CAP) de l’EPAC/UAC, pendant la période allant du {{ $d['debut'] }} au {{ $d['fin'] }}.
+    au sein du Centre Autonome de Perfectionnement (CAP) de l’EPAC/UAC, pendant la période allant du <strong>{{ $d['debut'] }}</strong> au <strong>{{ $d['fin'] }}</strong>.
 </p>
 
 @if(count($d['taches']))
