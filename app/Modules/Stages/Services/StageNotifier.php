@@ -51,12 +51,37 @@ class StageNotifier
         ?array $file = null,
         bool $official = false,
     ): void {
-        $greeting = 'Bonjour ' . trim($req->civilite . ' ' . $req->fullName()) . ',';
+        $this->toPerson(
+            ['civilite' => $req->civilite, 'name' => $req->fullName(), 'phone' => $req->whatsapp, 'email' => $req->email, 'reference' => $req->reference],
+            $title, $paragraphs, $fields, $highlight, $highlightTitle, $ctaLabel, $ctaUrl, $context, $file, $official,
+        );
+    }
+
+    /**
+     * Même message à une personne hors dossier de stage (attestation de
+     * travail…) : $who = civilité, nom, téléphone, email, référence.
+     *
+     * @param array{civilite: ?string, name: string, phone: ?string, email: ?string, reference: string} $who
+     */
+    public function toPerson(
+        array $who,
+        string $title,
+        array $paragraphs,
+        array $fields = [],
+        ?string $highlight = null,
+        ?string $highlightTitle = null,
+        ?string $ctaLabel = null,
+        ?string $ctaUrl = null,
+        string $context = 'stage',
+        ?array $file = null,
+        bool $official = false,
+    ): void {
+        $greeting = 'Bonjour ' . trim(($who['civilite'] ?? '') . ' ' . $who['name']) . ',';
         $at = BusinessHours::nextInternSlot();
         $email = [
-            'to'      => $req->email,
-            'to_name' => $req->fullName(),
-            'subject' => "{$title} - {$req->reference}",
+            'to'      => $who['email'],
+            'to_name' => $who['name'],
+            'subject' => "{$title} - {$who['reference']}",
             'view'    => 'stages::emails.message',
             'vars'    => [
                 'title'          => $title,
@@ -73,7 +98,7 @@ class StageNotifier
         $both = $official || $file !== null;
 
         $this->notifier->whatsapp(
-            $req->whatsapp,
+            $who['phone'],
             WhatsAppText::compose($title, [
                 $greeting,
                 implode("\n\n", $paragraphs),
@@ -81,7 +106,7 @@ class StageNotifier
                 $highlight ? ($highlightTitle ? "*{$highlightTitle} :*\n{$highlight}" : $highlight) : '',
                 $ctaUrl ? (($ctaLabel ? "{$ctaLabel} :\n" : '') . $ctaUrl) : '',
             ]),
-            "{$context}:{$req->reference}",
+            "{$context}:{$who['reference']}",
             self::MODULE,
             fallbackEmail: $both ? [] : $email,
             at: $at,
@@ -90,8 +115,8 @@ class StageNotifier
         // Document joint (ex. note de service en PDF) : envoyé juste après le message.
         if ($file) {
             $this->notifier->whatsappFile(
-                $req->whatsapp, $file['disk'], $file['path'], $file['name'], $file['caption'] ?? $title,
-                "{$context}-pdf:{$req->reference}", self::MODULE,
+                $who['phone'], $file['disk'], $file['path'], $file['name'], $file['caption'] ?? $title,
+                "{$context}-pdf:{$who['reference']}", self::MODULE,
             );
         }
 

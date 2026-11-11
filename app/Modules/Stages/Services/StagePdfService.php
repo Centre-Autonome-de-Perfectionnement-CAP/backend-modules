@@ -168,6 +168,29 @@ class StagePdfService
     }
 
     /**
+     * Attestation de travail (modèle validé par le CAP). Aperçu filigrané
+     * tant qu'elle n'est pas validée ; le N° est écrit à la main.
+     *
+     * @return array{name: string, content: string}
+     */
+    public function workAttestation(\App\Modules\Stages\Models\StageWorkAttestation $a, CarbonImmutable $date): array
+    {
+        $html = view('stages::pdfs.travail', [
+            'd'        => app(WorkAttestationService::class)->content($a),
+            'apercu'   => in_array($a->status, ['invitee', 'a_valider'], true),
+            'suffixe'  => trim((string) $this->settings->get('numero_suffixe'), '/'),
+            'ville'    => $this->settings->get('pdf_ville'),
+            'date'     => $date->format('d/m/Y'),
+            'signataire_titre' => $this->settings->get('signataire_titre'),
+            'signataire_nom'   => $this->settings->get('signataire_nom'),
+            'footer'   => $this->settings->get('pdf_pied_de_page'),
+        ])->render();
+        $slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->ascii($a->nom . '-' . $a->prenoms));
+
+        return ['name' => "Attestation de travail - {$slug}.pdf", 'content' => $this->render($html)];
+    }
+
+    /**
      * Bulletin d'évaluation de stage : note retenue, note de chaque critère
      * et appréciation du responsable (ni noms ni commentaires des superviseurs).
      *

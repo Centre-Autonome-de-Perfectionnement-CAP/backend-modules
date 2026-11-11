@@ -135,6 +135,17 @@ class AttestationController extends Controller
         ));
     }
 
+    /** Prévenir à nouveau le stagiaire : son attestation imprimée l'attend au secrétariat. */
+    public function notify(Request $request, int $id): JsonResponse
+    {
+        $a = $this->find($request, $id);
+
+        return $this->guard(fn () => $this->successResponse(
+            $this->attestations->present($this->attestations->notifyReady($a, $request->user())->load('stage')),
+            'Le stagiaire est prévenu (WhatsApp et email) : son attestation l\'attend au secrétariat.',
+        ));
+    }
+
     public function scan(Request $request, int $id): JsonResponse
     {
         $request->validate([

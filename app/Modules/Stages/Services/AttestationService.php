@@ -16,6 +16,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -312,7 +313,9 @@ class AttestationService
             $docDate = $this->documentDate($a, $date);
             if ($numero !== null) {
                 $taken = StageAttestation::where('numero', $numero)->where('id', '!=', $a->id)
-                    ->where('status', '!=', 'annulee')->where('stage_request_id', '!=', $a->stage_request_id)->exists();
+                    ->where('status', '!=', 'annulee')->where('stage_request_id', '!=', $a->stage_request_id)->exists()
+                    || (Schema::hasTable('stage_work_attestations') && DB::table('stage_work_attestations')
+                        ->where('numero', $numero)->where('status', '!=', 'annulee')->exists());
                 if ($taken) {
                     throw new BusinessException("Le numéro {$numero} est déjà utilisé pour un autre stagiaire.", 'STAGE_ATT_NUMBER_TAKEN', 409);
                 }
@@ -329,18 +332,33 @@ class AttestationService
         });
 
         if ($first) {
-            $c = $a->content ?? [];
-            $this->notifier->toDemandeur(
-                $a->stage,
-                'Votre attestation de stage est prête',
-                ['Votre attestation de stage est prête. Vous pouvez la retirer au secrétariat du CAP-EPAC, aux heures d\'ouverture, muni(e) d\'une pièce d\'identité.'],
-                ($a->numero ? ['Attestation n°' => $a->numero] : []) + (!empty($c['date_debut']) && !empty($c['date_fin'])
-                    ? ['Stage' => 'Du ' . $this->requests->frDate($c['date_debut']) . ' au ' . $this->requests->frDate($c['date_fin'])] : []),
-                context: 'stage-attestation-prete', official: true,
-            );
+            $this->sendReady($a);
         }
 
         return $a;
+    }
+
+    /** Prévenir à nouveau le stagiaire que son attestation imprimée l'attend au secrétariat. */
+    public function notifyReady(StageAttestation $a, User $by): StageAttestation
+    {
+        $this->assertStatus($a, ['imprimee']);
+        $this->sendReady($a);
+        $this->history($a->stage, 'attestation_notified', $by, 'Stagiaire prévenu à nouveau : attestation à retirer');
+
+        return $a;
+    }
+
+    private function sendReady(StageAttestation $a): void
+    {
+        $c = $a->content ?? [];
+        $this->notifier->toDemandeur(
+            $a->stage,
+            'Votre attestation de stage est prête',
+            ['Votre attestation de stage est prête. Vous pouvez la retirer au secrétariat du CAP-EPAC, aux heures d\'ouverture, muni(e) d\'une pièce d\'identité.'],
+            ($a->numero ? ['Attestation n°' => $a->numero] : []) + (!empty($c['date_debut']) && !empty($c['date_fin'])
+                ? ['Stage' => 'Du ' . $this->requests->frDate($c['date_debut']) . ' au ' . $this->requests->frDate($c['date_fin'])] : []),
+            context: 'stage-attestation-prete', official: true,
+        );
     }
 
     /**
@@ -638,12 +656,19 @@ class AttestationService
         return $a->scan_path && Storage::disk(StageRequestService::DISK)->exists($a->scan_path) ? $a->scan_path : null;
     }
 
-    /** Numéro proposé : « 001-26 » (séquence annuelle), imprimé « N° 001-26/CAP/EPAC/UAC ». */
+    /**
+     * Numéro proposé : « 001-26 » (séquence annuelle), imprimé
+     * « N° 001-26/CAP/EPAC/UAC ». Un seul registre pour les attestations de
+     * stage et de travail.
+     */
     public function nextNumber(): string
     {
         $yy  = BusinessHours::today()->format('y');
-        $max = StageAttestation::where('numero', 'like', '%-' . $yy)
-            ->pluck('numero')
+        $numbers = StageAttestation::where('numero', 'like', '%-' . $yy)->pluck('numero');
+        if (Schema::hasTable('stage_work_attestations')) {
+            $numbers = $numbers->concat(DB::table('stage_work_attestations')->where('numero', 'like', '%-' . $yy)->pluck('numero'));
+        }
+        $max = $numbers
             ->map(fn ($n) => preg_match('/^(\d+)-' . $yy . '$/', (string) $n, $m) ? (int) $m[1] : 0)
             ->max() ?? 0;
 
