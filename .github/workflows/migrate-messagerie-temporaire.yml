@@ -43,7 +43,8 @@ jobs:
               app/Modules/Stages/database/migrations/2026_11_09_000000_add_stage_task_invitations.php \
               app/Modules/Stages/database/migrations/2026_11_10_000000_create_stage_feedback_tables.php \
               app/Modules/Stages/database/migrations/2026_11_11_000000_add_stage_task_due_time.php \
-              app/Modules/Stages/database/migrations/2026_11_12_000000_add_stage_team_final_mode.php; do
+              app/Modules/Stages/database/migrations/2026_11_12_000000_add_stage_team_final_mode.php \
+              app/Modules/Stages/database/migrations/2026_11_12_000001_create_stage_work_attestations.php; do
               if [ ! -f "$MIGRATION" ]; then
                 echo "Absente de la version déployée : $MIGRATION"
                 continue

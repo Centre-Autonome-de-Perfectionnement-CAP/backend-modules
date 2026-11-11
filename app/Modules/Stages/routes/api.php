@@ -14,6 +14,7 @@ use App\Modules\Stages\Http\Controllers\StageAdminController;
 use App\Modules\Stages\Http\Controllers\StageChatController;
 use App\Modules\Stages\Http\Controllers\StageFeedbackController;
 use App\Modules\Stages\Http\Controllers\StageTaskController;
+use App\Modules\Stages\Http\Controllers\WorkAttestationController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -45,6 +46,10 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
     // ── Stagiaire arrivé avant le système : dossier complété via son lien ─
     Route::get('rejoindre', [InternInvitationController::class, 'show'])->middleware('throttle:stages-public-code');
     Route::post('rejoindre', [InternInvitationController::class, 'register'])->middleware('throttle:stages-public-code');
+
+    // ── Attestation de travail : fiche remplie via le lien reçu (sans compte) ─
+    Route::get('attestation-travail', [WorkAttestationController::class, 'publicShow'])->middleware('throttle:stages-public-code');
+    Route::post('attestation-travail', [WorkAttestationController::class, 'publicSubmit'])->middleware('throttle:stages-public-code');
 
     // ── Progiciel : responsables (admin, Responsable de division FC) ──────
     Route::prefix('admin')->middleware(['auth:sanctum', 'can:stages.lead'])->group(function () {
@@ -86,6 +91,16 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         });
         Route::post('stagiaires/{id}/attestation-exceptionnelle', [AttestationController::class, 'exceptional'])
             ->whereNumber('id')->middleware('throttle:5,1');
+
+        // Attestations de travail : décisions réservées au responsable.
+        Route::middleware('throttle:30,1')->group(function () {
+            Route::post('attestations-travail', [WorkAttestationController::class, 'invite']);
+            Route::post('stagiaires/{id}/attestation-travail', [WorkAttestationController::class, 'fromStage'])->whereNumber('id');
+            Route::put('attestations-travail/{id}', [WorkAttestationController::class, 'update'])->whereNumber('id');
+            Route::post('attestations-travail/{id}/valider', [WorkAttestationController::class, 'validateWork'])->whereNumber('id');
+            Route::post('attestations-travail/{id}/renvoyer', [WorkAttestationController::class, 'resend'])->whereNumber('id');
+            Route::post('attestations-travail/{id}/annuler', [WorkAttestationController::class, 'cancel'])->whereNumber('id');
+        });
         Route::get('exports/demandes', [DashboardController::class, 'exportDemandes'])->middleware('throttle:10,1');
     });
 
@@ -100,7 +115,14 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
             Route::post('attestations/{id}/imprimee', [AttestationController::class, 'printed'])->whereNumber('id');
             Route::post('attestations/{id}/remise', [AttestationController::class, 'delivered'])->whereNumber('id');
             Route::post('attestations/{id}/scan', [AttestationController::class, 'scan'])->whereNumber('id');
+            Route::post('attestations/{id}/prevenir', [AttestationController::class, 'notify'])->whereNumber('id');
+            Route::post('attestations-travail/{id}/imprimee', [WorkAttestationController::class, 'printed'])->whereNumber('id');
+            Route::post('attestations-travail/{id}/prevenir', [WorkAttestationController::class, 'notify'])->whereNumber('id');
+            Route::post('attestations-travail/{id}/remise', [WorkAttestationController::class, 'delivered'])->whereNumber('id');
         });
+        Route::get('attestations-travail', [WorkAttestationController::class, 'index']);
+        Route::get('attestations-travail/{id}', [WorkAttestationController::class, 'show'])->whereNumber('id');
+        Route::get('attestations-travail/{id}/pdf', [WorkAttestationController::class, 'pdf'])->whereNumber('id')->middleware('throttle:30,1');
     });
 
     // ── Progiciel : responsables + superviseurs ───────────────────────────
