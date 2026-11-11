@@ -4,6 +4,7 @@ namespace App\Modules\Stages\Http\Controllers;
 
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
+use App\Modules\Core\Support\OfficeFile;
 use App\Modules\Stages\Models\StageInternAccount;
 use App\Modules\Stages\Services\StageChatService;
 use App\Traits\ApiResponse;
@@ -45,13 +46,11 @@ class StageChatController extends Controller
             'body'     => ['nullable', 'string', 'max:' . (StageChatService::MAX_LENGTH + 500)],
             'reply_to' => ['nullable', 'integer', 'min:1'],
             'files'    => ['nullable', 'array', 'max:' . StageChatService::MAX_FILES],
-            'files.*'  => ['file', 'max:' . StageChatService::MAX_FILE_KB,
-                'mimes:' . implode(',', StageChatService::FILE_TYPES), 'mimetypes:' . implode(',', StageChatService::FILE_MIMES)],
+            'files.*'  => OfficeFile::rules(StageChatService::FILE_TYPES, StageChatService::MAX_FILE_KB),
         ], [
             'files.max'         => 'Trois fichiers au plus par message.',
             'files.*.max'       => 'Un fichier dépasse 5 Mo.',
-            'files.*.mimes'     => 'Fichiers acceptés : PDF, Word, ZIP et images.',
-            'files.*.mimetypes' => 'Fichiers acceptés : PDF, Word, ZIP et images.',
+            'files.*.extensions' => 'Fichiers acceptés : PDF, Word, ZIP et images.',
         ]);
 
         return $this->guard(fn () => $this->chat->post($channel, $this->who($request), (string) ($data['body'] ?? ''),

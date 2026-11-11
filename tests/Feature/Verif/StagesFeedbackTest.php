@@ -138,6 +138,32 @@ class StagesFeedbackTest extends TestCase
         $this->assertCount(1, $this->getJson('/api/stagiaire/documents', $h)->json('data.items'));
     }
 
+    /** Fichier réel : son type est détecté sur son contenu (un faux fichier de test le déduit de l'extension). */
+    private function realFile(string $name, string $content): UploadedFile
+    {
+        $path = tempnam(sys_get_temp_dir(), 'up');
+        file_put_contents($path, $content);
+
+        return new UploadedFile($path, $name, null, null, true);
+    }
+
+    public function test_office_files_are_accepted_whatever_the_detected_type_but_not_web_pages(): void
+    {
+        $this->actingAs($this->user('superviseur'), 'sanctum');
+        $this->at('2026-11-10 10:00');
+        // Ancien .doc (conteneur OLE) : souvent détecté « application/CDFV2 » ou « application/vnd.ms-office »
+        $ole = "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1" . str_repeat("\0", 504) . str_repeat('x', 2048);
+        $this->post('/api/stages/admin/documents', ['title' => 'Ancien modèle', 'category' => 'modeles',
+            'file' => $this->realFile('modele.doc', $ole)], ['Accept' => 'application/json'])->assertStatus(201);
+        // Page web déguisée en PDF : refusée ; extension non prévue : refusée
+        $this->post('/api/stages/admin/documents', ['title' => 'Piège', 'category' => 'autre',
+            'file' => $this->realFile('piege.pdf', '<!DOCTYPE html><html><body><script>alert(1)</script></body></html>')],
+            ['Accept' => 'application/json'])->assertStatus(422);
+        $this->post('/api/stages/admin/documents', ['title' => 'Script', 'category' => 'autre',
+            'file' => UploadedFile::fake()->createWithContent('outil.exe', 'MZ' . str_repeat('x', 100))], ['Accept' => 'application/json'])
+            ->assertStatus(422)->assertJsonPath('errors.file.0', 'Fichiers acceptés : Word, PDF, PowerPoint, Excel, ZIP et images.');
+    }
+
     public function test_feedback_is_anonymous_by_default_and_encadrement_is_for_leads_only(): void
     {
         [$req, $h] = $this->intern();

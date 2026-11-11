@@ -5,11 +5,13 @@ namespace App\Modules\Stages\Http\Controllers;
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Modules\Core\Support\FilePreview;
+use App\Modules\Core\Support\OfficeFile;
 use App\Modules\Stages\Models\StageInternAccount;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Services\EvaluationService;
 use App\Modules\Stages\Services\FeedbackService;
 use App\Modules\Stages\Services\StageDocumentService;
+use App\Modules\Stages\Services\TaskService;
 use App\Modules\Stages\Support\StageAccess;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -46,13 +48,12 @@ class StageFeedbackController extends Controller
             'description' => ['nullable', 'string', 'max:500'],
             'category'    => ['required', Rule::in(array_keys(StageDocumentService::CATEGORIES))],
             'url'         => ['nullable', 'string', 'max:1000', 'required_without:file'],
-            'file'        => ['nullable', 'file', 'max:' . StageDocumentService::MAX_FILE_KB,
-                'mimes:' . implode(',', \App\Modules\Stages\Services\TaskService::FILE_TYPES)],
+            'file'        => ['nullable', ...OfficeFile::rules(TaskService::FILE_TYPES, StageDocumentService::MAX_FILE_KB)],
         ], [
             'title.required'       => 'Donnez un titre au document.',
             'url.required_without' => 'Ajoutez un fichier ou un lien.',
             'file.max'             => 'Le fichier dépasse 20 Mo.',
-            'file.mimes'           => 'Fichiers acceptés : Word, PDF, PowerPoint, Excel, ZIP et images.',
+            'file.extensions'      => 'Fichiers acceptés : Word, PDF, PowerPoint, Excel, ZIP et images.',
         ]);
 
         return $this->guard(fn () => ['id' => $this->documents->create($data, $request->file('file'), $request->user())], 'Document ajouté : il sera annoncé ce soir.', 201);

@@ -30,14 +30,6 @@ class TaskService
     public const MAX_ITEMS   = 5;
     public const MAX_FILE_KB = 20480;   // 20 Mo par fichier
     public const FILE_TYPES  = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'zip', 'jpg', 'jpeg', 'png', 'webp'];
-    public const FILE_MIMES  = [
-        'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'application/zip', 'application/x-zip-compressed', 'image/jpeg', 'image/png', 'image/webp',
-        // Fichiers Office reconnus comme archives par certains serveurs
-        'application/octet-stream',
-    ];
     public const STATUS_LABELS = ['todo' => 'À faire', 'submitted' => 'Remis', 'revision' => 'À revoir', 'validated' => 'Validé'];
     private const DISK = 'local';
 
@@ -51,13 +43,13 @@ class TaskService
     /** Tables présentes (migration passée) ? */
     public function ready(): bool
     {
-        if (Cache::get('stage-tasks-ready-2')) {
+        if (Cache::get('stage-tasks-ready-3')) {
             return true;
         }
         $ok = Schema::hasTable('stage_tasks') && Schema::hasTable('stage_task_items') && Schema::hasTable('stage_task_staff')
-            && Schema::hasColumn('stage_task_members', 'role');
+            && Schema::hasColumn('stage_task_members', 'role') && Schema::hasColumn('stage_tasks', 'due_time');
         if ($ok) {
-            Cache::put('stage-tasks-ready-2', true, 3600);
+            Cache::put('stage-tasks-ready-3', true, 3600);
         }
 
         return $ok;
@@ -234,7 +226,7 @@ class TaskService
             if (!$current) {
                 $this->notifier->toDemandeur($req, 'Invitation sur une tâche', [
                     "{$by} vous invite sur une tâche, " . ($role === self::WORKER ? 'pour y travailler.' : 'pour la consulter.'),
-                ], ['Tâche' => $task->title, 'Échéance' => $task->due_date ? $this->frDate($task->due_date) : null],
+                ], ['Tâche' => $task->title, 'Échéance' => $task->due_date ? $this->frDue($task->due_date, $task->due_time) : null],
                     ctaLabel: 'Ouvrir la tâche', ctaUrl: $this->notifier->spaceUrl("/taches/{$task->id}"), context: 'stage-tache');
             }
 
@@ -303,7 +295,10 @@ class TaskService
      * Nouvelle tâche pour $for (et son binôme si $withPartner).
      * $staff : créée par le personnel (le stagiaire est prévenu) ; sinon par le stagiaire lui-même.
      */
-    public function create(StageRequest $for, string $title, ?string $instructions, ?string $due, bool $withPartner, ?User $staff): object
+    /** Heure d'échéance quand seul le jour est donné : fin de la journée de travail. */
+    public const DEFAULT_DUE_TIME = '18:00';
+
+    public function create(StageRequest $for, string $title, ?string $instructions, ?string $due, bool $withPartner, ?User $staff, ?string $dueTime = null): object
     {
         $this->assertReady();
         if ($for->status !== StageStatus::ACCEPTED) {
@@ -313,7 +308,8 @@ class TaskService
         if ($title === '') {
             throw new BusinessException('Le titre est obligatoire.', 'STAGE_TASK_TITLE', 422);
         }
-        if ($due !== null && $due < BusinessHours::today()->toDateString()) {
+        $dueTime = $due !== null ? ($dueTime ?: self::DEFAULT_DUE_TIME) : null;
+        if ($due !== null && CarbonImmutable::parse("{$due} {$dueTime}", BusinessHours::TZ)->lessThanOrEqualTo(now())) {
             throw new BusinessException('L\'échéance ne peut pas être passée.', 'STAGE_TASK_DUE', 422);
         }
         $members = collect([$for]);
@@ -322,9 +318,9 @@ class TaskService
                 ->where('status', StageStatus::ACCEPTED)->get());
         }
 
-        $id = DB::transaction(function () use ($title, $instructions, $due, $staff, $for, $members) {
+        $id = DB::transaction(function () use ($title, $instructions, $due, $dueTime, $staff, $for, $members) {
             $id = DB::table('stage_tasks')->insertGetId([
-                'title' => mb_substr($title, 0, 200), 'instructions' => $this->clean($instructions), 'due_date' => $due,
+                'title' => mb_substr($title, 0, 200), 'instructions' => $this->clean($instructions), 'due_date' => $due, 'due_time' => $dueTime,
                 'created_by_type' => $staff ? 'staff' : 'intern', 'created_by_id' => $staff?->id ?? $for->id,
                 'status' => 'todo', 'created_at' => now(), 'updated_at' => now(),
             ]);
@@ -338,7 +334,7 @@ class TaskService
             foreach ($members as $m) {
                 $this->notifier->toDemandeur($m, 'Nouvelle tâche', [
                     trim($staff->first_name . ' ' . $staff->last_name) . ' vous a confié une tâche' . ($members->count() > 1 ? ' (avec votre binôme).' : '.'),
-                ], ['Tâche' => $title, 'Échéance' => $due ? $this->frDate($due) : null],
+                ], ['Tâche' => $title, 'Échéance' => $due ? $this->frDue($due, $dueTime) : null],
                     highlight: $task->instructions, highlightTitle: 'Consignes',
                     ctaLabel: 'Ouvrir la tâche', ctaUrl: $this->notifier->spaceUrl("/taches/{$id}"), context: 'stage-tache');
             }
@@ -511,7 +507,7 @@ class TaskService
             foreach ($this->members($t, true) as $m) {
                 $this->notifier->toDemandeur($m, 'Tâche à rendre demain', [
                     'La tâche suivante est à rendre demain. Pensez à remettre votre travail sur la plateforme.',
-                ], ['Tâche' => $t->title, 'Échéance' => $this->frDate($t->due_date)],
+                ], ['Tâche' => $t->title, 'Échéance' => $this->frDue($t->due_date, $t->due_time)],
                     ctaLabel: 'Ouvrir la tâche', ctaUrl: $this->notifier->spaceUrl("/taches/{$t->id}"), context: 'stage-tache-rappel');
             }
         }
@@ -568,6 +564,7 @@ class TaskService
             'id'           => (int) $t->id,
             'title'        => $t->title,
             'due_date'     => $t->due_date,
+            'due_time'     => $t->due_time,
             'status'       => $t->status,
             'status_label' => self::STATUS_LABELS[$t->status] ?? $t->status,
             'version'      => (int) $t->version,
@@ -646,9 +643,10 @@ class TaskService
         return $u ? trim($u->first_name . ' ' . $u->last_name) : 'Personnel';
     }
 
-    private function frDate(string $d): string
+    /** « lundi 16 novembre à 18h00 » */
+    private function frDue(string $d, ?string $time): string
     {
-        return CarbonImmutable::parse($d)->locale('fr')->isoFormat('dddd D MMMM');
+        return CarbonImmutable::parse($d)->locale('fr')->isoFormat('dddd D MMMM') . ($time ? ' à ' . str_replace(':', 'h', $time) : '');
     }
 
     private function staffUrl(object $task): string

@@ -5,6 +5,7 @@ namespace App\Modules\Stages\Http\Controllers;
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Modules\Core\Support\FilePreview;
+use App\Modules\Core\Support\OfficeFile;
 use App\Modules\Stages\Models\StageInternAccount;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Services\TaskService;
@@ -105,6 +106,7 @@ class StageTaskController extends Controller
             'title'            => ['required', 'string', 'max:200'],
             'instructions'     => ['nullable', 'string', 'max:3000'],
             'due_date'         => ['nullable', 'date_format:Y-m-d'],
+            'due_time'         => ['nullable', 'date_format:H:i'],
             'pour_binome'      => ['nullable', 'boolean'],
             'stage_request_id' => [$intern ? 'prohibited' : 'required', 'integer'],
         ], ['title.required' => 'Donnez un titre à la tâche.']);
@@ -115,7 +117,7 @@ class StageTaskController extends Controller
                 throw new BusinessException('Stagiaire introuvable.', 'STAGE_TASK_INTERN', 404);
             }
             $task = $this->tasks->create($for, $data['title'], $data['instructions'] ?? null, $data['due_date'] ?? null,
-                (bool) ($data['pour_binome'] ?? false), $intern ? null : $request->user());
+                (bool) ($data['pour_binome'] ?? false), $intern ? null : $request->user(), $data['due_time'] ?? null);
 
             return $this->tasks->detail($task, $intern, $intern ? null : $request->user());
         }, 'Tâche créée.', 201);
@@ -136,16 +138,14 @@ class StageTaskController extends Controller
     {
         $data = $request->validate([
             'files'   => ['nullable', 'array', 'max:' . TaskService::MAX_ITEMS],
-            'files.*' => ['file', 'max:' . TaskService::MAX_FILE_KB, 'mimes:' . implode(',', TaskService::FILE_TYPES),
-                'mimetypes:' . implode(',', TaskService::FILE_MIMES)],
+            'files.*' => OfficeFile::rules(TaskService::FILE_TYPES, TaskService::MAX_FILE_KB),
             'links'   => ['nullable', 'array', 'max:' . TaskService::MAX_ITEMS],
             'links.*' => ['nullable', 'string', 'max:1000'],
             'message' => ['nullable', 'string', 'max:2000'],
         ], [
             'files.max'         => 'Cinq fichiers au plus.',
             'files.*.max'       => 'Un fichier dépasse 20 Mo.',
-            'files.*.mimes'     => 'Fichiers acceptés : Word, PDF, PowerPoint, Excel, ZIP et images.',
-            'files.*.mimetypes' => 'Fichiers acceptés : Word, PDF, PowerPoint, Excel, ZIP et images.',
+            'files.*.extensions' => 'Fichiers acceptés : Word, PDF, PowerPoint, Excel, ZIP et images.',
         ]);
 
         return $this->guard(function () use ($request, $id, $data) {
