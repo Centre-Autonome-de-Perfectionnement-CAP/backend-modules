@@ -13,6 +13,7 @@ use App\Modules\Stages\Services\AttendanceService;
 use App\Modules\Stages\Services\InternActivationService;
 use App\Modules\Stages\Services\InternAuthService;
 use App\Modules\Stages\Services\InternCodeService;
+use App\Modules\Stages\Services\InternInvitationService;
 use App\Modules\Stages\Services\InternRequestService;
 use App\Modules\Stages\Services\InternWebAuthnService;
 use App\Modules\Stages\Services\ReportService;
@@ -475,9 +476,12 @@ class InternSpaceController extends Controller
 
     // ── Binôme ──────────────────────────────────────────────────────────
 
-    public function binome(Request $request): JsonResponse
+    public function binome(Request $request, InternInvitationService $invitations): JsonResponse
     {
-        return $this->successResponse($this->binomes->overview($this->ready($request)->stage));
+        $stage = $this->ready($request)->stage;
+
+        // Invité en binôme : l'autre n'a pas encore enregistré son stage.
+        return $this->successResponse($this->binomes->overview($stage) + ['awaiting' => $invitations->awaitingPartner($stage)]);
     }
 
     /** Proposer un binôme à un autre stagiaire, avec sa référence de stage. */

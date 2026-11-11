@@ -50,6 +50,7 @@ class ReportService
         private readonly StageNotifier $notifier,
         private readonly StageSettingsService $settings,
         private readonly StageRequestService $requests,
+        private readonly BinomeService $binomes,
     ) {}
 
     // ════════════════════════════════════════════════════════════════════
@@ -76,7 +77,7 @@ class ReportService
                 $nextShown = true;
             }
             $items[] = $p + [
-                'state'  => $this->state($p, $report, $today),
+                'state'  => $this->state($req, $p, $report, $today),
                 'report' => $report ? $this->summary($report) : null,
             ];
         }
@@ -97,7 +98,7 @@ class ReportService
 
         return [
             'frequency' => $this->settings->get('report_frequency'),
-            'binome'    => $partner ? ['name' => $partner->fullName()] : null,
+            'binome'    => $partner ? ['name' => $partner->fullName(), 'final_commun' => $this->finalShared($req, $partner)] : null,
             'items'     => array_values(array_filter($items, fn ($i) => $i['key'] !== ReportPlan::FINAL_KEY)),
             'final'     => $final,
             'stats'     => [
@@ -140,6 +141,12 @@ class ReportService
             ->where('status', StageStatus::ACCEPTED)->first();
     }
 
+    /** Rapport final commun au binôme (un même mémoire, déposé une fois pour les deux) ? */
+    public function finalShared(StageRequest $req, ?StageRequest $partner = null): bool
+    {
+        return ($partner ?? $this->partnerFor($req)) !== null && $this->binomes->finalMode($req->team_id) === BinomeService::FINAL_COMMUN;
+    }
+
     /**
      * Rapport jumeau (binôme), tant que les deux stagiaires forment encore un
      * binôme ; sinon chacun garde son rapport, sans lien actif.
@@ -159,17 +166,22 @@ class ReportService
     /**
      * Pour un dépôt : [rapport jumeau existant, binôme, période du binôme],
      * ou [null, null, null] si le dépôt ne concerne que le stagiaire.
+     * Rapport final : en binôme seulement s'il est commun (et alors toujours).
      */
     private function pairFor(StageRequest $req, ?StageReport $report, array $period, bool $forPair): array
     {
         $none = [null, null, null];
-        if ($period['kind'] === 'final' || !$this->pairingReady()) {
+        $final = $period['kind'] === 'final';
+        if (!$this->pairingReady()) {
             return $none;
         }
         if ($report && $report->pair_report_id) {
             $twin = $this->twinOf($report, true);
 
             return $twin ? [$twin, $twin->stage, collect($this->plan($twin->stage))->firstWhere('key', $period['key']) ?? $period] : $none;
+        }
+        if ($final) {
+            $forPair = $this->finalShared($req);
         }
         if (!$forPair || !($partner = $this->partnerFor($req))) {
             return $none;
@@ -182,8 +194,9 @@ class ReportService
             );
         }
         if (StageReport::where('stage_request_id', $partner->id)->where('period_key', $period['key'])->lockForUpdate()->exists()) {
-            throw new BusinessException(
-                $partner->fullName() . ' a déjà déposé son propre rapport pour cette période. Décochez « Déposer pour mon binôme » pour déposer le vôtre.',
+            throw new BusinessException($final
+                ? $partner->fullName() . ' a déjà déposé son propre rapport final : le rapport commun n\'est plus possible. Contactez le responsable de division.'
+                : $partner->fullName() . ' a déjà déposé son propre rapport pour cette période. Décochez « Déposer pour mon binôme » pour déposer le vôtre.',
                 'STAGE_REPORT_PAIR_EXISTS', 409,
             );
         }
@@ -313,7 +326,9 @@ class ReportService
                         $report->pair_report_id = $twin->id;
                         $report->save();
                     }
-                    $this->addVersion($twin, $req, $stored, $name, (int) $file->getSize(), $note, $twinLate, false);
+                    // Rapport final commun validé : la version corrigée après soutenance vaut aussi pour le binôme.
+                    $twinPost = $postDefense && $this->isValidated($twin);
+                    $this->addVersion($twin, $req, $stored, $name, (int) $file->getSize(), $note, $twinPost ? false : $twinLate, $twinPost);
                     $this->history($partner, 'report_submitted', null, $this->labelFor($twin) . " - version {$twin->current_version}, déposée par " . $req->fullName() . ' pour le binôme');
                 }
 
@@ -934,37 +949,46 @@ class ReportService
             throw new BusinessException('Le responsable de division a déjà tranché sur cette version.', 'STAGE_REPORT_LEAD_DECIDED', 409);
         }
 
-        DB::transaction(function () use ($report, $decision, $comment, $by, $role, $lead) {
-            DB::table('stage_report_reviews')->insert([
-                'report_id' => $report->id, 'version' => $report->current_version, 'user_id' => $by->id,
-                'role' => $role, 'decision' => $decision, 'comment' => $comment, 'created_at' => now(),
-            ]);
-            // Le superviseur donne son avis ; le responsable tranche.
-            if ($lead) {
-                $report->correction_status = $decision;
-                if ($decision === 'approved') {
-                    $report->official_version = $report->current_version;
+        // Rapport final commun : la décision vaut aussi pour le binôme.
+        $twin = $this->twinOf($report);
+        $both = array_values(array_filter([$report, $twin?->correction_status === 'pending' ? $twin : null]));
+        DB::transaction(function () use ($both, $decision, $comment, $by, $role, $lead) {
+            foreach ($both as $r) {
+                DB::table('stage_report_reviews')->insert([
+                    'report_id' => $r->id, 'version' => $r->current_version, 'user_id' => $by->id,
+                    'role' => $role, 'decision' => $decision, 'comment' => $comment, 'created_at' => now(),
+                ]);
+                // Le superviseur donne son avis ; le responsable tranche.
+                if ($lead) {
+                    $r->correction_status = $decision;
+                    if ($decision === 'approved') {
+                        $r->official_version = $r->current_version;
+                    }
+                    $r->save();
                 }
-                $report->save();
+                $this->history($r->stage, 'report_correction_' . $decision, $by,
+                    $this->labelFor($r) . ' - version corrigée après soutenance' . ($comment ? " : {$comment}" : ''));
             }
-            $this->history($report->stage, 'report_correction_' . $decision, $by,
-                $this->labelFor($report) . ' - version corrigée après soutenance' . ($comment ? " : {$comment}" : ''));
         });
-        $this->pruneOldVersions($report);
+        foreach ($both as $r) {
+            $this->pruneOldVersions($r);
+        }
 
         $req = $report->stage;
         $who = trim($by->first_name . ' ' . $by->last_name);
         if ($lead) {
-            $this->notifier->toDemandeur(
-                $req,
-                $decision === 'approved' ? 'Version corrigée validée' : 'Version corrigée non retenue',
-                [$decision === 'approved'
-                    ? "{$who} a validé la version corrigée de votre rapport final. C'est désormais la version officielle."
-                    : "{$who} n'a pas retenu la version corrigée de votre rapport final. Votre version validée précédente reste valable ; vous pouvez en déposer une autre."],
-                ['Rapport' => $this->labelFor($report)],
-                highlight: $comment, highlightTitle: 'Commentaire',
-                ctaLabel: 'Ouvrir mes rapports', ctaUrl: $this->notifier->spaceUrl('/rapports'), context: 'stage-rapport-correction',
-            );
+            foreach ($both as $r) {
+                $this->notifier->toDemandeur(
+                    $r->stage,
+                    $decision === 'approved' ? 'Version corrigée validée' : 'Version corrigée non retenue',
+                    [$decision === 'approved'
+                        ? "{$who} a validé la version corrigée de " . (count($both) > 1 ? 'votre rapport final commun' : 'votre rapport final') . ". C'est désormais la version officielle."
+                        : "{$who} n'a pas retenu la version corrigée de " . (count($both) > 1 ? 'votre rapport final commun' : 'votre rapport final') . '. La version validée précédente reste valable ; vous pouvez en déposer une autre.'],
+                    ['Rapport' => $this->labelFor($r)],
+                    highlight: $comment, highlightTitle: 'Commentaire',
+                    ctaLabel: 'Ouvrir mes rapports', ctaUrl: $this->notifier->spaceUrl('/rapports'), context: 'stage-rapport-correction',
+                );
+            }
         } else {
             $this->notifier->toManagers($req, 'Avis d\'un superviseur', [
                 "{$who} (superviseur) a " . ($decision === 'approved' ? 'approuvé' : 'émis des réserves sur') . ' la version corrigée du rapport final. À vous de trancher.',
@@ -985,7 +1009,7 @@ class ReportService
             ->where('role', 'responsable')->orderByDesc('id')->value('decision');
     }
 
-    private function state(array $p, ?StageReport $report, CarbonImmutable $today): string
+    private function state(StageRequest $req, array $p, ?StageReport $report, CarbonImmutable $today): string
     {
         if ($report) {
             return $this->isValidated($report) ? 'validated'
@@ -995,7 +1019,8 @@ class ReportService
             return 'upcoming';
         }
 
-        return $today->toDateString() > $p['closes'] ? 'missing' : 'open';
+        // Entré dans le système après l'échéance (stage enregistré après coup) : à déposer, pas manquant.
+        return $this->isLate($req, $p, $today) ? 'missing' : 'open';
     }
 
     public function labelFor(StageReport $r): string

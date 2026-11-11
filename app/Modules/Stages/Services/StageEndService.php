@@ -131,7 +131,7 @@ class StageEndService
         $meta   = $end?->meta ?? [];
 
         return [
-            'can_end'  => $canAct && $req->status === StageStatus::ACCEPTED,
+            'can_end'  => $canAct && $req->status === StageStatus::ACCEPTED && !$this->finished($req),
             'can_undo' => $canAct && $end && $this->undoable($end),
             'motifs'   => self::REVOKE_MOTIFS,
             'current'  => $end ? [
@@ -145,6 +145,12 @@ class StageEndService
                 'note_id'     => $meta['note_id'] ?? null,
             ] : null,
         ];
+    }
+
+    /** Stage arrivé à son terme (date de fin passée). */
+    public function finished(StageRequest $req): bool
+    {
+        return $req->date_fin !== null && $req->date_fin->toDateString() < BusinessHours::today()->toDateString();
     }
 
     /** Superviseur attribué au stagiaire, ou responsable de division. */
@@ -174,6 +180,9 @@ class StageEndService
             }
             if ($status === StageStatus::DESISTED && !$stage->activated_at) {
                 throw new BusinessException('Votre stage n\'a pas commencé.', 'STAGE_END_STATUS', 409);
+            }
+            if ($this->finished($stage)) {
+                throw new BusinessException('Ce stage est déjà terminé : il n\'y a plus rien à clore.', 'STAGE_END_FINISHED', 409);
             }
 
             $today   = BusinessHours::today();

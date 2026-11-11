@@ -55,6 +55,7 @@ class LibraryService
         if ($report->kind !== 'final') {
             return;
         }
+        $report = $this->sourceReport($report);
         $work = LibraryWork::firstWhere(['source_type' => 'stage_report', 'source_id' => $report->id]);
         if ($work && $work->status !== 'proposed') {
             return; // déjà repris par le responsable : la fiche est la sienne
@@ -69,14 +70,14 @@ class LibraryService
                 'keywords'        => $this->keywords($data['mots_cles'] ?? null),
                 'authors_consent' => (bool) ($data['consentement_publication'] ?? false),
             ])->save();
-            $this->syncPeople($work, $this->stagePeople($report->stage, $data));
+            $this->syncPeople($work, $this->stagePeople($report, $data));
         });
     }
 
     /** Fiche proposée par le stagiaire, pour la reprendre au dépôt suivant. */
     public function proposalFor(StageReport $report): ?array
     {
-        $work = LibraryWork::with('people')->firstWhere(['source_type' => 'stage_report', 'source_id' => $report->id]);
+        $work = LibraryWork::with('people')->firstWhere(['source_type' => 'stage_report', 'source_id' => $this->sourceReport($report)->id]);
         if (!$work) {
             return null;
         }
@@ -121,10 +122,11 @@ class LibraryService
 
         $reports = StageReport::with('stage')->where('kind', 'final')->whereNotIn('id', $taken('stage_report'))
             ->orderByDesc('id')->limit(200)->get()
-            ->filter(fn (StageReport $r) => $r->stage && $this->reports->isValidated($r))
+            // Rapport final commun : proposé une seule fois (celui du premier dépôt).
+            ->filter(fn (StageReport $r) => $r->stage && $this->reports->isValidated($r) && $this->sourceReport($r)->id === $r->id)
             ->map(fn (StageReport $r) => [
                 'type' => 'stage_report', 'id' => $r->id, 'title' => $r->stage->theme_souhaite ?: 'Rapport final de stage',
-                'authors' => $r->stage->fullName(), 'reference' => $r->stage->reference,
+                'authors' => collect([$r->stage, $this->reports->twinOf($r)?->stage])->filter()->map->fullName()->implode(' et '), 'reference' => $r->stage->reference,
                 'year' => $r->stage->date_fin?->year, 'detail' => $r->stage->filiere_niveau,
             ])->values();
 
@@ -152,7 +154,7 @@ class LibraryService
                 $work = $this->newWork('rapport_stage', $type, $id, 'draft', $by);
                 $this->fillFromStage($work, $report->stage);
                 $work->fill(['title' => $report->stage->theme_souhaite ?: 'Rapport de fin de formation'])->save();
-                $this->syncPeople($work, $this->stagePeople($report->stage, []));
+                $this->syncPeople($work, $this->stagePeople($report, []));
 
                 return $work;
             }
@@ -446,18 +448,31 @@ class LibraryService
         ]);
     }
 
-    /** Le stagiaire, son binôme et ses superviseurs ; le maître de mémoire qu'il indique. */
-    private function stagePeople(StageRequest $req, array $data): array
+    /**
+     * Rapport de référence d'un rapport final : pour un rapport commun au
+     * binôme, celui du premier dépôt (une seule fiche, une seule publication).
+     */
+    private function sourceReport(StageReport $r): StageReport
     {
-        $authors = StageRequest::when($req->team_id, fn ($q) => $q->where('team_id', $req->team_id), fn ($q) => $q->whereKey($req->id))
-            ->orderByRaw('id = ? DESC', [$req->id])->get();
+        $twin = $this->reports->twinOf($r);
+
+        return $twin && $twin->id < $r->id ? $twin : $r;
+    }
+
+    /**
+     * Auteurs (le stagiaire, et son binôme si le rapport leur est commun),
+     * leurs superviseurs, et le maître de mémoire indiqué.
+     */
+    private function stagePeople(StageReport $report, array $data): array
+    {
+        $authors = collect([$report->stage, $this->reports->twinOf($report)?->stage])->filter()->values();
         $people = $authors->map(fn (StageRequest $a) => ['role' => 'auteur', 'name' => $a->fullName(), 'email' => $a->email, 'phone' => $a->whatsapp])->all();
         if (!empty($data['maitre_nom'])) {
             $people[] = ['role' => 'maitre', 'name' => $data['maitre_nom'], 'fonction' => $data['maitre_fonction'] ?? null,
                 'email' => $data['maitre_email'] ?? null, 'phone' => $data['maitre_telephone'] ?? null];
         }
         foreach (DB::table('stage_supervisions as s')->join('users as u', 'u.id', '=', 's.user_id')
-            ->where('s.stage_request_id', $req->id)->get(['u.first_name', 'u.last_name', 'u.email', 'u.phone']) as $u) {
+            ->whereIn('s.stage_request_id', $authors->pluck('id'))->distinct()->get(['u.id', 'u.first_name', 'u.last_name', 'u.email', 'u.phone']) as $u) {
             $people[] = ['role' => 'superviseur', 'name' => trim($u->first_name . ' ' . mb_strtoupper($u->last_name)), 'fonction' => 'Superviseur de stage, CAP-EPAC', 'email' => $u->email, 'phone' => $u->phone];
         }
 

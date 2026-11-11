@@ -120,6 +120,7 @@ class SupervisionController extends Controller
             'nom'         => ['nullable', 'string', 'max:80'],
             'stage_ids'   => ['required', 'array', 'size:2'],
             'stage_ids.*' => ['integer', 'min:1', 'distinct'],
+            'final_mode'  => ['nullable', Rule::in(array_keys(BinomeService::FINAL_MODES))],
         ], ['stage_ids.size' => 'Un binôme compte exactement deux stagiaires.']);
         $pair = StageRequest::whereIn('id', $data['stage_ids'])->get();
         if ($pair->count() !== 2) {
@@ -127,8 +128,22 @@ class SupervisionController extends Controller
         }
 
         return $this->guard(function () use ($pair, $data, $request, $binomes) {
-            $teamId = $binomes->form($pair[0], $pair[1], $request->user(), $data['nom'] ?? null);
+            $teamId = $binomes->form($pair[0], $pair[1], $request->user(), $data['nom'] ?? null, $data['final_mode'] ?? null);
             return $this->successResponse(['id' => $teamId], 'Binôme formé. Les deux stagiaires sont prévenus.', 201);
+        });
+    }
+
+    /** Rapport final du binôme : individuel ou commun (tant qu'aucun n'est déposé). */
+    public function teamFinalMode(Request $request, int $id, BinomeService $binomes): JsonResponse
+    {
+        $data = $request->validate(['final_mode' => ['required', Rule::in(array_keys(BinomeService::FINAL_MODES))]],
+            ['final_mode.required' => 'Choisissez le type de rapport final.']);
+
+        return $this->guard(function () use ($id, $data, $request, $binomes) {
+            $binomes->setFinalMode($id, $data['final_mode'], $request->user());
+            return $this->successResponse(null, $data['final_mode'] === BinomeService::FINAL_COMMUN
+                ? 'Rapport final commun : déposé par l\'un, il vaudra pour les deux. Les deux stagiaires sont prévenus.'
+                : 'Rapport final individuel : chacun déposera le sien. Les deux stagiaires sont prévenus.');
         });
     }
 
