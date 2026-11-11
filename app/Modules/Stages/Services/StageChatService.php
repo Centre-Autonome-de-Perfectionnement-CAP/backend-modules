@@ -42,10 +42,6 @@ class StageChatService
     public const MAX_FILE_KB = 5120;
     /** Extensions acceptées (vérifiées aussi par type réel). */
     public const FILE_TYPES = ['pdf', 'doc', 'docx', 'zip', 'jpg', 'jpeg', 'png', 'webp'];
-    public const FILE_MIMES = [
-        'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/zip', 'application/x-zip-compressed', 'image/jpeg', 'image/png', 'image/webp',
-    ];
     private const DISK = 'local';
     private const PAGE = 50;
     private const BURST_MINUTES = 10;

@@ -267,9 +267,15 @@ class ReportService
         $stored = null;
         $postDefense = false;
         $twin = null;
+        $requester = null;
         try {
-            $report = DB::transaction(function () use ($req, $period, $file, $note, $forPair, $today, &$late, &$stored, &$postDefense, &$twin) {
+            $report = DB::transaction(function () use ($req, $period, $file, $note, $forPair, $today, &$late, &$stored, &$postDefense, &$twin, &$requester) {
                 $report = StageReport::where('stage_request_id', $req->id)->where('period_key', $period['key'])->lockForUpdate()->first();
+                // Correction demandée : qui l'a demandée (prévenu avec les superviseurs titulaires).
+                if ($report && in_array($report->status, ['rejected', 'supervisor_rejected'], true)) {
+                    $requester = DB::table('stage_report_reviews')->where('report_id', $report->id)->where('version', $report->current_version)
+                        ->where('decision', 'rejected')->orderByDesc('id')->value('user_id') ?? 0;
+                }
                 // Rapport final validé : seule une version corrigée après la
                 // soutenance est encore possible (dans le délai prévu).
                 $postDefense = $report && $this->isValidated($report);
@@ -321,8 +327,18 @@ class ReportService
         }
 
         $partner = $twin?->stage;
-        // Rapports journaliers : récapitulatif quotidien au personnel (pas un message par dépôt).
-        if ($report->kind === 'final' || $report->frequency !== 'journalier') {
+        if ($requester !== null) {
+            // Nouvelle version après une demande de correction : les superviseurs
+            // titulaires et la personne qui l'a demandée, un seul message chacun.
+            $to = collect(array_filter([$req, $partner]))->flatMap(fn ($r) => $this->notifier->supervisorsOf($r))
+                ->concat(DB::table('users')->where('id', $requester)->whereNull('deleted_at')->get(['id', 'email', 'phone', 'first_name', 'last_name']))
+                ->unique('id')->values();
+            $this->notifier->toStaff($to, 'Rapport corrigé', [
+                $req->fullName() . ' a déposé la version corrigée de son rapport' . ($partner ? ' (pour lui et son binôme, ' . $partner->fullName() . ')' : '') . '.',
+            ], ['Stagiaire' => $req->fullName(), 'Binôme' => $partner?->fullName(), 'Rapport' => $this->labelFor($report),
+                'Version' => (string) $report->current_version], 'stage-rapport', $this->staffUrl($report), $req->reference);
+        } elseif ($report->kind === 'final' || $report->frequency !== 'journalier') {
+            // Rapports journaliers : récapitulatif quotidien au personnel (pas un message par dépôt).
             $this->notifier->toFollowers(
                 $partner ? [$req, $partner] : $req,
                 $postDefense ? 'Rapport final corrigé après soutenance' : ($report->kind === 'final' ? 'Rapport final déposé' : 'Rapport déposé'),
@@ -516,6 +532,23 @@ class ReportService
                 ($n > 1 ? "{$n} nouveaux commentaires" : 'Un nouveau commentaire') . ' sur ' . ($twin ? 'le rapport de votre binôme' : 'votre rapport') . " « {$label} ».",
             ], [], highlight: $text($others), highlightTitle: $n > 1 ? 'Commentaires' : 'Commentaire',
                 ctaLabel: 'Ouvrir mes rapports', ctaUrl: $this->notifier->spaceUrl('/rapports'), context: 'stage-rapport-commentaire');
+        }
+
+        // Autres stagiaires qui ont déjà commenté ce rapport : prévenus des nouvelles réponses (sauf les leurs).
+        $ownerIds = collect($owners)->pluck('id')->all();
+        $participants = StageRequest::whereIn('id', DB::table('stage_report_comments')->whereIn('report_id', array_filter([$report->id, $twin?->id]))
+            ->where('author', 'stagiaire')->whereNotNull('stage_request_id')->whereNotIn('id', $rows->pluck('id'))
+            ->distinct()->pluck('stage_request_id'))->whereNotIn('id', $ownerIds)->get();
+        foreach ($participants as $p) {
+            $others = $rows->reject(fn ($c) => $c->author === 'stagiaire' && (int) $c->stage_request_id === $p->id);
+            if ($others->isEmpty()) {
+                continue;
+            }
+            $n = $others->count();
+            $this->notifier->toDemandeur($p, $n > 1 ? 'Nouvelles réponses sur un rapport' : 'Nouvelle réponse sur un rapport', [
+                ($n > 1 ? "{$n} nouveaux commentaires" : 'Un nouveau commentaire') . ' sur « ' . $label . ' » de ' . collect($owners)->map->fullName()->implode(' et ') . ', que vous avez commenté.',
+            ], [], highlight: $text($others), highlightTitle: $n > 1 ? 'Commentaires' : 'Commentaire',
+                ctaLabel: 'Ouvrir les rapports', ctaUrl: $this->notifier->spaceUrl('/rapports/tous'), context: 'stage-rapport-commentaire');
         }
 
         $fromInterns = $rows->where('author', 'stagiaire');

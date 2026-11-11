@@ -207,8 +207,13 @@ class StagesLot4Test extends TestCase
         $this->actingAs($sup, 'sanctum')->postJson("/api/stages/admin/rapports/{$id}/decision", ['decision' => 'approved'])
             ->assertStatus(409)->assertJsonPath('error_code', 'STAGE_REPORT_LEAD_DECIDED');
 
-        // Nouvelle version → de nouveau à examiner ; le stagiaire répond
+        // Nouvelle version → de nouveau à examiner : le superviseur titulaire et le responsable qui a demandé
+        // la correction sont prévenus, une seule fois chacun ; le stagiaire répond
+        Queue::fake();
         $this->post('/api/stagiaire/rapports', ['period_key' => 'S2026-W45', 'fichier' => $this->pdf()], $h)->assertStatus(201);
+        $corrected = fn (?string $phone) => Queue::pushed(SendNotificationJob::class, fn ($j) => ($j->payload['phone'] ?? null) === $phone
+            && str_contains(json_encode($j->payload, JSON_UNESCAPED_UNICODE), 'Rapport corrigé'))->count();
+        $this->assertSame([1, 1], [$corrected($sup->phone), $corrected($lead->phone)]);
         $this->postJson("/api/stagiaire/rapports/{$id}/commentaires", ['body' => 'Schéma ajouté page 4'], $h)->assertOk();
         $d = $this->actingAs($lead, 'sanctum')->postJson("/api/stages/admin/rapports/{$id}/decision", ['decision' => 'approved'])
             ->assertOk()->json('data');
@@ -335,6 +340,14 @@ class StagesLot4Test extends TestCase
         $this->assertStringContainsString('DOSSOU Ines : Bon travail', $toA[0]['text']);
         $this->assertSame(0, DB::table('stage_digest_items')->count());
 
+        // L'auteur répond : le stagiaire qui avait commenté est prévenu (pas l'auteur lui-même)
+        $this->sent = [];
+        $this->postJson("/api/stagiaire/rapports/{$id}/commentaires", ['body' => 'Merci, je complète la partie réseau'], $ha)->assertOk();
+        $this->at('2026-11-06 16:25');
+        $this->artisan('stages:process-reports --comments')->assertSuccessful();
+        $this->assertSame([$b->whatsapp], collect($this->sent)->filter(fn ($s) => str_contains($s['text'], 'Nouvelle réponse sur un rapport'))->pluck('to')->values()->all());
+        $this->assertFalse(collect($this->sent)->contains('to', $a->whatsapp));
+
         // Côté auteur du commentaire : « mine » et suppression ; pas les autres
         $d = $this->getJson("/api/stagiaire/rapports/{$id}", $hb)->assertOk()->json('data');
         $this->assertSame([false, true, true, false], [$d['mine'], $d['comments'][0]['mine'], $d['comments'][0]['can_delete'], $d['comments'][2]['can_delete']]);
@@ -342,7 +355,7 @@ class StagesLot4Test extends TestCase
         $this->deleteJson("/api/stagiaire/rapports/{$id}/commentaires/{$cid}", [], $hb)->assertOk();
         $first = $d['comments'][0]['id'];
         $this->actingAs($lead, 'sanctum')->deleteJson("/api/stages/admin/rapports/{$id}/commentaires/{$first}")->assertOk();
-        $this->assertSame(['Ajoutez le schéma'], array_column($this->getJson("/api/stagiaire/rapports/{$id}", $ha)->json('data.comments'), 'body'));
+        $this->assertSame(['Ajoutez le schéma', 'Merci, je complète la partie réseau'], array_column($this->getJson("/api/stagiaire/rapports/{$id}", $ha)->json('data.comments'), 'body'));
 
         // La nuit, les messages aux stagiaires attendent 7h
         $this->at('2026-11-06 22:30');
@@ -371,8 +384,14 @@ class StagesLot4Test extends TestCase
         $this->actingAs($sup, 'sanctum');
         $this->assertSame('DOSSOU Ines', collect($this->getJson('/api/stages/admin/taches')->assertOk()->json('data.interns'))->firstWhere('id', $a->id)['binome']);
         $this->postJson('/api/stages/admin/taches', ['title' => 'Hier', 'stage_request_id' => $a->id, 'due_date' => '2026-11-01'])->assertStatus(422);
+        $this->postJson('/api/stages/admin/taches', ['title' => 'Ce matin', 'stage_request_id' => $a->id, 'due_date' => '2026-11-09', 'due_time' => '08:00'])->assertStatus(422);
+        $d = $this->postJson('/api/stages/admin/taches', ['title' => 'Ce soir', 'stage_request_id' => $a->id, 'due_date' => '2026-11-09'])->assertStatus(201)->json('data');
+        $this->assertSame('18:00', $d['due_time'], 'heure par défaut');
+        $this->assertTrue(collect($this->sent)->contains(fn ($s) => str_contains($s['text'], 'lundi 9 novembre à 18h00')));
+        $this->deleteJson("/api/stages/admin/taches/{$d['id']}")->assertOk();
+        $this->sent = [];
         $id = $this->postJson('/api/stages/admin/taches', ['title' => 'Maquette de la page d\'accueil', 'instructions' => 'Version téléphone et ordinateur.',
-            'stage_request_id' => $a->id, 'pour_binome' => true, 'due_date' => '2026-11-13'])->assertStatus(201)->json('data.id');
+            'stage_request_id' => $a->id, 'pour_binome' => true, 'due_date' => '2026-11-13', 'due_time' => '10:30'])->assertStatus(201)->json('data.id');
         $this->assertSame(2, collect($this->sent)->filter(fn ($s) => str_contains($s['text'], 'Nouvelle tâche'))->count());
 
         // Visible du binôme, pas d'un autre stagiaire
