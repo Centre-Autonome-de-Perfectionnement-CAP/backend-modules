@@ -136,6 +136,9 @@ Route::prefix('inscription')->group(function () {
     // Broadcast messages aux étudiants
     Route::middleware('auth:sanctum')->post('broadcast/whatsapp-invitation', [StudentBroadcastController::class, 'sendWhatsAppInvitation']);
     Route::middleware('auth:sanctum')->get('broadcast/whatsapp-status/{broadcastId}', [StudentBroadcastController::class, 'getBroadcastStatus']);
+    // Messages WhatsApp groupés (étudiants cochés + numéros ajoutés)
+    Route::middleware(['auth:sanctum', 'throttle:20,1'])->post('messages-whatsapp', [\App\Modules\Inscription\Http\Controllers\WhatsAppMessageController::class, 'send']);
+    Route::middleware('auth:sanctum')->get('messages-whatsapp', [\App\Modules\Inscription\Http\Controllers\WhatsAppMessageController::class, 'history']);
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('export/pdf', [PendingStudentExportController::class, 'exportPdf']);

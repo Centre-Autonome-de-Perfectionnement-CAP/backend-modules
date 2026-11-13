@@ -59,6 +59,13 @@ Schedule::command('stages:sync-whatsapp-group')
     ->timezone('Africa/Porto-Novo')
     ->withoutOverlapping(60);
 
+// Inscription : fichiers joints aux messages WhatsApp groupés, effacés après quelques jours.
+Schedule::call(fn () => app(\App\Modules\Inscription\Services\WhatsAppBroadcastService::class)->purgeFiles())
+    ->name('inscription:purge-diffusions')
+    ->dailyAt('03:10')
+    ->timezone('Africa/Porto-Novo')
+    ->withoutOverlapping(30);
+
 // Filet de sécurité des notifications : si aucun worker ne tourne (crash,
 // redémarrage serveur), le scheduler vide la file chaque minute. Sans effet
 // gênant quand les workers sont actifs (withoutOverlapping, arrêt à vide).
