@@ -1,0 +1,1 @@
+import{r as p,am as d,R as l,an as m,ao as r}from"./index-BVBpLIEJ.js";const s=p.forwardRef((a,e)=>{var{children:c,className:o}=a,t=d(a,["children","className"]);return l.createElement("div",Object.assign({className:m("card-group",o)},t,{ref:e}),c)});s.propTypes={children:r.node,className:r.string};s.displayName="CCardGroup";export{s as C};
