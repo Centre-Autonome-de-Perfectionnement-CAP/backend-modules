@@ -260,6 +260,10 @@ class StagesLot4Test extends TestCase
         $this->postJson("/api/stages/admin/rapports/{$idA}/commentaires", ['body' => 'Ajoutez le planning'])->assertOk();
         $this->postJson("/api/stages/admin/rapports/{$idA}/decision", ['decision' => 'rejected', 'comment' => 'Trop court'])->assertOk();
         $this->assertSame('supervisor_rejected', $twin->fresh()->status);
+        // Renvoyé au stagiaire : il quitte « à traiter » et passe dans « à corriger »
+        $this->assertSame([0, 0], [count($this->getJson('/api/stages/admin/rapports?mine=1')->json('data')), $this->getJson('/api/stages/admin/rapports')->json('to_review')]);
+        $this->assertSame([$idA, false], [$this->getJson('/api/stages/admin/rapports?status=rejected&mine=1')->json('data.0.id'),
+            $this->getJson('/api/stages/admin/rapports?status=rejected&mine=1')->json('data.0.stage.termine')]);
         $this->assertSame(['Ajoutez le planning'], array_column($this->getJson("/api/stagiaire/rapports/{$twin->id}", $hb)->json('data.comments'), 'body'));
 
         // Le binôme dépose la correction : elle vaut pour les deux

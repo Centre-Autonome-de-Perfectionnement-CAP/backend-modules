@@ -32,7 +32,7 @@ class ReportController extends Controller
         return response()->json([
             'success' => true,
             'data'    => $this->reports->staffList($data['status'] ?? 'to_review', !empty($data['mine']) ? $request->user() : null)->values(),
-            'to_review' => $this->reports->countDistinct(StageReport::whereIn('status', ['submitted', 'supervisor_approved', 'supervisor_rejected'])),
+            'to_review' => $this->reports->countDistinct($this->reports->pending(StageReport::query())),
         ]);
     }
 

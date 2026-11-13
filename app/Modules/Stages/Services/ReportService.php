@@ -734,13 +734,14 @@ class ReportService
     /** Liste pour le personnel. */
     public function staffList(string $filter, ?User $mineOf): Collection
     {
-        $q = StageReport::with('stage')->orderByDesc('submitted_at')->limit(300);
-        if ($filter === 'to_review') {
-            $q->where(fn ($w) => $w->whereIn('status', ['submitted', 'supervisor_approved', 'supervisor_rejected'])
-                ->orWhere('correction_status', 'pending'));
-        } elseif ($filter !== 'all') {
-            $q->where('status', $filter);
-        }
+        $q = StageReport::with('stage')->orderByDesc('submitted_at')->limit(400);
+        match ($filter) {
+            'to_review' => $this->pending($q),
+            'approved'  => $q->whereIn('status', ['approved', 'supervisor_approved'])
+                ->where(fn ($w) => $w->whereNull('correction_status')->orWhere('correction_status', '!=', 'pending')),
+            'rejected'  => $q->whereIn('status', ['rejected', 'supervisor_rejected']),
+            default     => null,
+        };
         if ($mineOf) {
             $q->whereIn('stage_request_id', DB::table('stage_supervisions')->where('user_id', $mineOf->id)->select('stage_request_id'));
         }
@@ -750,9 +751,23 @@ class ReportService
         $ids = $rows->pluck('id')->flip();
         $rows = $rows->reject(fn ($r) => $r->pair_report_id && isset($ids[$r->pair_report_id]) && $r->id > $r->pair_report_id && $this->twinOf($r));
 
+        $today = BusinessHours::today()->toDateString();
+
         return $rows->map(fn ($r) => $this->summary($r) + [
-            'stage' => ['id' => $r->stage->id, 'reference' => $r->stage->reference, 'nom_complet' => trim($r->stage->civilite . ' ' . $r->stage->fullName())],
+            'stage' => ['id' => $r->stage->id, 'reference' => $r->stage->reference, 'nom_complet' => trim($r->stage->civilite . ' ' . $r->stage->fullName()),
+                // Stage terminé (date de fin passée) ou arrêté : rangé à part des stagiaires en cours.
+                'termine' => $r->stage->status !== StageStatus::ACCEPTED || ($r->stage->date_fin && $r->stage->date_fin->toDateString() < $today)],
         ]);
+    }
+
+    /**
+     * Rapports à traiter : déposés et pas encore validés, ou version corrigée
+     * d'un rapport validé à examiner. Un rapport validé (par le responsable ou
+     * un superviseur) ou renvoyé au stagiaire n'y figure plus.
+     */
+    public function pending(\Illuminate\Database\Eloquent\Builder $q): \Illuminate\Database\Eloquent\Builder
+    {
+        return $q->where(fn ($w) => $w->where('status', 'submitted')->orWhere('correction_status', 'pending'));
     }
 
     /**
