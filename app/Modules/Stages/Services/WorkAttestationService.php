@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Attestations de travail : pour une personne ayant travaillé au CAP
+ * Attestations de service fait : pour une personne ayant travaillé au CAP
  * (souvent un ancien stagiaire). Traitées comme les attestations de stage :
  *
  *  1. le responsable invite la personne par son numéro WhatsApp (lien à
@@ -58,6 +58,8 @@ class WorkAttestationService
     public const NATURES = ['à titre bénévole', 'en qualité de vacataire', 'à temps partiel'];
 
     /** Limites : l'attestation tient toujours sur une page. */
+    public const DEFAULT_APPRECIATION = 'Son engagement, son professionnalisme et sa disponibilité ont grandement contribué au bon fonctionnement du service informatique du Centre.';
+
     public const MAX_FONCTIONS = 5;
     public const MAX_TACHES = 8;
     public const MAX_FONCTION_LEN = 90;
@@ -69,7 +71,6 @@ class WorkAttestationService
         private readonly StageNotifier $notifier,
         private readonly Notifier $channels,
         private readonly WhatsAppBridgeClient $bridge,
-        private readonly StageSettingsService $settings,
         private readonly AttestationService $attestations,
     ) {}
 
@@ -113,7 +114,7 @@ class WorkAttestationService
         });
         $this->sendLink($a, $token);
         if ($stage) {
-            $this->history($stage, 'work_attestation_invited', $by, 'Lien envoyé pour une attestation de travail');
+            $this->history($stage, 'work_attestation_invited', $by, 'Lien envoyé pour une attestation de service fait');
         }
 
         return $a;
@@ -126,7 +127,7 @@ class WorkAttestationService
         $a = StageWorkAttestation::create($this->fromStage($stage) + [
             'status' => 'a_valider', 'phone' => $stage->whatsapp, 'created_by' => $by->id,
         ]);
-        $this->history($stage, 'work_attestation_draft', $by, 'Attestation de travail préparée');
+        $this->history($stage, 'work_attestation_draft', $by, 'Attestation de service fait préparée');
 
         return $a;
     }
@@ -142,16 +143,12 @@ class WorkAttestationService
         $this->sendLink($a, $token);
     }
 
-    /**
-     * Corrections du responsable. Une fiche encore en attente de la personne
-     * passe « à vérifier » (le responsable la remplit lui-même, le lien ne
-     * fonctionne plus).
-     */
+    /** Corrections du responsable, une fois la fiche remplie par la personne (ou préparée depuis un dossier). */
     public function update(StageWorkAttestation $a, array $data, User $by): StageWorkAttestation
     {
         return DB::transaction(function () use ($a, $data, $by) {
             $a = StageWorkAttestation::whereKey($a->id)->lockForUpdate()->first();
-            $this->assertStatus($a, ['invitee', 'a_valider']);
+            $this->assertStatus($a, ['a_valider']);
             $fill = $this->clean($data);
             if (array_key_exists('phone', $data)) {
                 $phone = $data['phone'] ? $this->normalize((string) $data['phone']) : null;
@@ -159,9 +156,6 @@ class WorkAttestationService
                     throw new BusinessException('Numéro WhatsApp invalide.', 'STAGE_WORK_PHONE', 422);
                 }
                 $fill['phone'] = $phone;
-            }
-            if ($a->status === 'invitee') {
-                $fill += ['status' => 'a_valider', 'token_hash' => null];
             }
             $a->forceFill($fill)->save();
             $this->assertDates($a);
@@ -185,8 +179,8 @@ class WorkAttestationService
 
             return $a;
         });
-        $this->toSecretariat($a, 'Attestation de travail à imprimer',
-            'Une attestation de travail validée est à imprimer, à faire signer par le Chef CAP, puis à remettre.');
+        $this->toSecretariat($a, 'Attestation de service fait à imprimer',
+            'Une attestation de service fait validée est à imprimer, à faire signer par le Chef CAP, puis à remettre.');
 
         return $a;
     }
@@ -238,8 +232,8 @@ class WorkAttestationService
 
             return $a;
         });
-        $this->notifier->toPerson($this->who($a), 'Votre attestation de travail est prête', [
-            'Votre attestation de travail est prête. Vous pouvez la retirer au secrétariat du CAP-EPAC, aux heures d\'ouverture, muni(e) d\'une pièce d\'identité.',
+        $this->notifier->toPerson($this->who($a), 'Votre attestation de service fait est prête', [
+            'Votre attestation de service fait est prête. Vous pouvez la retirer au secrétariat du CAP-EPAC, aux heures d\'ouverture, muni(e) d\'une pièce d\'identité.',
         ], array_filter(['Attestation n°' => $a->numero, 'Période' => 'Du ' . $this->longDate($a->date_debut) . ' au ' . $this->longDate($a->date_fin)]),
             context: 'stage-attestation-travail-prete', official: true);
 
@@ -308,12 +302,12 @@ class WorkAttestationService
             return $a;
         });
         try {
-            $this->notifier->toManagersGeneric('Attestation de travail à vérifier', [
+            $this->notifier->toManagersGeneric('Attestation de service fait à vérifier', [
                 $a->fullName() . ' a envoyé sa fiche : vérifiez-la, corrigez si besoin, puis validez-la pour l\'impression.',
             ], ['Personne' => trim($a->civilite . ' ' . $a->fullName()), 'Période' => 'Du ' . $this->longDate($a->date_debut) . ' au ' . $this->longDate($a->date_fin)],
                 'stage-attestation-travail', $this->staffUrl($a));
         } catch (\Throwable $e) {
-            Log::error('[Stages] Attestation de travail : responsable non prévenu', ['id' => $a->id, 'error' => $e->getMessage()]);
+            Log::error('[Stages] Attestation de service fait : responsable non prévenu', ['id' => $a->id, 'error' => $e->getMessage()]);
         }
 
         return $a;
@@ -336,6 +330,15 @@ class WorkAttestationService
             ->when($q !== '', fn ($w) => $w->where(fn ($w) => $w->where('nom', 'like', "%{$q}%")->orWhere('prenoms', 'like', "%{$q}%")
                 ->orWhere('numero', 'like', "%{$q}%")->orWhere('phone', 'like', '%' . preg_replace('/\D/', '', $q) . '%')))
             ->orderByDesc('updated_at')->limit(500)->get()->map(fn ($a) => $this->present($a, false));
+    }
+
+    public function forStage(StageRequest $stage): Collection
+    {
+        if (!$this->ready()) {
+            return collect();
+        }
+
+        return StageWorkAttestation::where('stage_request_id', $stage->id)->orderByDesc('id')->get()->map(fn ($a) => $this->present($a, false));
     }
 
     public function counts(bool $secretariat): array
@@ -467,7 +470,8 @@ class WorkAttestationService
     /** Classe de mise en page : '' (normal), 'dense' ou 'denser' selon la longueur du texte. */
     private function density(array $fonctions, array $taches, string $other): string
     {
-        $lines = count($fonctions) + count($taches);
+        // Lignes imprimées : une puce de plus de 80 caractères passe sur deux lignes.
+        $lines = array_sum(array_map(fn ($t) => max(1, (int) ceil(mb_strlen($t) / 80)), [...$fonctions, ...$taches]));
         $chars = mb_strlen(implode('', $fonctions) . implode('', $taches) . $other);
 
         return match (true) {
@@ -547,21 +551,16 @@ class WorkAttestationService
 
     private function fromStage(?StageRequest $stage): array
     {
+        // Appréciation pré-remplie (modifiable par le responsable).
+        $base = ['appreciation' => self::DEFAULT_APPRECIATION];
         if (!$stage) {
-            return [];
+            return $base;
         }
 
-        return [
+        return $base + [
             'stage_request_id' => $stage->id, 'civilite' => $stage->civilite, 'nom' => mb_strtoupper((string) $stage->nom),
             'prenoms' => $stage->prenoms, 'email' => $stage->email,
-            'appreciation' => $this->defaultAppreciation(),
         ];
-    }
-
-    public function defaultAppreciation(): string
-    {
-        return 'Son engagement, son professionnalisme et sa disponibilité ont grandement contribué au bon fonctionnement du '
-            . ($this->settings->get('default_service') ?: 'Service Informatique') . ' du Centre.';
     }
 
     private function numberTaken(string $numero, int $exceptId): bool
@@ -572,10 +571,10 @@ class WorkAttestationService
 
     private function sendLink(StageWorkAttestation $a, string $token): void
     {
-        $url = rtrim((string) config('app.frontend_url'), '/') . '/attestation-travail/' . $token;
-        $this->channels->whatsapp($a->phone, WhatsAppText::compose('Votre attestation de travail', [
+        $url = rtrim((string) config('app.frontend_url'), '/') . '/attestation-service-fait/' . $token;
+        $this->channels->whatsapp($a->phone, WhatsAppText::compose('Votre attestation de service fait', [
             'Bonjour' . ($a->civilite && $a->nom ? ' ' . trim($a->civilite . ' ' . $a->fullName()) : '') . ',',
-            'Le CAP-EPAC prépare votre attestation de travail. Indiquez vos informations (identité, diplôme, période, fonctions et tâches) en ouvrant ce lien personnel (valable '
+            'Le CAP-EPAC prépare votre attestation de service fait. Indiquez vos informations (identité, diplôme, période, fonctions et tâches) en ouvrant ce lien personnel (valable '
                 . self::TTL_DAYS . " jours, utilisable une seule fois) :\n{$url}",
             'Aucun compte à créer. Le CAP vérifie vos informations, puis vous prévient quand l\'attestation est prête à retirer.',
             '_Si vous n\'attendiez pas ce message, ignorez-le._',
@@ -586,7 +585,7 @@ class WorkAttestationService
     {
         $to = StageAccess::secretaries();
         if ($to->isEmpty()) {
-            Log::warning('[Stages] Aucun compte secrétariat à prévenir (attestation de travail)', ['id' => $a->id]);
+            Log::warning('[Stages] Aucun compte secrétariat à prévenir (attestation de service fait)', ['id' => $a->id]);
 
             return;
         }
@@ -601,7 +600,7 @@ class WorkAttestationService
 
     private function staffUrl(StageWorkAttestation $a): string
     {
-        return rtrim((string) config('app.url'), '/') . '/services/stages/attestations?type=travail&attestation=' . $a->id;
+        return rtrim((string) config('app.url'), '/') . '/services/stages/attestations?type=service&attestation=' . $a->id;
     }
 
     private function normalize(string $raw): ?string
@@ -621,7 +620,7 @@ class WorkAttestationService
     private function assertReady(): void
     {
         if (!$this->ready()) {
-            throw new BusinessException('Les attestations de travail seront disponibles dans quelques minutes.', 'STAGE_WORK_NOT_READY', 503);
+            throw new BusinessException('Les attestations de service fait seront disponibles dans quelques minutes.', 'STAGE_WORK_NOT_READY', 503);
         }
     }
 

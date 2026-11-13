@@ -15,7 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * Attestations de travail :
+ * Attestations de service fait :
  *  - responsables : inviter, partir d'un dossier, corriger, valider, annuler ;
  *  - secrétariat (et responsables) : imprimer, prévenir la personne, remettre ;
  *  - personne invitée : lien public, sans compte.
@@ -57,6 +57,14 @@ class WorkAttestationController extends Controller
 
             return $this->successResponse($this->work->present($this->work->draftFromStage($stage, $request->user())), 'Fiche préremplie : complétez-la puis validez.', 201);
         });
+    }
+
+    /** Dossier d'un stagiaire : ses attestations de service fait. */
+    public function forStage(int $id): JsonResponse
+    {
+        $stage = StageRequest::findOrFail($id);
+
+        return $this->guard(fn () => $this->successResponse($this->work->forStage($stage)->values()));
     }
 
     public function update(Request $request, int $id): JsonResponse

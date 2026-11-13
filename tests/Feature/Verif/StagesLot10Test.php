@@ -178,9 +178,13 @@ class StagesLot10Test extends TestCase
         // Plus de changement de type une fois déposé
         $this->actingAs($lead, 'sanctum')->patchJson("/api/stages/admin/equipes/{$team['id']}/rapport-final", ['final_mode' => 'individuel'])->assertStatus(409);
 
+        // Invités, stage terminé : aucune condition d'assiduité, seul le rapport final manque
+        $att = app(\App\Modules\Stages\Services\AttestationService::class);
+        $e = $att->eligibility($a->fresh());
+        $this->assertSame([false, true, false, ['Rapport final pas encore validé.']], [$e['attendance_required'], $e['attendance_ok'], $e['eligible'], $e['missing']]);
+
         // Une validation pour les deux, attestation possible pour chacun
         $this->postJson("/api/stages/admin/rapports/{$id}/decision", ['decision' => 'approved'])->assertOk();
-        $att = app(\App\Modules\Stages\Services\AttestationService::class);
         $this->assertTrue($att->eligibility($a->fresh())['eligible']);
         $this->assertTrue($att->eligibility($b->fresh())['eligible']);
         // Proposé une seule fois aux travaux à publier

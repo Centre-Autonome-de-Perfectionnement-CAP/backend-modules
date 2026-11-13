@@ -37,7 +37,7 @@ class StageSettingsService
         'seuil_assiduite'          => 80,             // % minimal de présence pour l'attestation
         'attestation_structure'    => 'de la Cellule Informatique de la Division Formation Continue et Perfectionnement du CAP',
         // ── Documents PDF (attestation, note de service) ─────────────────
-        'numero_suffixe'           => 'CAP/EPAC/UAC',   // attestations : « N° 001-26/CAP/EPAC/UAC »
+        'numero_suffixe'           => 'FCP/CAP/EPAC/UAC', // attestations : « N° 001-26/FCP/CAP/EPAC/UAC »
         'pdf_ville'                => 'Abomey-Calavi',
         'signataire_titre'         => 'Le Chef CAP,',
         'signataire_nom'           => 'Professeur Fidèle Paul TCHOBO',

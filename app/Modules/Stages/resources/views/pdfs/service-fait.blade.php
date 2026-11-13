@@ -1,22 +1,23 @@
 {{--
-    Attestation de travail - même famille que l'attestation de stage
+    Attestation de service fait - même famille que l'attestation de stage
     (titre Algerian à ruban, Pristina et Albertus Medium, tout en texte).
     Fonctions et tâches : une puce par ligne. Signature et cachet du Chef CAP
     apposés à la main sur l'original.
 --}}
 @extends('stages::pdfs.layout')
 
-@section('title', 'Attestation de travail - ' . $d['nom_complet'])
+@section('title', 'Attestation de service fait - ' . $d['nom_complet'])
 
 @section('styles')
     .page { padding-top: 41mm; }
     .ref { font-size: 12pt; height: 7mm; }
     .ref .num { float: left; font-weight: bold; }
     .ref .date { float: right; }
-    .titre { position: relative; height: 21mm; margin-top: 3mm; }
-    .titre .t { position: absolute; left: 0; width: 160mm; top: 0; text-align: center; font-family: 'Algerian'; font-size: 29pt; line-height: 1; white-space: nowrap; transform: scale(1, 1.71); }
+    /* Un saut de la hauteur des lettres du titre sous la ligne N° / date. */
+    .titre { position: relative; height: 19mm; margin-top: 14mm; }
+    .titre .t { position: absolute; left: 0; width: 160mm; top: 0; text-align: center; font-family: 'Algerian'; font-size: 25pt; line-height: 1; white-space: nowrap; transform: scale(1, 1.71); }
     .titre .ombre { color: #9a9a9a; left: 0.55mm; top: 0.55mm; }
-    .titre .ruban { position: absolute; left: 50mm; top: 15.5mm; width: 60mm; }
+    .titre .ruban { position: absolute; left: 50mm; top: 13.5mm; width: 60mm; }
     .pristina { font-family: 'Pristina'; font-size: 14pt; text-align: justify; line-height: 1.2; }
     .alb { font-family: 'Albertus'; font-size: 11.5pt; line-height: 1.3; text-align: justify; }
     .nom { font-size: 13pt; }
@@ -56,13 +57,13 @@
 <div class="{{ $d['dense'] }}">
 <div class="ref">
     {{-- Numéro écrit à la main sur l'original --}}
-    <span class="num">N°{{ str_repeat("\u{00A0}", 26) }}/{{ $suffixe }}</span>
+    <span class="num">N°{{ str_repeat("\u{00A0}", 15) }}/{{ $suffixe }}</span>
     <span class="date">{{ $ville }}, le {{ $date }}</span>
 </div>
 
 <div class="titre">
-    <div class="t ombre">ATTESTATION DE TRAVAIL</div>
-    <div class="t">ATTESTATION DE TRAVAIL</div>
+    <div class="t ombre">ATTESTATION DE SERVICE FAIT</div>
+    <div class="t">ATTESTATION DE SERVICE FAIT</div>
     <img class="ruban" src="data:image/svg+xml;base64,{{ base64_encode($svgRuban) }}" alt="">
 </div>
 

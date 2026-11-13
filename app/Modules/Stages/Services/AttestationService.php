@@ -107,7 +107,10 @@ class AttestationService
         $final   = $this->reports->finalValidated($req);
         // Stage (en partie) antérieur au système : seule la période suivie compte ;
         // un stage déjà terminé à l'entrée dans le système n'a pas d'assiduité mesurable.
-        $attOk   = ($taux !== null && $taux >= $seuil) || ($taux === null && $req->attendance_from !== null);
+        // Stagiaire invité (arrivé avant le système), stage terminé : on le suppose assidu,
+        // seul le rapport final compte.
+        $required = !$this->invitedAndFinished($req);
+        $attOk   = !$required || ($taux !== null && $taux >= $seuil) || ($taux === null && $req->attendance_from !== null);
 
         $missing = [];
         if (!$attOk) {
@@ -123,6 +126,7 @@ class AttestationService
             'taux'            => $taux,
             'seuil'           => $seuil,
             'attendance_ok'   => $attOk,
+            'attendance_required' => $required,
             'final_validated' => $final,
             'eligible'        => $attOk && $final,
             'jours_ouvres'    => $summary['jours_ouvres'],
@@ -130,6 +134,12 @@ class AttestationService
             'missing'         => $missing,
             'computed_at'     => now()->toIso8601String(),
         ];
+    }
+
+    private function invitedAndFinished(StageRequest $req): bool
+    {
+        return $req->origin === 'invitation' && $req->date_fin !== null
+            && $req->date_fin->toDateString() < BusinessHours::today()->toDateString();
     }
 
     /** Contenu de l'attestation (données du stage + corrections du responsable). */
@@ -658,8 +668,8 @@ class AttestationService
 
     /**
      * Numéro proposé : « 001-26 » (séquence annuelle), imprimé
-     * « N° 001-26/CAP/EPAC/UAC ». Un seul registre pour les attestations de
-     * stage et de travail.
+     * « N° 001-26/FCP/CAP/EPAC/UAC ». Un seul registre pour les attestations de
+     * stage et de service fait.
      */
     public function nextNumber(): string
     {
