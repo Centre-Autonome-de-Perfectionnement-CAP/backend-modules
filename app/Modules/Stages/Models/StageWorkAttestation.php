@@ -5,7 +5,7 @@ namespace App\Modules\Stages\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/** Attestation de travail (voir WorkAttestationService). */
+/** Attestation de service fait (voir WorkAttestationService). */
 class StageWorkAttestation extends Model
 {
     protected $table = 'stage_work_attestations';

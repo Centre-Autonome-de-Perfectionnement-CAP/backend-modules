@@ -47,7 +47,7 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
     Route::get('rejoindre', [InternInvitationController::class, 'show'])->middleware('throttle:stages-public-code');
     Route::post('rejoindre', [InternInvitationController::class, 'register'])->middleware('throttle:stages-public-code');
 
-    // ── Attestation de travail : fiche remplie via le lien reçu (sans compte) ─
+    // ── Attestation de service fait : fiche remplie via le lien reçu (sans compte) ─
     Route::get('attestation-travail', [WorkAttestationController::class, 'publicShow'])->middleware('throttle:stages-public-code');
     Route::post('attestation-travail', [WorkAttestationController::class, 'publicSubmit'])->middleware('throttle:stages-public-code');
 
@@ -92,10 +92,11 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         Route::post('stagiaires/{id}/attestation-exceptionnelle', [AttestationController::class, 'exceptional'])
             ->whereNumber('id')->middleware('throttle:5,1');
 
-        // Attestations de travail : décisions réservées au responsable.
+        // Attestations de service fait : décisions réservées au responsable.
         Route::middleware('throttle:30,1')->group(function () {
             Route::post('attestations-travail', [WorkAttestationController::class, 'invite']);
             Route::post('stagiaires/{id}/attestation-travail', [WorkAttestationController::class, 'fromStage'])->whereNumber('id');
+            Route::get('stagiaires/{id}/attestations-travail', [WorkAttestationController::class, 'forStage'])->whereNumber('id');
             Route::put('attestations-travail/{id}', [WorkAttestationController::class, 'update'])->whereNumber('id');
             Route::post('attestations-travail/{id}/valider', [WorkAttestationController::class, 'validateWork'])->whereNumber('id');
             Route::post('attestations-travail/{id}/renvoyer', [WorkAttestationController::class, 'resend'])->whereNumber('id');

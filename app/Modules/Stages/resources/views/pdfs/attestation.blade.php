@@ -13,7 +13,8 @@
     .ref { font-size: 12pt; height: 7mm; }
     .ref .num { float: left; font-weight: bold; }
     .ref .date { float: right; }
-    .titre { position: relative; height: 26mm; margin-top: 5mm; }
+    /* Un saut de la hauteur des lettres du titre sous la ligne N° / date. */
+    .titre { position: relative; height: 26mm; margin-top: 19mm; }
     .titre .t { position: absolute; left: 0; width: 160mm; top: 0; text-align: center; font-family: 'Algerian'; font-size: 32.3pt; line-height: 1; white-space: nowrap; transform: scale(1, 1.71); }
     .titre .ombre { color: #9a9a9a; left: 0.55mm; top: 0.55mm; }
     .titre .ruban { position: absolute; left: 53.7mm; top: 17mm; width: 52.6mm; }
@@ -43,7 +44,7 @@
 @if($apercu)<div class="apercu">APERÇU - NON VALIDÉE</div>@endif
 <div class="ref">
     {{-- Numéro écrit à la main sur l'original --}}
-    <span class="num">N°{{ str_repeat("\u{00A0}", 26) }}/{{ $suffixe }}</span>
+    <span class="num">N°{{ str_repeat("\u{00A0}", 15) }}/{{ $suffixe }}</span>
     <span class="date">{{ $ville }}, le {{ $date }}</span>
 </div>
 

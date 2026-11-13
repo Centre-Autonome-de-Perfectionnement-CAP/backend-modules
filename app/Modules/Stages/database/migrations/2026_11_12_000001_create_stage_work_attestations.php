@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Attestations de travail (personnes ayant travaillé au CAP, souvent
+ * Attestations de service fait (personnes ayant travaillé au CAP, souvent
  * d'anciens stagiaires) : invitation par WhatsApp (lien à usage unique, sans
  * compte), vérification par le responsable, impression et remise par le
  * secrétariat, comme les attestations de stage.

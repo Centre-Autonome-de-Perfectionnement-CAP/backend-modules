@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
-/** Module Stages - Lot 11 : attestations de travail (invitation sans compte, vérification, impression, intéressé prévenu, remise). */
+/** Module Stages - Lot 11 : attestations de service fait (invitation sans compte, vérification, impression, intéressé prévenu, remise). */
 class StagesLot11Test extends TestCase
 {
     use InternDevice;
@@ -116,9 +116,9 @@ class StagesLot11Test extends TestCase
 
     private function link(string $phone): string
     {
-        $wa = collect($this->sent)->last(fn ($s) => $s['to'] === $phone && str_contains($s['text'], '/attestation-travail/'));
+        $wa = collect($this->sent)->last(fn ($s) => $s['to'] === $phone && str_contains($s['text'], '/attestation-service-fait/'));
         $this->assertNotNull($wa);
-        preg_match('#attestation-travail/([A-Za-z0-9]{16})\b#', $wa['text'], $m);
+        preg_match('#attestation-service-fait/([A-Za-z0-9]{16})\b#', $wa['text'], $m);
 
         return $m[1];
     }
@@ -144,6 +144,8 @@ class StagesLot11Test extends TestCase
         $this->actingAs($lead, 'sanctum')->postJson('/api/stages/admin/attestations-travail', ['numero' => '12'])->assertStatus(422);
         $id = $this->postJson('/api/stages/admin/attestations-travail', ['numero' => '0197445566'])->assertStatus(201)->json('data.id');
         $token = $this->link('+2290197445566');
+        // Pas de fiche à remplir côté responsable tant que la personne n'a pas envoyé la sienne
+        $this->putJson("/api/stages/admin/attestations-travail/{$id}", ['nom' => 'Autre'])->assertStatus(409);
 
         // Lien public : sans compte ; fiche envoyée une seule fois
         $this->getJson("/api/stages/attestation-travail?token={$token}")->assertOk()->assertJsonPath('data.phone', '••••••5566');
@@ -157,6 +159,7 @@ class StagesLot11Test extends TestCase
         $this->actingAs($sec, 'sanctum')->getJson("/api/stages/admin/attestations-travail/{$id}")->assertNotFound();
         $a = $this->actingAs($lead, 'sanctum')->getJson("/api/stages/admin/attestations-travail/{$id}")->assertOk()->json('data');
         $this->assertSame(['a_valider', 'HOUNGBO', ['Développeuse web', 'Assistante réseau']], [$a['status'], $a['values']['nom'], $a['values']['fonctions']]);
+        $this->assertSame(\App\Modules\Stages\Services\WorkAttestationService::DEFAULT_APPRECIATION, $a['values']['appreciation']);
         $this->putJson("/api/stages/admin/attestations-travail/{$id}", ['nature' => 'à titre bénévole',
             'appreciation' => 'Son engagement a grandement contribué au bon fonctionnement du Service Informatique du Centre.'])->assertOk();
 
@@ -164,7 +167,8 @@ class StagesLot11Test extends TestCase
         $pdf = base64_decode($this->getJson("/api/stages/admin/attestations-travail/{$id}/pdf")->assertOk()->json('content'));
         $this->assertStringStartsWith('%PDF', $pdf);
         $text = $this->pdfText($pdf);
-        foreach (['ATTESTATION DE TRAVAIL', 'Mlle HOUNGBO', 'du diplôme d’Ingénieur', 'à titre bénévole', 'les fonctions de', 'Développeuse web',
+        $this->assertStringContainsString('/FCP/CAP/EPAC/UAC', $text);
+        foreach (['ATTESTATION DE SERVICE FAIT', 'Mlle HOUNGBO', 'du diplôme d’Ingénieur', 'à titre bénévole', 'les fonctions de', 'Développeuse web',
             'du 1er mars 2026 au 30 septembre 2026', 'elle a notamment été chargée de', 'l’assistance', 'ce que de droit.'] as $needle) {
             $this->assertStringContainsString($needle, $text, $needle);
         }
@@ -205,6 +209,9 @@ class StagesLot11Test extends TestCase
         $this->postJson("/api/stages/admin/attestations-travail/{$id}/valider")->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'une page'));
         $this->putJson("/api/stages/admin/attestations-travail/{$id}", ['taches' => ['le classement des dossiers.']])->assertOk();
         $this->postJson("/api/stages/admin/attestations-travail/{$id}/valider")->assertOk();
+        // Listée dans la fiche du stagiaire
+        $this->getJson("/api/stages/admin/stagiaires/{$stage->id}/attestations-travail")->assertOk()
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $id);
 
         // Ou le lien envoyé à son numéro ; un nouveau lien annule l'ancien
         $this->postJson("/api/stages/admin/stagiaires/{$stage->id}/attestation-travail", ['mode' => 'lien'])->assertStatus(201);
