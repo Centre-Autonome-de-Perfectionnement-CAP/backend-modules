@@ -58,7 +58,7 @@ class DashboardService
 
         $rated = $current->filter(fn ($r) => $r['taux'] !== null && $r['jours_ouvres'] >= self::MIN_DAYS_FOR_RATE);
         $statusCounts = StageRequest::select('status', DB::raw('count(*) as n'))->groupBy('status')->pluck('n', 'status');
-        $reportScope = StageReport::whereIn('status', ['submitted', 'supervisor_approved', 'supervisor_rejected']);
+        $reportScope = $this->reports->pending(StageReport::query());
         $requestScope = StageInternRequest::where('status', 'pending');
         if (!$lead) {
             $reportScope->whereIn('stage_request_id', $mineIds);
