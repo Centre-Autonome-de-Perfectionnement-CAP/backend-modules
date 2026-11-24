@@ -67,17 +67,31 @@ class StudentController extends Controller{
 
     public function exportFichePresence(Request $request)
     {
+        $filters = $this->presenceExportFilters($request);
+        return $this->studentService->exportFichePresence($filters);
+    }
 
+    public function exportFichePresenceExcel(Request $request)
+    {
+        $filters = $this->presenceExportFilters($request);
+        return $this->studentService->exportFichePresenceExcel($filters);
+    }
+
+    private function presenceExportFilters(Request $request): array
+    {
         $request->validate([
             'cohort' => 'required',
         ], [
             'cohort.required' => 'La sélection de la cohorte est obligatoire',
         ]);
 
-
-
-        $filters = $request->only(['year', 'filiere', 'niveau', 'cohort', 'groupe']);
-        return $this->studentService->exportFichePresence($filters);
+        return array_filter([
+            'year' => $request->input('year', $request->input('academic_year_id')),
+            'filiere' => $request->input('filiere', $request->input('department_id')),
+            'niveau' => $request->input('niveau', $request->input('study_level')),
+            'cohort' => $request->input('cohort'),
+            'groupe' => $request->input('groupe', $request->input('group_id')),
+        ], static fn ($value) => $value !== null);
     }
 
     public function exportFicheEmargement(Request $request)

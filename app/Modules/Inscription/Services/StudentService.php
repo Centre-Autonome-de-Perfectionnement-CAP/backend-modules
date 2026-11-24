@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Modules\Core\Services\PdfService;
 use App\Modules\Core\Services\NationalityService;
+use App\Modules\Inscription\Exports\PresenceSheetExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 /**
  * Service de gestion des étudiants
@@ -319,6 +321,42 @@ class StudentService
             $data,
             $filename,
             ['orientation' => 'portrait']
+        );
+    }
+
+    public function exportFichePresenceExcel(array $filters = [])
+    {
+        $students = $this->getAllForExport($filters);
+        $academicYear = null;
+        $department = null;
+
+        if (!empty($filters['year']) && is_numeric($filters['year'])) {
+            $academicYear = DB::table('academic_years')->where('id', $filters['year'])->first();
+        }
+        if (!empty($filters['filiere']) && is_numeric($filters['filiere'])) {
+            $department = DB::table('departments')->where('id', $filters['filiere'])->first();
+        }
+
+        $classeLabel = ($department && $department->abbreviation
+            ? $department->abbreviation
+            : ($filters['filiere'] ?? 'N/A')) . '-' . ($filters['niveau'] ?? 'N/A');
+        $cohort = $filters['cohort'] ?? 'all';
+        $filename = 'FICHE_PRESENCE_'
+            . ($academicYear ? str_replace(['/', '-'], '_', $academicYear->academic_year) : 'N_A')
+            . '_COHORTE_' . $cohort
+            . '_' . ($department && $department->abbreviation ? $department->abbreviation : 'N_A')
+            . '_' . ($filters['niveau'] ?? 'N_A');
+        if (!empty($filters['groupe'])) {
+            $filename .= '_GROUPE_' . $filters['groupe'];
+        }
+
+        return Excel::download(
+            new PresenceSheetExport($students->all(), [
+                'annee' => $academicYear?->academic_year ?? ($filters['year'] ?? 'N/A'),
+                'filiere' => $department?->name ?? ($filters['filiere'] ?? 'N/A'),
+                'classe' => $classeLabel,
+            ]),
+            $filename . '_' . now()->format('Ymd_His') . '.xlsx'
         );
     }
 
