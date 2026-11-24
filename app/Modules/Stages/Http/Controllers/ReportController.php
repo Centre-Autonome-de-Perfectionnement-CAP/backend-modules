@@ -36,9 +36,9 @@ class ReportController extends Controller
         ]);
     }
 
-    public function show(int $id): JsonResponse
+    public function show(Request $request, int $id): JsonResponse
     {
-        return $this->successResponse($this->reports->detail(StageReport::with('stage')->findOrFail($id), true));
+        return $this->successResponse($this->reports->detail(StageReport::with('stage')->findOrFail($id), true, null, $request->user()));
     }
 
     public function forIntern(int $id): JsonResponse
@@ -68,7 +68,7 @@ class ReportController extends Controller
         return $this->guard(function () use ($report, $data, $request) {
             $this->reports->comment($report, $data['body'], $request->user());
 
-            return $this->successResponse($this->reports->detail($report->fresh('stage'), true), 'Commentaire envoyé.');
+            return $this->successResponse($this->reports->detail($report->fresh('stage'), true, null, $request->user()), 'Commentaire envoyé.');
         });
     }
 
@@ -80,7 +80,7 @@ class ReportController extends Controller
         return $this->guard(function () use ($report, $comment, $request) {
             $this->reports->deleteComment($report, $comment, $request->user());
 
-            return $this->successResponse($this->reports->detail($report->fresh('stage'), true), 'Commentaire supprimé.');
+            return $this->successResponse($this->reports->detail($report->fresh('stage'), true, null, $request->user()), 'Commentaire supprimé.');
         });
     }
 
@@ -96,7 +96,7 @@ class ReportController extends Controller
         return $this->guard(function () use ($report, $data, $comment, $request) {
             $r = $this->reports->decide($report, $data['decision'], $comment, $request->user());
 
-            return $this->successResponse($this->reports->detail($r->load('stage'), true),
+            return $this->successResponse($this->reports->detail($r->load('stage'), true, null, $request->user()),
                 $data['decision'] === 'approved' ? 'Rapport validé. Le stagiaire a été prévenu.' : 'Correction demandée. Le stagiaire a été prévenu.');
         });
     }

@@ -48,6 +48,7 @@ class StageRequestService
         private readonly StageNotifier $notifier,
         private readonly StageSettingsService $settings,
         private readonly BinomeService $binomes,
+        private readonly StageIdentityService $identity,
     ) {}
 
     // ════════════════════════════════════════════════════════════════════
@@ -64,17 +65,10 @@ class StageRequestService
         $whatsapp = $this->normalizePhone($data['telephone']);
         $email    = mb_strtolower(trim($data['email']));
 
-        $active = StageRequest::query()
-            ->whereIn('status', StageStatus::ACTIVE)
-            ->where(fn ($q) => $q->where('email', $email)->orWhere('whatsapp', $whatsapp))
-            ->exists();
-        if ($active) {
-            throw new BusinessException(
-                "Une demande de stage est déjà en cours avec cet email ou ce numéro. Suivez-la avec la référence que vous avez reçue.",
-                'STAGE_REQUEST_ALREADY_ACTIVE',
-                409,
-            );
-        }
+        $this->identity->assertFree([
+            'npi' => $data['npi'], 'whatsapp' => $whatsapp, 'email' => $email,
+            'nom' => $data['nom'], 'prenoms' => $data['prenoms'], 'date_naissance' => $data['date_naissance'],
+        ]);
         // Demande en binôme : la demande du binôme est vérifiée avant tout enregistrement.
         $binome = !empty($data['binome_reference']) ? $this->binomes->target($data['binome_reference'], BinomeService::DEMANDE) : null;
 
@@ -98,6 +92,7 @@ class StageRequestService
                     'civilite'              => $data['civilite'],
                     'nom'                   => $data['nom'],
                     'prenoms'               => $data['prenoms'],
+                    'npi'                   => $data['npi'],
                     'date_naissance'        => $data['date_naissance'],
                     'lieu_naissance'        => $data['lieu_naissance'],
                     'nationalite'           => $data['nationalite'],

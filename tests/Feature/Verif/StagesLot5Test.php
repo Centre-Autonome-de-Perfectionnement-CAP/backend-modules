@@ -337,7 +337,7 @@ class StagesLot5Test extends TestCase
         $this->assertSame(1, $svc->tick()['reminded']);
         // Le superviseur est relancé aussi ; le stagiaire pas encore
         Queue::assertPushed(SendNotificationJob::class, fn ($j) => str_ends_with((string) ($j->payload['phone'] ?? ''), substr($sup->phone, -8))
-            && str_contains((string) $j->payload['message'], 'Rapport final pas encore validé'));
+            && str_contains((string) $j->payload['message'], 'Rapport de fin de stage pas encore validé'));
         $this->assertSame(0, $blocked());
 
         // J-3 ouvrés (mardi 24) puis le dernier jour : le stagiaire est prévenu

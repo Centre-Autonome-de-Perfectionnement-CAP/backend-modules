@@ -95,14 +95,16 @@ Route::prefix('api/stages')->middleware('api')->group(function () {
         // Attestations de service fait : décisions réservées au responsable.
         Route::middleware('throttle:30,1')->group(function () {
             Route::post('attestations-travail', [WorkAttestationController::class, 'invite']);
-            Route::post('stagiaires/{id}/attestation-travail', [WorkAttestationController::class, 'fromStage'])->whereNumber('id');
-            Route::get('stagiaires/{id}/attestations-travail', [WorkAttestationController::class, 'forStage'])->whereNumber('id');
             Route::put('attestations-travail/{id}', [WorkAttestationController::class, 'update'])->whereNumber('id');
             Route::post('attestations-travail/{id}/valider', [WorkAttestationController::class, 'validateWork'])->whereNumber('id');
             Route::post('attestations-travail/{id}/renvoyer', [WorkAttestationController::class, 'resend'])->whereNumber('id');
             Route::post('attestations-travail/{id}/annuler', [WorkAttestationController::class, 'cancel'])->whereNumber('id');
         });
         Route::get('exports/demandes', [DashboardController::class, 'exportDemandes'])->middleware('throttle:10,1');
+
+        // Une même personne ne doit pas avoir deux demandes ou stages en même temps.
+        Route::get('doublons', [StageAdminController::class, 'duplicates'])->middleware('throttle:30,1');
+        Route::patch('stagiaires/{id}/npi', [StageAdminController::class, 'updateNpi'])->whereNumber('id')->middleware('throttle:30,1');
     });
 
     // ── Progiciel : attestations (responsables + secrétariat) ─────────────
@@ -242,6 +244,7 @@ Route::prefix('api/stagiaire')->middleware('api')->group(function () {
         Route::get('messages/{channel}/fichiers/{file}', [StageChatController::class, 'file'])->where('channel', StageChatController::CHANNEL)->whereNumber('file');
         Route::get('moi', [InternSpaceController::class, 'me']);
         Route::post('reglement', [InternSpaceController::class, 'acceptReglement']);
+        Route::post('npi', [InternSpaceController::class, 'saveNpi'])->middleware('throttle:stages-intern-write');
         Route::post('empreinte/options', [InternSpaceController::class, 'webauthnRegisterOptions']);
         Route::post('empreinte', [InternSpaceController::class, 'webauthnRegister']);
         Route::post('code', [InternSpaceController::class, 'code'])->middleware('throttle:stages-intern-medium');

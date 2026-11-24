@@ -174,7 +174,7 @@ class DashboardService
                     $found['assiduite'] = "Assiduité de {$r['taux']} % (minimum {$seuil} %).";
                 }
                 if ($r['fin_proche'] && !$r['rapports']['final_validated']) {
-                    $found['fin_proche'] = 'Fin le ' . $this->fr($r['date_fin']) . ' : rapport final pas encore validé.';
+                    $found['fin_proche'] = 'Fin le ' . $this->fr($r['date_fin']) . ' : rapport de fin de stage pas encore validé.';
                 }
                 if ($r['rapports']['missing'] > 0) {
                     $found['rapports'] = $r['rapports']['missing'] . ' rapport(s) non déposé(s).';

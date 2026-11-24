@@ -31,7 +31,6 @@ class StageSettingsService
         // ── Lot 4 : rapports ─────────────────────────────────────────────
         'report_frequency'         => 'hebdomadaire', // journalier | hebdomadaire | mensuel
         'report_grace_days'        => 2,              // jours ouvrés après la fin de la période
-        'final_report_open_days'   => 14,             // dépôt du rapport final ouvert N jours avant la fin
         'final_correction_days'    => 90,             // version corrigée après soutenance : N jours après la fin du stage
         // ── Lot 5 : attestations ─────────────────────────────────────────
         'seuil_assiduite'          => 80,             // % minimal de présence pour l'attestation
@@ -87,7 +86,7 @@ class StageSettingsService
         'requests_open', 'closed_message', 'default_rejection_reason',
         'default_service', 'default_lieu', 'default_horaires',
         'lieu_position', 'lieu_rayon', 'reglement_text', 'permission_delay_days',
-        'report_frequency', 'report_grace_days', 'final_report_open_days', 'final_correction_days',
+        'report_frequency', 'report_grace_days', 'final_correction_days',
         'seuil_assiduite', 'attestation_structure', 'numero_suffixe', 'pdf_ville',
         'signataire_titre', 'signataire_nom', 'pdf_pied_de_page',
         'note_signataire_titre', 'note_signataire_nom', 'note_numero_suffixe',

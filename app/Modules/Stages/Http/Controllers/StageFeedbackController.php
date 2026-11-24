@@ -168,7 +168,7 @@ class StageFeedbackController extends Controller
             'period'        => ['required', 'string', 'regex:/^(\d{4}-\d{2}|fin)$/'],
             'scores'        => ['required', 'array'],
             ...collect(FeedbackService::CRITERIA)->keys()->mapWithKeys(fn ($k) => ["scores.{$k}" => $rule])->all(),
-            'supervisors'   => ['nullable', 'array', 'max:5'],
+            'supervisors'   => ['nullable', 'array', 'max:100'],
             'supervisors.*' => $rule,
             'comment'       => ['nullable', 'string', 'max:1000'],
         ], ['scores.*.required' => 'Donnez une note à chaque critère.']);

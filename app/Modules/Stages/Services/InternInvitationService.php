@@ -51,6 +51,7 @@ class InternInvitationService
         private readonly StageSettingsService $settings,
         private readonly StageNotifier $stageNotifier,
         private readonly BinomeService $binomes,
+        private readonly StageIdentityService $identity,
     ) {}
 
     /**
@@ -325,9 +326,10 @@ class InternInvitationService
                 if (!$inv || $inv->used_at || $inv->revoked_at || now()->greaterThanOrEqualTo($inv->expires_at)) {
                     throw new BusinessException("Ce lien n'est plus valable. Demandez-en un nouveau au responsable de division.", 'STAGE_INVITE_INVALID', 410);
                 }
-                if ($this->hasActiveStage($inv->phone)) {
-                    throw new BusinessException('Un stage est déjà enregistré pour ce numéro. Connectez-vous à votre espace stagiaire.', 'STAGE_INVITE_DUPLICATE', 409);
-                }
+                $this->identity->assertFree([
+                    'npi' => $data['npi'], 'whatsapp' => $inv->phone, 'email' => $data['email'],
+                    'nom' => $data['nom'], 'prenoms' => $data['prenoms'], 'date_naissance' => $data['date_naissance'],
+                ]);
 
                 $reference = $this->reference();
                 $files = [];
@@ -339,7 +341,7 @@ class InternInvitationService
 
                 $req = StageRequest::create([
                     'reference' => $reference, 'status' => StageStatus::ACCEPTED, 'origin' => 'invitation',
-                    'civilite' => $data['civilite'], 'nom' => mb_strtoupper(trim($data['nom'])), 'prenoms' => trim($data['prenoms']),
+                    'civilite' => $data['civilite'], 'nom' => mb_strtoupper(trim($data['nom'])), 'prenoms' => trim($data['prenoms']), 'npi' => $data['npi'],
                     'date_naissance' => $data['date_naissance'], 'lieu_naissance' => trim($data['lieu_naissance']),
                     'nationalite' => trim($data['nationalite']), 'etablissement_origine' => trim($data['etablissement_origine']),
                     'filiere' => trim($data['filiere']), 'cycle' => $data['cycle'], 'annee_etude' => $data['annee_etude'] ?? null, 'theme_souhaite' => $data['theme'] ?? null,

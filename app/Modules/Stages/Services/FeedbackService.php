@@ -21,8 +21,10 @@ use Illuminate\Support\Facades\DB;
  * responsables et des superviseurs, sauf ceux sur l'encadrement (responsables
  * seulement). Trois avis par semaine au plus.
  *
- * Notation : une par mois et une de fin de stage, toujours anonyme. Tout
- * reste interne (responsables seulement), sauf le bloc public « Ce qu'en
+ * Notation : une par mois et une de fin de stage, toujours anonyme. Le stagiaire
+ * peut noter tous les superviseurs (les siens en tête de liste), librement, mais
+ * une seule fois chacun, quelle que soit la période.
+ * Tout reste interne (responsables seulement), sauf le bloc public « Ce qu'en
  * disent nos stagiaires » : moyenne des critères qui ne visent personne
  * (accueil, conditions, organisation, apprentissage), à partir de 10 notes,
  * et avis positifs choisis par les responsables avec l'accord de leur auteur.
@@ -157,7 +159,7 @@ class FeedbackService
     // NOTATION DU STAGE
     // ════════════════════════════════════════════════════════════════════
 
-    /** Périodes que le stagiaire peut noter maintenant, et ses superviseurs à noter. */
+    /** Périodes que le stagiaire peut noter maintenant, et les superviseurs qu'il peut encore noter (tous ; les siens en tête). */
     public function ratingState(StageRequest $req): array
     {
         $this->documents->assertReady();
@@ -166,7 +168,7 @@ class FeedbackService
         return [
             'open' => array_map(fn ($p) => ['period' => $p, 'label' => $this->periodLabel($p)], $open),
             'criteria' => collect(self::CRITERIA)->map(fn ($c, $k) => ['key' => $k, 'label' => $c[0]])->values(),
-            'supervisors' => $this->titulars($req)->map(fn ($u) => ['id' => $u->id, 'name' => trim($u->first_name . ' ' . $u->last_name)])->values(),
+            'supervisors' => $this->ratable($req)->map(fn ($u) => ['id' => $u->id, 'name' => trim($u->first_name . ' ' . $u->last_name)])->values(),
         ];
     }
 
@@ -181,8 +183,8 @@ class FeedbackService
         if ($this->rated($req, $period)) {
             throw new BusinessException('Vous avez déjà noté cette période. Merci !', 'STAGE_RATING_DONE', 409);
         }
-        $titulars = $this->titulars($req)->pluck('id')->map(fn ($id) => (string) $id)->all();
-        $sup = collect($data['supervisors'] ?? [])->only($titulars)->map(fn ($v) => (int) $v)->all();
+        $allowed = $this->ratable($req)->pluck('id')->map(fn ($id) => (string) $id)->all();
+        $sup = collect($data['supervisors'] ?? [])->only($allowed)->map(fn ($v) => (int) $v)->all();
 
         DB::table('stage_ratings')->insert([
             'period' => $period, 'voter_hash' => $this->voter($req, $period),
@@ -291,9 +293,35 @@ class FeedbackService
         return hash_hmac('sha256', 'stage-rating|' . $req->id . '|' . $period, (string) config('app.key'));
     }
 
-    private function titulars(StageRequest $req): Collection
+    /** Superviseurs que ce stagiaire peut encore noter : tous les superviseurs et ses titulaires (ceux-ci en tête), chacun une seule fois. */
+    private function ratable(StageRequest $req): Collection
     {
-        return User::whereIn('id', DB::table('stage_supervisions')->where('stage_request_id', $req->id)->pluck('user_id'))->get();
+        $titulars = DB::table('stage_supervisions')->where('stage_request_id', $req->id)->pluck('user_id')->all();
+        $ids = array_diff(array_unique(array_merge($titulars, StageAccess::supervisors()->pluck('id')->all())), $this->ratedSupervisors($req));
+
+        return User::whereIn('id', $ids)->get()
+            ->sortBy(fn ($u) => [in_array($u->id, $titulars, true) ? 0 : 1, mb_strtolower($u->last_name . ' ' . $u->first_name)])
+            ->values();
+    }
+
+    /**
+     * Superviseurs déjà notés par ce stagiaire, toutes périodes confondues (les notes restent anonymes :
+     * on retrouve les siennes par leurs empreintes à clé secrète, période par période).
+     *
+     * @return list<int>
+     */
+    private function ratedSupervisors(StageRequest $req): array
+    {
+        $start = CarbonImmutable::parse(($req->date_debut_reelle ?? $req->date_debut)->toDateString())->startOfMonth();
+        $last = CarbonImmutable::parse(($req->date_fin ?? BusinessHours::today())->toDateString())->addMonth()->startOfMonth();
+        $hashes = [$this->voter($req, 'fin')];
+        for ($m = $start, $i = 0; $m->lessThanOrEqualTo($last) && $i < 60; $m = $m->addMonth(), $i++) {
+            $hashes[] = $this->voter($req, $m->format('Y-m'));
+        }
+
+        return DB::table('stage_ratings')->whereIn('voter_hash', $hashes)->pluck('supervisors')
+            ->flatMap(fn ($json) => array_keys((array) json_decode((string) $json, true)))
+            ->map(fn ($id) => (int) $id)->unique()->values()->all();
     }
 
     private function periodLabel(string $p): string

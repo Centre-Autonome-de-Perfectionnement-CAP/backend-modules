@@ -59,6 +59,14 @@ Schedule::command('stages:sync-whatsapp-group')
     ->timezone('Africa/Porto-Novo')
     ->withoutOverlapping(60);
 
+// Stages : notes de service, notes de fin et bulletins effacés après l'envoi
+// (régénérés à la demande, l'envoi reste dans l'historique).
+Schedule::call(fn () => app(\App\Modules\Stages\Services\StagePdfService::class)->purgeSentFiles())
+    ->name('stages:purge-documents')
+    ->dailyAt('03:20')
+    ->timezone('Africa/Porto-Novo')
+    ->withoutOverlapping(30);
+
 // Inscription : fichiers joints aux messages WhatsApp groupés, effacés après quelques jours.
 Schedule::call(fn () => app(\App\Modules\Inscription\Services\WhatsAppBroadcastService::class)->purgeFiles())
     ->name('inscription:purge-diffusions')

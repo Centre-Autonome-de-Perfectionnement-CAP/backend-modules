@@ -9,8 +9,6 @@ use App\Modules\Core\Services\WhatsAppBridgeClient;
 use App\Modules\Core\Support\LinkToken;
 use App\Modules\Core\Support\WhatsAppText;
 use App\Modules\Stages\Models\StageAttestation;
-use App\Modules\Stages\Models\StageHistory;
-use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Models\StageWorkAttestation;
 use App\Modules\Stages\Support\BusinessHours;
 use App\Modules\Stages\Support\StageAccess;
@@ -88,11 +86,11 @@ class WorkAttestationService
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // RESPONSABLE : invitation, dossier existant, vérification
+    // RESPONSABLE : invitation, vérification
     // ════════════════════════════════════════════════════════════════════
 
-    /** Invite une personne par son numéro WhatsApp ($stage : ancien stagiaire, fiche préremplie). */
-    public function invite(string $rawPhone, User $by, ?StageRequest $stage = null): StageWorkAttestation
+    /** Invite une personne par son numéro WhatsApp : elle remplit elle-même sa fiche via le lien. */
+    public function invite(string $rawPhone, User $by): StageWorkAttestation
     {
         $this->assertReady();
         $phone = $this->normalize($rawPhone);
@@ -100,34 +98,21 @@ class WorkAttestationService
             throw new BusinessException('Numéro WhatsApp invalide. Exemple attendu : 01 97 00 00 00.', 'STAGE_WORK_PHONE', 422);
         }
         $token = LinkToken::make();
-        $a = DB::transaction(function () use ($phone, $by, $stage, $token) {
+        $a = DB::transaction(function () use ($phone, $by, $token) {
             // Un numéro ne garde qu'un lien valable : l'ancien est annulé.
             StageWorkAttestation::where('phone', $phone)->where('status', 'invitee')->lockForUpdate()->get()
                 ->each(fn ($old) => $old->forceFill(['status' => 'annulee', 'token_hash' => null, 'cancelled_by' => $by->id,
                     'cancelled_at' => now(), 'cancel_reason' => 'Nouvelle invitation envoyée'])->save());
 
-            return StageWorkAttestation::create($this->fromStage($stage) + [
+            // Appréciation pré-remplie (modifiable par le responsable).
+            return StageWorkAttestation::create([
+                'appreciation' => self::DEFAULT_APPRECIATION,
                 'status' => 'invitee', 'phone' => $phone, 'token_hash' => hash('sha256', $token),
                 'expires_at' => now()->addDays(self::TTL_DAYS), 'send_count' => 1, 'last_sent_at' => now(),
                 'created_by' => $by->id,
             ]);
         });
         $this->sendLink($a, $token);
-        if ($stage) {
-            $this->history($stage, 'work_attestation_invited', $by, 'Lien envoyé pour une attestation de service fait');
-        }
-
-        return $a;
-    }
-
-    /** Dossier d'un ancien stagiaire : fiche préremplie, à compléter par le responsable. */
-    public function draftFromStage(StageRequest $stage, User $by): StageWorkAttestation
-    {
-        $this->assertReady();
-        $a = StageWorkAttestation::create($this->fromStage($stage) + [
-            'status' => 'a_valider', 'phone' => $stage->whatsapp, 'created_by' => $by->id,
-        ]);
-        $this->history($stage, 'work_attestation_draft', $by, 'Attestation de service fait préparée');
 
         return $a;
     }
@@ -330,15 +315,6 @@ class WorkAttestationService
             ->when($q !== '', fn ($w) => $w->where(fn ($w) => $w->where('nom', 'like', "%{$q}%")->orWhere('prenoms', 'like', "%{$q}%")
                 ->orWhere('numero', 'like', "%{$q}%")->orWhere('phone', 'like', '%' . preg_replace('/\D/', '', $q) . '%')))
             ->orderByDesc('updated_at')->limit(500)->get()->map(fn ($a) => $this->present($a, false));
-    }
-
-    public function forStage(StageRequest $stage): Collection
-    {
-        if (!$this->ready()) {
-            return collect();
-        }
-
-        return StageWorkAttestation::where('stage_request_id', $stage->id)->orderByDesc('id')->get()->map(fn ($a) => $this->present($a, false));
     }
 
     public function counts(bool $secretariat): array
@@ -549,20 +525,6 @@ class WorkAttestationService
         return preg_replace('/\s*([:;!?])/u', "\u{00A0}$1", $s);
     }
 
-    private function fromStage(?StageRequest $stage): array
-    {
-        // Appréciation pré-remplie (modifiable par le responsable).
-        $base = ['appreciation' => self::DEFAULT_APPRECIATION];
-        if (!$stage) {
-            return $base;
-        }
-
-        return $base + [
-            'stage_request_id' => $stage->id, 'civilite' => $stage->civilite, 'nom' => mb_strtoupper((string) $stage->nom),
-            'prenoms' => $stage->prenoms, 'email' => $stage->email,
-        ];
-    }
-
     private function numberTaken(string $numero, int $exceptId): bool
     {
         return StageWorkAttestation::where('numero', $numero)->where('id', '!=', $exceptId)->where('status', '!=', 'annulee')->exists()
@@ -629,13 +591,5 @@ class WorkAttestationService
         if (!in_array($a->status, $allowed, true)) {
             throw new BusinessException('Cette action n\'est plus possible : l\'attestation est « ' . mb_strtolower(self::STATUS_LABELS[$a->status] ?? $a->status) . ' ».', 'STAGE_ATT_STATUS', 409);
         }
-    }
-
-    private function history(StageRequest $req, string $action, User $by, string $comment): void
-    {
-        StageHistory::create([
-            'stage_request_id' => $req->id, 'action' => $action, 'from_status' => $req->status, 'to_status' => $req->status,
-            'actor' => 'staff', 'user_id' => $by->id, 'comment' => $comment,
-        ]);
     }
 }

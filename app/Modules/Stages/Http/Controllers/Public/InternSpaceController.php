@@ -6,6 +6,7 @@ use App\Exceptions\BusinessException;
 use App\Modules\Stages\Exceptions\DeviceConfirmationRequired;
 use App\Http\Controllers\Controller;
 use App\Modules\Bibliotheque\Services\LibraryService;
+use App\Modules\Stages\Models\StageHistory;
 use App\Modules\Stages\Models\StageInternAccount;
 use App\Modules\Stages\Models\StageInternRequest;
 use App\Modules\Stages\Services\BinomeService;
@@ -21,6 +22,7 @@ use App\Modules\Stages\Services\AttestationService;
 use App\Modules\Stages\Models\StageReport;
 use Illuminate\Support\Facades\Storage;
 use App\Modules\Stages\Services\StageEndService;
+use App\Modules\Stages\Services\StageIdentityService;
 use App\Modules\Stages\Services\StageRequestService;
 use App\Modules\Stages\Services\StageSettingsService;
 use App\Modules\Stages\Support\BusinessHours;
@@ -81,6 +83,8 @@ class InternSpaceController extends Controller
 
         return $this->successResponse([
             'reference'   => $req->reference,
+            // NPI demandé une seule fois, à la prochaine connexion (stage non terminé seulement).
+            'npi_requis'  => !$req->npi && $this->reglementApplies($req),
             'nom_complet' => trim($req->civilite . ' ' . $req->fullName()),
             'lieu'        => $req->lieu,
             'checks_position' => (bool) $this->settings->get('lieu_position'),
@@ -272,6 +276,34 @@ class InternSpaceController extends Controller
         ]);
 
         return $this->successResponse(null, 'Règlement accepté.');
+    }
+
+    /** Le stagiaire déjà inscrit renseigne son NPI (une seule fois ; correction par le responsable). */
+    public function saveNpi(Request $request): JsonResponse
+    {
+        $request->merge(['npi' => StageIdentityService::cleanNpi($request->input('npi'))]);
+        $data = $request->validate(['npi' => ['required', 'digits:' . StageIdentityService::NPI_LENGTH]], [
+            'npi.required' => 'Indiquez votre NPI.',
+            'npi.digits'   => 'Le NPI comporte ' . StageIdentityService::NPI_LENGTH . ' chiffres.',
+        ]);
+        $req = $this->account($request)->stage;
+        if ($req->npi) {
+            return $this->errorResponse('Votre NPI est déjà enregistré. Pour le corriger, contactez le responsable de division.', 409, 'STAGE_NPI_ALREADY_SET');
+        }
+
+        return $this->guard(function () use ($req, $data) {
+            app(StageIdentityService::class)->assertFree([
+                'npi' => $data['npi'], 'whatsapp' => $req->whatsapp, 'email' => $req->email,
+                'nom' => $req->nom, 'prenoms' => $req->prenoms, 'date_naissance' => $req->date_naissance?->toDateString(),
+            ], $req->id);
+            $req->forceFill(['npi' => $data['npi']])->save();
+            StageHistory::create([
+                'stage_request_id' => $req->id, 'action' => 'npi_updated', 'from_status' => $req->status, 'to_status' => $req->status,
+                'actor' => 'demandeur', 'comment' => 'NPI renseigné par le stagiaire',
+            ]);
+
+            return $this->successResponse(null, 'NPI enregistré. Merci.');
+        });
     }
 
     public function webauthnRegisterOptions(Request $request): JsonResponse
