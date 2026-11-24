@@ -7,29 +7,33 @@ use Carbon\CarbonImmutable;
 /**
  * Calendrier des rapports d'un stagiaire.
  *
- *  - périodiques (journalier, hebdomadaire - par défaut —, mensuel), du
- *    début réel du stage jusqu'à l'ouverture du rapport final ;
+ *  - périodiques (journalier, hebdomadaire - par défaut -, mensuel), du
+ *    début réel du stage jusqu'à 14 jours avant la fin (le temps de finir le
+ *    rapport de fin de stage), comme avant ;
  *  - dépôt ouvert le dernier jour ouvré de la période, fermé N jours ouvrés
  *    après la fin de la période (au-delà : accepté, marqué « en retard ») ;
- *  - rapport final : ouvert N jours avant la fin du stage, attendu au plus
- *    tard le dernier jour.
+ *  - rapport de fin de stage : ouvert aux 2/3 du stage (voir finalOpens()),
+ *    attendu au plus tard le dernier jour.
  */
 final class ReportPlan
 {
     public const FREQUENCIES = ['journalier', 'hebdomadaire', 'mensuel'];
     public const FINAL_KEY = 'FINAL';
+    /** Les rapports périodiques s'arrêtent 14 jours avant la fin du stage. */
+    private const PERIODIC_STOP_DAYS = 14;
 
     /**
      * @return array<int, array{key: string, kind: string, label: string, start: string, end: string, opens: string, closes: string}>
      */
-    public static function periods(CarbonImmutable $start, CarbonImmutable $end, string $frequency, int $graceDays, int $finalOpenDays): array
+    public static function periods(CarbonImmutable $start, CarbonImmutable $end, string $frequency, int $graceDays): array
     {
-        $finalOpens = $end->subDays(max(0, $finalOpenDays))->max($start);
+        $finalOpens = self::finalOpens($start, $end);
+        $periodicUntil = $end->subDays(self::PERIODIC_STOP_DAYS)->max($start);
         $out = [];
         $cursor = $start;
         $guard = 0;
 
-        while ($cursor->lessThan($finalOpens) && $guard++ < 400) {
+        while ($cursor->lessThan($periodicUntil) && $guard++ < 400) {
             [$pStart, $pEnd, $key, $label] = match ($frequency) {
                 'journalier' => [$cursor, $cursor, 'J' . $cursor->toDateString(), $cursor->locale('fr')->isoFormat('dddd D MMMM')],
                 'mensuel'    => [$cursor, $cursor->endOfMonth()->startOfDay(), 'M' . $cursor->format('Y-m'), ucfirst($cursor->locale('fr')->isoFormat('MMMM YYYY'))],
@@ -66,7 +70,7 @@ final class ReportPlan
         $out[] = [
             'key'    => self::FINAL_KEY,
             'kind'   => 'final',
-            'label'  => 'Rapport final',
+            'label'  => 'Rapport de fin de stage',
             'start'  => $start->toDateString(),
             'end'    => $end->toDateString(),
             'opens'  => $finalOpens->toDateString(),
@@ -74,6 +78,27 @@ final class ReportPlan
         ];
 
         return $out;
+    }
+
+    /**
+     * Ouverture du rapport de fin de stage : aux 2/3 du stage, en jours ouvrés,
+     * quelle que soit sa durée (22 jours ouvrés : le 15e ; 65 : le 44e ;
+     * 130 : le 87e ; 2 jours : le 2e). Plus le stage est long, plus le temps
+     * de relecture et de correction est grand.
+     */
+    public static function finalOpens(CarbonImmutable $start, CarbonImmutable $end): CarbonImmutable
+    {
+        $days = [];
+        for ($d = $start; $d->lessThanOrEqualTo($end) && count($days) < 1000; $d = $d->addDay()) {
+            if (!$d->isWeekend()) {
+                $days[] = $d;
+            }
+        }
+        if ($days === []) {
+            return $start;
+        }
+
+        return $days[intdiv(count($days) * 2 + 2, 3) - 1];
     }
 
     public static function addWorkingDays(CarbonImmutable $from, int $n): CarbonImmutable

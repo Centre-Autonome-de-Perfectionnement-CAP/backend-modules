@@ -5,7 +5,6 @@ namespace App\Modules\Stages\Http\Controllers;
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Modules\Core\Support\LinkToken;
-use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Services\StagePdfService;
 use App\Modules\Stages\Services\WorkAttestationService as Work;
 use App\Modules\Stages\Support\StageAccess;
@@ -16,7 +15,7 @@ use Illuminate\Validation\Rule;
 
 /**
  * Attestations de service fait :
- *  - responsables : inviter, partir d'un dossier, corriger, valider, annuler ;
+ *  - responsables : inviter, corriger, valider, annuler ;
  *  - secrétariat (et responsables) : imprimer, prévenir la personne, remettre ;
  *  - personne invitée : lien public, sans compte.
  */
@@ -37,34 +36,6 @@ class WorkAttestationController extends Controller
 
         return $this->guard(fn () => $this->successResponse($this->work->present($this->work->invite($data['numero'], $request->user())),
             'Lien envoyé sur WhatsApp (valable ' . Work::TTL_DAYS . ' jours).', 201));
-    }
-
-    /** Dossier d'un ancien stagiaire : lien envoyé (« lien ») ou fiche à remplir soi-même (« remplir »). */
-    public function fromStage(Request $request, int $id): JsonResponse
-    {
-        $data = $request->validate(['mode' => ['required', Rule::in(['lien', 'remplir'])]]);
-        $stage = StageRequest::findOrFail($id);
-
-        return $this->guard(function () use ($data, $stage, $request) {
-            if ($data['mode'] === 'lien') {
-                if (!$stage->whatsapp) {
-                    throw new BusinessException('Aucun numéro WhatsApp dans ce dossier.', 'STAGE_WORK_PHONE', 422);
-                }
-                $a = $this->work->invite($stage->whatsapp, $request->user(), $stage);
-
-                return $this->successResponse($this->work->present($a), 'Lien envoyé sur WhatsApp à ' . $stage->fullName() . '.', 201);
-            }
-
-            return $this->successResponse($this->work->present($this->work->draftFromStage($stage, $request->user())), 'Fiche préremplie : complétez-la puis validez.', 201);
-        });
-    }
-
-    /** Dossier d'un stagiaire : ses attestations de service fait. */
-    public function forStage(int $id): JsonResponse
-    {
-        $stage = StageRequest::findOrFail($id);
-
-        return $this->guard(fn () => $this->successResponse($this->work->forStage($stage)->values()));
     }
 
     public function update(Request $request, int $id): JsonResponse

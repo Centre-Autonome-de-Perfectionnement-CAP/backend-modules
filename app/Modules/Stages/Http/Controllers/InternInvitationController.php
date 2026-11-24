@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Stages\Services\BinomeService;
 use App\Modules\Stages\Services\InternAuthService;
 use App\Modules\Stages\Services\InternInvitationService;
+use App\Modules\Stages\Services\StageIdentityService;
 use App\Modules\Stages\Services\StageSettingsService;
 use App\Modules\Stages\Support\StudyLevel;
 use App\Modules\Stages\Support\BusinessHours;
@@ -103,11 +104,13 @@ class InternInvitationController extends Controller
     public function register(Request $request): JsonResponse
     {
         $text = fn (int $max, bool $required = true) => [$required ? 'required' : 'nullable', 'string', "max:{$max}"];
+        $request->merge(['npi' => StageIdentityService::cleanNpi($request->input('npi'))]);
         $data = $request->validate([
             'token'                 => self::TOKEN_RULE,
             'civilite'              => ['required', Rule::in(['M.', 'Mme', 'Mlle'])],
             'nom'                   => $text(80),
             'prenoms'               => $text(100),
+            'npi'                   => ['required', 'digits:' . StageIdentityService::NPI_LENGTH],
             'date_naissance'        => ['required', 'date', 'before:-14 years', 'after:1930-01-01'],
             'lieu_naissance'        => $text(100),
             'nationalite'           => $text(60),
@@ -121,6 +124,8 @@ class InternInvitationController extends Controller
             'note_papier'           => ['nullable', 'file', UploadLimit::rule(), 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png'],
             'consentement'          => ['accepted'],
         ] + StudyLevel::rules($request->all()), StudyLevel::MESSAGES + [
+            'npi.required'            => 'Indiquez votre NPI.',
+            'npi.digits'              => 'Le NPI comporte ' . StageIdentityService::NPI_LENGTH . ' chiffres.',
             'password.confirmed'      => 'Les deux mots de passe ne correspondent pas.',
             'date_fin.after_or_equal' => 'La date de fin doit suivre la date de début.',
             'consentement.accepted'   => 'Vous devez accepter le traitement de vos données.',

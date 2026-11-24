@@ -144,13 +144,7 @@ class EvaluationService
     public function save(StageRequest $req, User $user, array $scores, string $comment): void
     {
         $this->documents->assertReady();
-        $row = DB::table('stage_evaluation_results')->where('stage_request_id', $req->id)->first();
-        if (!$row) {
-            throw new BusinessException('La notation de ce stagiaire n\'est pas encore ouverte.', 'STAGE_EVAL_CLOSED', 422);
-        }
-        if ($row->validated_at) {
-            throw new BusinessException('La note de ce stagiaire est déjà validée.', 'STAGE_EVAL_VALIDATED', 409);
-        }
+        $this->assertOpen($req);
         $clean = [];
         foreach (self::CRITERIA as $k => [$label, $max]) {
             $v = (float) ($scores[$k] ?? -1);
@@ -161,15 +155,25 @@ class EvaluationService
         }
         $titular = DB::table('stage_supervisions')->where('stage_request_id', $req->id)->where('user_id', $user->id)->exists();
 
-        DB::table('stage_evaluations')->updateOrInsert(['stage_request_id' => $req->id, 'user_id' => $user->id], [
-            'titular' => $titular, 'scores' => json_encode($clean), 'total' => array_sum($clean), 'comment' => trim($comment),
-            'returned_note' => null, 'returned_at' => null, 'updated_at' => now(),
-            'created_at' => DB::table('stage_evaluations')->where('stage_request_id', $req->id)->where('user_id', $user->id)->value('created_at') ?? now(),
-        ]);
+        // Sous verrou : une note ne s'ajoute pas à une évaluation que le responsable valide au même instant.
+        $ready = DB::transaction(function () use ($req, $user, $clean, $comment, $titular) {
+            $row = $this->assertOpen($req, true);
+            DB::table('stage_evaluations')->updateOrInsert(['stage_request_id' => $req->id, 'user_id' => $user->id], [
+                'titular' => $titular, 'scores' => json_encode($clean), 'total' => array_sum($clean), 'comment' => trim($comment),
+                'returned_note' => null, 'returned_at' => null, 'updated_at' => now(),
+                'created_at' => DB::table('stage_evaluations')->where('stage_request_id', $req->id)->where('user_id', $user->id)->value('created_at') ?? now(),
+            ]);
 
-        // Toutes les notes des titulaires reçues : le responsable est prévenu.
-        if (!$row->ready_at && $this->missingTitulars($req)->isEmpty()) {
-            DB::table('stage_evaluation_results')->where('id', $row->id)->update(['ready_at' => now(), 'updated_at' => now()]);
+            // Toutes les notes des titulaires reçues : le responsable est prévenu.
+            if (!$row->ready_at && $this->missingTitulars($req)->isEmpty()) {
+                DB::table('stage_evaluation_results')->where('id', $row->id)->update(['ready_at' => now(), 'updated_at' => now()]);
+
+                return true;
+            }
+
+            return false;
+        });
+        if ($ready) {
             $this->notifier->toManagersGeneric('Note de stage à valider', [
                 'Les superviseurs ont noté ' . $req->fullName() . ' : la note est prête à être validée.',
             ], ['Référence' => $req->reference, 'Stagiaire' => $req->fullName()], 'stage-evaluation',
@@ -198,13 +202,15 @@ class EvaluationService
 
     public function returnTo(StageRequest $req, int $userId, string $note, User $by): void
     {
-        $this->assertOpen($req);
-        $e = DB::table('stage_evaluations')->where('stage_request_id', $req->id)->where('user_id', $userId)->first();
-        if (!$e) {
-            throw new BusinessException('Ce superviseur n\'a pas encore noté.', 'STAGE_EVAL_NONE', 404);
-        }
-        DB::table('stage_evaluations')->where('id', $e->id)->update(['returned_note' => trim($note), 'returned_at' => now(), 'updated_at' => now()]);
-        DB::table('stage_evaluation_results')->where('stage_request_id', $req->id)->update(['ready_at' => null, 'updated_at' => now()]);
+        DB::transaction(function () use ($req, $userId, $note) {
+            $this->assertOpen($req, true);
+            $e = DB::table('stage_evaluations')->where('stage_request_id', $req->id)->where('user_id', $userId)->first();
+            if (!$e) {
+                throw new BusinessException('Ce superviseur n\'a pas encore noté.', 'STAGE_EVAL_NONE', 404);
+            }
+            DB::table('stage_evaluations')->where('id', $e->id)->update(['returned_note' => trim($note), 'returned_at' => now(), 'updated_at' => now()]);
+            DB::table('stage_evaluation_results')->where('stage_request_id', $req->id)->update(['ready_at' => null, 'updated_at' => now()]);
+        });
         if ($u = User::find($userId)) {
             $this->notifier->toStaff(collect([$u]), 'Note de stage à revoir', [
                 trim($by->first_name . ' ' . $by->last_name) . ' vous demande de revoir votre note de ' . $req->fullName() . '.',
@@ -215,19 +221,24 @@ class EvaluationService
 
     public function validate(StageRequest $req, string $appreciation, User $by): array
     {
-        $row = $this->assertOpen($req);
-        $evals = DB::table('stage_evaluations')->where('stage_request_id', $req->id)->get();
-        if ($evals->isEmpty()) {
-            throw new BusinessException('Aucun superviseur n\'a encore noté ce stagiaire.', 'STAGE_EVAL_NONE', 422);
-        }
-        if ($evals->whereNotNull('returned_at')->isNotEmpty()) {
-            throw new BusinessException('Une note renvoyée pour être revue n\'a pas encore été corrigée.', 'STAGE_EVAL_RETURNED', 409);
-        }
-        $c = $this->compute($evals);
-        DB::table('stage_evaluation_results')->where('id', $row->id)->update([
-            'average' => $c['average'], 'final' => $c['final'], 'criteria' => json_encode($c['criteria']),
-            'appreciation' => trim($appreciation), 'validated_by' => $by->id, 'validated_at' => now(), 'updated_at' => now(),
-        ]);
+        // Sous verrou : une note ne se valide qu'une fois (double clic, deux responsables en même temps).
+        $c = DB::transaction(function () use ($req, $appreciation, $by) {
+            $row = $this->assertOpen($req, true);
+            $evals = DB::table('stage_evaluations')->where('stage_request_id', $req->id)->get();
+            if ($evals->isEmpty()) {
+                throw new BusinessException('Aucun superviseur n\'a encore noté ce stagiaire.', 'STAGE_EVAL_NONE', 422);
+            }
+            if ($evals->whereNotNull('returned_at')->isNotEmpty()) {
+                throw new BusinessException('Une note renvoyée pour être revue n\'a pas encore été corrigée.', 'STAGE_EVAL_RETURNED', 409);
+            }
+            $c = $this->compute($evals);
+            DB::table('stage_evaluation_results')->where('id', $row->id)->update([
+                'average' => $c['average'], 'final' => $c['final'], 'criteria' => json_encode($c['criteria']),
+                'appreciation' => trim($appreciation), 'validated_by' => $by->id, 'validated_at' => now(), 'updated_at' => now(),
+            ]);
+
+            return $c;
+        });
 
         $file = $this->bulletin($req);
         $this->notifier->toDemandeur($req, 'Votre note de stage', [
@@ -333,11 +344,12 @@ class EvaluationService
         ];
     }
 
-    private function assertOpen(StageRequest $req): object
+    private function assertOpen(StageRequest $req, bool $lock = false): object
     {
-        $row = DB::table('stage_evaluation_results')->where('stage_request_id', $req->id)->first();
+        $query = DB::table('stage_evaluation_results')->where('stage_request_id', $req->id);
+        $row = ($lock ? $query->lockForUpdate() : $query)->first();
         if (!$row) {
-            throw new BusinessException('La notation de ce stagiaire n\'est pas ouverte.', 'STAGE_EVAL_CLOSED', 422);
+            throw new BusinessException('La notation de ce stagiaire n\'est pas encore ouverte.', 'STAGE_EVAL_CLOSED', 422);
         }
         if ($row->validated_at) {
             throw new BusinessException('La note de ce stagiaire est déjà validée.', 'STAGE_EVAL_VALIDATED', 409);

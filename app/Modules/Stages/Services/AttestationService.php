@@ -119,7 +119,7 @@ class AttestationService
                 : "Assiduité de {$taux} % (minimum {$seuil} %).";
         }
         if (!$final) {
-            $missing[] = 'Rapport final pas encore validé.';
+            $missing[] = 'Rapport de fin de stage pas encore validé.';
         }
 
         return [

@@ -10,6 +10,7 @@ use App\Modules\Stages\Support\StageStatus;
 use App\Modules\Core\Support\PdfFonts;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * PDF du module Stages : attestation de stage et notes de service.
@@ -256,6 +257,29 @@ class StagePdfService
                 'fontCache'               => PdfFonts::dir(),
             ])
             ->output();
+    }
+
+    /**
+     * Notes de service, notes de fin et bulletins ne sont rangés sur le disque
+     * que le temps de partir sur WhatsApp et par e-mail : ils sont effacés
+     * quelques jours après. Le PDF est régénéré à chaque consultation ou
+     * renvoi, et l'envoi reste tracé dans l'historique.
+     */
+    public function purgeSentFiles(int $days = 3): int
+    {
+        $disk = Storage::disk('local');
+        $limit = now()->subDays($days)->getTimestamp();
+        $n = 0;
+        foreach ($disk->directories('stages') as $dir) {
+            foreach ([...$disk->files("{$dir}/notes"), "{$dir}/evaluation.pdf"] as $file) {
+                if (str_ends_with($file, '.pdf') && $disk->exists($file) && $disk->lastModified($file) < $limit) {
+                    $disk->delete($file);
+                    $n++;
+                }
+            }
+        }
+
+        return $n;
     }
 
     /** « Lundi 11 Août 2025 » (jour en option), « 07 Janvier 2006 ». */

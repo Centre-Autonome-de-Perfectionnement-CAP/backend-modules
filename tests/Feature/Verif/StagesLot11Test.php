@@ -107,7 +107,7 @@ class StagesLot11Test extends TestCase
     private function form(string $token, string $start, string $end, array $extra = []): array
     {
         return $extra + [
-            'token' => $token, 'civilite' => 'Mlle', 'nom' => 'adjovi', 'prenoms' => 'Carine', 'date_naissance' => '2002-04-12',
+            'token' => $token, 'civilite' => 'Mlle', 'nom' => 'adjovi', 'prenoms' => 'Carine', 'npi' => (string) random_int(1000000000, 9999999999), 'date_naissance' => date('Y-m-d', strtotime('2002-01-01 +' . random_int(0, 2000) . ' days')),
             'lieu_naissance' => 'Porto-Novo', 'nationalite' => 'Béninoise', 'email' => 'carine@example.org',
             'etablissement_origine' => 'EPAC / UAC', 'filiere' => 'Génie civil', 'cycle' => 'ingenieur', 'annee_etude' => 1, 'theme' => 'Réseau',
             'date_debut' => $start, 'date_fin' => $end, 'password' => 'Stage2026', 'password_confirmation' => 'Stage2026', 'consentement' => '1',
@@ -192,16 +192,22 @@ class StagesLot11Test extends TestCase
         $this->assertSame('002-26', app(\App\Modules\Stages\Services\AttestationService::class)->nextNumber());
     }
 
-    public function test_from_an_existing_intern_file(): void
+    public function test_sheet_must_be_complete_and_fit_one_page_and_new_link_replaces_old(): void
     {
         $this->at('2026-10-22 10:00');
-        $r = $this->postJson('/api/stages/rejoindre', $this->form($this->invite('0191000777'), '2026-03-02', '2026-05-29', ['email' => 'old@example.org']))->assertStatus(201);
-        $stage = StageRequest::where('reference', $r->json('data.reference'))->first();
         $lead = $this->lead();
 
-        // Le responsable remplit lui-même : fiche préremplie, à compléter avant de valider
-        $id = $this->actingAs($lead, 'sanctum')->postJson("/api/stages/admin/stagiaires/{$stage->id}/attestation-travail", ['mode' => 'remplir'])
-            ->assertStatus(201)->assertJsonPath('data.values.nom', 'ADJOVI')->assertJsonPath('data.values.email', 'old@example.org')->json('data.id');
+        // Un nouveau lien annule l'ancien pour le même numéro
+        $this->actingAs($lead, 'sanctum')->postJson('/api/stages/admin/attestations-travail', ['numero' => '0191000777'])->assertStatus(201);
+        $first = $this->link('+2290191000777');
+        $id = $this->postJson('/api/stages/admin/attestations-travail', ['numero' => '0191000777'])->assertStatus(201)->json('data.id');
+        $this->getJson("/api/stages/attestation-travail?token={$first}")->assertStatus(410);
+        $token = $this->link('+2290191000777');
+        $this->getJson("/api/stages/attestation-travail?token={$token}")->assertOk()->assertJsonPath('data.values.nom', null);
+        $this->postJson('/api/stages/attestation-travail', $this->fiche($token))->assertStatus(201);
+
+        // Fiche incomplète : validation refusée jusqu'à ce qu'elle soit complétée
+        $this->putJson("/api/stages/admin/attestations-travail/{$id}", ['diplome' => null])->assertOk();
         $this->postJson("/api/stages/admin/attestations-travail/{$id}/valider")->assertStatus(422);
         $this->putJson("/api/stages/admin/attestations-travail/{$id}", ['diplome' => 'Licence en Génie civil', 'date_debut' => '2026-06-01',
             'date_fin' => '2026-10-15', 'fonctions' => ['Assistante administrative'], 'taches' => array_fill(0, 8, str_repeat('x', 105))])->assertOk();
@@ -209,16 +215,6 @@ class StagesLot11Test extends TestCase
         $this->postJson("/api/stages/admin/attestations-travail/{$id}/valider")->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'une page'));
         $this->putJson("/api/stages/admin/attestations-travail/{$id}", ['taches' => ['le classement des dossiers.']])->assertOk();
         $this->postJson("/api/stages/admin/attestations-travail/{$id}/valider")->assertOk();
-        // Listée dans la fiche du stagiaire
-        $this->getJson("/api/stages/admin/stagiaires/{$stage->id}/attestations-travail")->assertOk()
-            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $id);
-
-        // Ou le lien envoyé à son numéro ; un nouveau lien annule l'ancien
-        $this->postJson("/api/stages/admin/stagiaires/{$stage->id}/attestation-travail", ['mode' => 'lien'])->assertStatus(201);
-        $first = $this->link('+2290191000777');
-        $this->postJson("/api/stages/admin/attestations-travail", ['numero' => '0191000777'])->assertStatus(201);
-        $this->getJson("/api/stages/attestation-travail?token={$first}")->assertStatus(410);
-        $this->getJson('/api/stages/attestation-travail?token=' . $this->link('+2290191000777'))->assertOk()->assertJsonPath('data.values.nom', null);
     }
 
     public function test_stage_attestation_can_be_notified_again(): void
