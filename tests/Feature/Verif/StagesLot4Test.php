@@ -122,15 +122,17 @@ class StagesLot4Test extends TestCase
 
     public function test_weekly_plan_windows_and_final(): void
     {
-        $plan = ReportPlan::periods(CarbonImmutable::parse('2026-11-04'), CarbonImmutable::parse('2026-12-31'), 'hebdomadaire', 2, 14);
+        $plan = ReportPlan::periods(CarbonImmutable::parse('2026-11-04'), CarbonImmutable::parse('2026-12-31'), 'hebdomadaire', 2);
         $first = $plan[0];
         $this->assertSame(['S2026-W45', '2026-11-04', '2026-11-06', '2026-11-06', '2026-11-10'],
             [$first['key'], $first['start'], $first['end'], $first['opens'], $first['closes']]);
+        // Rapport de fin de stage : ouvert aux 2/3 du stage (28e des 42 jours ouvrés) ; les rapports
+        // périodiques s'arrêtent, comme avant, 14 jours avant la fin
         $final = end($plan);
-        $this->assertSame(['FINAL', '2026-12-17', '2026-12-31'], [$final['key'], $final['opens'], $final['closes']]);
+        $this->assertSame(['FINAL', '2026-12-11', '2026-12-31'], [$final['key'], $final['opens'], $final['closes']]);
         $this->assertTrue(collect($plan)->every(fn ($p) => $p['kind'] === 'final' || $p['start'] < '2026-12-17'));
 
-        $daily = ReportPlan::periods(CarbonImmutable::parse('2026-11-06'), CarbonImmutable::parse('2026-12-31'), 'journalier', 1, 14);
+        $daily = ReportPlan::periods(CarbonImmutable::parse('2026-11-06'), CarbonImmutable::parse('2026-12-31'), 'journalier', 1);
         $this->assertSame(['J2026-11-06', 'J2026-11-09'], [$daily[0]['key'], $daily[1]['key']], 'pas de rapport le week-end');
         $this->assertSame('2026-11-09', $daily[0]['closes']);
     }
@@ -509,7 +511,7 @@ class StagesLot4Test extends TestCase
         $lead = $this->lead();
         $svc = app(ReportService::class);
 
-        $this->at('2026-12-16 10:00');
+        $this->at('2026-12-10 10:00');
         $this->post('/api/stagiaire/rapports', ['period_key' => 'FINAL', 'fichier' => $this->pdf()], $h)->assertStatus(422);
         $this->at('2026-12-18 10:00');
         $id = $this->post('/api/stagiaire/rapports', ['period_key' => 'FINAL', 'fichier' => $this->pdf()], $h)->assertStatus(201)->json('data.id');

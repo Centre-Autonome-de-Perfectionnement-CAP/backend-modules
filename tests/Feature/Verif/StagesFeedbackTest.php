@@ -230,6 +230,36 @@ class StagesFeedbackTest extends TestCase
         $this->assertEquals(3, $board['supervisors'][0]['average']);
     }
 
+    public function test_intern_can_rate_every_supervisor_and_nobody_else(): void
+    {
+        $mine = $this->user('superviseur');
+        $other = $this->user('superviseur');
+        $secretary = $this->user('secretaire');
+        $this->at('2026-11-10 10:00');
+        [$req, $h] = $this->intern('2026-11-02', '2027-01-29');
+        DB::table('stage_supervisions')->insert(['stage_request_id' => $req->id, 'user_id' => $mine->id, 'created_at' => now()]);
+
+        $ids = array_column($this->getJson('/api/stagiaire/notation', $h)->assertOk()->json('data.supervisors'), 'id');
+        $this->assertSame($mine->id, $ids[0], 'ses titulaires en tête');
+        $this->assertContains($other->id, $ids);
+        $this->assertNotContains($secretary->id, $ids);
+
+        // Plus de cinq superviseurs notés d'un coup : la liste n'est plus limitée à ses titulaires
+        $many = collect(range(1, 6))->mapWithKeys(fn () => [$this->user('superviseur')->id => 4])->all();
+        $scores = ['encadrement' => 4, 'accueil' => 5, 'conditions' => 4, 'organisation' => 4, 'apprentissage' => 5];
+        $this->postJson('/api/stagiaire/notation', ['period' => '2026-11', 'scores' => $scores,
+            'supervisors' => [$mine->id => 5, $other->id => 2, $secretary->id => 1] + $many], $h)->assertStatus(201);
+        $stored = json_decode((string) DB::table('stage_ratings')->orderByDesc('id')->value('supervisors'), true);
+        $this->assertEquals([$mine->id => 5, $other->id => 2] + $many, $stored);
+
+        // Le mois suivant, chaque superviseur déjà noté disparaît de la liste et une seconde note est ignorée
+        $this->at('2026-12-10 10:00');
+        $ids = array_column($this->getJson('/api/stagiaire/notation', $h)->assertOk()->json('data.supervisors'), 'id');
+        $this->assertSame([], array_values(array_intersect($ids, [$mine->id, $other->id, ...array_keys($many)])));
+        $this->postJson('/api/stagiaire/notation', ['period' => '2026-12', 'scores' => $scores, 'supervisors' => [$mine->id => 1]], $h)->assertStatus(201);
+        $this->assertNull(DB::table('stage_ratings')->orderByDesc('id')->value('supervisors'));
+    }
+
     /** Messages au personnel (file d'attente) contenant ce texte et adressés à ce numéro. */
     private function staffSent(?string $phone, string $text): int
     {
@@ -273,6 +303,10 @@ class StagesFeedbackTest extends TestCase
         $list = $this->getJson('/api/stages/admin/evaluations')->assertOk()->json('data');
         $this->assertFalse($list['interns'][0]['mine']);
         $this->postJson("/api/stages/admin/evaluations/{$req->id}", ['scores' => ['assiduite' => 4.2] + $scores, 'comment' => 'Bon travail dans l’ensemble.'])->assertStatus(422);
+        // Jamais au-dessus du maximum du critère (assiduité sur 4, qualité sur 6) : pas de 5 / 4 ni de 7 / 6
+        $this->postJson("/api/stages/admin/evaluations/{$req->id}", ['scores' => ['assiduite' => 5] + $scores, 'comment' => 'Trop.'])->assertStatus(422)->assertJsonPath('error_code', 'STAGE_EVAL_SCORE');
+        $this->postJson("/api/stages/admin/evaluations/{$req->id}", ['scores' => ['qualite' => 7] + $scores, 'comment' => 'Trop.'])->assertStatus(422)->assertJsonPath('error_code', 'STAGE_EVAL_SCORE');
+        $this->postJson("/api/stages/admin/evaluations/{$req->id}", ['scores' => ['autonomie' => -1] + $scores, 'comment' => 'Négatif.'])->assertStatus(422);
         $this->postJson("/api/stages/admin/evaluations/{$req->id}", ['scores' => $scores])->assertStatus(422);
         $this->postJson("/api/stages/admin/evaluations/{$req->id}", ['scores' => ['qualite' => 3] + $scores, 'comment' => 'Correct, peut mieux faire.'])->assertOk(); // 15
         $this->actingAs($titular, 'sanctum');

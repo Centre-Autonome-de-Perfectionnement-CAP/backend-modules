@@ -404,6 +404,10 @@ class TaskService
             }
             $old = DB::table('stage_task_items')->where('task_id', $task->id)->whereNotNull('path')->pluck('path');
             DB::transaction(function () use ($task, $stored, $links, $by, $message) {
+                // Sous verrou : pas de remise sur un travail validé entre-temps.
+                if (DB::table('stage_tasks')->where('id', $task->id)->lockForUpdate()->value('status') === 'validated') {
+                    throw new BusinessException('Ce travail est déjà validé.', 'STAGE_TASK_VALIDATED', 409);
+                }
                 DB::table('stage_task_items')->where('task_id', $task->id)->delete();
                 foreach ($stored as $s) {
                     DB::table('stage_task_items')->insert($s + ['task_id' => $task->id, 'created_at' => now()]);
@@ -438,16 +442,18 @@ class TaskService
     public function review(object $task, User $by, string $decision, ?string $comment): object
     {
         $this->assertManages($task, $by);
-        if ($task->status !== 'submitted') {
-            throw new BusinessException('Ce travail n\'attend pas de revue.', 'STAGE_TASK_NOT_SUBMITTED', 409);
-        }
+        $this->assertAwaitingReview($task->status);
         $comment = $this->clean($comment);
         if ($decision === 'revision' && !$comment) {
             throw new BusinessException('Dites ce qu\'il faut revoir.', 'STAGE_TASK_COMMENT', 422);
         }
-        DB::table('stage_tasks')->where('id', $task->id)->update([
-            'status' => $decision, 'review_comment' => $comment, 'reviewed_by' => $by->id, 'reviewed_at' => now(), 'updated_at' => now(),
-        ]);
+        // Sous verrou : une remise ne se juge qu'une fois (double clic, deux superviseurs en même temps).
+        DB::transaction(function () use ($task, $by, $decision, $comment) {
+            $this->assertAwaitingReview(DB::table('stage_tasks')->where('id', $task->id)->lockForUpdate()->value('status'));
+            DB::table('stage_tasks')->where('id', $task->id)->update([
+                'status' => $decision, 'review_comment' => $comment, 'reviewed_by' => $by->id, 'reviewed_at' => now(), 'updated_at' => now(),
+            ]);
+        });
         $task = $this->find($task->id);
         $who = trim($by->first_name . ' ' . $by->last_name);
         foreach ($this->members($task, true) as $m) {
@@ -602,6 +608,13 @@ class TaskService
     {
         return DB::table('stage_task_staff as s')->join('users as u', 'u.id', '=', 's.user_id')->where('s.task_id', $task->id)
             ->whereNull('u.deleted_at')->get(['u.id', 'u.email', 'u.phone', 'u.first_name', 'u.last_name']);
+    }
+
+    private function assertAwaitingReview(?string $status): void
+    {
+        if ($status !== 'submitted') {
+            throw new BusinessException('Ce travail n\'attend pas de revue.', 'STAGE_TASK_NOT_SUBMITTED', 409);
+        }
     }
 
     private function assertManages(object $task, User $user): void

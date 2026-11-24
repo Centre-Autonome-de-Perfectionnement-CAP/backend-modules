@@ -107,7 +107,7 @@ class StagesLot10Test extends TestCase
     private function form(string $token, string $start, string $end, array $extra = []): array
     {
         return $extra + [
-            'token' => $token, 'civilite' => 'Mlle', 'nom' => 'adjovi', 'prenoms' => 'Carine', 'date_naissance' => '2002-04-12',
+            'token' => $token, 'civilite' => 'Mlle', 'nom' => 'adjovi', 'prenoms' => 'Carine', 'npi' => (string) random_int(1000000000, 9999999999), 'date_naissance' => date('Y-m-d', strtotime('2002-01-01 +' . random_int(0, 2000) . ' days')),
             'lieu_naissance' => 'Porto-Novo', 'nationalite' => 'Béninoise', 'email' => 'carine@example.org',
             'etablissement_origine' => 'EPAC / UAC', 'filiere' => 'Génie civil', 'cycle' => 'ingenieur', 'annee_etude' => 1, 'theme' => 'Réseau',
             'date_debut' => $start, 'date_fin' => $end, 'password' => 'Stage2026', 'password_confirmation' => 'Stage2026', 'consentement' => '1',

@@ -6,6 +6,7 @@ use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Services\BinomeService;
+use App\Modules\Stages\Services\StageIdentityService;
 use App\Modules\Stages\Services\StageRequestService;
 use App\Modules\Stages\Services\StageSettingsService;
 use App\Modules\Stages\Services\StageSuiviOtpService;
@@ -50,11 +51,13 @@ class StagePublicController extends Controller
     public function store(Request $request): JsonResponse
     {
         $text = fn (int $max, bool $required = true) => [$required ? 'required' : 'nullable', 'string', "max:{$max}"];
+        $request->merge(['npi' => StageIdentityService::cleanNpi($request->input('npi'))]);
 
         $data = $request->validate([
             'civilite'              => ['required', Rule::in(['M.', 'Mlle', 'Mme'])],
             'nom'                   => [...$text(80), 'min:2'],
             'prenoms'               => $text(100),
+            'npi'                   => ['required', 'digits:' . StageIdentityService::NPI_LENGTH],
             'date_naissance'        => ['required', 'date_format:Y-m-d', 'before:-10 years', 'after:1940-01-01'],
             'lieu_naissance'        => $text(100),
             'nationalite'           => $text(60),
@@ -71,6 +74,8 @@ class StagePublicController extends Controller
             'acte_naissance'        => self::FILE_RULE,
         ] + StudyLevel::rules($request->all()), StudyLevel::MESSAGES + [
             'consentement.accepted'    => 'Vous devez accepter le traitement de vos données.',
+            'npi.required'             => 'Indiquez votre NPI.',
+            'npi.digits'               => 'Le NPI comporte ' . StageIdentityService::NPI_LENGTH . ' chiffres.',
             'date_naissance.before'    => 'Date de naissance invalide.',
             'date_debut_souhaitee.after_or_equal' => 'La date de début ne peut pas être passée.',
             'telephone.regex'          => 'Numéro de téléphone invalide.',

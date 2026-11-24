@@ -80,8 +80,8 @@ class StagesLot1Test extends TestCase
     private function payload(array $override = []): array
     {
         return array_merge([
-            'civilite' => 'M.', 'nom' => 'AGOSSA', 'prenoms' => 'Jean <b>Marie</b>',
-            'date_naissance' => '2002-05-10', 'lieu_naissance' => 'Cotonou', 'nationalite' => 'Béninoise',
+            'civilite' => 'M.', 'nom' => 'AGOSSA', 'prenoms' => 'Jean <b>Marie</b>', 'npi' => (string) random_int(1000000000, 9999999999),
+            'date_naissance' => date('Y-m-d', strtotime('2002-01-01 +' . random_int(0, 2000) . ' days')), 'lieu_naissance' => 'Cotonou', 'nationalite' => 'Béninoise',
             'etablissement_origine' => 'UAC', 'filiere' => 'Informatique', 'cycle' => 'licence', 'annee_etude' => 3,
             'email' => 'Jean.Agossa' . random_int(100, 999) . '@example.org',
             'telephone' => '01 97 ' . random_int(10, 99) . ' 44 55',
@@ -144,7 +144,7 @@ class StagesLot1Test extends TestCase
         $req = $this->submit();
 
         $this->post('/api/stages/demandes', $this->payload(['email' => $req->email]), ['Accept' => 'application/json'])
-            ->assertStatus(409)->assertJsonPath('error_code', 'STAGE_REQUEST_ALREADY_ACTIVE');
+            ->assertStatus(409)->assertJsonPath('error_code', 'STAGE_PERSON_ALREADY_ACTIVE');
 
         $this->post('/api/stages/demandes', $this->payload(['cv' => UploadedFile::fake()->create('x.exe', 10, 'application/octet-stream')]), ['Accept' => 'application/json'])
             ->assertStatus(422)->assertJsonValidationErrors('cv');

@@ -5,10 +5,12 @@ namespace App\Modules\Stages\Http\Controllers;
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Modules\Core\Support\FilePreview;
+use App\Modules\Stages\Models\StageHistory;
 use App\Modules\Stages\Models\StageRequest;
 use App\Modules\Stages\Services\InternActivationService;
 use App\Modules\Stages\Services\NoteSignatureService;
 use App\Modules\Stages\Services\StageEndService;
+use App\Modules\Stages\Services\StageIdentityService;
 use App\Modules\Stages\Services\StageRequestService;
 use App\Modules\Stages\Services\StageNotifier;
 use App\Modules\Stages\Services\StageSettingsService;
@@ -80,6 +82,40 @@ class StageAdminController extends Controller
                 ['ended' => (int) $counts->only(StageStatus::ENDED)->sum()]),
             'labels'  => StageStatus::LABELS,
         ]);
+    }
+
+    /** Doublons probables : une même personne avec plusieurs demandes ou stages en même temps. */
+    public function duplicates(): JsonResponse
+    {
+        return $this->successResponse(app(StageIdentityService::class)->duplicateGroups());
+    }
+
+    /** Le responsable renseigne ou corrige le NPI d'un stagiaire. */
+    public function updateNpi(Request $request, string $id): JsonResponse
+    {
+        $request->merge(['npi' => StageIdentityService::cleanNpi($request->input('npi'))]);
+        $data = $request->validate(['npi' => ['required', 'digits:' . StageIdentityService::NPI_LENGTH]], [
+            'npi.required' => 'Indiquez le NPI.',
+            'npi.digits'   => 'Le NPI comporte ' . StageIdentityService::NPI_LENGTH . ' chiffres.',
+        ]);
+        $req = $this->findOrFail($id);
+
+        return $this->act(function () use ($req, $data, $request) {
+            $identity = app(StageIdentityService::class);
+            if (StageIdentityService::isLive($req)) {
+                $identity->assertFree([
+                    'npi' => $data['npi'], 'whatsapp' => $req->whatsapp, 'email' => $req->email,
+                    'nom' => $req->nom, 'prenoms' => $req->prenoms, 'date_naissance' => $req->date_naissance?->toDateString(),
+                ], $req->id);
+            }
+            $req->forceFill(['npi' => $data['npi']])->save();
+            StageHistory::create([
+                'stage_request_id' => $req->id, 'action' => 'npi_updated', 'from_status' => $req->status, 'to_status' => $req->status,
+                'actor' => 'staff', 'user_id' => $request->user()->id, 'comment' => 'NPI renseigné ou corrigé',
+            ]);
+
+            return $req;
+        }, fn () => 'NPI enregistré.');
     }
 
     public function show(string $id): JsonResponse
@@ -307,7 +343,6 @@ class StageAdminController extends Controller
             'permission_delay_days'    => ['sometimes', 'integer', 'min:0', 'max:15'],
             'report_frequency'         => ['sometimes', Rule::in(\App\Modules\Stages\Support\ReportPlan::FREQUENCIES)],
             'report_grace_days'        => ['sometimes', 'integer', 'min:0', 'max:10'],
-            'final_report_open_days'   => ['sometimes', 'integer', 'min:3', 'max:60'],
             'final_correction_days'    => ['sometimes', 'integer', 'min:0', 'max:365'],
             'seuil_assiduite'          => ['sometimes', 'integer', 'min:50', 'max:100'],
             'wa_group_auto'            => ['sometimes', 'boolean'],
@@ -474,6 +509,14 @@ class StageAdminController extends Controller
             'theme_souhaite'  => $r->theme_souhaite,
             'email'           => $r->email,
             'whatsapp'        => $r->whatsapp,
+            'npi'             => $r->npi,
+            // Autres demandes ou stages de la même personne (historique et doublons).
+            'autres_stages'   => app(StageIdentityService::class)->otherStays($r)->map(fn (array $m) => [
+                'id' => $m['request']->id, 'reference' => $m['request']->reference,
+                'status' => $m['request']->status, 'status_label' => StageStatus::label($m['request']->status),
+                'date_debut' => $m['request']->date_debut?->toDateString(), 'date_fin' => $m['request']->date_fin?->toDateString(),
+                'live' => StageIdentityService::isLive($m['request']), 'why' => $m['why'],
+            ])->values(),
             'files'           => $files,
             'terms'           => $r->date_debut ? $this->service->currentTerms($r) : null,
             'date_debut_reelle' => $r->date_debut_reelle?->toDateString(),

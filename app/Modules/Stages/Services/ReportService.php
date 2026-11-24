@@ -4,6 +4,7 @@ namespace App\Modules\Stages\Services;
 
 use App\Exceptions\BusinessException;
 use App\Models\User;
+use App\Modules\Stages\Models\StageAttestation;
 use App\Modules\Stages\Models\StageHistory;
 use App\Modules\Stages\Models\StageReport;
 use App\Modules\Stages\Models\StageReportVersion;
@@ -13,6 +14,7 @@ use App\Modules\Stages\Support\ReportPlan;
 use App\Modules\Stages\Support\StageAccess;
 use App\Modules\Stages\Support\StageStatus;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -28,8 +30,11 @@ use Illuminate\Support\Facades\Storage;
  *    stagiaire dépose dans la période de soumission (après : accepté,
  *    marqué « en retard ») ;
  *  - chaque dépôt est une nouvelle version, l'historique est conservé ;
- *  - superviseurs et responsable commentent et valident ; le responsable a
- *    le dernier mot et peut revenir sur sa décision ;
+ *  - superviseurs et responsable commentent et valident ; chaque version se
+ *    décide une fois par rôle, sous verrou ; le responsable a le dernier mot
+ *    et peut renvoyer un rapport validé à corriger tant que l'attestation
+ *    n'est pas validée ; un rapport en correction accepte une nouvelle demande
+ *    de correction mais pas de validation avant une nouvelle version ;
  *  - un rapport est « validé » si le responsable l'a validé, ou, à défaut
  *    de décision du responsable, si un superviseur l'a validé.
  */
@@ -195,7 +200,7 @@ class ReportService
         }
         if (StageReport::where('stage_request_id', $partner->id)->where('period_key', $period['key'])->lockForUpdate()->exists()) {
             throw new BusinessException($final
-                ? $partner->fullName() . ' a déjà déposé son propre rapport final : le rapport commun n\'est plus possible. Contactez le responsable de division.'
+                ? $partner->fullName() . ' a déjà déposé son propre rapport de fin de stage : le rapport commun n\'est plus possible. Contactez le responsable de division.'
                 : $partner->fullName() . ' a déjà déposé son propre rapport pour cette période. Décochez « Déposer pour mon binôme » pour déposer le vôtre.',
                 'STAGE_REPORT_PAIR_EXISTS', 409,
             );
@@ -272,7 +277,9 @@ class ReportService
         if (!$period) {
             throw new BusinessException('Cette période de rapport n\'existe pas.', 'STAGE_REPORT_PERIOD', 422);
         }
-        if ($today->toDateString() < $period['opens']) {
+        // Un rapport déjà déposé reste ouvert aux nouvelles versions (correction demandée).
+        if ($today->toDateString() < $period['opens']
+            && !StageReport::where('stage_request_id', $req->id)->where('period_key', $period['key'])->exists()) {
             throw new BusinessException('Le dépôt de ce rapport ouvre le ' . $this->requests->frDate($period['opens']) . '.', 'STAGE_REPORT_NOT_OPEN', 422);
         }
         $late = $this->isLate($req, $period, $today);
@@ -356,9 +363,9 @@ class ReportService
             // Rapports journaliers : récapitulatif quotidien au personnel (pas un message par dépôt).
             $this->notifier->toFollowers(
                 $partner ? [$req, $partner] : $req,
-                $postDefense ? 'Rapport final corrigé après soutenance' : ($report->kind === 'final' ? 'Rapport final déposé' : 'Rapport déposé'),
+                $postDefense ? 'Rapport de fin de stage corrigé après soutenance' : ($report->kind === 'final' ? 'Rapport de fin de stage déposé' : 'Rapport déposé'),
                 [$postDefense
-                    ? 'Le stagiaire a déposé la version corrigée de son rapport final, après la soutenance. Sa validation précédente reste acquise.'
+                    ? 'Le stagiaire a déposé la version corrigée de son rapport de fin de stage, après la soutenance. Sa validation précédente reste acquise.'
                     : ($partner
                         ? 'Le stagiaire a déposé le rapport pour lui et son binôme (' . $partner->fullName() . ').'
                         : ($report->current_version > 1 ? 'Le stagiaire a déposé une nouvelle version de son rapport.' : 'Le stagiaire a déposé son rapport.'))],
@@ -576,49 +583,205 @@ class ReportService
         }
     }
 
+    /**
+     * Décision sur la version actuelle d'un rapport (superviseur ou responsable).
+     *
+     * Tout se joue sous verrou : l'état est relu une fois le rapport (et son
+     * jumeau) verrouillé, pour qu'une même version ne soit jamais validée ou
+     * renvoyée deux fois (double clic, deux décideurs en même temps).
+     * Règles : voir decisionBlock().
+     */
     public function decide(StageReport $report, string $decision, ?string $comment, User $by): StageReport
     {
-        if ($report->current_version < 1) {
-            throw new BusinessException('Aucune version à examiner.', 'STAGE_REPORT_EMPTY', 409);
-        }
         if ($decision === 'rejected' && !$comment) {
             throw new BusinessException('Indiquez ce qui doit être corrigé.', 'STAGE_REPORT_REJECT_COMMENT', 422);
         }
         $lead = StageAccess::isLead($by);
         $role = $lead ? 'responsable' : 'superviseur';
 
-        if ($report->correction_status === 'pending') {
-            return $this->decideCorrection($report, $decision, $comment, $by, $lead, $role);
-        }
+        [$report, $both, $correction, $before] = DB::transaction(function () use ($report, $decision, $comment, $by, $lead, $role) {
+            $report = $this->lockPair($report);
+            if ($report->current_version < 1) {
+                throw new BusinessException('Aucune version à examiner.', 'STAGE_REPORT_EMPTY', 409);
+            }
+            $correction = $report->correction_status === 'pending';
+            $before = $this->isValidated($report);
+            $this->assertDecidable($report, $decision, $lead, $by, $correction);
 
-        $before = $this->isValidated($report);
-        if (!$lead && $this->leadDecision($report) !== null) {
-            throw new BusinessException('Le responsable de division a déjà tranché sur cette version.', 'STAGE_REPORT_LEAD_DECIDED', 409);
-        }
-
-        // Rapport de binôme : la décision vaut pour les deux rapports.
-        $twin = $this->twinOf($report);
-        $both = array_filter([$report, $twin]);
-        DB::transaction(function () use ($both, $decision, $comment, $by, $role) {
+            // Rapport de binôme : la décision vaut pour les deux rapports (version corrigée : si le jumeau l'attend aussi).
+            $twin = $this->twinOf($report);
+            $both = $correction
+                ? array_values(array_filter([$report, $twin?->correction_status === 'pending' ? $twin : null]))
+                : array_values(array_filter([$report, $twin]));
             foreach ($both as $r) {
                 DB::table('stage_report_reviews')->insert([
                     'report_id' => $r->id, 'version' => $r->current_version, 'user_id' => $by->id,
                     'role' => $role, 'decision' => $decision, 'comment' => $comment, 'created_at' => now(),
                 ]);
-                $r->status = $role === 'responsable' ? $decision : 'supervisor_' . $decision;
-                if ($this->isValidated($r)) {
-                    $r->official_version = $r->current_version;
+                if ($correction) {
+                    // Le superviseur donne son avis ; le responsable tranche.
+                    if ($lead) {
+                        $r->correction_status = $decision;
+                        if ($decision === 'approved') {
+                            $r->official_version = $r->current_version;
+                        }
+                        $r->save();
+                    }
+                    $this->history($r->stage, 'report_correction_' . $decision, $by,
+                        $this->labelFor($r) . ' - version corrigée après soutenance' . ($comment ? " : {$comment}" : ''));
+                } else {
+                    $r->status = $lead ? $decision : 'supervisor_' . $decision;
+                    if ($this->isValidated($r)) {
+                        $r->official_version = $r->current_version;
+                    }
+                    $r->save();
+                    $this->history($r->stage, 'report_' . $decision, $by, $this->labelFor($r) . ($comment ? " : {$comment}" : ''));
                 }
-                $r->save();
-                $this->history($r->stage, 'report_' . $decision, $by, $this->labelFor($r) . ($comment ? " : {$comment}" : ''));
             }
+
+            return [$report, $both, $correction, $before];
         });
         foreach ($both as $r) {
             $this->pruneOldVersions($r);
         }
+        $this->notifyDecision($report, $both, $decision, $comment, $by, $lead, $correction, $before);
 
+        return $report->fresh();
+    }
+
+    /** Verrouille le rapport et son jumeau (toujours dans le même ordre : pas d'interblocage), relus à jour. */
+    private function lockPair(StageReport $report): StageReport
+    {
+        $pairId = $this->pairingReady() ? StageReport::whereKey($report->id)->value('pair_report_id') : null;
+        $locked = StageReport::whereIn('id', array_filter([$report->id, $pairId]))->orderBy('id')->lockForUpdate()->get();
+
+        return $locked->firstWhere('id', $report->id) ?? throw (new ModelNotFoundException())->setModel(StageReport::class, [$report->id]);
+    }
+
+    /**
+     * Pourquoi cette décision est impossible maintenant, ou null si elle est permise.
+     *  - version corrigée après soutenance : un avis par superviseur, le responsable tranche une fois ;
+     *  - un rapport en correction (renvoyé au stagiaire) accepte une nouvelle demande de correction,
+     *    jamais une validation : il faut d'abord une nouvelle version ;
+     *  - superviseur : seulement tant que la version n'a pas été examinée (ou pour redemander une
+     *    correction), et jamais après le responsable ;
+     *  - responsable (dernier mot) : une validation par version ; il peut ensuite renvoyer le rapport
+     *    à corriger tant que l'attestation n'est pas validée.
+     *
+     * @return array{0: string, 1: string, 2: int}|null [message, code, statut HTTP]
+     */
+    private function decisionBlock(StageReport $r, string $decision, bool $lead, User $by, bool $correction): ?array
+    {
+        if ($correction) {
+            $reviews = DB::table('stage_report_reviews')->where('report_id', $r->id)->where('version', $r->current_version);
+            if (!$lead && (clone $reviews)->where('role', 'responsable')->exists()) {
+                return ['Le responsable de division a déjà tranché sur cette version.', 'STAGE_REPORT_LEAD_DECIDED', 409];
+            }
+            if (!$lead && (clone $reviews)->where('user_id', $by->id)->exists()) {
+                return ['Vous avez déjà donné votre avis sur cette version.', 'STAGE_REPORT_ALREADY_DECIDED', 409];
+            }
+
+            return null;
+        }
+        if ($r->correction_status !== null) {
+            return ['La version corrigée après soutenance a déjà été jugée : plus de décision possible sur ce rapport.', 'STAGE_REPORT_LOCKED', 409];
+        }
+
+        $inCorrection = in_array($r->status, ['rejected', 'supervisor_rejected'], true);
+        if ($decision === 'approved' && $inCorrection) {
+            return ['Ce rapport est en correction : le stagiaire doit en déposer une nouvelle version avant toute validation.', 'STAGE_REPORT_IN_CORRECTION', 409];
+        }
+
+        $leadDecision = $this->leadDecision($r);
+        if (!$lead) {
+            if ($leadDecision !== null) {
+                return ['Le responsable de division a déjà tranché sur cette version.', 'STAGE_REPORT_LEAD_DECIDED', 409];
+            }
+
+            return $r->status === 'submitted' || ($decision === 'rejected' && $inCorrection) ? null
+                : ['Cette version a déjà été examinée par un superviseur. Le responsable de division a le dernier mot.', 'STAGE_REPORT_ALREADY_DECIDED', 409];
+        }
+        if ($leadDecision === null || $leadDecision === 'rejected') {
+            return null;
+        }
+        // Le responsable a validé : il ne peut pas valider une seconde fois, ni renvoyer le rapport une fois l'attestation validée.
+        if ($decision === 'approved') {
+            return ['Ce rapport est déjà validé.', 'STAGE_REPORT_ALREADY_DECIDED', 409];
+        }
+        if ($this->attestationValidated($r)) {
+            return ['Votre validation ne peut plus être retirée : l\'attestation est validée.', 'STAGE_REPORT_LOCKED', 409];
+        }
+
+        return null;
+    }
+
+    private function assertDecidable(StageReport $r, string $decision, bool $lead, User $by, bool $correction): void
+    {
+        if ($block = $this->decisionBlock($r, $decision, $lead, $by, $correction)) {
+            throw new BusinessException($block[0], $block[1], $block[2]);
+        }
+    }
+
+    /** Rapport final : l'attestation du stagiaire (ou de son binôme, si le rapport est commun) est-elle validée ? */
+    private function attestationValidated(StageReport $r): bool
+    {
+        if ($r->kind !== 'final') {
+            return false;
+        }
+        $ids = array_filter([$r->stage_request_id, $this->twinOf($r)?->stage_request_id]);
+
+        return StageAttestation::whereIn('stage_request_id', $ids)->whereIn('status', ['a_imprimer', 'imprimee', 'remise'])->exists();
+    }
+
+    /**
+     * Ce que ce décideur peut faire maintenant sur le rapport (pour l'écran).
+     *
+     * @return array{approve: bool, reject: bool, reverse: bool}
+     */
+    private function decisionOptions(StageReport $r, User $by): array
+    {
+        $lead = StageAccess::isLead($by);
+        $correction = $r->correction_status === 'pending';
+        $can = fn (string $d) => $r->current_version >= 1 && $this->decisionBlock($r, $d, $lead, $by, $correction) === null;
+
+        return [
+            'approve' => $can('approved'),
+            'reject'  => $can('rejected'),
+            // Retirer sa validation (renvoyer à corriger) : l'écran adapte son intitulé.
+            'reverse' => $lead && !$correction && $this->leadDecision($r) === 'approved',
+        ];
+    }
+
+    /** Prévient le stagiaire (et, selon le cas, le superviseur ou les responsables) après une décision. */
+    private function notifyDecision(StageReport $report, array $both, string $decision, ?string $comment, User $by, bool $lead, bool $correction, bool $before): void
+    {
         $req = $report->stage;
         $who = trim($by->first_name . ' ' . $by->last_name);
+
+        if ($correction) {
+            if ($lead) {
+                foreach ($both as $r) {
+                    $this->notifier->toDemandeur(
+                        $r->stage,
+                        $decision === 'approved' ? 'Version corrigée validée' : 'Version corrigée non retenue',
+                        [$decision === 'approved'
+                            ? "{$who} a validé la version corrigée de " . (count($both) > 1 ? 'votre rapport de fin de stage commun' : 'votre rapport de fin de stage') . ". C'est désormais la version officielle."
+                            : "{$who} n'a pas retenu la version corrigée de " . (count($both) > 1 ? 'votre rapport de fin de stage commun' : 'votre rapport de fin de stage') . '. La version validée précédente reste valable ; vous pouvez en déposer une autre.'],
+                        ['Rapport' => $this->labelFor($r)],
+                        highlight: $comment, highlightTitle: 'Commentaire',
+                        ctaLabel: 'Ouvrir mes rapports', ctaUrl: $this->notifier->spaceUrl('/rapports'), context: 'stage-rapport-correction',
+                    );
+                }
+            } else {
+                $this->notifier->toManagers($req, 'Avis d\'un superviseur', [
+                    "{$who} (superviseur) a " . ($decision === 'approved' ? 'approuvé' : 'émis des réserves sur') . ' la version corrigée du rapport de fin de stage. À vous de trancher.',
+                ], ['Stagiaire' => $req->fullName(), 'Rapport' => $this->labelFor($report)], 'stage-superviseur');
+            }
+
+            return;
+        }
+
+        $twin = $both[1] ?? null;
         foreach ($both as $r) {
             $this->notifier->toDemandeur(
                 $r->stage,
@@ -638,8 +801,6 @@ class ReportService
         if ($report->kind === 'final' && !$before && $this->isValidated($report->fresh())) {
             Log::info('[Stages] Rapport final validé', ['reference' => $req->reference]);
         }
-
-        return $report->fresh();
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -650,7 +811,7 @@ class ReportService
      * Détail d'un rapport. $viewer : stagiaire qui consulte (le sien, celui
      * de son binôme ou celui d'un autre : les rapports sont ouverts à tous).
      */
-    public function detail(StageReport $report, bool $forStaff, ?StageRequest $viewer = null): array
+    public function detail(StageReport $report, bool $forStaff, ?StageRequest $viewer = null, ?User $by = null): array
     {
         $viewerId = $forStaff ? null : ($viewer?->id ?? $report->stage_request_id);
         $twin = $this->twinOf($report);
@@ -675,6 +836,7 @@ class ReportService
                 'id' => $report->stage->id, 'reference' => $report->stage->reference,
                 'nom_complet' => trim($report->stage->civilite . ' ' . $report->stage->fullName()),
             ] : null,
+            'decisions' => $forStaff && $by ? $this->decisionOptions($report, $by) : null,
             'versions' => $versions->map(fn ($v) => [
                 'version' => $v->version, 'name' => $v->original_name, 'size' => $v->size, 'note' => $v->note,
                 'late' => $v->late, 'post_defense' => (bool) $v->post_defense, 'at' => $v->created_at?->toIso8601String(),
@@ -875,6 +1037,9 @@ class ReportService
                     $type = $this->reminderDue($p, $today);
                     if ($type && $this->notice($req, $p['key'], $type)) {
                         $this->remindIntern($req, $p, $type);
+                        if ($type === 'open' && $p['kind'] === 'final') {
+                            $this->announceFinalOpening($req, $p);
+                        }
                         $stats[$type === 'open' ? 'opened' : ($type === 'closing' ? 'closing' : $type)]++;
                     }
                 }
@@ -927,7 +1092,6 @@ class ReportService
             CarbonImmutable::parse($req->date_fin->toDateString()),
             (string) $this->settings->get('report_frequency'),
             (int) $this->settings->get('report_grace_days'),
-            (int) $this->settings->get('final_report_open_days'),
         );
 
         // Stagiaire arrivé avant le système : pas de rapports périodiques pour
@@ -935,6 +1099,17 @@ class ReportService
         if ($req->attendance_from) {
             $from = $req->attendance_from->toDateString();
             $periods = array_values(array_filter($periods, fn ($p) => $p['kind'] === 'final' || ($p['end'] ?? '') >= $from));
+        }
+
+        // Une fois ouvert, l'espace reste ouvert : une prolongation du stage qui décale les 2/3
+        // ne le referme pas.
+        $last = array_key_last($periods);
+        if ($last !== null && $periods[$last]['opens'] > BusinessHours::today()->toDateString()) {
+            $openedAt = DB::table('stage_report_notices')->where('stage_request_id', $req->id)
+                ->where('period_key', ReportPlan::FINAL_KEY)->where('kind', 'open')->value('created_at');
+            if ($openedAt) {
+                $periods[$last]['opens'] = min($periods[$last]['opens'], CarbonImmutable::parse($openedAt)->setTimezone(BusinessHours::TZ)->toDateString());
+            }
         }
 
         return $periods;
@@ -954,63 +1129,6 @@ class ReportService
 
         return $end !== null && $days > 0
             && BusinessHours::today()->toDateString() <= CarbonImmutable::parse($end->toDateString())->addDays($days)->toDateString();
-    }
-
-    /** Relecture d'une version corrigée après soutenance (la validation du rapport reste acquise). */
-    private function decideCorrection(StageReport $report, string $decision, ?string $comment, User $by, bool $lead, string $role): StageReport
-    {
-        if (!$lead && DB::table('stage_report_reviews')->where('report_id', $report->id)->where('version', $report->current_version)
-            ->where('role', 'responsable')->exists()) {
-            throw new BusinessException('Le responsable de division a déjà tranché sur cette version.', 'STAGE_REPORT_LEAD_DECIDED', 409);
-        }
-
-        // Rapport final commun : la décision vaut aussi pour le binôme.
-        $twin = $this->twinOf($report);
-        $both = array_values(array_filter([$report, $twin?->correction_status === 'pending' ? $twin : null]));
-        DB::transaction(function () use ($both, $decision, $comment, $by, $role, $lead) {
-            foreach ($both as $r) {
-                DB::table('stage_report_reviews')->insert([
-                    'report_id' => $r->id, 'version' => $r->current_version, 'user_id' => $by->id,
-                    'role' => $role, 'decision' => $decision, 'comment' => $comment, 'created_at' => now(),
-                ]);
-                // Le superviseur donne son avis ; le responsable tranche.
-                if ($lead) {
-                    $r->correction_status = $decision;
-                    if ($decision === 'approved') {
-                        $r->official_version = $r->current_version;
-                    }
-                    $r->save();
-                }
-                $this->history($r->stage, 'report_correction_' . $decision, $by,
-                    $this->labelFor($r) . ' - version corrigée après soutenance' . ($comment ? " : {$comment}" : ''));
-            }
-        });
-        foreach ($both as $r) {
-            $this->pruneOldVersions($r);
-        }
-
-        $req = $report->stage;
-        $who = trim($by->first_name . ' ' . $by->last_name);
-        if ($lead) {
-            foreach ($both as $r) {
-                $this->notifier->toDemandeur(
-                    $r->stage,
-                    $decision === 'approved' ? 'Version corrigée validée' : 'Version corrigée non retenue',
-                    [$decision === 'approved'
-                        ? "{$who} a validé la version corrigée de " . (count($both) > 1 ? 'votre rapport final commun' : 'votre rapport final') . ". C'est désormais la version officielle."
-                        : "{$who} n'a pas retenu la version corrigée de " . (count($both) > 1 ? 'votre rapport final commun' : 'votre rapport final') . '. La version validée précédente reste valable ; vous pouvez en déposer une autre.'],
-                    ['Rapport' => $this->labelFor($r)],
-                    highlight: $comment, highlightTitle: 'Commentaire',
-                    ctaLabel: 'Ouvrir mes rapports', ctaUrl: $this->notifier->spaceUrl('/rapports'), context: 'stage-rapport-correction',
-                );
-            }
-        } else {
-            $this->notifier->toManagers($req, 'Avis d\'un superviseur', [
-                "{$who} (superviseur) a " . ($decision === 'approved' ? 'approuvé' : 'émis des réserves sur') . ' la version corrigée du rapport final. À vous de trancher.',
-            ], ['Stagiaire' => $req->fullName(), 'Rapport' => $this->labelFor($report)], 'stage-superviseur');
-        }
-
-        return $report->fresh();
     }
 
     public function isValidated(StageReport $r): bool
@@ -1041,7 +1159,7 @@ class ReportService
     public function labelFor(StageReport $r): string
     {
         if ($r->kind === 'final') {
-            return 'Rapport final';
+            return 'Rapport de fin de stage';
         }
         $s = $r->period_start ? CarbonImmutable::parse($r->period_start->toDateString())->locale('fr') : null;
 
@@ -1072,10 +1190,10 @@ class ReportService
         $final = $p['kind'] === 'final';
         [$title, $text] = match ($type) {
             'closing' => ['Dernier jour pour votre rapport', 'Vous n\'avez pas encore déposé ce rapport : aujourd\'hui est le dernier jour du délai.'],
-            'mid'     => ['Rapport final : plus que 7 jours', 'Votre stage se termine dans 7 jours. Déposez votre rapport final en PDF depuis votre espace stagiaire.'],
+            'mid'     => ['Rapport de fin de stage : plus que 7 jours', 'Votre stage se termine dans 7 jours. Déposez votre rapport de fin de stage en PDF depuis votre espace stagiaire.'],
             'late'    => ['Rapport en retard', 'Le délai de ce rapport est passé et il n\'a pas été déposé. Déposez-le dès que possible : il sera accepté, mais marqué en retard.'],
             default   => $final
-                ? ['Rapport final à déposer', 'Le dépôt de votre rapport final est ouvert. Déposez-le en PDF depuis votre espace stagiaire, assez tôt pour qu\'il soit validé avant la fin de votre stage.']
+                ? ['Rapport de fin de stage à déposer', 'Le dépôt de votre rapport de fin de stage est ouvert. Vous pouvez déposer une première version dès maintenant, autant de fois que nécessaire : vos encadrants la liront et la commenteront, puis vous la corrigerez avec eux jusqu\'à sa validation. Déposez-la assez tôt pour qu\'elle soit validée avant la fin de votre stage.']
                 : ['Rapport à déposer aujourd\'hui', 'C\'est aujourd\'hui le jour du dépôt de votre rapport. Déposez-le en PDF depuis votre espace stagiaire.'],
         };
 
@@ -1086,6 +1204,15 @@ class ReportService
             ['Rapport' => $p['label'], ($type === 'late' ? 'Délai dépassé le' : 'À déposer avant le') => $this->requests->frDate($p['closes'])],
             ctaLabel: 'Déposer mon rapport', ctaUrl: $this->notifier->spaceUrl('/rapports'), context: 'stage-rapport-rappel',
         );
+    }
+
+    /** Ouverture du rapport de fin de stage : les superviseurs du stagiaire et les responsables en sont prévenus, une seule fois. */
+    private function announceFinalOpening(StageRequest $req, array $p): void
+    {
+        $this->notifier->toFollowers($req, 'Rapport de fin de stage ouvert', [
+            'Le dépôt du rapport de fin de stage de ' . $req->fullName() . ' est ouvert. Vous serez prévenu à chaque version déposée, pour la lire et la commenter.',
+        ], ['Stagiaire' => $req->fullName(), 'À déposer avant le' => $this->requests->frDate($p['closes'])],
+            'stage-rapport', rtrim((string) config('app.url'), '/') . '/services/stages/rapports');
     }
 
     private function notice(StageRequest $req, string $key, string $kind): bool
