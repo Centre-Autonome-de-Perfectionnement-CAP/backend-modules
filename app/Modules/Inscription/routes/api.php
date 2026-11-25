@@ -95,6 +95,7 @@ Route::prefix('inscription')->group(function () {
             Route::post('/{id}/remove-class-responsible', [StudentController::class, 'removeClassResponsible']);
             Route::get('/export/cap-history', [StudentController::class, 'exportCapHistory']);
             Route::get('/export/fiche-presence', [StudentController::class, 'exportFichePresence']);
+            Route::get('/export/fiche-presence/excel', [StudentController::class, 'exportFichePresenceExcel']);
             Route::get('/export/fiche-emargement', [StudentController::class, 'exportFicheEmargement']);
             Route::get('/{id}', [StudentController::class, 'show']);
         });
