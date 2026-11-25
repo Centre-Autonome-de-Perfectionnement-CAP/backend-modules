@@ -80,7 +80,7 @@ class StudentController extends Controller{
     private function presenceExportFilters(Request $request): array
     {
         $request->validate([
-            'cohort' => 'required',
+            'cohort' => 'sometimes|required|string',
         ], [
             'cohort.required' => 'La sélection de la cohorte est obligatoire',
         ]);
@@ -89,7 +89,7 @@ class StudentController extends Controller{
             'year' => $request->input('year', $request->input('academic_year_id')),
             'filiere' => $request->input('filiere', $request->input('department_id')),
             'niveau' => $request->input('niveau', $request->input('study_level')),
-            'cohort' => $request->input('cohort'),
+            'cohort' => $request->input('cohort', 'all'),
             'groupe' => $request->input('groupe', $request->input('group_id')),
         ], static fn ($value) => $value !== null);
     }
