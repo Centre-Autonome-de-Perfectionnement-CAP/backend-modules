@@ -57,7 +57,7 @@
 <p class="pristina p1">Le Chef du Centre Autonome de Perfectionnement (CAP) de l’EPAC, atteste par la présente, que :</p>
 
 <p class="alb civ">
-    {{ $d['masculin'] ? 'M.' : ($d['civilite'] === 'Mme' ? 'Mme' : 'Mlle') }} :
+    {{ $d['masculin'] ? 'M.' : ($d['civilite'] === 'Mme' ? 'Mme' : 'Mlle') }}
     <span class="nom">{{ $d['nom'] }} {{ $d['prenoms'] }}</span>
 </p>
 
@@ -69,7 +69,7 @@
     A effectué du {{ $d['debut_long'] }} au {{ $d['fin_long'] }}, un stage {{ $d['type_stage'] }} au sein {{ $d['structure'] }}.
 </p>
 
-<p class="pristina foi">En foi de quoi, la présente Attestation est délivrée pour servir et valoir ce que de droit.&nbsp;-</p>
+<p class="pristina foi">En foi de quoi, la présente Attestation est délivrée pour servir et valoir ce que de droit.</p>
 
 <div class="sign">
     <div class="titre-s">{{ $signataire_titre }}</div>

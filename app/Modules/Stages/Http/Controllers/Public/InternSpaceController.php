@@ -237,8 +237,8 @@ class InternSpaceController extends Controller
 
         return $this->successResponse([
             'reference'   => $req->reference,
+            'npi_requis'  => !$req->npi && $req->activated_at,
             'nom_complet' => trim($req->civilite . ' ' . $req->fullName()),
-            'prenoms'     => $req->prenoms,
             'terms'       => $this->stages->currentTerms($req) + [
                 'date_debut_reelle' => $req->date_debut_reelle?->toDateString(),
                 'duree' => $req->date_debut && $req->date_fin ? $this->stages->durationLabel($req->date_debut->toDateString(), $req->date_fin->toDateString()) : null,

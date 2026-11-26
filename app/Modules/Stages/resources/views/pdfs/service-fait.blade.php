@@ -71,14 +71,14 @@
 
 <p class="alb p">
     <strong class="nom">{{ $d['civilite'] }} {{ $d['nom'] }} {{ $d['prenoms'] }}</strong>@if($d['diplome']), titulaire du diplôme {{ $d['diplome_de'] }}<strong>{{ $d['diplome'] }}</strong>@endif,
-    a exercé@if($d['nature']), <strong>{{ $d['nature'] }}</strong>,@endif {{ count($d['fonctions']) > 1 ? 'les fonctions' : 'la fonction' }} de&nbsp;:
+    a exercé@if($d['nature']) <strong>{{ $d['nature'] }}</strong>,@endif {{ count($d['fonctions']) > 1 ? 'les fonctions' : 'la fonction' }} de&nbsp;:
 </p>
 <ul class="puces">
     @foreach($d['fonctions'] as $f)<li><span class="b">-</span><strong>{{ $f }}</strong></li>@endforeach
 </ul>
 
 <p class="alb p">
-    au sein du Centre Autonome de Perfectionnement (CAP) de l’EPAC/UAC, pendant la période allant du <strong>{{ $d['debut'] }}</strong> au <strong>{{ $d['fin'] }}</strong>.
+    au sein de la Cellule Informatique du Centre Autonome de Perfectionnement (CAP) de l’EPAC, pendant la période allant du <strong>{{ $d['debut'] }}</strong> au <strong>{{ $d['fin'] }}</strong>.
 </p>
 
 @if(count($d['taches']))

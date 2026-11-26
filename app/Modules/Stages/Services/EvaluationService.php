@@ -62,7 +62,7 @@ class EvaluationService
         $base = floor($v);
         $f = round($v - $base, 2);
 
-        return min(20.0, $f < 0.25 ? $base : ($f <= 0.5 ? $base + 0.5 : $base + 1));
+        return min(20.0, $f === 0.0 ? $base : ($f <= 0.5 ? $base + 0.5 : $base + 1));
     }
 
     // ════════════════════════════════════════════════════════════════════
