@@ -593,7 +593,7 @@ class InternSpaceController extends Controller
 
         return $this->guard(function () use ($data, $note, $request) {
             $r = $this->reports->submit($this->ready($request)->stage, $data['period_key'], $request->file('fichier'), $note,
-                (bool) ($data['pour_binome'] ?? true));
+                (bool) ($data['pour_binome'] ?? false));
             if (!empty($data['fin_formation'])) {
                 $this->library->proposeFromReport($r->load('stage'), array_map(fn ($v) => is_string($v) ? (trim(strip_tags($v)) ?: null) : $v, $data));
             }

@@ -92,7 +92,9 @@ class ReportService
                 $items[] = [
                     'key' => $key, 'kind' => $report->kind, 'label' => $this->labelFor($report),
                     'start' => $report->period_start?->toDateString(), 'end' => $report->period_end?->toDateString(),
-                    'opens' => null, 'closes' => null, 'state' => 'deposited', 'report' => $this->summary($report),
+                    'opens' => null, 'closes' => null,
+                    'state' => $this->isValidated($report) ? 'validated' : (in_array($report->status, ['rejected', 'supervisor_rejected'], true) ? 'to_fix' : 'deposited'),
+                    'report' => $this->summary($report),
                 ];
             }
         }
@@ -275,7 +277,22 @@ class ReportService
         $today = BusinessHours::today();
         $period = collect($this->plan($req))->firstWhere('key', $periodKey);
         if (!$period) {
-            throw new BusinessException('Cette période de rapport n\'existe pas.', 'STAGE_REPORT_PERIOD', 422);
+            // Rapport déjà déposé sur une période qui a disparu du plan (changement
+            // de fréquence, prolongation, etc.) : on autorise quand même une nouvelle
+            // version en reconstruisant la période depuis le rapport existant.
+            $existing = StageReport::where('stage_request_id', $req->id)->where('period_key', $periodKey)->first();
+            if (!$existing) {
+                throw new BusinessException('Cette période de rapport n\'existe pas.', 'STAGE_REPORT_PERIOD', 422);
+            }
+            $period = [
+                'key'    => $existing->period_key,
+                'kind'   => $existing->kind,
+                'label'  => $this->labelFor($existing),
+                'start'  => $existing->period_start?->toDateString(),
+                'end'    => $existing->period_end?->toDateString(),
+                'opens'  => $existing->period_start?->toDateString() ?? BusinessHours::today()->toDateString(),
+                'closes' => $existing->period_end?->toDateString() ?? BusinessHours::today()->toDateString(),
+            ];
         }
         // Un rapport déjà déposé reste ouvert aux nouvelles versions (correction demandée).
         if ($today->toDateString() < $period['opens']
